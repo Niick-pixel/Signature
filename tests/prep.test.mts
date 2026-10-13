@@ -34,7 +34,7 @@ test('six steps of reminders, each part of the model (plus the heatmap)', () => 
   }
   assert.ok(PREP_STEPS.find((s) => s.id === 'heatmap')?.heatmap);
   // The important levels and gaps are all reminded.
-  for (const level of ['PDH and PDL', 'PWH and PWL', 'Asia and London', 'equal highs and lows', '4H FVGs', '1H FVGs', 'NWOG / NDOG', 'killzone', 'Invalidation'])
+  for (const level of ['5m, 10m, 15m, 30m, 1H, 4H', 'PDH and PDL', 'PWH and PWL', 'Asia and London', 'equal highs and lows', '4H FVGs', '1H FVGs', 'NWOG / NDOG', 'killzone', 'Invalidation'])
     assert.ok(words.includes(level), level);
   // The target is picked from the same ranked classes as the trade form.
   assert.equal(PREP_STEPS.find((s) => s.id === 'draw')!.fields.find((f) => f.id === 'target')!.options[0], 'PDH/PDL');

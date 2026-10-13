@@ -838,3 +838,14 @@ html[data-nav] [data-sheet] { view-transition-name: sheet; }
   [data-stagger] > *, [data-cell-in], :focus-visible { animation: none !important; }
   :where(button, [role='button'], a[href], summary):active { transform: none !important; }
 }
+
+/* A field that wants an answer breathes a soft glow (Followed ALL rules). */
+@keyframes signature-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--accent) / 0), 0 0 10px rgb(var(--accent) / 0.18); }
+  50%      { box-shadow: 0 0 0 3px rgb(var(--accent) / 0.12), 0 0 22px rgb(var(--accent) / 0.38); }
+}
+.signature-glow { animation: signature-glow 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .signature-glow { animation: none; box-shadow: 0 0 16px rgb(var(--accent) / 0.3); }
+}
+html[data-reduce-motion='true'] .signature-glow { animation: none; box-shadow: 0 0 16px rgb(var(--accent) / 0.3); }

@@ -1019,12 +1019,28 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           the height of the whole card. This costs nothing and buys the last
           hundred and thirty pixels.
         */}
-        <TriState inline
-          value={followedRules}
-          onChange={setFollowedRules}
-          label="Followed ALL rules"
-          hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
-        />
+        {/*
+          The one question about my own discipline, so it is lit: it glows
+          softly until it is answered, then settles into green (yes) or red
+          (no). Still optional, still never a gate.
+        */}
+        <div data-followed-rules={followedRules == null ? 'unset' : followedRules ? 'yes' : 'no'}
+          className={`rounded-[calc(14px*var(--rk))] border px-3 py-2 transition-[background-color,border-color,box-shadow] duration-300 ${followedRules == null ? 'signature-glow' : ''}`}
+          style={{
+            borderColor: followedRules == null ? 'rgb(var(--accent) / 0.55)'
+              : followedRules ? 'rgb(var(--outcome-win) / 0.6)' : 'rgb(var(--outcome-loss) / 0.6)',
+            background: followedRules == null ? 'rgb(var(--accent) / 0.08)'
+              : followedRules ? 'rgb(var(--outcome-win) / 0.10)' : 'rgb(var(--outcome-loss) / 0.10)',
+            boxShadow: followedRules == null ? undefined
+              : `0 0 18px rgb(var(${followedRules ? '--outcome-win' : '--outcome-loss'}) / 0.25)`,
+          }}>
+          <TriState inline
+            value={followedRules}
+            onChange={setFollowedRules}
+            label="Followed ALL rules"
+            hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
+          />
+        </div>
         </div>
 
         {/* D — the score. */}

@@ -10,7 +10,7 @@ import { TARGET_TYPES } from './domain';
  *
  *   1. Bias            the HTF swing range, its 50%, the nearest HTF FVGs
  *   2. Liquidity       every nameable level a sweep can take
- *   3. HTF gaps        the 4H / 1H FVGs and the opening gaps
+ *   3. HTF gaps        FVGs in the direction of travel, 5m up to 4H, and the opening gaps
  *   4. Heatmap         the resting size in the book
  *   5. Draw and plan   which way, to which target class, where it is wrong
  *   6. Session         news, the killzone, the rules for today
@@ -82,15 +82,16 @@ export const PREP_STEPS: PrepStep[] = [
     ],
   },
   {
-    id: 'gaps', title: 'HTF gaps', frames: '4H · 1H',
+    id: 'gaps', title: 'HTF gaps', frames: '4H · 1H · 30m · 15m · 10m · 5m',
     marks: [
+      'FVGs in the direction price is moving searched and added — 5m, 10m, 15m, 30m, 1H, 4H',
       'Unfilled 4H FVGs boxed',
       'Unfilled 1H FVGs boxed',
       'NWOG / NDOG marked',
       'Gaps already traded through taken off the chart',
     ],
     fields: [
-      { id: 'types', label: 'On the chart today', kind: 'many', options: ['Daily FVG', '4H FVG', '1H FVG', 'NWOG', 'NDOG'] },
+      { id: 'types', label: 'On the chart today', kind: 'many', options: ['Daily FVG', '4H FVG', '1H FVG', '30m FVG', '15m FVG', '10m FVG', '5m FVG', 'NWOG', 'NDOG'] },
       { id: 'nearest', label: 'Nearest unfilled HTF FVG', kind: 'one', options: ['Above price', 'Below price', 'Both sides', 'None close'] },
     ],
   },
