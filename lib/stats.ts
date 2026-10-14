@@ -661,7 +661,15 @@ const dayOf = (iso: string) => iso.slice(0, 10);
 export function streaks(all: Trade[]): Streaks {
   // Days: an undated backtest happened on no day we know.
   const trades = all.filter(isDated);
-  const days = [...new Set(trades.map((t) => dayOf(t.date)))].sort();
+  // Grouped once: scanning every trade for every day was quadratic, and the
+  // board pays for this on every mount.
+  const byDay = new Map<string, Trade[]>();
+  for (const t of trades) {
+    const day = dayOf(t.date);
+    const list = byDay.get(day);
+    if (list) list.push(t); else byDay.set(day, [t]);
+  }
+  const days = [...byDay.keys()].sort();
 
   const runOf = (list: string[]) => {
     let best = 0; let current = 0; let prev: string | null = null;
@@ -683,10 +691,7 @@ export function streaks(all: Trade[]): Streaks {
   };
 
   // A clean day is one where every trade on it followed the rules.
-  const cleanDays = days.filter((day) => {
-    const onDay = trades.filter((t) => dayOf(t.date) === day);
-    return onDay.length > 0 && onDay.every((t) => derivedAdherence(t));
-  });
+  const cleanDays = days.filter((day) => byDay.get(day)!.every((t) => derivedAdherence(t)));
 
   const j = runOf(days);
   const a = runOf(cleanDays);

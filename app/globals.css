@@ -327,7 +327,6 @@
   --font-display: Bahnschrift, 'DIN Alternate', 'DIN 2014', 'Segoe UI', system-ui, sans-serif;
 }
 :root[data-theme='terracotta'] body::before {
-  filter: blur(40px);
   background:
     radial-gradient(40rem 30rem at 20% 6%, rgba(214, 120, 70, 0.22), transparent 60%),
     radial-gradient(44rem 32rem at 90% 30%, rgba(222, 168, 96, 0.2), transparent 62%),
@@ -457,7 +456,14 @@ body::before {
     radial-gradient(42rem 34rem at 18% 8%,  rgba(214, 150, 48, 0.22), transparent 62%),
     radial-gradient(38rem 30rem at 88% 22%, rgba(176, 106, 44, 0.18), transparent 62%),
     radial-gradient(46rem 36rem at 62% 96%, rgba(140, 122, 62, 0.16), transparent 62%);
-  filter: blur(28px);
+  /*
+    No blur. These gradients already fade to nothing over 60% of their
+    radius, so a 28px blur on top changed nothing you could see — but it made
+    the browser re-blur a layer 1.4× the window on every tab switch, which was
+    half the paint cost of going Stats → Whiteboard. translateZ keeps it on
+    its own layer, painted once and then just composited.
+  */
+  transform: translateZ(0);
 }
 
 :root[data-mode='dark'] body::before {
@@ -840,12 +846,27 @@ html[data-nav] [data-sheet] { view-transition-name: sheet; }
 }
 
 /* A field that wants an answer breathes a soft glow (Followed ALL rules). */
+/*
+  The glow is a fixed shadow on a pseudo-element whose opacity pulses.
+  Animating box-shadow itself repainted the box every frame for as long as the
+  trade window was open; opacity runs on the compositor and costs nothing.
+*/
 @keyframes signature-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--accent) / 0), 0 0 10px rgb(var(--accent) / 0.18); }
-  50%      { box-shadow: 0 0 0 3px rgb(var(--accent) / 0.12), 0 0 22px rgb(var(--accent) / 0.38); }
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
 }
-.signature-glow { animation: signature-glow 2.4s ease-in-out infinite; }
+.signature-glow { position: relative; }
+.signature-glow::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 3px rgb(var(--accent) / 0.12), 0 0 22px rgb(var(--accent) / 0.38);
+  animation: signature-glow 2.4s ease-in-out infinite;
+  will-change: opacity;
+}
 @media (prefers-reduced-motion: reduce) {
-  .signature-glow { animation: none; box-shadow: 0 0 16px rgb(var(--accent) / 0.3); }
+  .signature-glow::after { animation: none; opacity: 0.7; }
 }
-html[data-reduce-motion='true'] .signature-glow { animation: none; box-shadow: 0 0 16px rgb(var(--accent) / 0.3); }
+html[data-reduce-motion='true'] .signature-glow::after { animation: none; opacity: 0.7; }
