@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { freshPush } from '@/lib/freshness';
 import { announceAccount, writeAccountCookie } from '@/lib/account-pref';
 import { DIRECTIONS, SESSIONS, accountLabel, type Account } from '@/lib/domain';
 import { PERIODS, accountParam, type StatsScope } from '@/lib/statsScope';
@@ -34,7 +35,7 @@ export function StatsFilters({ available, scope }: {
   const push = (change: Record<string, string | null>) => {
     const next = new URLSearchParams(params.toString());
     for (const [k, v] of Object.entries(change)) { if (v == null || v === '') next.delete(k); else next.set(k, v); }
-    router.push(`${here}?${next}`);
+    freshPush(router, `${here}?${next}`);
   };
   const setAccounts = (list: Account[]) => {
     const value = accountParam(list, names);

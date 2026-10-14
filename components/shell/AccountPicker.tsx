@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, springBouncy, springSnappy, stagger, exitQuick } from '@/lib/motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { freshPush } from '@/lib/freshness';
 import { ACCOUNTS, accountLabel } from '@/lib/domain';
 import { ACCOUNT_EVENT, ACCOUNT_SHOWN_EVENT, lastShownAccount, readAccountCookie, scopeOf, writeAccountCookie, type AccountChange } from '@/lib/account-pref';
 
@@ -50,7 +51,7 @@ export function AccountPicker() {
     if (pathname === '/stats' || pathname === '/calendar') {
       const q = new URLSearchParams(params.toString());
       q.set('account', next);
-      router.push(`${pathname}?${q}`);
+      freshPush(router, `${pathname}?${q}`);
     }
   };
 

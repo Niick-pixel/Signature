@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { arrived, navigate, registerNavigator } from '@/lib/nav';
+import { freshPush, watchWrites } from '@/lib/freshness';
 
 /**
  * Routes every internal link through lib/nav.ts, so moving between screens
@@ -13,7 +14,8 @@ export function NavTransitions() {
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => { registerNavigator((href) => router.push(href)); }, [router]);
+  useEffect(() => { watchWrites(); }, []);
+  useEffect(() => { registerNavigator((href) => freshPush(router, href)); }, [router]);
   // The new screen has rendered: let the transition play.
   useEffect(() => { arrived(); }, [pathname]);
 

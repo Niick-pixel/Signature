@@ -1,4 +1,5 @@
 'use client';
+import { markStale } from './freshness';
 
 /**
  * Per-machine display preferences.
@@ -119,6 +120,7 @@ export function writePreferences(prefs: Preferences): void {
   // Mirrored in a cookie, which belongs to the host rather than the port, so
   // a restart on a different port keeps the settings too.
   document.cookie = `${PREFERENCES_COOKIE}=${encodeURIComponent(JSON.stringify(prefs))}; path=/; max-age=31536000; samesite=lax`;
+  markStale(); // the server reads this cookie: cached screens are now out of date
   applyPreferences(prefs);
   window.dispatchEvent(new CustomEvent('signature:preferences', { detail: prefs }));
 }

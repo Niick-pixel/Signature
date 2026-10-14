@@ -24,6 +24,14 @@ const nextConfig: NextConfig = {
 
   // The floating dev badge sits on top of the whiteboard. Not in a window app.
   devIndicators: false,
+
+  // Tabs stay cached on the client for five minutes, so switching back to a
+  // screen is instant instead of a full server render of it. Anything that
+  // changes the journal marks the cache stale and the next move loads fresh
+  // (lib/freshness.ts) — a cached screen is never shown after a save.
+  experimental: {
+    staleTimes: { dynamic: 300 },
+  },
 };
 
 export default nextConfig;

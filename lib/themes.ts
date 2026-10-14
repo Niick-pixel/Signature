@@ -1,4 +1,5 @@
 import { EASE_SOFT } from './motion';
+import { markStale } from './freshness';
 /**
  * The themes.
  *
@@ -83,6 +84,7 @@ function paint(theme: ThemeInfo) {
   // Also a cookie: cookies belong to the host, not the port, so the choice
   // survives even a launch that had to use a different port.
   document.cookie = `${THEME_COOKIE}=${theme.id}; path=/; max-age=31536000; samesite=lax`;
+  markStale(); // the server reads this cookie: cached screens are now out of date
   window.signature?.setTitleBarTheme(theme.chrome);
   window.dispatchEvent(new CustomEvent('signature:theme', { detail: theme.id }));
 }

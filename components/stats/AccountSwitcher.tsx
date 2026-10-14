@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { shortcutAllowed } from '@/lib/keys';
 import { announceAccount, scopeOf, writeAccountCookie } from '@/lib/account-pref';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { freshPush } from '@/lib/freshness';
 import { press, spring } from '@/lib/motion';
 import type { Account } from '@/lib/domain';
 import { accountLabel } from '@/lib/domain';
@@ -40,7 +41,7 @@ export function AccountSwitcher({ available, current }: AccountSwitcherProps) {
     next.set('account', account);
     const scope = scopeOf(here);
     if (scope) writeAccountCookie(account, scope);
-    router.push(`${here}${next.toString() ? `?${next}` : ''}`);
+    freshPush(router, `${here}${next.toString() ? `?${next}` : ''}`);
   };
 
   const options: Array<{ key: Account | 'All'; label: string; count: number | null }> = [

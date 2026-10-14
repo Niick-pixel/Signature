@@ -1,3 +1,4 @@
+import { markStale } from './freshness';
 /**
  * The account each screen is showing, remembered across launches.
  *
@@ -63,5 +64,6 @@ export function announceAccount(account: string): void {
 /** Only for a deliberate choice — a click, never a page opening. */
 export function writeAccountCookie(account: string, scope: AccountScope): void {
   document.cookie = `${accountCookie(scope)}=${encodeURIComponent(account)}; path=/; max-age=31536000; samesite=lax`;
+  markStale(); // the server reads this cookie: cached screens are now out of date
   window.dispatchEvent(new CustomEvent<AccountChange>(ACCOUNT_EVENT, { detail: { account, scope } }));
 }
