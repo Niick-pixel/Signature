@@ -16,6 +16,9 @@ import { HypotheticalNote } from '@/components/money/MissedCard';
 import { StatsFilters } from '@/components/stats/StatsFilters';
 import { accountParam, applyStatsScope, mixesWorlds, parseStatsScope } from '@/lib/statsScope';
 import { Line, Panel, SignedBars, Stat, type BarRow } from '@/components/stats/Bars';
+import { listPreps } from '@/db/prep';
+import { planSplit } from '@/lib/planMatch';
+import { DrawdownSim } from '@/components/stats/DrawdownSim';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { MissedPatternsView } from '@/components/stats/MissedPatterns';
 import { BreakdownTable } from '@/components/stats/ModelBreakdown';
@@ -105,6 +108,14 @@ export default async function StatsPage(
     ...(gatedOnly ? {} : { gates: '1' }),
   })}#model`;
   const agg = aggregate(trades);
+  // Each trade against that morning's chart prep (lib/planMatch).
+  const plan = planSplit(trades, new Map(listPreps().map((p) => [p.day, p.data])));
+  const planned = plan.rows[0].taken + plan.rows[1].taken;
+  // The simulator's inputs: every R result in view, and a typical risk.
+  const simR = trades.filter((t) => t.outcome !== 'Not taken' && t.r_multiple != null).map((t) => t.r_multiple as number);
+  const risks = trades.map((t) => t.risk_dollars ?? (t.pnl_dollars != null && t.r_multiple ? Math.abs(t.pnl_dollars / t.r_multiple) : null))
+    .filter((v): v is number => v != null && v > 0).sort((a, b) => a - b);
+  const typicalRisk = risks.length ? risks[Math.floor(risks.length / 2)] : null;
   const m = money(trades);
   const e = edge(trades);
   const d = discipline(trades);
@@ -251,6 +262,47 @@ export default async function StatsPage(
               </Panel>
             </div>
           )}
+
+          {/*
+            The rubric 4 trial, where it can be seen: how far the sample has
+            got and, once it is in, what it says. The full table stays with
+            the model breakdowns below.
+          */}
+          {TRIAL_RUBRIC != null && (() => {
+            const v = trialVerdict;
+            const pct = Math.min(100, Math.round((v.n / TRIAL_SAMPLE) * 100));
+            const state = !v.ready ? 'collecting' : v.positive ? 'promote' : 'drop';
+            const hue = state === 'promote' ? '--outcome-win' : state === 'drop' ? '--outcome-loss' : '--accent';
+            return (
+              <section data-trial-card={state} className="glass mb-5 rounded-[calc(20px*var(--rk))] px-5 py-4"
+                style={{ borderColor: `rgb(var(${hue}) / 0.35)` }}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="text-[14px] font-semibold tracking-tight">Rubric {TRIAL_RUBRIC} trial — does a delivery without a sweep pay?</h2>
+                  <span className="tabular-nums text-[12px] font-semibold" style={{ color: `rgb(var(${hue}))` }}>
+                    {v.n}/{TRIAL_SAMPLE} setups{v.avgR != null && ` · avg ${v.avgR >= 0 ? '+' : '−'}${Math.abs(v.avgR).toFixed(2)}R`}
+                  </span>
+                </div>
+                <div className="mt-2.5 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--glass-fill-strong)' }}>
+                  <div data-trial-progress={pct} className="h-full rounded-full" style={{ width: `${pct}%`, background: `rgb(var(${hue}))` }} />
+                </div>
+                <p className="mt-2.5 text-[12px] leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+                  {state === 'collecting' && <>
+                    Collecting. Rubric {TRIAL_RUBRIC} would accept a delivery from an HTF FVG/OB without a sweep (max B). It needs {TRIAL_SAMPLE - v.n} more
+                    such setup{TRIAL_SAMPLE - v.n === 1 ? '' : 's'} to judge — taken{v.missed > 0 ? ` (${v.real})` : ''} or logged in Missed{v.missed > 0 ? ` (${v.missed})` : ''},
+                    which fills it without risking money. Your grades stay under rubric 3 until then.
+                  </>}
+                  {state === 'promote' && <>
+                    <strong style={{ color: 'rgb(var(--outcome-win))' }}>Verdict: promote.</strong> The sample is in and delivery-only setups made money on average.
+                    Promoting makes rubric {TRIAL_RUBRIC} the one new trades are graded under; old trades keep their grades. It is a change to the app — ask for it in the next update.
+                  </>}
+                  {state === 'drop' && <>
+                    <strong style={{ color: 'rgb(var(--outcome-loss))' }}>Verdict: drop.</strong> The sample is in and delivery-only setups lost on average — the sweep gate in
+                    rubric 3 was right. Dropping ends the trial; the answers it collected stay on the trades. Ask for it in the next update.
+                  </>}
+                </p>
+              </section>
+            );
+          })()}
 
           {trades.length === 0 ? (
             <div className="glass rounded-[calc(24px*var(--rk))] p-8 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>
@@ -561,6 +613,40 @@ export default async function StatsPage(
                   </div>
                 </Panel>
               </div>
+
+              <Panel n={simR.length} title="What's normal pain"
+                note="Your results reshuffled into 2,000 possible futures: the drawdown and losing streak to expect, and how often a limit would be hit at your risk. A streak inside the typical range is the strategy being itself, not broken.">
+                <DrawdownSim rs={simR} defaultRisk={typicalRisk} />
+              </Panel>
+
+              <Panel n={planned} title="Trading the plan"
+                note="Each trade against that morning's chart prep: the side you said you would take, the sweep you said you would wait for, the target you picked. The checklist asks if a setup was good; this asks if it was the one you planned.">
+                {planned === 0 ? (
+                  <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                    Nothing to compare yet. Fill in &ldquo;Today I take&rdquo;, &ldquo;Sweep to wait for&rdquo; or the target in the morning&rsquo;s chart prep (press P), and the trades that day are set against it.
+                  </p>
+                ) : (
+                  <div data-plan-split className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      {plan.rows.map((r) => (
+                        <Line key={r.key}
+                          label={`${r.label} · ${r.taken} trade${r.taken === 1 ? '' : 's'}${r.wins + r.losses ? ` · ${Math.round((r.wins / (r.wins + r.losses)) * 100)}% won` : ''}`}
+                          value={r.taken ? `${r.totalR >= 0 ? '+' : '−'}${Math.abs(r.totalR).toFixed(1)}R` : '—'}
+                          tone={r.taken === 0 || r.key === 'none' ? null : r.totalR >= 0 ? 'win' : 'loss'} />
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      {plan.reasons.length === 0 ? (
+                        <p className="text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+                          No trade has gone off plan yet.
+                        </p>
+                      ) : plan.reasons.map(([why, n]) => (
+                        <Line key={why} label={why} value={`${n}×`} tone="loss" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Panel>
 
               <div className="grid gap-5 lg:grid-cols-2">
                 <Panel n={agg.taken} title="R by reason" note="Net, worst first. This is the list that changes how you trade.">

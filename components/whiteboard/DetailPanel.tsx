@@ -23,6 +23,7 @@ import { Lightbox } from './Lightbox';
 import { ShotGallery } from './ShotGallery';
 import { tradeWhen } from '@/lib/when';
 import { accountLabel } from '@/lib/domain';
+import { PLAN_LABEL, planDay, planMatch, type PlanMatch } from '@/lib/planMatch';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -101,6 +102,17 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [zoomed, setZoomed] = useState<string | null>(null);
+  // That morning's plan, set against this trade (lib/planMatch).
+  const [plan, setPlan] = useState<PlanMatch | null>(null);
+  useEffect(() => {
+    if (!trade) { setPlan(null); return; }
+    let live = true;
+    void fetch(`/api/prep?day=${planDay(trade)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live) setPlan(planMatch(trade, j?.prep?.data ?? null)); })
+      .catch(() => { if (live) setPlan(null); });
+    return () => { live = false; };
+  }, [trade]);
 
   useEffect(() => {
     if (!trade) return;
@@ -432,6 +444,19 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                     <Row
                       label="What worked"
                       value={trade.worked_tags.length ? trade.worked_tags.join(', ') : '—'}
+                    />
+                    <Row
+                      label="Plan"
+                      value={plan == null ? '—' : (
+                        <span data-plan={plan.status} style={{
+                          color: plan.status === 'in' ? 'rgb(var(--outcome-win))' : plan.status === 'off' ? 'rgb(var(--amber))' : 'var(--text-faint)',
+                        }}>
+                          {PLAN_LABEL[plan.status]}
+                          {plan.status === 'off' && ` — ${plan.diffs.join('; ')}`}
+                          {plan.status === 'in' && ` — ${plan.agreed.join(', ')}`}
+                          {plan.status === 'none' && ' — no chart prep that morning, or nothing in it to compare'}
+                        </span>
+                      )}
                     />
                     <Row
                       label="What the market did"
