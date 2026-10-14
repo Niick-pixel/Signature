@@ -19,6 +19,7 @@ import { Line, Panel, SignedBars, Stat, type BarRow } from '@/components/stats/B
 import { listPreps } from '@/db/prep';
 import { planSplit } from '@/lib/planMatch';
 import { DrawdownSim } from '@/components/stats/DrawdownSim';
+import { edgeRead, meanRange, winRateRange } from '@/lib/confidence';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { MissedPatternsView } from '@/components/stats/MissedPatterns';
 import { BreakdownTable } from '@/components/stats/ModelBreakdown';
@@ -122,6 +123,10 @@ export default async function StatsPage(
   const trend = gapTrend(trades);
   const taken = trades.filter((t) => t.outcome !== 'Not taken');
   const withR = taken.filter((t) => t.r_multiple != null);
+  // 95% ranges: the same numbers, honest about how few trades sit behind them.
+  const wrRange = winRateRange(agg.wins, agg.wins + agg.losses);
+  const expRange = meanRange(withR.map((t) => t.r_multiple as number));
+  const expRead = edgeRead(expRange);
   const runs = streaks(trades);
   const tradingDays = new Set(taken.filter(isDated).map((t) => t.date.slice(0, 10))).size;
   const tagged = (key: 'mistake_tags' | 'worked_tags' | 'market_tags') => taken.filter((t) => (t[key] ?? []).length > 0).length;
@@ -393,12 +398,19 @@ export default async function StatsPage(
                   label="Win rate"
                   value={pct(agg.winRate)}
                   sub={`${agg.wins}W · ${agg.losses}L · ${agg.breakeven + agg.scratched} flat`}
+                  range={wrRange && `likely ${Math.round(wrRange.lo * 100)}–${Math.round(wrRange.hi * 100)}%`}
                 />
                 <Stat
                   n={withR.length}
                   label="Expectancy"
                   value={r2(e.expectancy)}
                   sub="Average R per trade taken"
+                  range={expRange && `likely ${r2(expRange.lo)} to ${r2(expRange.hi)}`}
+                  read={expRead && {
+                    positive: { text: 'edge looks real', tone: 'win' as const },
+                    negative: { text: 'losing, not bad luck', tone: 'loss' as const },
+                    unclear: { text: 'not clear yet', tone: null },
+                  }[expRead]}
                   tone={(e.expectancy ?? 0) > 0 ? 'win' : (e.expectancy ?? 0) < 0 ? 'loss' : null}
                 />
                 {/*

@@ -145,8 +145,14 @@ export function RateBars({ rows }: { rows: BarRow[] }) {
 
 /** A single headline number. The row of these is the first thing you read. */
 export function Stat({
-  label, value, sub, tone, n,
-}: { label: string; value: string; sub?: string; tone?: 'win' | 'loss' | null; n?: number }) {
+  label, value, sub, tone, n, range, read,
+}: {
+  label: string; value: string; sub?: string; tone?: 'win' | 'loss' | null; n?: number;
+  /** The 95% range around `value`, already formatted ("likely 33–79%"). */
+  range?: string | null;
+  /** What the range says, in a word or three, and how to colour it. */
+  read?: { text: string; tone: 'win' | 'loss' | null } | null;
+}) {
   const color = tone === 'win' ? 'rgb(var(--outcome-win))'
     : tone === 'loss' ? 'rgb(var(--outcome-loss))'
     : 'var(--text)';
@@ -163,6 +169,25 @@ export function Stat({
       </div>
       {sub && (
         <div className="mt-1.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>{sub}</div>
+      )}
+      {range && (
+        <div
+          className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-[10.5px] leading-snug tabular-nums"
+          style={{ color: 'var(--text-faint)' }}
+          title="95% range: where the true number most likely sits, given how few or many trades this is"
+          data-range
+        >
+          <span>{range}</span>
+          {read && (
+            <span
+              className="font-medium"
+              style={{ color: read.tone === 'win' ? 'rgb(var(--outcome-win))' : read.tone === 'loss' ? 'rgb(var(--outcome-loss))' : 'var(--text-dim)' }}
+              data-range-read
+            >
+              · {read.text}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
