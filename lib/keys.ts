@@ -70,6 +70,19 @@ export function typing(): boolean {
  * is allowed, it is how "?" and "+" are typed), nothing being typed, and no
  * dialog on screen — a dialog owns the keyboard while it is open.
  */
+/** Whether the New trade window is open over the current screen. */
+export function captureOpen(): boolean {
+  return typeof window !== 'undefined' && window.location.pathname === '/new';
+}
+
+/**
+ * A shortcut that belongs to the screen underneath — the board's zoom, a
+ * month's arrows — stands down while New trade is open over it.
+ */
+export function pageShortcutAllowed(e: KeyboardEvent): boolean {
+  return !captureOpen() && shortcutAllowed(e);
+}
+
 export function shortcutAllowed(e: KeyboardEvent): boolean {
   if (e.defaultPrevented || e.repeat && !/^Arrow/.test(e.key)) return false;
   if (e.ctrlKey || e.metaKey || e.altKey) return false;

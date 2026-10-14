@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { shortcutAllowed } from '@/lib/keys';
+import { pageShortcutAllowed } from '@/lib/keys';
 import { navigate } from '@/lib/nav';
 
 /**
@@ -11,7 +11,7 @@ import { navigate } from '@/lib/nav';
 export function KeyNav({ prev, next, home }: { prev: string; next: string; home?: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!shortcutAllowed(e)) return;
+      if (!pageShortcutAllowed(e)) return;
       const to = e.key === 'ArrowLeft' ? prev : e.key === 'ArrowRight' ? next : e.key === 'Home' ? home : undefined;
       if (!to) return;
       e.preventDefault();

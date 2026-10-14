@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   flashes cream and a light one never flashes dark. The OS setting is
   deliberately ignored: the app opens the way you left it.
 */
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
   return (
     // The bootstrap script below sets data-theme before React hydrates, which
     // is by definition a server/client mismatch on this one element.
@@ -33,6 +33,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <PreferencesProvider>
           <ConfirmProvider>
           {children}
+          {/* New trade, over the current screen — see components/capture/CaptureSheet. */}
+          {modal}
           {/* Theme above settings, bottom-left, on every screen. */}
           <BottomLeftControls>
             <ThemeToggle />

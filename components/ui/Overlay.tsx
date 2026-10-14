@@ -45,7 +45,7 @@ export function Overlay({
   children,
   className = '',
   lift = 14,
-  scrim = { opacity: 0.45, blur: 3 },
+  scrim = { opacity: 0.5 },
   surface,
 }: {
   open: boolean;
@@ -56,7 +56,7 @@ export function Overlay({
   /** How far the panel rises as it opens. */
   lift?: number;
   /** A bigger panel wants a heavier backdrop behind it. */
-  scrim?: { opacity: number; blur: number };
+  scrim?: { opacity: number };
   /** A background for the panel, when the glass should read as solid. */
   surface?: string;
 }) {
@@ -90,8 +90,10 @@ export function Overlay({
             onClick={onClose}
             className="fixed inset-0 z-[70]"
             style={{
+              // Tint only, never a backdrop blur: a full-window blur that fades
+              // in re-blurs everything behind it on every frame of the fade,
+              // and under a dark tint it was barely visible anyway.
               background: `rgb(0 0 0 / ${scrim.opacity})`,
-              backdropFilter: `blur(${scrim.blur}px)`,
             }}
           />
 

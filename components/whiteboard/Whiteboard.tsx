@@ -28,6 +28,8 @@ import { EdgeKey } from './EdgeKey';
 import { accountLabel, isReal } from '@/lib/domain';
 import { LiveFlow } from './LiveFlow';
 import { dialogIsOpen } from '@/components/ui/Overlay';
+import { captureOpen } from '@/lib/keys';
+import { JOURNAL_CHANGED } from '@/lib/freshness';
 import { GroupViewer } from './GroupViewer';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
 import { BulkBar } from './BulkBar';
@@ -75,6 +77,11 @@ export interface BoardStart {
 function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades: Trade[]; readOnly?: boolean; start?: BoardStart }) {
   const flow = useReactFlow();
   const [trades, setTrades] = useState(initial);
+  // The board now stays mounted under the New trade window, so a save no
+  // longer rebuilds it: when the server sends a fresh list (a router refresh
+  // after any change), adopt it in place.
+  const [received, setReceived] = useState(initial);
+  if (initial !== received) { setReceived(initial); setTrades(initial); }
   const confirm = useConfirm();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
@@ -230,6 +237,15 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
     if (res.ok) setTrades(await res.json());
   }, []);
 
+  // New trade closed over the board after a save: the board never left, so
+  // it reloads its own trades and layout in place instead of being rebuilt.
+  useEffect(() => {
+    if (readOnly) return;
+    const onChanged = () => { void refresh(); void loadBoard(); };
+    window.addEventListener(JOURNAL_CHANGED, onChanged);
+    return () => window.removeEventListener(JOURNAL_CHANGED, onChanged);
+  }, [readOnly, refresh, loadBoard]);
+
   const { prefs } = usePreferences();
   const scale = DENSITY_SCALE[prefs.boardDensity];
 
@@ -347,6 +363,8 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
   useEffect(() => {
     if (readOnly) return;
     const onKey = (e: KeyboardEvent) => {
+      // New trade is open over the board: the keyboard is the form's.
+      if (captureOpen()) return;
       const el = document.activeElement;
       const typing = el instanceof HTMLInputElement
         || el instanceof HTMLTextAreaElement

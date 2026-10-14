@@ -67,10 +67,16 @@
   /* Glass on the whiteboard, where there is no blur — see .react-flow__node below. */
   --node-fill: rgba(251, 247, 238, 0.94);
 
-  /* Layered shadows: one tight, one wide and soft. Never a single flat one. */
+  /*
+    Layered shadows: one tight, one soft. Never a single flat one.
+    The card shadow sits on every small control (dozens per screen), and a
+    shadow's paint cost grows with its blur — the old 40px halo made the
+    trade window drop most frames while scrolling. Kept short: it reads as
+    lift, not haze. The panel shadow is on a handful of surfaces and stays wide.
+  */
   --shadow-card:
     0 1px 2px rgba(60, 42, 22, 0.12),
-    0 16px 40px -12px rgba(60, 42, 22, 0.18);
+    0 6px 16px -8px rgba(60, 42, 22, 0.2);
   --shadow-panel:
     0 2px 6px rgba(60, 42, 22, 0.14),
     0 40px 88px -24px rgba(60, 42, 22, 0.24);
@@ -110,7 +116,7 @@
 
   --shadow-card:
     0 1px 2px rgba(0, 0, 0, 0.55),
-    0 16px 48px -12px rgba(0, 0, 0, 0.68);
+    0 6px 18px -8px rgba(0, 0, 0, 0.6);
   --shadow-panel:
     0 2px 4px rgba(0, 0, 0, 0.62),
     0 40px 96px -24px rgba(0, 0, 0, 0.82);
@@ -286,7 +292,7 @@
   --glass-specular: rgba(255, 255, 250, 0.9);
   --glass-blur: blur(14px) saturate(130%);
   --node-fill: rgba(247, 247, 237, 0.95);
-  --shadow-card: 0 2px 4px rgba(45, 60, 35, 0.06), 0 22px 48px -20px rgba(45, 60, 35, 0.22);
+  --shadow-card: 0 2px 4px rgba(45, 60, 35, 0.06), 0 8px 18px -10px rgba(45, 60, 35, 0.24);
   --shadow-panel: 0 4px 10px rgba(45, 60, 35, 0.08), 0 44px 96px -30px rgba(45, 60, 35, 0.28);
   --accent: 66 98 52;
   --board-dots: rgba(60, 80, 45, 0.22);
@@ -349,7 +355,7 @@
   --glass-specular: rgba(240, 226, 196, 0.4);
   --glass-blur: blur(22px) saturate(160%);
   --node-fill: rgba(24, 30, 46, 0.95);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.6), 0 16px 48px -12px rgba(0, 0, 0, 0.7);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.6), 0 6px 18px -8px rgba(0, 0, 0, 0.62);
   --shadow-panel: 0 2px 4px rgba(0, 0, 0, 0.62), 0 40px 96px -24px rgba(0, 0, 0, 0.85);
   --accent: 218 174 96;
   --board-dots: rgba(226, 204, 160, 0.14);
@@ -835,6 +841,16 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   the New trade card like everything else.
 */
 html[data-nav] header.titlebar-drag { view-transition-name: titlebar; }
+/* New trade is open over the screen: the title bar (and its menus) stay above it. */
+html[data-capture] header.titlebar-drag { z-index: 56; }
+/*
+  Over the live board the form's own glass would let the board's text show
+  through behind the fields (the old blurred copy hid that). The window is
+  solid; the board stays visible around it, through the tint.
+*/
+[data-capture-root] [data-sheet] {
+  background: color-mix(in srgb, var(--bg-raised) 96%, var(--glass-fill));
+}
 html[data-nav] [data-sheet] { view-transition-name: sheet; }
 /* The title bar is the same on both sides: no crossfade, no flicker. */
 ::view-transition-old(titlebar) { animation: none; opacity: 0; }

@@ -8,6 +8,7 @@ import {
 } from '@/lib/domain';
 import { DeleteTradeDialog } from './DeleteTradeDialog';
 import { dialogIsOpen } from '@/components/ui/Overlay';
+import { captureOpen } from '@/lib/keys';
 import { GATES_SINCE, MODEL_GATE_MESSAGE, TRIAL_RUBRIC, gradeUnder, trialEventOf } from '@/lib/rubric';
 import { spring, springSoft, scrimExit, exitQuick } from '@/lib/motion';
 import { derivedAdherence } from '@/lib/adherence';
@@ -125,7 +126,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
 
   useEffect(() => {
     // A dialog over the panel (the delete steps) owns Escape first.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !dialogIsOpen()) onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !dialogIsOpen() && !captureOpen()) onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -176,7 +177,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
             className="fixed inset-0 z-40"
             // A modal scrim darkens in both themes — that is what makes the
             // panel read as lifted off the board.
-            style={{ background: 'rgba(0,0,0,0.68)', backdropFilter: 'blur(6px)' }}
+            style={{ background: 'rgba(0,0,0,0.72)' /* no backdrop blur: see Overlay */ }}
           />
 
           <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-6">

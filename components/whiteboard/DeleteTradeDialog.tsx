@@ -85,7 +85,7 @@ export function DeleteTradeDialog({ trade, open, onClose, onDone, mode = 'trash'
 
   return (
     <Overlay open={open} onClose={onClose} className="w-full max-w-[30rem] rounded-[calc(24px*var(--rk))] p-6"
-      scrim={{ opacity: 0.55, blur: 6 }}
+      scrim={{ opacity: 0.6 }}
       // A decision, not a glance: solid enough that nothing behind competes with it.
       surface="color-mix(in srgb, var(--bg-raised) 94%, transparent)">
       <div data-delete-dialog={step}>

@@ -8,7 +8,7 @@ import { announceAccount, writeAccountCookie } from '@/lib/account-pref';
 import { DIRECTIONS, SESSIONS, accountLabel, type Account } from '@/lib/domain';
 import { PERIODS, accountParam, type StatsScope } from '@/lib/statsScope';
 import { press, spring } from '@/lib/motion';
-import { shortcutAllowed } from '@/lib/keys';
+import { pageShortcutAllowed } from '@/lib/keys';
 
 /**
  * Everything the Stats page can be narrowed by, in one place.
@@ -60,7 +60,7 @@ export function StatsFilters({ available, scope }: {
     const order: Array<Account | 'All'> = [...names, ...(names.length > 1 ? ['All' as const] : [])];
     if (order.length <= 1) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key !== '[' && e.key !== ']') || !shortcutAllowed(e)) return;
+      if ((e.key !== '[' && e.key !== ']') || !pageShortcutAllowed(e)) return;
       e.preventDefault();
       const at = Math.max(0, order.findIndex((o) => (o === 'All' ? scope.all : !scope.all && o === single)));
       const to = order[(at + (e.key === ']' ? 1 : -1) + order.length) % order.length];

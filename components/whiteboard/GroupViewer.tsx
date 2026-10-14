@@ -51,7 +51,7 @@ export function GroupViewer({
       open={label !== null}
       onClose={onClose}
       lift={18}
-      scrim={{ opacity: 0.5, blur: 4 }}
+      scrim={{ opacity: 0.55 }}
       className="flex max-h-[86vh] w-[min(76rem,calc(100vw-3rem))] flex-col rounded-[calc(26px*var(--rk))] p-6"
     >
             <div className="mb-5 flex flex-wrap items-start justify-between gap-4">

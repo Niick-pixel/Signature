@@ -74,7 +74,7 @@ export function SearchPalette({ trades, pages = [], open, onClose, onOpenTrade }
             transition={spring}
             onClick={onClose}
             className="fixed inset-0 z-[70]"
-            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+            style={{ background: 'rgba(0,0,0,0.6)' /* no backdrop blur: see Overlay */ }}
           />
           <div className="pointer-events-none fixed inset-x-0 top-[12vh] z-[71] flex justify-center px-6">
             <motion.div

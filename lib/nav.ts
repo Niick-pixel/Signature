@@ -25,6 +25,7 @@
  */
 
 import { EASE_BOUNCE, EASE_SOFT as EASE_OUT } from './motion';
+import { JOURNAL_CHANGED, peekStale } from './freshness';
 
 const EASE_IN = 'cubic-bezier(0.4, 0, 1, 1)';
 
@@ -33,12 +34,19 @@ type Kind = 'page' | 'open' | 'close';
 
 let push: Push | null = null;
 let arrive: (() => void) | null = null;
+/** A tab switch waiting for its new screen, to play the entrance on it. */
+let entering: string | null = null;
+/** The screen the New trade window was opened over. */
+let underneath: string | null = null;
 
 /** Wired once by <NavTransitions/> with the router. */
 export function registerNavigator(p: Push) { push = p; }
 
-/** Called by <NavTransitions/> when the new path has rendered. */
-export function arrived() { arrive?.(); arrive = null; }
+/** Called by <NavTransitions/> when the new path has rendered — before it is painted. */
+export function arrived() {
+  arrive?.(); arrive = null;
+  if (entering) { enter(entering); entering = null; }
+}
 
 const still = () => document.documentElement.dataset.reduceMotion === 'true'
   || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -62,7 +70,32 @@ export function navigate(href: string): void {
   const start = (document as Document & { startViewTransition?: StartVT }).startViewTransition?.bind(document);
   if (to === from || !start || still()) { push(href); return; }
 
+  // New trade opens over the current screen (components/capture/CaptureSheet
+  // animates itself in), and closes by sliding away before the move.
+  if (to === '/new' && from !== '/new') { underneath = from; push(href); return; }
+  if (from === '/new' && document.documentElement.dataset.capture !== undefined) {
+    const back = underneath;
+    const changed = peekStale();
+    void closeSheet().then(() => {
+      // Back to the screen it was opened over: nothing to enter, it never left
+      // — and nothing rebuilds it, so after a save it is told to reload.
+      if (to !== back) entering = to;
+      push!(href);
+      if (changed && to === back) window.dispatchEvent(new Event(JOURNAL_CHANGED));
+    });
+    return;
+  }
+
   const kind = kindFor(from, to);
+  /*
+    Tab switches don't use a view transition any more. A transition freezes
+    the screen, snapshots it, waits for the next page and snapshots again
+    before it can animate: measured, that was ~8 dropped frames on every
+    switch, even to a screen with no work to do. Now the new screen is
+    shown on the very next frame and rises in on the compositor (enter).
+    The New trade window keeps its transition — the sheet opening is worth it.
+  */
+  if (kind === 'page') { entering = to; push(href); return; }
   const root = document.documentElement;
   root.dataset.nav = kind;
   const t = start(() => new Promise<void>((resolve) => {
@@ -81,6 +114,37 @@ export function navigate(href: string): void {
     // navigation, if not let go here.
     for (const a of playing) a.cancel();
   });
+}
+
+/*
+  The entrance for a tab switch: one animation, on the content under the
+  title bar (which stays put), opacity and transform only — both run on the
+  compositor, so it stays smooth while the new screen finishes mounting.
+  It starts at 40%, never at zero: a fade from nothing shows the bare
+  background for a beat, which read as a flicker. Played once per screen
+  change, from a layout effect, so no frame ever shows the page at full
+  strength before the fade begins.
+*/
+function enter(to: string) {
+  const content = document.querySelector('header.titlebar-drag')?.nextElementSibling as HTMLElement | null;
+  if (!content) return;
+  const board = to === '/';
+  content.animate(board
+    // The whiteboard only fades: it is the one screen never seen to move.
+    ? [{ opacity: 0.4 }, { opacity: 1 }]
+    : [{ opacity: 0.4, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }],
+  { duration: board ? 200 : 260, easing: board ? EASE_OUT : EASE_BOUNCE });
+}
+
+/** The New trade window leaving: a quick sink and fade, then the move. */
+function closeSheet(): Promise<void> {
+  const root = document.querySelector<HTMLElement>('[data-capture-root]');
+  if (!root) return Promise.resolve();
+  root.querySelector<HTMLElement>('[data-sheet]')?.animate(
+    [{ transform: 'none' }, { transform: 'translateY(14px) scale(0.97)' }],
+    { duration: 170, easing: EASE_IN, fill: 'forwards' });
+  const fade = root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 170, easing: EASE_IN, fill: 'forwards' });
+  return fade.finished.then(() => {}, () => {});
 }
 
 function play(kind: Kind, to: string): Animation[] {

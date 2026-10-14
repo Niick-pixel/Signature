@@ -18,6 +18,12 @@ let stale = false;
 
 export function markStale(): void { stale = true; }
 
+/** Whether anything changed since the last move, without clearing it. */
+export function peekStale(): boolean { return stale; }
+
+/** Fired when New trade closes after a change, for the screen it was over. */
+export const JOURNAL_CHANGED = 'signature:journal-changed';
+
 /** True once after a change; reading it clears it. */
 export function takeStale(): boolean {
   const was = stale;

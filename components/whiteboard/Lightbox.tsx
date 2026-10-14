@@ -66,7 +66,7 @@ export function Lightbox({ src, alt, onClose, onPrev, onNext, caption }: Lightbo
           transition={spring}
           // Above the detail panel, which is already at z-50.
           className="fixed inset-0 z-[80] grid place-items-center"
-          style={{ background: 'rgba(0,0,0,0.86)', backdropFilter: 'blur(8px)' }}
+          style={{ background: 'rgba(0,0,0,0.88)' /* no backdrop blur: see Overlay */ }}
           onClick={onClose}
           onWheel={(e) => {
             setZoom((z) => Math.min(6, Math.max(1, z * (e.deltaY < 0 ? 1.12 : 0.89))));

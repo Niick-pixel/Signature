@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { arrived, navigate, registerNavigator } from '@/lib/nav';
 import { freshPush, watchWrites } from '@/lib/freshness';
@@ -16,8 +16,9 @@ export function NavTransitions() {
 
   useEffect(() => { watchWrites(); }, []);
   useEffect(() => { registerNavigator((href) => freshPush(router, href)); }, [router]);
-  // The new screen has rendered: let the transition play.
-  useEffect(() => { arrived(); }, [pathname]);
+  // The new screen has rendered: let the transition (or entrance) play —
+  // before the browser paints it, so the entrance owns its first frame.
+  useLayoutEffect(() => { arrived(); }, [pathname]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {

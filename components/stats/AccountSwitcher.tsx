@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { shortcutAllowed } from '@/lib/keys';
+import { pageShortcutAllowed } from '@/lib/keys';
 import { announceAccount, scopeOf, writeAccountCookie } from '@/lib/account-pref';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { freshPush } from '@/lib/freshness';
@@ -58,7 +58,7 @@ export function AccountSwitcher({ available, current }: AccountSwitcherProps) {
   useEffect(() => {
     if (options.length <= 1) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key !== '[' && e.key !== ']') || !shortcutAllowed(e)) return;
+      if ((e.key !== '[' && e.key !== ']') || !pageShortcutAllowed(e)) return;
       e.preventDefault();
       const i = Math.max(0, options.findIndex((o) => o.key === current));
       go(options[(i + (e.key === ']' ? 1 : -1) + options.length) % options.length].key);
