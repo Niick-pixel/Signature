@@ -620,7 +620,7 @@ export default async function StatsPage(
               </Panel>
 
               <Panel n={planned} title="Trading the plan"
-                note="Each trade against that morning's chart prep: the side you said you would take, the sweep you said you would wait for, the target you picked. The checklist asks if a setup was good; this asks if it was the one you planned.">
+                note="Each trade against that morning's chart prep: the side you said you would take, the sweep you said you would wait for, the target you picked, and the entry time (converted from Costa Rica to New York time) against your first-entry and done-by times. The checklist asks if a setup was good; this asks if it was the one you planned.">
                 {planned === 0 ? (
                   <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
                     Nothing to compare yet. Fill in &ldquo;Today I take&rdquo;, &ldquo;Sweep to wait for&rdquo; or the target in the morning&rsquo;s chart prep (press P), and the trades that day are set against it.
