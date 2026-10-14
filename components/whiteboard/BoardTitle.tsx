@@ -3,7 +3,6 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { motion } from 'framer-motion';
-import { springBouncy } from '@/lib/motion';
 
 export type BoardTitleData = {
   label: string;
@@ -23,9 +22,8 @@ function BoardTitleInner({ data }: NodeProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={springBouncy}
+      // Arrives with the board's own fade, not a second spring on top of it.
+      initial={false}
       className="glass rounded-[calc(26px*var(--rk))] px-10 py-6 text-center"
       style={{
         borderColor: 'rgb(var(--accent) / 0.4)',

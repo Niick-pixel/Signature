@@ -85,3 +85,36 @@ export const exitQuick = { duration: 0.12, ease: [0.4, 0, 1, 1] } as const;
  * moment they start leaving.
  */
 export const scrimExit = { duration: 0.16, ease: [0.4, 0, 0.2, 1] } as const;
+
+/**
+ * A spring as a CSS easing curve, for animations that must run on the
+ * compositor (element.animate / CSS) instead of Framer's per-frame JavaScript.
+ *
+ * Framer's springs are stepped on the main thread; while a screen is still
+ * mounting they stall and skip, which reads as slow motion. The same spring,
+ * sampled into a linear() curve, plays on the compositor at full frame rate
+ * however busy the page is. Returns the curve and how long it takes to settle.
+ */
+export function springEasing(
+  { stiffness = 340, damping = 25, mass = 1 }: { stiffness?: number; damping?: number; mass?: number } = {},
+): { easing: string; duration: number } {
+  const dt = 1 / 240;
+  let x = 0; let v = 0; let t = 0;
+  const samples: number[] = [0];
+  // Integrate until it has settled (or 2s, whichever first).
+  while (t < 2) {
+    const a = (-stiffness * (x - 1) - damping * v) / mass;
+    v += a * dt; x += v * dt; t += dt;
+    samples.push(x);
+    if (t > 0.1 && Math.abs(x - 1) < 0.001 && Math.abs(v) < 0.01) break;
+  }
+  // ~40 evenly spaced stops is indistinguishable from the real curve.
+  const stops = 40;
+  const pts: string[] = [];
+  for (let i = 0; i <= stops; i++) pts.push(samples[Math.round((i / stops) * (samples.length - 1))].toFixed(4));
+  pts[pts.length - 1] = '1';
+  return { easing: `linear(${pts.join(', ')})`, duration: Math.round(t * 1000) };
+}
+
+/** The app's standard spring, ready for element.animate(). */
+export const SPRING_CSS = springEasing();

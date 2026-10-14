@@ -52,7 +52,7 @@ export function RiskBanner({ trades }: { trades: Trade[] }) {
   ].filter(Boolean);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}

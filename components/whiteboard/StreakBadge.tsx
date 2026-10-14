@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { springBouncy } from '@/lib/motion';
 import { streaks } from '@/lib/stats';
 import type { Trade } from '@/lib/types';
 
@@ -21,9 +20,8 @@ export function StreakBadge({ trades }: { trades: Trade[] }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={springBouncy}
+      // Arrives with the board's own fade, not a second spring on top of it.
+      initial={false}
       title={
         live
           ? `${run.journalingCurrent} days in a row with an entry · best ${run.journalingBest} · ${run.adherenceCurrent} clean days running`

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { press, spring } from '@/lib/motion';
+import { SPRING_CSS, press, spring } from '@/lib/motion';
 import { Wordmark } from './Wordmark';
 import { CheckInChip } from './MorningCheckIn';
 import { AccountPicker } from './AccountPicker';
@@ -24,8 +24,38 @@ const TABS = [
  * run to the edge, which means this strip provides the drag region — and has to
  * leave room for the platform's window buttons, which are drawn over it.
  */
+/*
+  Where the tab pill was on the previous screen. Every screen draws its own
+  title bar, so the pill is a new element after each switch; it reads this to
+  slide in from where the old one sat.
+*/
+let lastPill: { left: number; width: number } | null = null;
+
 export function TitleBar() {
   const pathname = usePathname();
+  const pill = useRef<HTMLSpanElement>(null);
+
+  /*
+    The pill slides between tabs on the compositor (FLIP: measure the old
+    place, start there, animate transform to none). It used to be a Framer
+    layoutId, stepped by JavaScript — and a switch is exactly when the main
+    thread is busiest building the new screen, so it crawled and skipped,
+    worst on the long Journal → Whiteboard slide.
+  */
+  useLayoutEffect(() => {
+    const el = pill.current;
+    if (!el) { lastPill = null; return; }
+    const r = el.getBoundingClientRect();
+    const from = lastPill;
+    lastPill = { left: r.left, width: r.width };
+    const still = document.documentElement.dataset.reduceMotion === 'true'
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!from || still || (from.left === r.left && from.width === r.width) || r.width === 0) return;
+    el.animate([
+      { transform: `translateX(${from.left - r.left}px) scaleX(${from.width / r.width})` },
+      { transform: 'none' },
+    ], { duration: SPRING_CSS.duration, easing: SPRING_CSS.easing });
+  }, [pathname]);
   const [platform, setPlatform] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,13 +95,11 @@ export function TitleBar() {
                   style={{ color: active ? 'var(--text)' : 'var(--text-faint)' }}
                 >
                   {active && (
-                    // A shared layoutId slides the pill between tabs on a
-                    // spring instead of cross-fading.
-                    <motion.span
-                      layoutId="titlebar-tab"
-                      transition={spring}
+                    // Slides in from the previous tab — see the layout effect above.
+                    <span
+                      ref={pill}
                       className="absolute inset-0 rounded-full"
-                      style={{ background: 'var(--glass-fill-strong)', border: '1px solid var(--glass-stroke)' }}
+                      style={{ background: 'var(--glass-fill-strong)', border: '1px solid var(--glass-stroke)', transformOrigin: 'left center' }}
                     />
                   )}
                   <span className="relative">{tab.label}</span>

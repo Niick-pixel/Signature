@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { OUTCOMES, SESSIONS, type Outcome, type Session } from '@/lib/domain';
 import { ACCOUNT_VALUES, accountLabel, type Account } from '@/lib/domain';
@@ -123,14 +124,16 @@ export function Toolbar({
   /** Rendered as-is so the toolbar does not need to know about preferences. */
   savedViews: React.ReactNode;
 }) {
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; }, []);
   const toggle = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
   return (
     <motion.div
-      initial={{ y: -12, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={spring}
+      // No entrance of its own: the board fades in on the compositor
+      // (lib/nav.ts), and a Framer spring here crawled while the board mounted.
+      initial={false}
       /*
         Centred, and wrapping symmetrically. The bar had grown left-aligned
         with a count pinned to the far right, so at a wide window it read as
@@ -171,7 +174,8 @@ export function Toolbar({
         </span>
         <motion.span
           key={filters.minGrade}
-          initial={{ scale: 0.7, opacity: 0.5 }}
+          // Pops when the grade changes, not when the board first appears.
+          initial={mounted.current ? { scale: 0.7, opacity: 0.5 } : false}
           animate={{ scale: 1, opacity: 1 }}
           transition={springBouncy}
           className="w-6 tabular-nums text-[11px] font-semibold"
