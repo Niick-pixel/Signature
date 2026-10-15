@@ -10,6 +10,7 @@ import { Shortcuts } from '@/components/shell/Shortcuts';
 import { NavTransitions } from '@/components/shell/NavTransitions';
 import { Tooltips } from '@/components/shell/Tooltips';
 import { ConfirmProvider } from '@/components/ui/Confirm';
+import { BoardLayer } from '@/components/whiteboard/BoardLayer';
 
 export const metadata: Metadata = {
   title: 'Signature',
@@ -33,6 +34,8 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
         <PreferencesProvider>
           <ConfirmProvider>
           {children}
+          {/* The whiteboard, mounted once and kept alive — see PersistentBoard. */}
+          <BoardLayer />
           {/* New trade, over the current screen — see components/capture/CaptureSheet. */}
           {modal}
           {/* Theme above settings, bottom-left, on every screen. */}

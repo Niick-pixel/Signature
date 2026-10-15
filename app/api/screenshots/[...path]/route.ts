@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { resolveScreenshot } from '@/db/screenshots';
+import { THUMB_WIDTHS, thumbnail } from '@/db/thumbs';
 
 const CONTENT_TYPE: Record<string, string> = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
@@ -13,7 +14,7 @@ const CONTENT_TYPE: Record<string, string> = {
  * purpose — /public is bundled at build time, and this folder is user data that
  * changes constantly.
  */
-export async function GET(_request: Request, ctx: { params: Promise<{ path: string[] }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ path: string[] }> }) {
   const { path: segments } = await ctx.params;
 
   let absolute: string;
@@ -27,6 +28,18 @@ export async function GET(_request: Request, ctx: { params: Promise<{ path: stri
 
   const type = CONTENT_TYPE[path.extname(absolute).toLowerCase()];
   if (!type) return new NextResponse('Not found', { status: 404 });
+
+  // ?w=720 asks for a card-sized copy (db/thumbs.ts); the original otherwise,
+  // or whenever a copy cannot be made.
+  const w = Number(new URL(request.url).searchParams.get('w'));
+  if ((THUMB_WIDTHS as readonly number[]).includes(w) && type !== 'image/gif') {
+    const small = await thumbnail(absolute, segments.join('/'), w);
+    if (small) {
+      return new NextResponse(small as unknown as BodyInit, {
+        headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=31536000, immutable' },
+      });
+    }
+  }
 
   return new NextResponse(fs.readFileSync(absolute) as unknown as BodyInit, {
     headers: {

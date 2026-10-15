@@ -28,8 +28,8 @@ import { EdgeKey } from './EdgeKey';
 import { accountLabel, isReal } from '@/lib/domain';
 import { LiveFlow } from './LiveFlow';
 import { dialogIsOpen } from '@/components/ui/Overlay';
-import { captureOpen } from '@/lib/keys';
-import { JOURNAL_CHANGED } from '@/lib/freshness';
+import { BOARD_SHOWN, boardShown, captureOpen } from '@/lib/keys';
+import { JOURNAL_CHANGED, journalVersion } from '@/lib/freshness';
 import { GroupViewer } from './GroupViewer';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
 import { BulkBar } from './BulkBar';
@@ -237,6 +237,26 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
     if (res.ok) setTrades(await res.json());
   }, []);
 
+  /*
+    The board stays alive, hidden, while other screens are up, and is told
+    each time it is shown again (PersistentBoard, BOARD_SHOWN). Anything
+    saved meanwhile — on the calendar, a review, the journal — is picked up
+    here, once.
+  */
+  const seenVersion = useRef(journalVersion());
+  const reload = useRef(() => { void refresh(); void loadBoard(); });
+  reload.current = () => { void refresh(); void loadBoard(); };
+  useEffect(() => {
+    if (readOnly) return;
+    const onShown = () => {
+      if (seenVersion.current === journalVersion()) return;
+      seenVersion.current = journalVersion();
+      reload.current();
+    };
+    window.addEventListener(BOARD_SHOWN, onShown);
+    return () => window.removeEventListener(BOARD_SHOWN, onShown);
+  }, [readOnly]);
+
   // New trade closed over the board after a save: the board never left, so
   // it reloads its own trades and layout in place instead of being rebuilt.
   useEffect(() => {
@@ -363,8 +383,9 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
   useEffect(() => {
     if (readOnly) return;
     const onKey = (e: KeyboardEvent) => {
-      // New trade is open over the board: the keyboard is the form's.
-      if (captureOpen()) return;
+      // New trade is open over the board, or the board is hidden behind
+      // another screen: the keyboard is not the board's.
+      if (captureOpen() || !boardShown()) return;
       const el = document.activeElement;
       const typing = el instanceof HTMLInputElement
         || el instanceof HTMLTextAreaElement

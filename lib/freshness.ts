@@ -15,8 +15,12 @@
  * never drives a render.
  */
 let stale = false;
+let version = 0;
 
-export function markStale(): void { stale = true; }
+export function markStale(): void { stale = true; version += 1; }
+
+/** Goes up on every change; a screen kept alive compares it to what it last saw. */
+export function journalVersion(): number { return version; }
 
 /** Whether anything changed since the last move, without clearing it. */
 export function peekStale(): boolean { return stale; }

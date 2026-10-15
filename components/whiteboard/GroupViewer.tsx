@@ -119,7 +119,7 @@ export function GroupViewer({
                     {t.screenshot_path ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`/api/screenshots/${t.screenshot_path}`}
+                        src={`/api/screenshots/${t.screenshot_path}?w=480`}
                         alt=""
                         className="aspect-[16/10] w-full object-cover"
                         style={{ background: 'var(--glass-fill-strong)' }}

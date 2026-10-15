@@ -39,6 +39,9 @@ let entering: string | null = null;
 /** The screen the New trade window was opened over. */
 let underneath: string | null = null;
 
+/** Whether New trade, if open, is over the whiteboard. */
+export function boardUnderneath(): boolean { return underneath === '/'; }
+
 /** Wired once by <NavTransitions/> with the router. */
 export function registerNavigator(p: Push) { push = p; }
 
@@ -126,9 +129,12 @@ export function navigate(href: string): void {
   strength before the fade begins.
 */
 function enter(to: string) {
-  const content = document.querySelector('header.titlebar-drag')?.nextElementSibling as HTMLElement | null;
-  if (!content) return;
   const board = to === '/';
+  // The board is not inside its page: it is the persistent layer (PersistentBoard).
+  const content = (board
+    ? document.querySelector('[data-board-layer]')
+    : document.querySelector('header.titlebar-drag')?.nextElementSibling) as HTMLElement | null;
+  if (!content) return;
   content.animate(board
     // The whiteboard only fades: it is the one screen never seen to move.
     ? [{ opacity: 0.4 }, { opacity: 1 }]

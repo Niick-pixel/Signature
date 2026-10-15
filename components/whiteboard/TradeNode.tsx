@@ -88,7 +88,11 @@ function TradeNodeInner({ data }: NodeProps) {
         then keeps the effect and costs the other cards nothing.
       */
       layoutId={armed || selected ? `trade-${trade.id}` : undefined}
-      onPointerEnter={armed ? undefined : () => setArmed(true)}
+      onPointerEnter={armed ? undefined : () => {
+        setArmed(true);
+        // Fetch and decode the panel's chart now, so it is there on click.
+        if (trade.screenshot_path) { const i = new Image(); i.src = `/api/screenshots/${trade.screenshot_path}?w=1600`; i.decode().catch(() => {}); }
+      }}
       transition={springLayout}
       whileHover={{ y: -2, scale: 1.012 }}
       whileTap={{ scale: 0.985 }}
@@ -149,9 +153,13 @@ function TradeNodeInner({ data }: NodeProps) {
       {trade.screenshot_path && !shotBroken ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/api/screenshots/${trade.screenshot_path}`}
+          // A card-sized copy, not the full capture: decoding twenty full
+          // screenshots was most of the wait each time the board appeared.
+          // The full image is still what the trade panel and lightbox show.
+          src={`/api/screenshots/${trade.screenshot_path}?w=720`}
           alt=""
           draggable={false}
+          decoding="async"
           onError={() => setShotBroken(true)}
           className="absolute inset-0 size-full object-cover"
           // A filter on every chart image had to be re-rastered each time the

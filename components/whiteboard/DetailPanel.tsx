@@ -8,7 +8,7 @@ import {
 } from '@/lib/domain';
 import { DeleteTradeDialog } from './DeleteTradeDialog';
 import { dialogIsOpen } from '@/components/ui/Overlay';
-import { captureOpen } from '@/lib/keys';
+import { boardShown, captureOpen } from '@/lib/keys';
 import { GATES_SINCE, MODEL_GATE_MESSAGE, TRIAL_RUBRIC, gradeUnder, trialEventOf } from '@/lib/rubric';
 import { spring, springSoft, scrimExit, exitQuick } from '@/lib/motion';
 import { derivedAdherence } from '@/lib/adherence';
@@ -126,7 +126,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
 
   useEffect(() => {
     // A dialog over the panel (the delete steps) owns Escape first.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !dialogIsOpen() && !captureOpen()) onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !dialogIsOpen() && !captureOpen() && boardShown()) onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -220,13 +220,8 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                   form, so the chart has to be openable. */}
               {trade.screenshot_path ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`/api/screenshots/${trade.screenshot_path}`}
-                  alt="Chart — click to zoom"
-                  onClick={() => setZoomed(`/api/screenshots/${trade.screenshot_path}`)}
-                  className="max-h-[46vh] w-full cursor-zoom-in object-contain"
-                  style={{ background: 'var(--letterbox)' }}
-                />
+                <ChartImage key={trade.screenshot_path} path={trade.screenshot_path}
+                  onZoom={() => setZoomed(`/api/screenshots/${trade.screenshot_path}`)} />
               ) : (
                 <div data-no-chart className="grid h-40 place-items-center text-[12.5px]"
                   style={{ background: 'var(--letterbox)', color: 'var(--text-faint)' }}>
@@ -558,5 +553,45 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+/**
+ * The chart in the panel: the card's small copy at once, a panel-sized copy
+ * over it as soon as it is decoded.
+ *
+ * Cards show a card-sized copy (db/thumbs.ts), so the full image is not
+ * already in memory when a trade opens. Loading and decoding it in the
+ * middle of the panel's opening animation dropped frames; the small copy is
+ * already there, and the full one replaces it once it is decoded AND the
+ * panel has finished opening — swapped, not faded: an animated layer holding
+ * a full-size capture had to be re-rastered on every frame of the opening.
+ * At panel size the two look nearly the same; the swap reads as a sharpen.
+ * (The card starts fetching the full image on hover.)
+ */
+function ChartImage({ path, onZoom }: { path: string; onZoom: () => void }) {
+  // Panel-sized, not the original: a 1600px copy is sharp at this size even
+  // on a high-DPI screen and decodes in a fraction of the time. The original
+  // is what the zoom (lightbox) opens.
+  const full = `/api/screenshots/${path}?w=1600`;
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const img = new Image();
+    img.src = full;
+    const decoded = img.decode().catch(() => {});
+    const opened = new Promise((r) => setTimeout(r, 450));
+    void Promise.all([decoded, opened]).then(() => { if (alive) setReady(true); });
+    return () => { alive = false; };
+  }, [full]);
+  return (
+    <div className="relative cursor-zoom-in" onClick={onZoom} style={{ background: 'var(--letterbox)' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/api/screenshots/${path}?w=720`} alt="Chart — click to zoom" className="max-h-[46vh] w-full object-contain" />
+      {ready && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={full} alt="" aria-hidden className="absolute inset-0 size-full object-contain" />
+      )}
+    </div>
   );
 }

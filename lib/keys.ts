@@ -70,6 +70,16 @@ export function typing(): boolean {
  * is allowed, it is how "?" and "+" are typed), nothing being typed, and no
  * dialog on screen — a dialog owns the keyboard while it is open.
  */
+/** Fired when the kept-alive whiteboard is shown again (PersistentBoard). */
+export const BOARD_SHOWN = 'signature:board-shown';
+
+/** Whether the whiteboard is on screen — it stays mounted, hidden, behind every other screen. */
+export function boardShown(): boolean {
+  if (typeof document === 'undefined') return false;
+  const layer = document.querySelector('[data-board-layer]');
+  return !layer || !layer.hasAttribute('data-hidden');
+}
+
 /** Whether the New trade window is open over the current screen. */
 export function captureOpen(): boolean {
   return typeof window !== 'undefined' && window.location.pathname === '/new';
