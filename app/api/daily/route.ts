@@ -59,6 +59,7 @@ export async function PUT(request: Request) {
   take('bias_direction', (v) => pick(v, BIAS_DIRECTIONS));
   take('news', (v) => pick(v, NEWS_LEVELS));
   take('news_note', str);
+  take('working_on', str);
 
   return NextResponse.json(saveDailyReview(body.day as string, fields, { checkIn: body.check_in === true }));
 }

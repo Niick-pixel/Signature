@@ -1,4 +1,5 @@
 import { adherenceOf } from './adherence';
+import type { PathEvent } from './path';
 import { conditions } from './conditions';
 import {
   CHECKLIST_ITEMS, CONTEXT_FLAG_LIST, MONEY_ACCOUNTS, SWEEP_TIER_SPEC, isBacktest, isHypothetical, isTaken, type Account,
@@ -39,6 +40,8 @@ export interface MonthlyInput {
   shots: Map<string, TradeShot[]>;
   /** The chart prep, per day. Optional: an older caller has none. */
   preps?: SessionPrep[];
+  /** The Path's record: promises broken, limits overridden, steps done. Optional. */
+  pathEvents?: PathEvent[];
   now?: Date;
 }
 
@@ -136,7 +139,7 @@ export function monthlyReview(input: MonthlyInput): MonthlyReview {
   p('');
   p('**How to read the data**');
   p('- **R** is the result in units of the risk taken. +2R made twice what was risked; −1R lost the full risk.');
-  p('- **Accounts.** Live and Funded are real money; Demo is simulated but traded live. **Missed** holds setups I saw and hesitated on or missed, logged as if taken — the R is what they *would* have made. Missed trades never count in any real total here.');
+  p('- **Accounts.** Live and Funded are real money; Eval is a paid prop evaluation; Demo is simulated but traded live. **Missed** holds setups I saw and hesitated on or missed, logged as if taken — the R is what they *would* have made. Missed trades never count in any real total here.');
   p('- **Passed** setups (outcome "Not taken") are ones I deliberately chose not to take. They are journalled but excluded from win rate and R.');
   p('- **The checklist** scores each trade 0–100 on the boxes that *applied* (a box marked n/a is removed from the total, not counted as a miss). Phase 3 — price returned to the FVG, inversion candle closed through it — is the trigger; without both there is no valid entry. Grades: A+ ≥ 90, A ≥ 80, B ≥ 70, C ≥ 50, F below. 70 is my minimum.');
   p('- **Adherence** is derived, never self-reported: a trade followed the rules if the trigger fired, 70% or more of the applicable boxes were ticked, and no mistake was tagged. "Said I followed the rules" is my own answer, kept separately so the gap can be measured.');
@@ -326,6 +329,9 @@ export function monthlyReview(input: MonthlyInput): MonthlyReview {
     if (t.mistake_tags.length) p(`- **Mistakes tagged:** ${t.mistake_tags.join(', ')}`);
     if (t.worked_tags?.length) p(`- **What worked:** ${t.worked_tags.join(', ')}`);
     if (t.market_tags?.length) p(`- **What the market did (outside my control):** ${t.market_tags.join(', ')}`);
+    for (const o of t.overrides ?? []) {
+      p(`- **Logged past ${o.kind === 'daily_limit' ? 'the daily loss limit' : `a commitment: "${o.commitment_text ?? ''}"`}**${o.step_title ? ` (${o.step_title})` : ''} — ${o.reason ? `my reason: ${o.reason}` : '_no reason given_'}`);
+    }
     if (t.quick_log) p('- **Quick log:** saved fast, past the form\'s minimums — the writing may be thin.');
     const exec = [
       t.contracts != null && `${t.contracts} contract${t.contracts === 1 ? '' : 's'}`,
@@ -371,6 +377,16 @@ export function monthlyReview(input: MonthlyInput): MonthlyReview {
     for (const g of groups) {
       h(`### "${g.shared.slice(0, 5).join(', ')}" — ${g.lessons.length} times, ${r1(g.totalR)}`);
       for (const l of g.lessons) p(`- ${l.date.slice(0, 10)} (${l.outcome}${l.r_multiple != null ? ` ${r1(l.r_multiple)}` : ''}): ${cell(l.lesson)}`);
+    }
+  }
+
+  /* ---------------------------------------------------------------- path */
+  const monthEvents = (input.pathEvents ?? []).filter((e) => inMonth(e.at.slice(0, 10)));
+  if (monthEvents.length) {
+    h('## The Path this month');
+    for (const e of [...monthEvents].sort((a, b) => a.at.localeCompare(b.at))) {
+      if (e.kind === 'step_done') p(`- ${e.at.slice(0, 10)} · **Finished:** ${e.step_title ?? 'a step'}`);
+      else p(`- ${e.at.slice(0, 10)} · **Broke ${e.kind === 'daily_limit' ? 'the daily loss limit' : `"${e.commitment_text ?? 'a commitment'}"`}**${e.step_title ? ` (${e.step_title})` : ''} — ${e.reason ? `reason: ${e.reason}` : '_no reason given_'}`);
     }
   }
 

@@ -11,7 +11,7 @@ const asBool = (v: unknown) => (v == null ? null : v ? 1 : 0);
 const DAILY_FIELDS = [
   'account', 'bias', 'bias_screenshot', 'planned_killzones', 'planned_levels',
   'what_happened', 'bias_held', 'trades_planned', 'screen_minutes', 'sleep_hours',
-  'state_of_mind', 'notes', 'bias_direction', 'news', 'news_note',
+  'state_of_mind', 'notes', 'bias_direction', 'news', 'news_note', 'working_on',
 ] as const;
 
 function hydrateDaily(row: Record<string, unknown>): DailyReview {

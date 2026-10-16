@@ -181,12 +181,29 @@ export interface Trade {
   screenshot_path: string;
   position_x: number | null;
   position_y: number | null;
+  /**
+   * Logged past a promise on the Path or a daily limit, with the reason typed
+   * at the time (migration 025). Empty on every trade that broke nothing.
+   */
+  overrides: TradeOverride[];
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */
   deleted_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** One promise or limit a trade was logged past, and why. */
+export interface TradeOverride {
+  kind: 'commitment_break' | 'daily_limit';
+  step_id: string | null;
+  step_title: string | null;
+  commitment_id: string | null;
+  commitment_text: string | null;
+  /** In my own words, at least 40 characters. Null only if the server had to record it unexplained. */
+  reason: string | null;
+  at: string;
 }
 
 /** What the capture form sends. `id` and the generated columns are not yours to set. */
@@ -253,6 +270,8 @@ export interface DailyReview {
   news_note: string | null;
   /** When the morning check-in was first saved. Set once, never rewritten. */
   checked_in_at: string | null;
+  /** "Today I'm working on…" — the morning's one intention for the current Path step (025). */
+  working_on: string | null;
   created_at: string;
   updated_at: string;
 }

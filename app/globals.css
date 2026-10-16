@@ -843,6 +843,10 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
 html[data-nav] header.titlebar-drag { view-transition-name: titlebar; }
 /* New trade is open over the screen: the title bar (and its menus) stay above it. */
 html[data-capture] header.titlebar-drag { z-index: 56; }
+/* The active step on the Path: a soft glowing edge. Static — no animation to repaint. */
+.signature-path-active {
+  box-shadow: var(--shadow-card), 0 0 0 1px rgb(var(--accent) / 0.28), 0 0 28px -10px rgb(var(--accent) / 0.55);
+}
 /*
   Over the live board the form's own glass would let the board's text show
   through behind the fields (the old blurred copy hid that). The window is

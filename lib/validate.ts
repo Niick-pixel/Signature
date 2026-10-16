@@ -7,6 +7,7 @@ import {
 import { REGRADE_HINT, regradeAllowed, type GradeLetter } from './grade';
 import { CURRENT_RUBRIC, HTF_DELIVERIES, SWEEP_LEVELS, gradeUnder } from './rubric';
 import { MIN_EXPLANATION, MIN_LESSON, type TradeInput } from './types';
+import { sanitizeOverrides } from './overrides';
 
 /**
  * Whose standard a piece of writing is held to.
@@ -306,6 +307,7 @@ export function parseTradeInput(
             (v): v is MarketTag => typeof v === 'string' && (MARKET_TAGS as readonly string[]).includes(v),
           )
         : [],
+      overrides: sanitizeOverrides(t.overrides),
   };
 
   /*

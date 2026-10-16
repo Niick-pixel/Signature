@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { usePathSummary } from '@/components/path/PathBanner';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Collapse } from '@/components/ui/Collapse';
@@ -180,6 +181,8 @@ function CheckInForm({ day, existing, onDone, onSaved, onChart }: {
   const [news, setNews] = useState<NewsLevel | null>(existing?.news ?? null);
   const [newsNote, setNewsNote] = useState(existing?.news_note ?? '');
   const [max, setMax] = useState(existing?.trades_planned?.toString() ?? '');
+  const [workingOn, setWorkingOn] = useState(existing?.working_on ?? '');
+  const path = usePathSummary();
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<DailyReview | null>(null);
 
@@ -194,6 +197,7 @@ function CheckInForm({ day, existing, onDone, onSaved, onChart }: {
         day, check_in: true,
         sleep_hours: num(sleep), state_of_mind: mind, bias_direction: direction, bias: why,
         news, news_note: news === 'None' ? '' : newsNote, trades_planned: num(max),
+        working_on: workingOn.trim(),
       }),
     });
     setSaving(false);
@@ -247,6 +251,20 @@ function CheckInForm({ day, existing, onDone, onSaved, onChart }: {
           </div>
 
           <div className="space-y-5">
+            {/* The Path first: the step I am on and the one thing to do next. */}
+            {path?.step && (
+              <div data-checkin-path className="signature-path-active glass rounded-[calc(16px*var(--rk))] px-4 py-3"
+                style={{ borderColor: 'rgb(var(--accent) / 0.45)' }}>
+                <div className="text-[10px] font-medium uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--accent))' }}>
+                  Step {path.step.index} of {path.total} · {path.step.title}
+                </div>
+                <p className="mt-1 text-[13px] leading-snug">{path.step.nextAction}</p>
+                <div className="mt-2.5">
+                  <Input placeholder="Today I’m working on…" aria-label="Today I'm working on" data-checkin-working-on
+                    value={workingOn} onChange={(e) => setWorkingOn(e.target.value)} />
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-[7rem_1fr] gap-4">
               <Field label="Slept">
                 <Input type="number" step="0.5" min="0" max="24" placeholder="hours" aria-label="Hours slept"

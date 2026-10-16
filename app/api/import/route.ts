@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getTrade, importTrade } from '@/db/trades';
+import { restorePath } from '@/db/path';
 import { importCashEvent, listCashEvents, parseCashInput } from '@/db/cash';
 import { getJournalPage, importJournalPage, parseJournalInput } from '@/db/journal';
 import { getPrep, restorePrep } from '@/db/prep';
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
     {
       trades?: unknown; cash?: unknown; journal?: unknown; format?: unknown;
       daily_reviews?: unknown; weekly_reviews?: unknown; session_prep?: unknown;
+      path_steps?: unknown; path_events?: unknown; eval_purchases?: unknown;
     } | null;
 
   if (!body || !Array.isArray(body.trades)) {
@@ -141,6 +143,7 @@ export async function POST(request: Request) {
         bias_direction: BIAS_DIRECTIONS.find((d) => d === raw.bias_direction) ?? null,
         news: NEWS_LEVELS.find((n) => n === raw.news) ?? null,
         news_note: strOrNull(raw.news_note),
+        working_on: strOrNull(raw.working_on),
       });
       // When the morning was written is part of what the morning says.
       if (typeof raw.checked_in_at === 'string') restoreCheckIn(raw.day, raw.checked_in_at);
@@ -170,7 +173,16 @@ export async function POST(request: Request) {
     }
   }
 
+  /*
+    The Path (version 6). A file that carries steps replaces this machine's
+    path — it is configuration, and the file is mine; the record of broken
+    promises and the eval purchases are merged on id like everything else.
+    Older files have none of it, which leaves the path as it is.
+  */
+  const hadPath = Array.isArray(body.path_steps) && body.path_steps.length > 0;
+  restorePath({ steps: body.path_steps, events: body.path_events, purchases: body.eval_purchases });
+
   return NextResponse.json({
-    imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps,
+    imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
   });
 }

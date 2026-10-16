@@ -8,6 +8,7 @@ import { shotsForMany } from '@/db/shots';
 import { SCREENSHOTS_DIR } from '@/lib/paths';
 import { makeZip } from '@/lib/zip';
 import { monthlyReview } from '@/lib/monthly';
+import { listEvents } from '@/db/path';
 import { listPreps } from '@/db/prep';
 import { isBacktest } from '@/lib/domain';
 
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     cash: listCashEvents(),
     shots: shotsForMany(inMonth.map((t) => t.id)),
     preps: listPreps(),
+    pathEvents: listEvents(),
   });
 
   if (format === 'md') {

@@ -6,7 +6,7 @@ import { Overlay } from '@/components/ui/Overlay';
 import { openCheckIn } from './MorningCheckIn';
 import { navigate } from '@/lib/nav';
 
-const TABS = ['/', '/stats', '/calendar', '/journal'];
+const TABS = ['/', '/stats', '/calendar', '/journal', '/path'];
 
 /** Events the bottom-left controls listen for, so a key can open them. */
 export const SETTINGS_TOGGLE = 'signature:settings-toggle';
@@ -42,7 +42,7 @@ export function Shortcuts() {
         case 'p': e.preventDefault(); openCheckIn('chart'); return;
         case 's': e.preventDefault(); window.dispatchEvent(new Event(SETTINGS_TOGGLE)); return;
         case 't': e.preventDefault(); window.dispatchEvent(new Event(THEME_TOGGLE)); return;
-        case '1': case '2': case '3': case '4': return go(TABS[Number(k) - 1]);
+        case '1': case '2': case '3': case '4': case '5': return go(TABS[Number(k) - 1]);
       }
     };
     // Listening on document, like every screen-level handler, so a dialog's own

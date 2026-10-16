@@ -6,6 +6,7 @@ const readSlot = (v: unknown, fallback: ShotSlot): ShotSlot =>
   typeof v === 'string' && (SHOT_SLOTS as readonly string[]).includes(v) ? (v as ShotSlot) : fallback;
 import { createTrade, listTrades } from '@/db/trades';
 import { deleteScreenshot, saveScreenshot } from '@/db/screenshots';
+import { guardTrade, recordTradeOverrides } from '@/db/path';
 import { parseTradeInput } from '@/lib/validate';
 import { logError } from '@/lib/log';
 import type { Outcome, Reason, Session } from '@/lib/domain';
@@ -56,9 +57,11 @@ export async function POST(request: Request) {
 
     const screenshot_path = hasImage ? await saveScreenshot(image as File) : '';
 
+    // Promises on the Path: recorded with the trade, never a reason to refuse it.
+    const guarded = guardTrade(check.value, null);
     let created;
     try {
-      created = createTrade({ ...check.value, screenshot_path });
+      created = createTrade({ ...check.value, overrides: guarded.overrides, screenshot_path });
     } catch (err) {
       // The row didn't land, so the file must not survive either.
       deleteScreenshot(screenshot_path);
@@ -71,6 +74,7 @@ export async function POST(request: Request) {
       trade is already recorded, and a chart that fails to save must not undo
       it.
     */
+    recordTradeOverrides(created.id, guarded.added);
     if (screenshot_path) addShot(created.id, screenshot_path, readSlot(form.get('screenshot_slot'), 'Entry'));
     const extras = form.getAll('shots');
     const labels = form.getAll('shot_slots');

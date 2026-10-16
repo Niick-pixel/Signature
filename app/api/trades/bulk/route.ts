@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { bulkUpdate } from '@/db/trades';
+import { guardBulkAccount } from '@/db/path';
 import { ACCOUNTS, MISTAKE_TAG_VALUES, REASONS, TRADE_STATUSES } from '@/lib/domain';
 import type { BulkPatch } from '@/lib/types';
 
@@ -41,5 +42,6 @@ export async function PATCH(request: Request) {
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Nothing to change.' }, { status: 400 });
   }
+  if (patch.account) guardBulkAccount(ids, patch.account);
   return NextResponse.json({ updated: bulkUpdate(ids, patch) });
 }

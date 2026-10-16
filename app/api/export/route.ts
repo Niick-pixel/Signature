@@ -8,7 +8,8 @@ import { listDailyReviews, listWeeklyReviews } from '@/db/reviews';
 import { listPreps } from '@/db/prep';
 import { SCREENSHOTS_DIR } from '@/lib/paths';
 import { makeZip } from '@/lib/zip';
-import type { JournalPage, Trade } from '@/lib/types';
+import type { JournalPage, Trade, TradeOverride } from '@/lib/types';
+import { listEvents, listPurchases, listSteps } from '@/db/path';
 
 /** Columns in a stable, readable order. Same order every export, so diffs work. */
 const CSV_COLUMNS: Array<keyof Trade> = [
@@ -25,11 +26,21 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'entry_price', 'take_profit', 'stop_loss',
   'would_have_hit_tp', 'r_left_on_table', 'skip_reason',
   'explanation', 'lesson', 'screenshot_path', 'deleted_at', 'created_at', 'updated_at',
+  // Added in export version 6, after everything that was already here so a
+  // diff against an older CSV shows only new columns: fields the CSV had been
+  // missing, then the Path's overrides.
+  'quick_log', 'confidence_at_entry', 'worked_tags', 'market_tags', 'pnl_dollars',
+  'mfe_r', 'mae_r', 'reached_1r', 'entry_time', 'exit_time', 'would_be_r', 'macro_time',
+  'overrides',
 ];
 
 function csvCell(v: unknown): string {
   if (v === null || v === undefined) return '';
-  const s = Array.isArray(v) ? v.join('; ') : String(v);
+  // Overrides read as sentences: "commitment_break: No paid eval… — <reason>".
+  const item = (x: unknown) => (x && typeof x === 'object'
+    ? (() => { const o = x as TradeOverride; return `${o.kind}: ${o.commitment_text ?? ''} — ${o.reason ?? 'no reason given'}`; })()
+    : String(x));
+  const s = Array.isArray(v) ? v.map(item).join('; ') : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -113,10 +124,11 @@ export async function GET() {
   const payload = {
     format: 'signature-journal',
     // Bumped as the payload grew: 2 added cash, 3 added the journal, 4 added the
-    // daily and weekly reviews, 5 the chart prep. An older file simply has no
-    // key for the newer things, which the importer reads as "none" rather than
-    // as an error.
-    version: 5,
+    // daily and weekly reviews, 5 the chart prep, 6 the Path (its steps, the
+    // record of promises broken, eval purchases) and each trade's overrides.
+    // An older file simply has no key for the newer things, which the
+    // importer reads as "none" rather than as an error.
+    version: 6,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -125,6 +137,9 @@ export async function GET() {
     daily_reviews: dailyReviews,
     weekly_reviews: weeklyReviews,
     session_prep: sessionPrep,
+    path_steps: listSteps(),
+    path_events: listEvents(),
+    eval_purchases: listPurchases(),
   };
 
   const zip = makeZip([

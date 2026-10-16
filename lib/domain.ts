@@ -458,7 +458,7 @@ export type MarketTag = (typeof MARKET_TAGS)[number];
  * the form stopped offering it would make those rows fail validation on their
  * next edit, which is the app refusing to save its own history.
  */
-export const ACCOUNT_VALUES = ['Backtest (FX Replay)', 'Demo', 'Live', 'Funded', 'Missed'] as const;
+export const ACCOUNT_VALUES = ['Backtest (FX Replay)', 'Demo', 'Live', 'Eval', 'Funded', 'Missed'] as const;
 export type Account = (typeof ACCOUNT_VALUES)[number];
 
 /**
@@ -470,7 +470,7 @@ export type Account = (typeof ACCOUNT_VALUES)[number];
  * before are the same account; it reads as "Backtest" everywhere (accountLabel).
  */
 export const BACKTEST: Account = 'Backtest (FX Replay)';
-export const ACCOUNTS: readonly Account[] = ['Demo', 'Live', 'Funded', BACKTEST, 'Missed'];
+export const ACCOUNTS: readonly Account[] = ['Demo', 'Live', 'Eval', 'Funded', BACKTEST, 'Missed'];
 
 /** How an account reads on screen. */
 export const accountLabel = (account: string): string => (account === BACKTEST ? 'Backtest' : account);

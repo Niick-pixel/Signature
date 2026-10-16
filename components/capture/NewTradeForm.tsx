@@ -54,6 +54,10 @@ import { PastLessons } from './PastLessons';
 import { dialogIsOpen } from '@/components/ui/Overlay';
 import type { PastLesson } from '@/lib/lessons';
 import { navigate } from '@/lib/nav';
+import { CommitmentSheet } from '@/components/path/CommitmentSheet';
+import { PathBanner, usePathSummary } from '@/components/path/PathBanner';
+import type { HeldCommitment } from '@/lib/path';
+import type { TradeOverride } from '@/lib/types';
 
 /** `datetime-local` wants 'YYYY-MM-DDTHH:mm' in local time, not an ISO string. */
 function toLocalInput(date: Date): string {
@@ -168,11 +172,41 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     group of their own on the whiteboard — offered there and nowhere else, so
     leaving Backtest clears it rather than carrying it onto a real trade.
   */
-  const changeAccount = (next: Account) => {
+  const moveAccount = (next: Account) => {
     setAccount(next);
     if (isBacktest(next) && reason == null) setReason(BACKTEST_REASON);
     if (!isBacktest(next) && reason === BACKTEST_REASON) setReason(null);
   };
+
+  /*
+    Promises on the Path (app/path). Filing a trade under an account a held
+    commitment guards — Eval while the demo eval is not passed — opens the
+    commitment sheet: go back, or go ahead with a reason that is saved with
+    the trade. Checked on the choice and again on save, which covers an
+    account restored from the last trade or a draft. An edit that keeps the
+    trade's own account is not asked again.
+  */
+  const path = usePathSummary();
+  const [overrides, setOverrides] = useState<TradeOverride[]>(trade?.overrides ?? []);
+  const [sheet, setSheet] = useState<{ items: HeldCommitment[]; prev: Account | null; thenSubmit: false | 'full' | 'quick' } | null>(null);
+  // Set when the sheet's reason is in; the save re-runs once the render that
+  // carries the reason has happened, so it sends it.
+  const [resubmit, setResubmit] = useState<false | 'full' | 'quick'>(false);
+  const brokenFor = (acc: Account): HeldCommitment[] => {
+    if (editing && trade && acc === trade.account) return [];
+    return (path?.held ?? []).filter((h) => h.commitment.guard.accounts?.includes(acc)
+      && !overrides.some((o) => o.kind === 'commitment_break' && o.commitment_id === h.commitment.id));
+  };
+  const changeAccount = (next: Account) => {
+    const prev = account;
+    moveAccount(next);
+    const items = brokenFor(next);
+    if (items.length) setSheet({ items, prev, thenSubmit: false });
+  };
+  // What travels with the save: everything the trade already carried, and the
+  // reasons given for promises the account chosen actually breaks.
+  const overridesToSend = overrides.filter((o) => (trade?.overrides ?? []).includes(o)
+    || (path?.held ?? []).some((h) => h.commitment.id === o.commitment_id && h.commitment.guard.accounts?.includes(account)));
   const reasonOptions = backtest || reason === BACKTEST_REASON ? REASONS : REASONS.filter((r) => r !== BACKTEST_REASON);
   const [instrument, setInstrument] = useState<Instrument>(trade?.instrument ?? 'NQ');
   const [direction, setDirection] = useState<Direction>(trade?.direction ?? 'Long');
@@ -378,6 +412,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
    */
   async function submit(quick = false) {
     if (quick ? (!reason || submitting) : (!canSubmit || !reason)) return;
+    const unexplained = brokenFor(account);
+    if (unexplained.length) { setSheet({ items: unexplained, prev: null, thenSubmit: quick ? 'quick' : 'full' }); return; }
     setSubmitting(true);
     setError(null);
 
@@ -422,6 +458,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       market_tags: marketTags,
       worked_tags: workedTags,
       account, account_label: accountLabel.trim() || null,
+      overrides: overridesToSend,
       status,
       // The server's to set: it is the frozen score, locked once the trade
       // leaves Planned. Sent only so an older server still gets a value.
@@ -505,6 +542,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   // Refs are not written during render; this keeps the key handler pointed at
   // the current submit without re-binding the listener on every keystroke.
   useEffect(() => { submitRef.current = () => { void submit(); }; });
+  useEffect(() => {
+    if (!resubmit) return;
+    setResubmit(false);
+    void submit(resubmit === 'quick');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resubmit]);
 
   return (
     <motion.div {...riseIn} initial={openedByTransition ? false : riseIn.initial} transition={springSoft}
@@ -520,7 +563,26 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               ? 'Paste a new chart to replace the screenshot, or leave it as it is.'
               : 'Name the motive before the data. That is the whole point.'}
           </p>
+          <div className="mt-2 flex"><PathBanner summary={path} compact /></div>
         </div>
+        <CommitmentSheet
+          open={sheet != null}
+          items={(sheet?.items ?? []).map((h) => ({ text: h.commitment.text, where: `Step ${h.step.position} · ${h.step.title}` }))}
+          current={path?.step ? `Step ${path.step.index} of ${path.total} · ${path.step.title}` : null}
+          confirmLabel={sheet?.thenSubmit ? 'Save it anyway' : 'Use this account anyway'}
+          onCancel={() => { if (sheet?.prev) moveAccount(sheet.prev); setSheet(null); }}
+          onConfirm={(why) => {
+            const at = new Date().toISOString();
+            const added: TradeOverride[] = (sheet?.items ?? []).map((h) => ({
+              kind: 'commitment_break', step_id: h.step.id, step_title: h.step.title,
+              commitment_id: h.commitment.id, commitment_text: h.commitment.text, reason: why, at,
+            }));
+            const thenSubmit = sheet?.thenSubmit;
+            setOverrides((prev) => [...prev, ...added]);
+            setSheet(null);
+            if (thenSubmit) setResubmit(thenSubmit);
+          }}
+        />
 
         {/* The board is still behind this card; there was no way back to it
             without saving or using the browser's own history. */}

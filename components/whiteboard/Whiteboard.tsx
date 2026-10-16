@@ -38,6 +38,7 @@ import { NoteNode } from './NoteNode';
 import { ContextMenu, type MenuState } from './ContextMenu';
 import { SearchPalette } from './SearchPalette';
 import { StreakBadge } from './StreakBadge';
+import { PathBanner } from '@/components/path/PathBanner';
 import { SavedViews } from './SavedViews';
 import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 import { useConfirm } from '@/components/ui/Confirm';
@@ -1055,7 +1056,9 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
           including their headers — which are the point of the screen. */}
       {!readOnly && (
         <div className="shrink-0 px-4 pb-2">
-          <div className="mb-2 flex items-center justify-center gap-2.5">
+          <div className="mb-2 flex flex-wrap items-center justify-center gap-2.5">
+            {/* The step I am on, before anything else — see app/path. */}
+            <PathBanner />
             {/* Real trades only: a trade you did not take cannot break a daily
                 limit or a clean streak. */}
             <StreakBadge trades={realTrades} />

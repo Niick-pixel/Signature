@@ -5,6 +5,7 @@ import { MISTAKE_TAG_VALUES, WORKED_TAG_VALUES, MARKET_TAGS, type MistakeTag, ty
 import { CURRENT_RUBRIC, gradeUnder } from '../lib/rubric';
 import { GRADE_LETTERS } from '../lib/grade';
 import { getDb } from './index';
+import { sanitizeOverrides } from '../lib/overrides';
 import { deleteScreenshot } from './screenshots';
 import type {
   BulkPatch, SettleInput, Trade, TradeEdit, TradeFilters, TradeInput,
@@ -91,6 +92,7 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
   trade.mistake_tags = parseTags((row as unknown as { mistake_tags: string | null }).mistake_tags);
   trade.worked_tags = parseList(r.worked_tags as string | null, WORKED_TAG_VALUES);
   trade.market_tags = parseList(r.market_tags as string | null, MARKET_TAGS);
+  trade.overrides = sanitizeOverrides(r.overrides);
   trade.trigger_fired = Boolean(r.trigger_fired_at_entry ?? r.trigger_fired);
   trade.dismissed_flags = dismissed;
   return trade;
@@ -152,7 +154,7 @@ const WRITABLE = [
   'entry_time', 'exit_time', 'mae_r', 'mfe_r', 'mae_points', 'mfe_points', 'reached_1r',
   'confidence_at_entry', 'would_be_r', 'playbook_id',
   'contracts', 'risk_dollars', 'risk_percent', 'pnl_dollars', 'stop_points', 'outcome', 'r_multiple',
-  'explanation', 'lesson', 'screenshot_path', 'quick_log', 'worked_tags', 'market_tags',
+  'explanation', 'lesson', 'screenshot_path', 'quick_log', 'worked_tags', 'market_tags', 'overrides',
   'undated',
 ] as const;
 
@@ -197,6 +199,9 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
   out.mistake_tags = JSON.stringify(input.mistake_tags ?? []);
   out.worked_tags = JSON.stringify(input.worked_tags ?? []);
   out.market_tags = JSON.stringify(input.market_tags ?? []);
+  // NULL, not '[]', when nothing was overridden: an old trade and a new one
+  // that broke nothing store the same thing.
+  out.overrides = input.overrides?.length ? JSON.stringify(input.overrides) : null;
   return out;
 }
 
@@ -389,6 +394,8 @@ export function duplicateTrade(id: string): Trade | null {
     skip_reason: null,
     status: 'Planned',
     lesson: null,
+    // A copy breaks its own promises, if any; it does not inherit the original's.
+    overrides: [],
   };
   const created = createTrade(copy);
   getDb()

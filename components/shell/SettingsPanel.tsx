@@ -9,6 +9,7 @@ import { TogglePill } from '@/components/ui/TogglePill';
 import { usePreferences } from './PreferencesProvider';
 import { TEXT_SCALE, TEXT_SIZES, textSizeOf, type Preferences } from '@/lib/preferences';
 import { ThemeGrid } from './ThemeGrid';
+import { navigate } from '@/lib/nav';
 import { SETTINGS_TOGGLE, SHEET_OPEN } from './Shortcuts';
 
 interface Info {
@@ -166,6 +167,10 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               overflow-y-auto rounded-[calc(22px*var(--rk))] p-5"
           >
             <h2 className="text-[14px] font-semibold tracking-tight">Settings</h2>
+
+            <Section title="Path" hint="The steps toward a funded account, their criteria, your commitments and the eval budget.">
+              <Button data-settings-path onClick={() => { onClose(); navigate('/path?edit=1'); }}>Edit the path</Button>
+            </Section>
 
             <Section
               title="Theme"
