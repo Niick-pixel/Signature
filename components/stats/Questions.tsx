@@ -69,7 +69,7 @@ export function Questions({ trades, sampleTrades }: {
           {be.early.length > 0 && (
             <ul className="mt-2 space-y-1 text-[12px] tabular-nums" style={{ color: 'var(--text-dim)' }}>
               {be.early.slice(0, 8).map((t) => (
-                <li key={t.id}>{(t.chart_date ?? t.date.slice(0, 10))} · {t.setup_type} {t.direction} · max {t.mfe_r}R · trigger {t.be_trigger ?? 'not set'}</li>
+                <li key={t.id}>{t.undated ? 'undated' : t.date.slice(0, 10)} · {t.setup_type} {t.direction} · max {t.mfe_r}R · trigger {t.be_trigger ?? 'not set'}</li>
               ))}
             </ul>
           )}

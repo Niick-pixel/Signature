@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     {
       trades?: unknown; cash?: unknown; journal?: unknown; format?: unknown;
       daily_reviews?: unknown; weekly_reviews?: unknown; session_prep?: unknown;
-      path_steps?: unknown; path_events?: unknown; eval_purchases?: unknown; red_day_pages?: unknown;
+      path_steps?: unknown; path_events?: unknown; eval_purchases?: unknown; red_day_pages?: unknown; red_day_skips?: unknown;
     } | null;
 
   if (!body || !Array.isArray(body.trades)) {
@@ -188,6 +188,16 @@ export async function POST(request: Request) {
     for (const r of body.red_day_pages as Record<string, unknown>[]) {
       if (r && typeof r.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.day) && (r.world === 'real' || r.world === 'backtest')) {
         put.run(r.day, r.world, typeof r.page_id === 'string' ? r.page_id : null, typeof r.created_at === 'string' ? r.created_at : new Date().toISOString());
+      }
+    }
+  }
+
+  // Skipped red days (version 8).
+  if (Array.isArray(body.red_day_skips)) {
+    const put = getDb().prepare('INSERT OR IGNORE INTO red_day_skips (day, world, skipped_at) VALUES (?, ?, ?)');
+    for (const r of body.red_day_skips as Record<string, unknown>[]) {
+      if (r && typeof r.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.day) && (r.world === 'real' || r.world === 'backtest')) {
+        put.run(r.day, r.world, typeof r.skipped_at === 'string' ? r.skipped_at : new Date().toISOString());
       }
     }
   }

@@ -48,11 +48,13 @@ test('breakevens that had run 0.7R first', () => {
   assert.equal(e.early.length, 1);
 });
 
-test('the scope filters by rubric and by a date range on the market day', () => {
+test('the scope filters by rubric and by a date range on the log day', () => {
   const scope = parseStatsScope({ account: 'Demo,Backtest (FX Replay)', rubric: '3', from: '2026-09-01', to: '2026-09-30' }, ['Demo', 'Backtest (FX Replay)']);
   assert.equal(scope.rubric, 3);
-  const bt = t({ account: 'Backtest (FX Replay)', date: '2026-10-15T22:00', chart_date: '2026-09-10' });
-  const inRange = applyStatsScope([...trades, bt, t({ date: '2026-09-05T09:45' })], scope);
-  assert.equal(inRange.length, 2, 'a backtest falls on its chart date');
+  // Backtests keep only their log time; an old chart_date is not read.
+  const bt = t({ account: 'Backtest (FX Replay)', date: '2026-09-15T22:00', chart_date: '2026-08-10' });
+  const late = t({ account: 'Backtest (FX Replay)', date: '2026-10-15T22:00', chart_date: '2026-09-10' });
+  const inRange = applyStatsScope([...trades, bt, late, t({ date: '2026-09-05T09:45' })], scope);
+  assert.equal(inRange.length, 2, 'a backtest falls on the day it was logged');
   assert.ok(inRange.includes(bt));
 });

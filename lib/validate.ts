@@ -1,7 +1,7 @@
 import {
   ACCOUNT_VALUES, BACKTEST, CHECKLIST_ITEMS, signForOutcome, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAG_VALUES,
   OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, RENAMED_TARGET_TYPES, SESSIONS, SETUP_TYPES, SKIP_REASONS,
-  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
+  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, R_BUCKETS, MANAGEMENTS, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
   type ChecklistKey, type Regrade, type TradeStatus, type WorkedTag, type MarketTag, type ContextFlag, type MistakeTag, type Tri,
 } from './domain';
 import { REGRADE_HINT, regradeAllowed, type GradeLetter } from './grade';
@@ -324,6 +324,8 @@ export function parseTradeInput(
       be_trigger: oneOf('be_trigger', BE_TRIGGERS),
       below_min_confidence: tri('below_min_confidence'),
       written_before_outcome: tri('written_before_outcome'),
+      r_to_nearest_bucket: oneOf('r_to_nearest_bucket', R_BUCKETS),
+      management: oneOf('management', MANAGEMENTS),
   };
 
   /*

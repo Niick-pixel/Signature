@@ -14,7 +14,8 @@ const LATER_KEY = 'signature:red-day-later';
  * After a red day, the next time the app opens: a quiet card, not a dialog —
  * "You had a red day on Tue 14 Oct. Write the page." It opens a page already
  * laid out (what I saw, what I did, the rule, one if-then) with the day's
- * trades listed. "Not now" holds it off for the rest of today.
+ * trades listed. "Not now" holds it off for the rest of today; "Skip this
+ * day" never asks about it again.
  */
 export function RedDayPrompt() {
   const [pending, setPending] = useState<Pending | null>(null);
@@ -30,6 +31,11 @@ export function RedDayPrompt() {
     return () => { alive = false; window.clearTimeout(t); };
   }, []);
 
+  async function skip() {
+    if (!pending) return;
+    setPending(null);
+    await fetch('/api/redday', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ day: pending.day, world: pending.world, skip: true }) }).catch(() => {});
+  }
   const later = () => { try { window.localStorage.setItem(LATER_KEY, localDay()); } catch { /* fine */ } setPending(null); };
   async function write() {
     if (!pending) return;
@@ -52,10 +58,11 @@ export function RedDayPrompt() {
           <div className="min-w-0 text-[13px] leading-snug">
             <b>You had a red day on {when}.</b> Write the page.
             <div className="mt-0.5 text-[11.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
-              {pending.world === 'backtest' ? 'Backtest session · ' : ''}{pending.netR}R over {pending.trades} trade{pending.trades === 1 ? '' : 's'}
+              {pending.netR}R over {pending.trades} trade{pending.trades === 1 ? '' : 's'}
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
+            <Button onClick={() => void skip()} data-red-day-skip title="Never ask about this day again — counted as skipped on the Path.">Skip this day</Button>
             <Button onClick={later}>Not now</Button>
             <Button variant="primary" onClick={() => void write()} disabled={busy} data-red-day-write>Write the page</Button>
           </div>

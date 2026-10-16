@@ -5,7 +5,7 @@ import { listTrades } from './trades';
 import { DEFAULT_RULES, belowMinConfidence, stopAfterFor, type RuleSettings } from '../lib/rules';
 import { targetCheck } from '../lib/targetCheck';
 import { adherenceOf } from '../lib/adherence';
-import { isBacktest, isHypothetical, isTaken, marketDay } from '../lib/domain';
+import { BE_FROM_MANAGEMENT, isBacktest, isHypothetical, isTaken, marketDay } from '../lib/domain';
 import type { Trade, TradeInput } from '../lib/types';
 
 /* --------------------------------------------------------------- settings */
@@ -34,10 +34,14 @@ export function setRuleSettings(next: Partial<RuleSettings>): RuleSettings {
  * Everything the server decides about a trade on its way in, whatever the
  * form sent:
  *
- * - The grade lock. A new trade is locked at its first save; one saved
- *   Planned or Live was graded before its outcome existed (graded_post_hoc
- *   false), anything else after. An edit never changes either — and an old
- *   Planned trade (from before the lock) locks the moment it leaves Planned.
+ * - The grade lock. A new trade's grade freezes at its first save. It was
+ *   graded before its outcome (graded_post_hoc false) when it was saved
+ *   Planned or Live, or when the form's "Lock grade" was pressed before any
+ *   outcome was filled in — the form sends that lock's time and
+ *   graded_post_hoc false. Anything else is graded after. An edit never
+ *   changes either — and an old Planned trade (from before the lock) locks
+ *   the moment it leaves Planned.
+ * - The management plan names the breakeven trigger: be_trigger follows it.
  * - The target check: R to the nearest liquidity and the verdict, recomputed.
  * - Confidence below the minimum, on a taken trade: the mistake tag, "did not
  *   follow the rules", and below_min_confidence. Only on trades of this era
@@ -49,8 +53,10 @@ export function applyRules(input: TradeInput, before: Trade | null, settings = g
   const now = new Date().toISOString();
 
   if (!before) {
-    out.grade_locked_at = now;
-    out.graded_post_hoc = !(input.status === 'Planned' || input.status === 'Live');
+    const lockedFirst = input.grade_locked_at != null && input.graded_post_hoc === false
+      && !Number.isNaN(Date.parse(input.grade_locked_at)) && Date.parse(input.grade_locked_at) <= Date.now() + 60_000;
+    out.grade_locked_at = lockedFirst ? input.grade_locked_at : now;
+    out.graded_post_hoc = !(input.status === 'Planned' || input.status === 'Live' || lockedFirst);
   } else {
     out.graded_post_hoc = before.graded_post_hoc;
     out.grade_locked_at = before.grade_locked_at
@@ -65,6 +71,8 @@ export function applyRules(input: TradeInput, before: Trade | null, settings = g
       || before?.written_before_outcome === true;
     if (plannedFirst) out.written_before_outcome = true;
   }
+
+  if (out.management) out.be_trigger = BE_FROM_MANAGEMENT[out.management];
 
   const verdict = targetCheck(out);
   out.r_to_nearest = verdict.r;
@@ -89,13 +97,13 @@ export function applyRules(input: TradeInput, before: Trade | null, settings = g
 export interface DayLimit { day: string | null; stopAfter: number; losses: number; reached: boolean }
 
 /**
- * How many losses this account already has on this market day, against the
- * day's "stop after" (from that day's chart prep, or the setting). A
- * backtest's day is its chart date.
+ * How many losses this account already has on this day, against the day's
+ * "stop after" (from that day's chart prep, or the setting). Backtests have
+ * no day: no per-day rule applies to them.
  */
 export function dayLimit(account: string, day: string | null, excludeId: string | null = null, settings = getRuleSettings()): DayLimit {
   const stopAfter = stopAfterFor(day ? getPrep(day)?.data ?? null : null, settings);
-  if (!day) return { day, stopAfter, losses: 0, reached: false };
+  if (!day || isBacktest(account)) return { day: null, stopAfter, losses: 0, reached: false };
   const losses = listTrades().filter((t) => t.id !== excludeId && t.account === account && t.outcome === 'Loss'
     && marketDay(t) === day).length;
   return { day, stopAfter, losses, reached: stopAfter > 0 && losses >= stopAfter };

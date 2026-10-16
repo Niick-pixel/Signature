@@ -54,6 +54,7 @@ export const DIMENSIONS: Array<{ id: string; title: string; key: (t: Trade) => s
   { id: 'pd', title: 'By premium / discount', key: (t) => t.premium_discount, order: ['Discount', 'Equilibrium', 'Premium'] },
   { id: 'targetCheck', title: 'By target check', key: (t) => (t.target_check_passed == null ? 'Not checked' : t.target_check_passed ? 'Passed' : 'Failed'),
     order: ['Passed', 'Failed', 'Not checked'] },
+  { id: 'rBucket', title: 'By R to nearest liquidity', key: (t) => t.r_to_nearest_bucket ?? 'Not set', order: ['<1', '1-1.5', '1.5-2', '2+', 'Not set'] },
   { id: 'be', title: 'By breakeven trigger', key: (t) => t.be_trigger ?? 'Not set', order: ['1R', 'Structure break', 'None', 'Not set'] },
 ];
 

@@ -567,13 +567,31 @@ export const BE_TRIGGER_LABEL: Record<BeTrigger, string> = {
 export const SWING_COUNTS = ['0', '1', '2+'] as const;
 export type SwingCount = (typeof SWING_COUNTS)[number];
 
+/** R to the nearest liquidity, as a quick bucket (029). Under 1.5R is no trade. */
+export const R_BUCKETS = ['<1', '1-1.5', '1.5-2', '2+'] as const;
+export type RBucket = (typeof R_BUCKETS)[number];
+export const R_BUCKET_LABEL: Record<RBucket, string> = { '<1': '< 1', '1-1.5': '1 – 1.5', '1.5-2': '1.5 – 2', '2+': '2+' };
+export const R_BUCKET_FAILS: readonly RBucket[] = ['<1', '1-1.5'];
+
 /**
- * The day a trade belongs to, for per-day rules: the replayed session for a
- * backtest that names one (chart_date), otherwise the day it was taken.
- * Null for an undated backtest with no chart date — it belongs to no day.
+ * The management plan (029): one choice that also names the breakeven
+ * trigger, so the two never disagree. be_trigger is derived from it on save.
+ * A partial at 1R moves the stop to breakeven there too. "Other" names none.
  */
-export function marketDay(t: { date: string; undated?: boolean | null; chart_date?: string | null }): string | null {
-  if (t.chart_date) return t.chart_date;
+export const MANAGEMENTS = ['Hold to stop or target', 'BE at 1R', 'BE on structure break', 'Partial at 1R, runner', 'Other'] as const;
+export type Management = (typeof MANAGEMENTS)[number];
+export const BE_FROM_MANAGEMENT: Record<Management, BeTrigger | null> = {
+  'Hold to stop or target': 'None', 'BE at 1R': '1R', 'BE on structure break': 'Structure break',
+  'Partial at 1R, runner': '1R', Other: null,
+};
+
+/**
+ * The day a trade belongs to: the day it was logged. Backtests carry only
+ * their log timestamp (chart_date is no longer asked or read), and no
+ * per-day rule applies to them — see dayLimit and redDays.
+ * Null for an undated backtest.
+ */
+export function marketDay(t: { date: string; undated?: boolean | null }): string | null {
   return t.undated ? null : t.date.slice(0, 10);
 }
 export type TradeStatus = (typeof TRADE_STATUSES)[number];

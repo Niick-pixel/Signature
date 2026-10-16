@@ -119,28 +119,51 @@ test('the target check: R to the nearest liquidity, and what fails it', async ()
   const v = targetCheck({ target_type: 'EQH/EQL', nearest_liquidity_type: 'PDH/PDL', nearest_liquidity_price: 112, opposing_swings_between: '2+',
     entry_price: 100, stop_loss: 90, stop_points: null, eqhl_checks: { touches: true, untested: false, in_range: true } });
   assert.equal(v.passed, false);
-  assert.equal(v.warnings.length, 4);
-  assert.ok(v.warnings.some((w) => w.includes('under 1.5R')));
+  assert.equal(v.warnings.length, 3);
+  assert.ok(v.warnings.some((w) => w.includes('By your rules this is no trade') && w.includes('under 1.5R') && w.includes('opposing swings')));
+  // The quick bucket: under 1.5R fails, 1.5 and up passes.
+  const quick = (b: string, sw = '0') => targetCheck({ target_type: 'PDH/PDL', nearest_liquidity_type: 'PDH/PDL', nearest_liquidity_price: null,
+    opposing_swings_between: sw, entry_price: null, stop_loss: null, stop_points: null, eqhl_checks: null, r_to_nearest_bucket: b });
+  assert.equal(quick('<1').passed, false);
+  assert.equal(quick('1-1.5').passed, false);
+  assert.equal(quick('1.5-2').passed, true);
+  assert.equal(quick('2+').passed, true);
+  assert.equal(quick('2+', '2+').passed, false);
+  assert.deepEqual(quick('1-1.5').warnings, ['By your rules this is no trade — under 1.5R to the nearest liquidity.']);
   // Stored by the server, recomputed whatever the form sent.
   const t = await post({ entry_price: 100, stop_loss: 90, nearest_liquidity_type: 'PDH/PDL', nearest_liquidity_price: 125, opposing_swings_between: '0', r_to_nearest: 99, target_check_passed: false, be_trigger: '1R' });
   assert.equal(t.r_to_nearest, 2.5);
   assert.equal(t.target_check_passed, true);
   assert.equal(t.be_trigger, '1R');
+  // The bucket is stored and decides the verdict; the management plan names the BE trigger.
+  const q = await post({ nearest_liquidity_type: 'PDH/PDL', opposing_swings_between: '1', r_to_nearest_bucket: '1-1.5', management: 'BE on structure break', be_trigger: '1R' });
+  assert.equal(q.r_to_nearest_bucket, '1-1.5');
+  assert.equal(q.target_check_passed, false);
+  assert.equal(q.management, 'BE on structure break');
+  assert.equal(q.be_trigger, 'Structure break');
+  const hold = await post({ management: 'Hold to stop or target' });
+  assert.equal(hold.be_trigger, 'None');
 });
 
 test('the day’s loss limit: from that day’s prep, else the setting; past it, the trade carries why', async () => {
   assert.equal(stopAfterFor(parsePrepData({ answers: { 'session.stop': '1 loss' } }), DEFAULT_RULES), 1);
   assert.equal(stopAfterFor(null, DEFAULT_RULES), 2);
   const day = '2026-09-20';
-  const bt = { account: 'Backtest (FX Replay)', reason: 'Backtest replay', chart_date: day, outcome: 'Loss', r_multiple: -1 };
+  // Backtests have no day: no per-day limit, however many losses.
+  const bt = { account: 'Backtest (FX Replay)', reason: 'Backtest replay', date: `${day}T21:30`, outcome: 'Loss', r_multiple: -1 };
   await post(bt); await post(bt);
-  assert.equal(dayLimit('Backtest (FX Replay)', day).reached, true);
-  const third = await post({ ...bt, outcome: 'Win', r_multiple: 2 });
+  assert.equal(dayLimit('Backtest (FX Replay)', day).reached, false);
+  assert.equal((await post({ ...bt, outcome: 'Win', r_multiple: 2 })).overrides.length, 0);
+  const real = { account: 'Live', date: `${day}T09:45`, outcome: 'Loss', r_multiple: -1 };
+  await post(real); await post(real);
+  assert.equal(dayLimit('Live', day).reached, true);
+  const bt2 = real;
+  const third = await post({ ...bt2, outcome: 'Win', r_multiple: 2 });
   assert.equal(third.overrides.length, 1);
   assert.equal(third.overrides[0].kind, 'daily_limit');
   assert.equal(third.overrides[0].reason, null);
   const reason = 'Replaying the same session again on purpose to check the second entry model.';
-  const fourth = await post({ ...bt, overrides: [{ kind: 'daily_limit', commitment_id: `day:${day}`, commitment_text: 'Stop after 2 losses', reason, at: '2026-10-16T21:00:00.000Z' }] });
+  const fourth = await post({ ...bt2, overrides: [{ kind: 'daily_limit', commitment_id: `day:${day}`, commitment_text: 'Stop after 2 losses', reason, at: '2026-10-16T21:00:00.000Z' }] });
   assert.equal(fourth.overrides.filter((o) => o.kind === 'daily_limit').length, 1);
   assert.equal(fourth.overrides[0].reason, reason);
   // A real day's prep can make it stricter.
@@ -155,4 +178,20 @@ test('the form’s live numbers come from my own trades', () => {
   assert.ok(ctx.lowConfidence.n >= 2);
   assert.ok(ctx.lowConfidence.l >= 1);
   assert.equal(ctx.limit.stopAfter, 1);
+});
+
+test('Lock grade: one optional click decides graded_post_hoc on a finished trade', async () => {
+  const at = new Date(Date.now() - 5 * 60_000).toISOString();
+  const before = await post({ grade_locked_at: at, graded_post_hoc: false });
+  assert.equal(before.graded_post_hoc, false, 'locked before the outcome');
+  assert.equal(before.grade_locked_at, at);
+  const after = await post({ graded_post_hoc: true });
+  assert.equal(after.graded_post_hoc, true, 'no lock: graded after');
+  assert.ok(after.grade_locked_at, 'the grade still freezes at the first save');
+  // A claim without a lock time is not a lock.
+  assert.equal((await post({ graded_post_hoc: false })).graded_post_hoc, true);
+  // An edit never changes it.
+  const edited = await put(before.id, { graded_post_hoc: true, grade_locked_at: null });
+  assert.equal(edited.graded_post_hoc, false);
+  assert.equal(edited.grade_locked_at, at);
 });

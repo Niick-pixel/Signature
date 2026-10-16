@@ -38,6 +38,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence',
   // The honest Missed log (027).
   'written_before_outcome',
+  // Form fixes (029).
+  'r_to_nearest_bucket', 'management',
 ];
 
 function csvCell(v: unknown): string {
@@ -138,7 +140,7 @@ export async function GET() {
     // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 7,
+    version: 8,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -151,6 +153,8 @@ export async function GET() {
     path_events: listEvents(),
     eval_purchases: listPurchases(),
     red_day_pages: (getDb().prepare('SELECT * FROM red_day_pages ORDER BY day').all() as Record<string, unknown>[]).map((r) => ({ ...r })),
+    // Version 8: red days skipped on purpose.
+    red_day_skips: (getDb().prepare('SELECT * FROM red_day_skips ORDER BY day').all() as Record<string, unknown>[]).map((r) => ({ ...r })),
   };
 
   const zip = makeZip([

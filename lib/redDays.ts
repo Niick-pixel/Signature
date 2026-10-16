@@ -1,9 +1,11 @@
 /**
  * Red days: a market day whose taken trades net below zero.
  *
- * Two worlds, never mixed: real accounts (Demo, Live, Eval, Funded) by the
- * day the trade was taken, and backtests by the replayed session (chart
- * date). Missed trades did not happen and are never part of a day's result.
+ * Real accounts only (Demo, Live, Eval, Funded), by the day the trade was
+ * taken. Backtests have no day — they keep only their log time and no
+ * per-day rule or stat applies to them. Missed trades did not happen and are
+ * never part of a day's result. `since` leaves out days before it: a red day
+ * that was already history when the prompt arrived is never counted.
  */
 import { countsInStats, isBacktest, isHypothetical, isTaken, marketDay } from './domain';
 import type { Trade } from './types';
@@ -19,12 +21,12 @@ export interface RedDay {
   lastLoggedAt: string;
 }
 
-export function redDays(trades: readonly Trade[]): RedDay[] {
+export function redDays(trades: readonly Trade[], since: string | null = null): RedDay[] {
   const groups = new Map<string, Trade[]>();
   for (const t of trades) {
-    if (t.deleted_at || isHypothetical(t.account) || !isTaken(t.outcome) || t.status === 'Planned' || !countsInStats(t)) continue;
+    if (t.deleted_at || isHypothetical(t.account) || isBacktest(t.account) || !isTaken(t.outcome) || t.status === 'Planned' || !countsInStats(t)) continue;
     const day = marketDay(t);
-    if (!day) continue;
+    if (!day || (since && day < since)) continue;
     const key = `${isBacktest(t.account) ? 'backtest' : 'real'}|${day}`;
     groups.set(key, [...(groups.get(key) ?? []), t]);
   }

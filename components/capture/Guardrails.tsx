@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Field, Input } from '@/components/ui/Field';
+import { Field } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { Select } from '@/components/ui/Select';
 import { spring, exitQuick } from '@/lib/motion';
-import { BE_TRIGGERS, BE_TRIGGER_LABEL, SWING_COUNTS, TARGET_TYPES, type BeTrigger, type SwingCount } from '@/lib/domain';
+import { R_BUCKETS, R_BUCKET_FAILS, R_BUCKET_LABEL, SWING_COUNTS, TARGET_TYPES, type BeTrigger, type RBucket, type SwingCount } from '@/lib/domain';
 import { targetCheck, MIN_R_TO_NEAREST } from '@/lib/targetCheck';
 import type { EqhlChecks } from '@/lib/types';
 
@@ -86,11 +86,22 @@ export function ConfidenceNotice({ confidence, ctx, taken, onPass }: {
   );
 }
 
-export function LateNotice({ ctx, backtest }: { ctx: GuardContext | null; backtest: boolean }) {
+export function LateNotice({ ctx, backtest, compact = false }: { ctx: GuardContext | null; backtest: boolean; compact?: boolean }) {
   const late = backtest && new Date().getHours() >= 21;
   if (!late) return null;
   const n = ctx?.lateNight;
   const day = n ? new Date(`${n.day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : null;
+  // A pill beside the Path banner: in sight, without pushing the form down.
+  if (compact) {
+    return (
+      <span data-notice="late-replay" className="glass inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-[11px]"
+        title={n ? `Your ${day} night had ${n.breaks} rule break${n.breaks === 1 ? '' : 's'} in ${n.trades} trade${n.trades === 1 ? '' : 's'}.` : 'Tired replays are where the rules slip.'}
+        style={{ borderColor: 'rgb(var(--amber) / 0.45)', color: 'rgb(var(--amber))' }}>
+        <span aria-hidden>☾</span>
+        <span className="truncate">Late replay{n ? ` · ${day}: ${n.breaks} break${n.breaks === 1 ? '' : 's'} / ${n.trades}` : ''}</span>
+      </span>
+    );
+  }
   return (
     <Notice id="late-replay">
       <b>Late replays.</b>{' '}
@@ -105,22 +116,16 @@ export function LateNotice({ ctx, backtest }: { ctx: GuardContext | null; backte
 export interface TargetCheckState {
   targetType: string | null;
   nearestType: string | null;
-  nearestPrice: string;
   swings: SwingCount | null;
-  entryPrice: string;
-  stopPrice: string;
-  targetPrice: string;
-  stopPoints: string;
+  rBucket: RBucket | null;
   eqhl: EqhlChecks;
 }
 
-const n = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-
 /**
- * Phase 2 of the checklist, made concrete: where is the nearest clear
- * liquidity in my direction, what stands in the way, and is it worth 1.5R?
- * It warns; it never blocks. EQH/EQL gets its three-point definition and my
- * own record on it, right beside the choice.
+ * Phase 2 of the checklist, made concrete and quick: the nearest clear
+ * liquidity in my direction, the swings in the way, and roughly how many R
+ * it is worth — three clicks, no prices. It warns; it never blocks. EQH/EQL
+ * gets its three-point definition and my own record on it.
  */
 export function TargetCheckBlock({ s, set, ctx }: {
   s: TargetCheckState;
@@ -128,33 +133,27 @@ export function TargetCheckBlock({ s, set, ctx }: {
   ctx: GuardContext | null;
 }) {
   const verdict = targetCheck({
-    target_type: s.targetType, nearest_liquidity_type: s.nearestType, nearest_liquidity_price: n(s.nearestPrice),
-    opposing_swings_between: s.swings, entry_price: n(s.entryPrice), stop_loss: n(s.stopPrice), stop_points: n(s.stopPoints),
-    eqhl_checks: s.targetType === 'EQH/EQL' ? s.eqhl : null,
+    target_type: s.targetType, nearest_liquidity_type: s.nearestType, nearest_liquidity_price: null,
+    opposing_swings_between: s.swings, entry_price: null, stop_loss: null, stop_points: null,
+    eqhl_checks: s.targetType === 'EQH/EQL' ? s.eqhl : null, r_to_nearest_bucket: s.rBucket,
   });
   return (
     <div data-target-check className="space-y-3 rounded-[calc(16px*var(--rk))] border p-3.5" style={{ borderColor: 'var(--glass-stroke)' }}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10.5px] font-medium uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Target check</span>
-        <span className="text-[11.5px] tabular-nums" data-r-to-nearest
-          style={{ color: verdict.r == null ? 'var(--text-faint)' : verdict.r >= MIN_R_TO_NEAREST ? 'rgb(var(--outcome-win))' : 'rgb(var(--accent))' }}>
-          {verdict.r == null ? 'R to nearest: —' : `R to nearest: ${verdict.r}R`}
-        </span>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <Field quiet label="Entry"><Input inputMode="decimal" placeholder="—" value={s.entryPrice} onChange={(e) => set({ entryPrice: e.target.value })} data-entry-price /></Field>
-        <Field quiet label="Stop"><Input inputMode="decimal" placeholder="—" value={s.stopPrice} onChange={(e) => set({ stopPrice: e.target.value })} data-stop-price /></Field>
-        <Field quiet label="Target"><Input inputMode="decimal" placeholder="—" value={s.targetPrice} onChange={(e) => set({ targetPrice: e.target.value })} /></Field>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-[1fr_7rem]">
-        <Field quiet label="Nearest liquidity, my direction" hint="The nearest clear pool inside the current dealing range.">
-          <Select value={s.nearestType as typeof TARGET_TYPES[number] | null} onChange={(v) => set({ nearestType: v })} options={TARGET_TYPES} placeholder="Which…" />
-        </Field>
-        <Field quiet label="at"><Input inputMode="decimal" placeholder="price" value={s.nearestPrice} onChange={(e) => set({ nearestPrice: e.target.value })} data-nearest-price /></Field>
-      </div>
-      <Field quiet label="Opposing swings in between" group>
-        <Segmented value={s.swings} onChange={(v) => set({ swings: v })} options={SWING_COUNTS} />
+      <span className="block text-[10.5px] font-medium uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Target check</span>
+      <Field quiet label="Nearest liquidity, my direction" hint="The nearest clear pool inside the current dealing range.">
+        <Select value={s.nearestType as typeof TARGET_TYPES[number] | null} onChange={(v) => set({ nearestType: v })} options={TARGET_TYPES} placeholder="Which…" />
       </Field>
+      <div className="grid gap-3">
+        <Field quiet label="Opposing swings in between" group>
+          <Segmented value={s.swings} onChange={(v) => set({ swings: v })} options={SWING_COUNTS} />
+        </Field>
+        <Field quiet label="R to nearest liquidity" hint={`Under ${MIN_R_TO_NEAREST}R is no trade by your rules.`} group>
+          <div data-r-bucket={s.rBucket ?? 'unset'}>
+            <Segmented value={s.rBucket} onChange={(v) => set({ rBucket: v })} options={R_BUCKETS} labelFor={(b) => R_BUCKET_LABEL[b]}
+              accentFor={(b) => (R_BUCKET_FAILS.includes(b) ? 'var(--outcome-loss)' : 'var(--outcome-win)')} />
+          </div>
+        </Field>
+      </div>
 
       {s.targetType === 'EQH/EQL' && (
         <div data-eqhl className="space-y-1.5 rounded-[calc(12px*var(--rk))] px-3 py-2.5" style={{ background: 'rgb(var(--accent) / 0.06)' }}>
@@ -183,15 +182,6 @@ export function TargetCheckBlock({ s, set, ctx }: {
 }
 
 /* ------------------------------------------------------------ breakeven */
-
-export function BeTriggerField({ value, onChange, required }: { value: BeTrigger | null; onChange: (v: BeTrigger) => void; required: boolean }) {
-  return (
-    <Field quiet label="Breakeven trigger" pending={required && value == null}
-      hint="What moves the stop to breakeven, decided before the trade. Required once a stop is set." group>
-      <Segmented value={value} onChange={onChange} options={BE_TRIGGERS} labelFor={(t) => BE_TRIGGER_LABEL[t]} />
-    </Field>
-  );
-}
 
 /** A breakeven before the trigger was reached is a moved stop by another name. */
 export function movedStopSuggested(outcome: string | null, trigger: BeTrigger | null, maxR: number | null): boolean {

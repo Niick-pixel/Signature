@@ -1,4 +1,4 @@
-/* Red days: found per world, asked about once the day is over, a page each. */
+/* Red days: real accounts only, counted from a start day, asked about once the day is over, a page or a skip each. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,10 +10,12 @@ process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
 const { getDb } = await import('../db/index');
 const { createTrade } = await import('../db/trades');
-const { redDayStatus, pendingRedDay, writeRedDayPage } = await import('../db/redDays');
+const { redDayStatus, pendingRedDay, writeRedDayPage, skipRedDay } = await import('../db/redDays');
 const { getJournalPage } = await import('../db/journal');
 const { parseTradeInput } = await import('../lib/validate');
 getDb();
+// Counted from the day migration 029 ran — set back here so these test days count.
+getDb().prepare("UPDATE app_settings SET value = '2026-10-01' WHERE key = 'red_days_since'").run();
 
 const t = (x: Record<string, unknown>) => {
   const r = parseTradeInput({
@@ -30,10 +32,12 @@ test('a net-negative day is red; a green one is not; Missed never counts', () =>
   t({}); t({ outcome: 'Win', r_multiple: 0.5 });                                  // 8 Oct: −0.5R → red
   t({ date: '2026-10-09T09:45', outcome: 'Win', r_multiple: 2 }); t({ date: '2026-10-09T10:00' }); // 9 Oct: +1R
   t({ date: '2026-10-09T10:30', account: 'Missed', written_before_outcome: true, r_multiple: -3 }); // not a real trade
-  t({ account: 'Backtest (FX Replay)', reason: 'Backtest replay', chart_date: '2026-09-02' });       // backtest world, by chart date
+  t({ account: 'Backtest (FX Replay)', reason: 'Backtest replay', date: '2026-10-07T22:00' });      // backtests have no day
+  t({ date: '2026-09-20T09:45' });                                                                  // before the start day: never counted
   const s = redDayStatus();
-  assert.deepEqual(s.days.map((d) => `${d.world}:${d.day}:${d.netR}`).sort(), ['backtest:2026-09-02:-1', 'real:2026-10-08:-0.5']);
-  assert.equal(s.without, 2);
+  assert.deepEqual(s.days.map((d) => `${d.world}:${d.day}:${d.netR}`).sort(), ['real:2026-10-08:-0.5']);
+  assert.equal(s.without, 1);
+  assert.equal(s.since, '2026-10-01');
 });
 
 test('it asks after the day is over, and the page closes the loop', () => {
@@ -50,4 +54,16 @@ test('it asks after the day is over, and the page closes the loop', () => {
   assert.equal(writeRedDayPage(p!.day, p!.world), id, 'one page per red day');
   assert.equal(redDayStatus().withPage, 1);
   assert.notEqual(pendingRedDay(tomorrow)?.day ?? null, p!.day);
+});
+
+test('a skipped red day is never asked about again, and counted apart', () => {
+  t({ date: '2026-10-10T09:45', r_multiple: -2 });
+  const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString('en-CA');
+  const p = pendingRedDay(tomorrow);
+  assert.equal(p?.day, '2026-10-10');
+  skipRedDay('2026-10-10', 'real');
+  assert.equal(pendingRedDay(tomorrow), null);
+  const s = redDayStatus();
+  assert.equal(s.skipped, 1);
+  assert.equal(s.without, 0);
 });

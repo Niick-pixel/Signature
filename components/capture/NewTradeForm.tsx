@@ -12,7 +12,7 @@ import {
   type Instrument, type MistakeTag, type Outcome, type PremiumDiscount, type Regrade,
   type SkipReason, type Reason, type Session, type SetupType, type TargetType,
   type SweepTier, type TradeStatus, type Tri,
-  MGMT_PLANS, MGMT_PLAN_LABEL, MGMT_PLAN_WHY, PARTIAL_LEVELS, type MgmtPlan,
+  MGMT_PLAN_LABEL,
 } from '@/lib/domain';
 import { REGRADE_HINT, regradeOptions } from '@/lib/grade';
 import { CURRENT_RUBRIC, GATES_SINCE, MODEL_GATE_MESSAGE, gradeUnder } from '@/lib/rubric';
@@ -30,10 +30,11 @@ const DEFAULTED = [
 ] as const;
 /*
   No biased defaults: these start empty on a new trade and must be chosen —
-  a pre-filled Win, Settled or EQH/EQL is an answer nobody gave. Instrument
-  (NQ) and the sweep tier keep theirs: neither leans toward a result.
+  a pre-filled Win or EQH/EQL is an answer nobody gave. Instrument (NQ) and
+  the stage (Settled — every trade is logged after it ends) keep theirs:
+  neither says anything about the trade's quality.
 */
-const REQUIRED = ['outcome', 'session', 'direction', 'setupType', 'htfBias', 'premiumDiscount', 'targetType', 'status'] as const;
+const REQUIRED = ['outcome', 'session', 'direction', 'setupType', 'htfBias', 'premiumDiscount', 'targetType'] as const;
 type DefaultedField = (typeof DEFAULTED)[number];
 const DEFAULTED_LABEL: Record<DefaultedField, string> = {
   outcome: 'How it ended', session: 'Session', instrument: 'Instrument', direction: 'Direction',
@@ -65,10 +66,10 @@ import { SkippedLosers } from './SkippedLosers';
 import { PathBanner, usePathSummary } from '@/components/path/PathBanner';
 import type { HeldCommitment } from '@/lib/path';
 import {
-  BeTriggerField, ConfidenceNotice, LateNotice, Notice, TargetCheckBlock, movedStopSuggested, useGuardContext,
+  ConfidenceNotice, LateNotice, Notice, TargetCheckBlock, movedStopSuggested, useGuardContext,
   type TargetCheckState,
 } from './Guardrails';
-import type { BeTrigger } from '@/lib/domain';
+import { BE_FROM_MANAGEMENT, MANAGEMENTS, type Management } from '@/lib/domain';
 import type { TradeOverride } from '@/lib/types';
 
 /** `datetime-local` wants 'YYYY-MM-DDTHH:mm' in local time, not an ISO string. */
@@ -95,7 +96,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     "With bias" is never saved without being looked at. An edit starts with
     everything confirmed: those answers were given when the trade was logged.
   */
-  const [confirmed, setConfirmed] = useState<DefaultedField[]>(() => (trade ? [...DEFAULTED] : []));
+  const [confirmed, setConfirmed] = useState<DefaultedField[]>(() => (trade ? [...DEFAULTED] : ['status']));
   const confirm = (field: DefaultedField) =>
     setConfirmed((prev) => (prev.includes(field) ? prev : [...prev, field]));
   const pending = (field: DefaultedField) => !confirmed.includes(field);
@@ -124,11 +125,11 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   const setCheck = (key: ChecklistKey, value: ChecklistAnswer) =>
     setChecks((prev) => ({ ...prev, [key]: value }));
   /*
-    Starts on NONE, the answer that claims nothing — and lit, like every other
-    default, until one is picked. An old trade that never answered it opens
-    with nothing picked rather than a guess.
+    Starts with nothing picked — not even NONE: nothing about the trade's
+    quality is pre-filled. Unanswered scores like NONE (no points) until one
+    is picked.
   */
-  const [sweepTier, setSweepTier] = useState<SweepTier | null>(trade ? trade.sweep_tier : 'none');
+  const [sweepTier, setSweepTier] = useState<SweepTier | null>(trade ? trade.sweep_tier : null);
   /*
     Rubric 4 (trial): the liquidity event, named. Empty and unset by default —
     nothing here claims a level or a confirmation nobody picked.
@@ -155,38 +156,34 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   const [targetHit, setTargetHit] = useState<Tri>(trade?.target_hit ?? null);
   const [targetFresh, setTargetFresh] = useState<Tri>(trade?.target_fresh ?? null);
   const [oppositeTaken, setOppositeTaken] = useState<Tri>(trade?.opposite_taken ?? null);
-  const [mgmtPlan, setMgmtPlan] = useState<MgmtPlan | null>(trade?.mgmt_plan ?? null);
-  const [partialAt, setPartialAt] = useState<string | null>(trade?.partial_at ?? null);
+  // The management plan names the breakeven trigger (029). An older trade's
+  // plan A/B and partial level are carried through untouched.
+  const [management, setManagement] = useState<Management | null>(trade?.management ?? null);
   const [mfeR, setMfeR] = useState(trade?.mfe_r?.toString() ?? '');
   const [confidence, setConfidence] = useState<number | null>(trade?.confidence_at_entry ?? null);
-  // Guardrails (026).
-  const [chartDate, setChartDate] = useState(trade?.chart_date ?? '');
-  const [beTrigger, setBeTrigger] = useState<BeTrigger | null>(trade?.be_trigger ?? null);
+  // Guardrails (026, 029): the BE trigger comes from the management plan.
+  const beTrigger = management ? BE_FROM_MANAGEMENT[management] : trade?.be_trigger ?? null;
   const [tc, setTc] = useState<TargetCheckState>(() => ({
     targetType: null,
     nearestType: trade?.nearest_liquidity_type ?? null,
-    nearestPrice: trade?.nearest_liquidity_price?.toString() ?? '',
     swings: trade?.opposing_swings_between ?? null,
-    entryPrice: trade?.entry_price?.toString() ?? '',
-    stopPrice: trade?.stop_loss?.toString() ?? '',
-    targetPrice: trade?.take_profit?.toString() ?? '',
-    stopPoints: '',
+    rBucket: trade?.r_to_nearest_bucket ?? null,
     eqhl: trade?.eqhl_checks ?? { touches: false, untested: false, in_range: false },
   }));
   const setTcPart = (p: Partial<TargetCheckState>) => setTc((prev) => ({ ...prev, ...p }));
   /*
-    A new backtest is graded in two steps: setup, checklist and confidence,
-    then "Lock grade" saves it as Planned — and only then do the outcome, R
-    and the result chart open. lockedId is that saved trade. skipLock is the
-    escape hatch: log it after the fact, marked as graded after the outcome.
+    "Grade before you look", in one optional click. Lock grade freezes the
+    checklist, the sweep, the target and the confidence. Pressed before any
+    outcome is filled in (how it ended, R, P&L), the trade saves as graded
+    before the outcome and counts toward the Path's sample; pressed after,
+    or never, it saves as graded after. Nothing is ever disabled but the
+    grade itself, and Unlock gives it back.
   */
+  const [gradeLock, setGradeLock] = useState<{ at: string; beforeOutcome: boolean } | null>(null);
   // Missed (027): was it written down before the move played out?
   const [writtenBefore, setWrittenBefore] = useState<Tri>(trade?.written_before_outcome ?? null);
   // After a Missed winner is saved: "did you also log the ones that would have lost?"
   const [losersPrompt, setLosersPrompt] = useState(false);
-  const [lockedId, setLockedId] = useState<string | null>(null);
-  const [skipLock, setSkipLock] = useState(false);
-  const [uploadedSlots, setUploadedSlots] = useState<string[]>([]);
   const [wouldBeR, setWouldBeR] = useState(trade?.would_be_r?.toString() ?? '');
   const [wouldHaveHitTp, setWouldHaveHitTp] = useState<boolean | null>(trade?.would_have_hit_tp ?? null);
   const [rLeftOnTable, setRLeftOnTable] = useState(trade?.r_left_on_table?.toString() ?? '');
@@ -228,7 +225,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   */
   const path = usePathSummary();
   const [overrides, setOverrides] = useState<TradeOverride[]>(trade?.overrides ?? []);
-  type SaveMode = 'full' | 'quick' | 'lock';
+  type SaveMode = 'full' | 'quick';
   // kind 'daily': the day's loss limit, same sheet, same rule — a reason, recorded.
   const [sheet, setSheet] = useState<{ kind: 'commitment' | 'daily'; items: HeldCommitment[]; prev: Account | null; thenSubmit: false | SaveMode } | null>(null);
   // Set when the sheet's reason is in; the save re-runs once the render that
@@ -287,23 +284,25 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   /*
     Everything the draft round-trips. The screenshot is deliberately absent:
     an image cannot go in localStorage without bloating it, and re-pasting a
-    chart is a second, not a paragraph.
+    chart is a second, not a paragraph. So are the grade's answers — the
+    checklist, the sweep, confidence and "followed all rules": a new trade
+    never opens with any of them already given.
   */
   const draftValues = useMemo(() => ({
     date, undated, instrument, direction, session, reason, setupType, htfBias,
     premiumDiscount, targetType, outcome, explanation, lesson,
-    context, checks, sweepTier, sweepLevel, futuresConfirmed, htfDelivery, followedRules, mistakeTags, workedTags, marketTags, account, accountLabel, status,
+    context, sweepLevel, futuresConfirmed, htfDelivery, mistakeTags, workedTags, marketTags, account, accountLabel, status,
     contracts, pnlDollars, stopPoints, rMultiple,
-    reached1R, confidence, wouldBeR, confirmed,
-    targetHit, targetFresh, oppositeTaken, mgmtPlan, partialAt, mfeR,
+    reached1R, wouldBeR, confirmed,
+    targetHit, targetFresh, oppositeTaken, management, mfeR,
   }), [
     undated,
     date, instrument, direction, session, reason, setupType, htfBias,
     premiumDiscount, targetType, outcome, explanation, lesson,
-    context, checks, sweepTier, sweepLevel, futuresConfirmed, htfDelivery, followedRules, mistakeTags, workedTags, marketTags, account, accountLabel, status,
+    context, sweepLevel, futuresConfirmed, htfDelivery, mistakeTags, workedTags, marketTags, account, accountLabel, status,
     contracts, pnlDollars, stopPoints, rMultiple,
-    reached1R, confidence, wouldBeR, confirmed,
-    targetHit, targetFresh, oppositeTaken, mgmtPlan, partialAt, mfeR,
+    reached1R, wouldBeR, confirmed,
+    targetHit, targetFresh, oppositeTaken, management, mfeR,
   ]);
 
   const [restored, setRestored] = useState(false);
@@ -336,8 +335,6 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     if (has('explanation')) setExplanation(v.explanation);
     if (has('lesson')) setLesson(v.lesson);
     if (has('context')) setContext(v.context);
-    if (has('checks')) setChecks(v.checks);
-    if (has('sweepTier')) setSweepTier(v.sweepTier);
     if (has('sweepLevel')) setSweepLevel(v.sweepLevel);
     if (has('futuresConfirmed')) setFuturesConfirmed(v.futuresConfirmed);
     if (has('htfDelivery')) setHtfDelivery(v.htfDelivery);
@@ -351,11 +348,10 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     if (has('premiumDiscount')) setPremiumDiscount(v.premiumDiscount);
     if (has('targetType')) setTargetType(v.targetType);
     if (has('outcome')) setOutcome(v.outcome);
-    if (has('followedRules')) setFollowedRules(v.followedRules);
     if (has('mistakeTags')) setMistakeTags(v.mistakeTags);
     if (has('workedTags')) setWorkedTags(v.workedTags);
     if (has('marketTags')) setMarketTags(v.marketTags);
-    if (has('confirmed')) setConfirmed(v.confirmed);
+    if (has('confirmed')) setConfirmed((v.confirmed as DefaultedField[]).filter((f) => f !== 'sweepTier'));
     if (has('account')) setAccount(v.account);
     if (has('accountLabel')) setAccountLabel(v.accountLabel);
     if (has('status')) setStatus(v.status);
@@ -367,10 +363,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     if (has('targetHit')) setTargetHit(v.targetHit);
     if (has('targetFresh')) setTargetFresh(v.targetFresh);
     if (has('oppositeTaken')) setOppositeTaken(v.oppositeTaken);
-    if (has('mgmtPlan')) setMgmtPlan(v.mgmtPlan);
-    if (has('partialAt')) setPartialAt(v.partialAt);
+    if (has('management')) setManagement(v.management);
     if (has('mfeR')) setMfeR(v.mfeR);
-    if (has('confidence')) setConfidence(v.confidence);
     if (has('wouldBeR')) setWouldBeR(v.wouldBeR);
     // Only claim to have restored something if something was actually written.
     const raw = draft.values as Record<string, unknown>;
@@ -427,12 +421,14 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     if (regrade && !regradeChoices.includes(regrade)) setRegrade(null);
   }, [regrade, regradeChoices]);
   const planned = status === 'Planned' && !pending('status');
-  // A new backtest before its grade is locked: the outcome is not open yet.
-  const gradeOpen = backtest && !editing && !lockedId && !skipLock;
-  const saved = editing || lockedId != null;
-  const stopSet = stopPoints.trim() !== '' || tc.stopPrice.trim() !== '';
-  const marketDayNow = backtest ? (chartDate || null) : (noDate ? null : date.slice(0, 10));
-  const guard = useGuardContext(account, marketDayNow, trade?.id ?? lockedId);
+  const saved = editing;
+  // Backtests have no day: no per-day rule applies to them.
+  const marketDayNow = backtest || noDate ? null : date.slice(0, 10);
+  const guard = useGuardContext(account, marketDayNow, trade?.id ?? null);
+  // Any part of the outcome written in: a lock after this is a lock after the outcome.
+  const outcomeWritten = !pending('outcome') || rMultiple.trim() !== '' || pnlDollars.trim() !== '';
+  const gradeLocked = gradeLock != null;
+  const lockGrade = () => setGradeLock({ at: new Date().toISOString(), beforeOutcome: !outcomeWritten });
   const takenNow = !planned && !pending('outcome') && outcome !== 'Not taken';
   const accent = reason ? reasonAccent(reason) : 'var(--accent)';
   /*
@@ -450,21 +446,14 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   const lessonOk = planned || lesson.trim().length >= MIN_LESSON || keptLesson;
   // Planned trades hide the outcome, so it is not waiting on an answer.
   const unconfirmed = DEFAULTED.filter((f) => pending(f) && !(f === 'outcome' && planned));
-  // What still has to be chosen. Before a backtest's grade is locked, the
-  // stage and the outcome are not asked yet.
-  const missing = REQUIRED.filter((f) => pending(f)
-    && !(f === 'outcome' && (planned || gradeOpen)) && !(f === 'status' && gradeOpen));
+  // What still has to be chosen.
+  const missing = REQUIRED.filter((f) => pending(f) && !(f === 'outcome' && planned));
   const extrasMissing = [
-    ...(stopSet && beTrigger == null ? ['Breakeven trigger'] : []),
-    ...(backtest && !chartDate && !editing ? ['Chart date'] : []),
     ...(isHypothetical(account) && writtenBefore == null ? ['Written before the move?'] : []),
   ];
   const choicesDone = missing.length === 0 && extrasMissing.length === 0;
   const canSubmit = (Boolean(chart) || saved)
-    && Boolean(reason) && explanationOk && lessonOk && choicesDone && !submitting && !gradeOpen;
-  // Step A of a backtest: everything but the result, with a chart of the setup.
-  const setupChart = Boolean(chart) && firstSlot !== 'Result';
-  const canLock = gradeOpen && setupChart && Boolean(reason) && explanationOk && choicesDone && confidence != null && !submitting;
+    && Boolean(reason) && explanationOk && lessonOk && choicesDone && !submitting;
 
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
 
@@ -476,13 +465,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   async function submit(mode: SaveMode | boolean = 'full') {
     const m: SaveMode = mode === true ? 'quick' : mode === false ? 'full' : mode;
     const quick = m === 'quick';
-    const lock = m === 'lock';
-    if (lock ? !canLock : quick ? (!reason || submitting || !choicesDone) : (!canSubmit || !reason)) return;
+    if (quick ? (!reason || submitting || !choicesDone) : (!canSubmit || !reason)) return;
     const unexplained = brokenFor(account);
     if (unexplained.length) { setSheet({ kind: 'commitment', items: unexplained, prev: null, thenSubmit: m }); return; }
     // The day's loss limit, on a trade being taken now.
     const day = guard?.limit.day;
-    if (!lock && takenNow && guard?.limit.reached && day
+    if (takenNow && guard?.limit.reached && day
       && !overrides.some((o) => o.kind === 'daily_limit' && o.commitment_id === `day:${day}`)
       && !(trade?.overrides ?? []).some((o) => o.kind === 'daily_limit')) {
       setSheet({ kind: 'daily', items: [], prev: null, thenSubmit: m });
@@ -490,24 +478,19 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     }
     setSubmitting(true);
     setError(null);
-    // Step A saves as Planned: the grade is locked before any outcome exists.
-    const stage: TradeStatus = lock ? 'Planned' : status;
-    const isPlanned = lock || planned;
+    const stage: TradeStatus = status;
+    const isPlanned = planned;
 
     const body = new FormData();
     // On an edit, sending no file means "keep the screenshot you already have".
-    if (chart && !lockedId) body.append('screenshot', chart);
+    if (chart) body.append('screenshot', chart);
     // A new trade's first filled slot is its chart; every image keeps its label.
-    // Locking a backtest sends everything but the result; the result follows.
-    const sent: string[] = [];
     if (!saved && firstSlot) {
       body.append('screenshot_slot', firstSlot);
-      sent.push(firstSlot);
       for (const s of SHOT_SLOTS) {
-        if (s === firstSlot || !slots[s] || (lock && s === 'Result')) continue;
+        if (s === firstSlot || !slots[s]) continue;
         body.append('shots', slots[s]!);
         body.append('shot_slots', s);
-        sent.push(s);
       }
     }
     body.append('trade', JSON.stringify({
@@ -544,17 +527,22 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       // The server's to set: it is the frozen score, locked once the trade
       // leaves Planned. Sent only so an older server still gets a value.
       grade_at_entry: trade?.grade_at_entry ?? live.score,
-      // True unless this record was opened as a Plan and settled later.
-      graded_post_hoc: trade ? trade.graded_post_hoc : status !== 'Planned',
-      entry_price: num(tc.entryPrice),
-      take_profit: num(tc.targetPrice),
-      stop_loss: num(tc.stopPrice),
-      // Guardrails (026). The server recomputes R to nearest and the verdict.
-      chart_date: backtest ? chartDate || null : trade?.chart_date ?? null,
+      // Graded before the outcome: saved Planned or Live, or "Lock grade"
+      // pressed before any outcome was written in. The server decides.
+      graded_post_hoc: trade ? trade.graded_post_hoc : !(planned || status === 'Live' || gradeLock?.beforeOutcome),
+      grade_locked_at: trade ? trade.grade_locked_at : gradeLock?.at ?? null,
+      // No longer asked; an older trade keeps what it holds.
+      entry_price: trade?.entry_price ?? null,
+      take_profit: trade?.take_profit ?? null,
+      stop_loss: trade?.stop_loss ?? null,
+      chart_date: trade?.chart_date ?? null,
+      nearest_liquidity_price: trade?.nearest_liquidity_price ?? null,
+      // Guardrails (026, 029). The server settles the verdict.
       nearest_liquidity_type: tc.nearestType,
-      nearest_liquidity_price: num(tc.nearestPrice),
       opposing_swings_between: tc.swings,
+      r_to_nearest_bucket: tc.rBucket,
       eqhl_checks: targetType === 'EQH/EQL' && !pending('targetType') ? tc.eqhl : null,
+      management,
       be_trigger: beTrigger,
       written_before_outcome: isHypothetical(account) ? writtenBefore : null,
       would_have_hit_tp: wouldHaveHitTp,
@@ -589,8 +577,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       target_hit: targetHit,
       target_fresh: targetFresh,
       opposite_taken: oppositeTaken,
-      mgmt_plan: mgmtPlan,
-      partial_at: mgmtPlan === 'B' ? partialAt : null,
+      mgmt_plan: trade?.mgmt_plan ?? null,
+      partial_at: trade?.partial_at ?? null,
       confidence_at_entry: confidence,
       would_be_r: num(wouldBeR),
       playbook_id: null,
@@ -602,7 +590,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     }));
 
     try {
-      const savedId = trade?.id ?? lockedId;
+      const savedId = trade?.id ?? null;
       const res = await fetch(savedId ? `/api/trades/${savedId}` : '/api/trades', {
         method: savedId ? 'PUT' : 'POST',
         body,
@@ -616,25 +604,6 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           detail = JSON.parse(body).error ?? detail;
         } catch { /* not JSON; show the raw beginning of the response */ }
         throw new Error(`${detail} (HTTP ${res.status})`);
-      }
-      const result = await res.json().catch(() => null) as { id?: string } | null;
-      if (lock && result?.id) {
-        // Grade locked. The outcome opens; the form stays.
-        setLockedId(result.id);
-        setUploadedSlots(sent);
-        setStatus('Settled'); confirm('status');
-        clearDraft();
-        setSubmitting(false);
-        return;
-      }
-      // Charts not yet on a trade saved earlier (a locked backtest's result).
-      const tradeId = savedId ?? result?.id;
-      if (lockedId && tradeId) {
-        for (const s of SHOT_SLOTS) {
-          if (!slots[s] || uploadedSlots.includes(s)) continue;
-          const fd = new FormData(); fd.append('screenshot', slots[s]!); fd.append('slot', s);
-          await fetch(`/api/trades/${tradeId}/shots`, { method: 'POST', body: fd }).catch(() => {});
-        }
       }
       // Saved, so the draft has served its purpose. Leaving it behind would
       // resurrect this trade as a ghost on the next New trade.
@@ -657,7 +626,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
 
   // Refs are not written during render; this keeps the key handler pointed at
   // the current submit without re-binding the listener on every keystroke.
-  useEffect(() => { submitRef.current = () => { void submit(gradeOpen ? 'lock' : 'full'); }; });
+  useEffect(() => { submitRef.current = () => { void submit('full'); }; });
   useEffect(() => {
     if (!resubmit) return;
     setResubmit(false);
@@ -673,14 +642,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       className="glass mx-auto rounded-[calc(28px*var(--rk))] p-5 sm:p-6">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-[20px] font-semibold">{editing ? 'Edit trade' : lockedId ? 'Grade locked — the result' : 'New trade'}</h1>
+          <h1 className="text-[20px] font-semibold">{editing ? 'Edit trade' : 'New trade'}</h1>
           <p className="mt-0.5 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>
             {editing
               ? 'Paste a new chart to replace the screenshot, or leave it as it is.'
               : 'Name the motive before the data. That is the whole point.'}
           </p>
-          <div className="mt-2 flex"><PathBanner summary={path} compact /></div>
-          {!editing && <div className="mt-2 max-w-[34rem]"><LateNotice ctx={guard} backtest={backtest} /></div>}
         </div>
         {/* Mounted only when asked, so it starts from the winner as saved. */}
         {losersPrompt && (
@@ -714,6 +681,10 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           }}
         />
 
+        {/* Top right, beside the close button: in sight without pushing the form down. */}
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        {!editing && <LateNotice ctx={guard} backtest={backtest} compact />}
+        <PathBanner summary={path} compact />
         {/* The board is still behind this card; there was no way back to it
             without saving or using the browser's own history. */}
         <motion.button
@@ -736,6 +707,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               strokeWidth="1.6" strokeLinecap="round" />
           </svg>
         </motion.button>
+        </div>
       </div>
 
       {restored && (
@@ -763,50 +735,23 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       )}
 
       {/*
-        Columns where there is room for them.
+        Four trains of thought, read left to right in the order a finished
+        trade is honestly logged:
 
-        The form had grown to a single tall strip: logging one trade meant four
-        or five screens of scrolling, and the checklist — the part that actually
-        scores the trade — was always the furthest away. Setup, the writing and
-        the checklist are three separate trains of thought, so they sit side by
-        side rather than stacked.
+          the trade   what it was — account, when, on what, why, the charts
+          the grade   the checklist, the sweep, the target, confidence — and
+                      the optional Lock grade, before any outcome is written
+          the result  the target check, the plan, then how it ended and R
+          the words   explanation, lesson, the honest re-grade, the tags
 
-        At 1280px each gets its own column. Between 1024 and 1280 there is only
-        room for two, so the writing — the tallest of the three by far — takes
-      {/*
-        Columns of thought, not one tall strip.
-
-        Logging a trade used to mean four or five screens of scrolling, and the
-        checklist — the part that actually scores the trade — was always the
-        furthest away. The form sorts itself into four trains of thought: what
-        the trade WAS, WHEN and on WHAT it happened, what you have to SAY about
-        it, and what it SCORES. The old "Details" heap is gone; every field in
-        it now lives beside the thing it describes.
-
-        How many of the four get their own column depends on the window:
-
-          under 1024   one column, read top to bottom
-          1024-1279    two, filled across — trade | facts, then writing | score
-          1280-1899    three: trade and facts stack down the left, the writing
-                       and the score take a full-height column each
-          1900+        four, one per train of thought
-
-        The last tier is what a 1440p monitor was always going to want. Three
-        columns leave a 2560px screen a third empty and still cost a scroll,
-        because the checklist is a single ~1000px block that cannot be split —
-        it sets the floor for the whole card no matter how the rest is
-        arranged. Give it a column of its own alongside three shorter ones and
-        the entire capture lands inside one screen.
-
-        The explicit placement at 1280 is doing real work: left to itself the
-        grid would put the writing, the facts and the trade across row one and
-        drop the score alone on row two beside two empty cells.
+        1280+ gives each its own column; 1024-1279 fills two across (trade |
+        grade, then result | words); under 1024 it is one column. The
+        checklist is the one block that cannot be split, so it sets the
+        card's height — the other three columns are kept under it.
       */}
       <div className="grid items-start gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-4 2xl:gap-x-7">
         {/* A — the trade. */}
         <div className="space-y-4">
-        {/* 1 — how it ended. You already know this before you start typing, and
-            burying it behind a disclosure made it the last thing recorded. */}
         {/*
           Account first, because it is the one field that must never be wrong:
           backtest R and live R summing into one number would make every other
@@ -821,7 +766,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               // did not take — and its outcome is the price of that.
               ? 'Missed: a setup you hesitated on or missed. Log it as if you had taken it — the outcome and R it would have had. It never joins a real total.'
               : backtest
-                ? 'Backtest: a replayed trade. Kept apart from All, every real total and the calendar — and it needs no date.'
+                ? 'Backtest: a replayed trade. Kept apart from All, every real total and the calendar — it keeps only the time it was logged.'
                 : 'Backtest R and live R never sum into the same number.'}
           >
             <Select value={account} onChange={changeAccount} options={accountOptions(account)} labelFor={accountName} />
@@ -829,8 +774,6 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           <Field quiet label="Account label" hint="Optional — which prop firm, which phase.">
             <Input placeholder="—" value={accountLabel} onChange={(e) => setAccountLabel(e.target.value)} />
           </Field>
-          {/* A missed trade's most useful fact is why it was missed — the
-              hesitation patterns on Stats split by exactly this. */}
           {isHypothetical(account) && (
             <div className="sm:col-span-2" data-written-before>
               <TriState inline value={writtenBefore} onChange={setWrittenBefore}
@@ -841,6 +784,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               )}
             </div>
           )}
+          {/* A missed trade's most useful fact is why it was missed — the
+              hesitation patterns on Stats split by exactly this. */}
           {isHypothetical(account) && outcome !== 'Not taken' && (
             <Field quiet label="Why you didn't take it" hint="Fear, a rule, not at the screen, or it simply went without you." className="sm:col-span-2">
               <Select value={skipReason} onChange={setSkipReason} options={SKIP_REASONS} placeholder="Why really?" />
@@ -848,178 +793,9 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           )}
         </div>
 
-        {/*
-          A new backtest is graded before its outcome exists: the stage and the
-          result stay closed until "Lock grade" (in the footer) saves the setup.
-        */}
-        {gradeOpen ? (
-          <div data-grade-open className="rounded-[calc(16px*var(--rk))] border px-4 py-3 text-[12.5px] leading-snug"
-            style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.07)' }}>
-            <b>Grade first.</b> Setup, checklist, confidence and your planned entry, stop and target — then
-            <b> Lock grade</b>. The outcome, R and the result chart open after that.
-            <button type="button" data-skip-lock onClick={() => setSkipLock(true)}
-              className="mt-1.5 block text-[11.5px] underline underline-offset-2" style={{ color: 'var(--text-faint)' }}>
-              Skip the lock — log it after the fact (counts as graded after the outcome)
-            </button>
-          </div>
-        ) : (<>
-        {lockedId && (
-          <div data-grade-locked className="rounded-[calc(16px*var(--rk))] border px-4 py-2.5 text-[12.5px]"
-            style={{ borderColor: 'rgb(var(--outcome-win) / 0.45)', color: 'rgb(var(--outcome-win))' }}>
-            ✓ Grade locked before the outcome. Now the result.
-          </div>
-        )}
-        {/*
-          Two-stage logging is available, never required. 'Settled' stays the
-          default so a finished trade can still be written in one pass.
-        */}
-        <div>
-          <Field quiet
-            label="Stage"
-            pending={pending('status')}
-            hint={locked
-              ? 'This trade has left Planned, so its grade at entry is locked — it cannot go back.'
-              : 'Planned hides the outcome until you settle it. The grade stays open while it is Planned and locks the moment it leaves.'}
-           group>
-            <Segmented value={pending('status') ? null : status} onChange={(v) => { setStatus(v); confirm('status'); }}
-              options={locked || lockedId ? TRADE_STATUSES.filter((st) => st !== 'Planned') : TRADE_STATUSES} />
-          </Field>
-        </div>
-
-        {/* A Planned trade has no outcome yet, so it is not asked for. */}
-        <AnimatePresence initial={false}>
-          {planned ? (
-            <Collapse key="planned">
-              <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>
-                Planned — the outcome is hidden until you settle it. The score you give it now is kept
-                as the entry grade, so hindsight cannot quietly rewrite it.
-              </p>
-              <PastLessons setup={setupType} lessons={lessonsHere[setupType] ?? []} inline />
-            </Collapse>
-          ) : (
-            <Collapse key="outcome">
-              <Field quiet label="How did it end" pending={pending('outcome')} group>
-                <Segmented
-                  value={pending('outcome') ? null : outcome}
-                  onChange={(o) => { setOutcome(o); confirm('outcome'); }}
-                  options={OUTCOMES}
-                  accentFor={(o) => OUTCOME_COLOR[o]}
-                  labelFor={(o) => (o === 'Not taken' ? 'Passed' : o)}
-                />
-              </Field>
-            </Collapse>
-          )}
-        </AnimatePresence>
-        </>)}
-
-        {/* 2 — the chart. */}
-        <div>
-        {editing ? (
-          <ScreenshotDropzone
-            file={file}
-            onFile={setFile}
-            existingUrl={trade!.screenshot_path ? `/api/screenshots/${trade!.screenshot_path}` : null}
-          />
-        ) : (
-          <ShotSlots files={slots} onChange={setSlots} />
-        )}
-        </div>
-
-        {/* The passed-setup questions belong here, the moment "Not taken"
-            is chosen — not four sections further down. */}
-        {/* Only meaningful for a setup you passed on — the plan calls this
-            the most important thing in the whole file. */}
-        <AnimatePresence>
-          {outcome === 'Not taken' && (
-            <Collapse key="not-taken">
-              <div className="space-y-5 pt-1">
-                <Field quiet label="Would it have hit TP?" hint="Go back and check. Guessing defeats the point." group>
-                  <Segmented
-                    value={wouldHaveHitTp === null ? 'Unknown' : wouldHaveHitTp ? 'Yes' : 'No'}
-                    onChange={(v) => setWouldHaveHitTp(v === 'Unknown' ? null : v === 'Yes')}
-                    options={['Yes', 'No', 'Unknown'] as const}
-                    accentFor={(v) => (v === 'Yes' ? 'var(--outcome-win)' : v === 'No' ? 'var(--outcome-loss)' : 'var(--outcome-neutral)')}
-                  />
-                </Field>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field quiet label="What it would have paid (R)" hint="Go and check. A guess here is worse than a blank.">
-                    <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-                      value={wouldBeR} onChange={(e) => setWouldBeR(e.target.value)} />
-                  </Field>
-                  <Field quiet label="R left on the table">
-                    <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-                      value={rLeftOnTable} onChange={(e) => setRLeftOnTable(e.target.value)} />
-                  </Field>
-                  <Field quiet label="Real reason" hint="Not the story — the reason.">
-                    <Select value={skipReason} onChange={setSkipReason} options={SKIP_REASONS} placeholder="Why really?" />
-                  </Field>
-                </div>
-              </div>
-            </Collapse>
-          )}
-        </AnimatePresence>
-
-
-        {/* 2 — reason, before anything else. */}
-        <Field quiet label="Why did you take it" hint="Answer honestly. Nothing else in this app works if this is wrong.">
-          <Select
-            value={reason}
-            onChange={setReason}
-            options={reasonOptions}
-            placeholder="Name your motive…"
-            accentFor={(r) => reasonAccent(r as Reason)}
-          />
-        </Field>
-
-        {/*
-          (Here, under the outcome and the motive, because this column had the
-          room: added to the facts column it pushed the form off a 1080p screen.)
-          Management: the plan, where the partial came off, how far it ran.
-          (The three target questions that sat here — hit, untouched, other
-          side taken — were removed: they added nothing. Answers already on
-          old trades are kept.)
-        */}
-        <div data-section="target-management" className="space-y-2.5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field quiet label="Management plan"
-              hint={`${mgmtPlan ? MGMT_PLAN_WHY[mgmtPlan] + '\n\n' : ''}Fixed for the whole sample, or the sample measures nothing.`}>
-              <Select value={mgmtPlan} onChange={setMgmtPlan} options={MGMT_PLANS}
-                labelFor={(o) => MGMT_PLAN_LABEL[o]} titleFor={(o) => MGMT_PLAN_WHY[o]} placeholder="Which plan?" />
-            </Field>
-            {!gradeOpen && (
-              <Field quiet label="Max R reached" hint="How far it went your way before it turned. Check the chart.">
-                <Input type="number" step="0.1" min="0" inputMode="decimal" placeholder="—"
-                  value={mfeR} onChange={(e) => setMfeR(e.target.value)} />
-              </Field>
-            )}
-            {movedStopSuggested(pending('outcome') ? null : outcome, beTrigger, num(mfeR)) && !mistakeTags.includes('Moved stop') && (
-              <div className="sm:col-span-2">
-                <Notice id="moved-stop">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span>Breakeven before your {beTrigger} trigger was reached ({num(mfeR)}R) — that is a moved stop.</span>
-                    <button type="button" data-add-moved-stop onClick={() => setMistakeTags((t) => [...t, 'Moved stop'])}
-                      className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'rgb(var(--accent) / 0.55)', color: 'rgb(var(--accent))' }}>
-                      Tag Moved stop
-                    </button>
-                  </div>
-                </Notice>
-              </div>
-            )}
-            {mgmtPlan === 'B' && (
-              <Field quiet label="Partial taken at" hint="The kind of level the first half came off at.">
-                <Select value={partialAt} onChange={setPartialAt} options={PARTIAL_LEVELS} placeholder="Which level?" />
-              </Field>
-            )}
-          </div>
-        </div>
-        </div>
-
-        {/* B — when it happened, and on what. Facts about the trade, so they
-            sit with the trade rather than in a heap at the bottom. */}
-        <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field quiet label="Date & time"
-            hint={backtest ? 'Today by default — the day you did the backtest, which is the day it shows on the Backtest calendar. The replayed chart’s date is not needed. "No date" leaves it off the calendar.' : undefined}>
+            hint={backtest ? 'When you logged it — a backtest keeps only this. "No date" leaves it off the calendar.' : undefined}>
             {noDate ? (
               <div data-undated className="flex h-[38px] items-center justify-between gap-2 rounded-[calc(12px*var(--rk))] border border-dashed px-3 text-[12.5px]"
                 style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)' }}>
@@ -1041,18 +817,13 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               </div>
             )}
           </Field>
-          {backtest && (
-            <Field quiet label="Chart date" pending={!chartDate && !editing}
-              hint="The session being replayed. Logs happen at night, so the log time is not the market day — this is what per-day rules and stats use.">
-              <Input type="date" value={chartDate} onChange={(e) => setChartDate(e.target.value)} data-chart-date />
-            </Field>
-          )}
           <Field quiet label="Session" pending={pending('session')}>
             <Select value={pending('session') ? null : session} placeholder="Choose…" onChange={(v) => { setSession(v); confirm('session'); }} options={SESSIONS} />
           </Field>
         </div>
 
-        {!noDate && <div data-macro={derivedWindow ? 'inside' : 'outside'} className="flex items-center gap-2 text-[11.5px]"
+        {/* Macro time is a fact about the entry time: shown, derived, never ticked. */}
+        {!noDate && <div data-macro={derivedWindow ? 'inside' : 'outside'} className="-mt-1 flex items-center gap-2 text-[11.5px]"
           title="Derived from the date and time above — change the time to change this">
           <span className="rounded-full border px-2.5 py-1 font-medium"
             style={{
@@ -1070,135 +841,366 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           <Field quiet label="Setup type" pending={pending('setupType')}><Select value={pending('setupType') ? null : setupType} placeholder="Choose…" onChange={(v) => { setSetupType(v); confirm('setupType'); }} options={SETUP_TYPES} /></Field>
           <Field quiet label="HTF bias" pending={pending('htfBias')}><Select value={pending('htfBias') ? null : htfBias} placeholder="Choose…" onChange={(v) => { setHtfBias(v); confirm('htfBias'); }} options={HTF_BIASES} /></Field>
           <Field quiet label="Premium / discount" pending={pending('premiumDiscount')}><Select value={pending('premiumDiscount') ? null : premiumDiscount} placeholder="Choose…" onChange={(v) => { setPremiumDiscount(v); confirm('premiumDiscount'); }} options={PREMIUM_DISCOUNTS} /></Field>
+          <Field quiet label="Why did you take it" hint="Answer honestly. Nothing else in this app works if this is wrong.">
+            <Select value={reason} onChange={setReason} options={reasonOptions} placeholder="Name your motive…"
+              accentFor={(r) => reasonAccent(r as Reason)} />
+          </Field>
         </div>
-        {!planned && !pending('setupType') && (
-          <PastLessons setup={setupType} lessons={lessonsHere[setupType] ?? []} inline={false} />
+
+        {/* The charts. */}
+        <div>
+        {editing ? (
+          <ScreenshotDropzone
+            file={file}
+            onFile={setFile}
+            existingUrl={trade!.screenshot_path ? `/api/screenshots/${trade!.screenshot_path}` : null}
+          />
+        ) : (
+          <ShotSlots files={slots} onChange={setSlots} />
+        )}
+        </div>
+        {!pending('setupType') && (
+          <PastLessons setup={setupType} lessons={lessonsHere[setupType] ?? []} inline={planned} />
         )}
 
+        {/* Rubric 4 (trial): the liquidity event, named — in the room left
+            under the charts, so the grade column ends above the fold. */}
+        <TrialLiquidity accent={accent}
+          answers={{
+            ...checks, sweep_tier: sweepTier, target_type: targetType,
+            sweep_level: sweepLevel, sweep_futures_confirmed: futuresConfirmed, htf_delivery: htfDelivery,
+          }}
+          sweepTier={sweepTier}
+          sweepLevel={sweepLevel} onSweepLevel={setSweepLevel}
+          futuresConfirmed={futuresConfirmed} onFuturesConfirmed={setFuturesConfirmed}
+          htfDelivery={htfDelivery} onHtfDelivery={setHtfDelivery} />
+        </div>
+
+        {/* B — the grade: everything that has to be answered before the outcome is looked at. */}
+        <div className="space-y-4">
+        <div>
+          <span className="mb-2 block cursor-help text-[11px] font-medium uppercase tracking-[0.07em]"
+            style={{ color: 'var(--text-faint)' }}
+            title="Hover any line for what it means. Phase 3 must fire for an entry to exist. The sweep and the single gap are gates: fail either and the grade stops at C, whatever the total. At 70 or more with the trigger fired and both gates passed, taking it is the rule — hesitating is a rule break, same as oversizing.">
+            Checklist <span aria-hidden className="normal-case opacity-60">ⓘ</span>
+          </span>
+
+          <div className="mb-3 space-y-2">
+            {locked ? (
+              /*
+                The grade the trade was taken on, not the one these answers
+                would get now. The live grade is still shown when they differ,
+                so a correction is visible without rewriting history.
+              */
+              <div data-grade-locked={trade!.grade_letter}>
+                <GradeBadge total={trade!.checklist_score} max={100} size="md" showPrompt
+                  triggerFired={trade!.trigger_fired} letter={trade!.grade_letter} />
+                <p className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+                  Grade at entry, locked at its first save
+                  {trade!.rubric_version < CURRENT_RUBRIC ? ` (rubric ${trade!.rubric_version})` : ''}. Changing the
+                  boxes is recorded in its history but cannot change it.
+                  {(live.letter !== trade!.grade_letter || live.score !== trade!.checklist_score) && (
+                    <span data-live-grade className="block" style={{ color: 'var(--text-dim)' }}>
+                      These answers now: {live.letter} · {live.score}%.
+                    </span>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <GradeBadge total={live.earned} max={live.possible} size="md" showPrompt
+                triggerFired={live.trigger} letter={live.letter} />
+            )}
+            {/* The gates outrank the total: said in red, above the boxes that caused it. */}
+            <AnimatePresence initial={false}>
+              {modelGate && (
+                <motion.div key="gate" data-gate-banner role="alert"
+                  initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: exitQuick }}
+                  transition={springSoft}
+                  className="rounded-[calc(12px*var(--rk))] border px-3 py-2 text-[12.5px] font-semibold leading-snug"
+                  style={{
+                    color: 'rgb(var(--outcome-loss))', borderColor: 'rgb(var(--outcome-loss) / 0.45)',
+                    background: 'rgb(var(--outcome-loss) / 0.10)',
+                  }}>
+                  {MODEL_GATE_MESSAGE}
+                </motion.div>
+              )}
+              {diagonalCap && (
+                <motion.p key="diag" data-diagonal-cap initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: exitQuick }}
+                  className="text-[11.5px] font-medium leading-snug" style={{ color: 'rgb(var(--amber))' }}>
+                  LRLR (trendline) target — max grade B.
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Locked: the grade's answers are frozen; everything else stays open. */}
+          <fieldset disabled={gradeLocked} data-grade-fieldset={gradeLocked ? 'locked' : 'open'}
+            className={`min-w-0 transition-opacity ${gradeLocked ? 'pointer-events-none opacity-60' : ''}`}>
+          <Checklist answers={checks} onChange={setCheck} accent={accent}
+            sweepTier={sweepTier} onSweepTier={(t) => { setSweepTier(t); confirm('sweepTier'); }}
+            sweepPending={pending('sweepTier')}
+            slot={{
+              /*
+                The target is picked where the rule about it is: on "Targets
+                are clear". Picking one names the target, so it ticks the box
+                when the box was not ticked — untick it if it was not clear.
+              */
+              chk_targets_clear: (
+                <div data-target-picker className="w-[10.5rem] rounded-[calc(10px*var(--rk))]"
+                  title={targetType === WEAK_TARGET ? `${WEAK_TARGET_WARNING} Max grade B.`
+                    : (targetType && TARGET_WHY[targetType]) || 'The target you aimed at — ranked strongest first. Hover an option for why.'}
+                  data-target-warning={targetType === WEAK_TARGET ? '' : undefined}
+                  style={targetType === WEAK_TARGET
+                    // LRLR: the weakest target, max grade B — amber, said on hover.
+                    ? { boxShadow: '0 0 0 1.5px rgb(var(--amber) / 0.7)' }
+                    : pending('targetType') ? { boxShadow: `0 0 0 1.5px rgb(${accent} / 0.6)` } : undefined}>
+                  <Select compact value={pending('targetType') ? null : targetType} placeholder="Target…"
+                    onChange={(v) => {
+                      setTargetType(v); confirm('targetType');
+                      if (checks.chk_targets_clear !== true) setCheck('chk_targets_clear', true);
+                    }}
+                    options={targetTypeOptions(trade?.target_type ?? null)} titleFor={(o) => TARGET_WHY[o]} />
+                </div>
+              ),
+            }} />
+
+          {/*
+            Confidence sits with the grade: it only measures anything if it is
+            set before the outcome is known. Answered afterwards it is just the
+            result wearing a different hat.
+          */}
+          <div className="mt-4">
+            <Field quiet label="Confidence at entry" hint="Optional. Only worth anything if you set it before you knew.">
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <motion.button
+                    key={n}
+                    type="button"
+                    aria-pressed={confidence === n}
+                    onClick={() => setConfidence(confidence === n ? null : n)}
+                    whileTap={press}
+                    transition={spring}
+                    animate={{
+                      borderColor: confidence === n ? `rgb(${accent} / 0.6)` : 'var(--glass-stroke)',
+                      background: confidence === n ? `rgb(${accent} / 0.12)` : 'var(--glass-fill)',
+                    }}
+                    className="flex-1 rounded-[calc(10px*var(--rk))] border py-1 text-[12px] font-medium"
+                    style={{ color: confidence === n ? `rgb(${accent})` : 'var(--text-faint)' }}
+                  >
+                    {'★'.repeat(n)}
+                  </motion.button>
+                ))}
+              </div>
+            </Field>
+          </div>
+          </fieldset>
+          <div className="mt-2">
+            <ConfidenceNotice confidence={confidence} ctx={guard} taken={!planned && outcome !== 'Not taken'}
+              onPass={() => { setOutcome('Not taken'); confirm('outcome'); setStatus('Settled'); confirm('status'); }} />
+          </div>
+
+          {/* Grade before you look: one click, optional, never in the way. */}
+          {!editing && (
+            <div data-grade-lock={gradeLock ? (gradeLock.beforeOutcome ? 'before' : 'after') : 'open'}
+              className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {gradeLock ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium"
+                    style={gradeLock.beforeOutcome
+                      ? { borderColor: 'rgb(var(--outcome-win) / 0.5)', color: 'rgb(var(--outcome-win))', background: 'rgb(var(--outcome-win) / 0.08)' }
+                      : { borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
+                    <LockIcon /> Locked {new Date(gradeLock.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                  <span className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
+                    {gradeLock.beforeOutcome ? 'Graded before the outcome.' : 'Locked after the outcome was filled in — saves as graded after.'}
+                  </span>
+                  <button type="button" data-unlock-grade onClick={() => setGradeLock(null)}
+                    className="text-[11.5px] underline underline-offset-2" style={{ color: 'var(--text-faint)' }}>Unlock</button>
+                </>
+              ) : (
+                <>
+                  <motion.button type="button" data-lock-grade onClick={lockGrade} whileTap={press} transition={spring}
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium"
+                    style={{ borderColor: `rgb(${accent} / 0.5)`, color: `rgb(${accent})`, background: `rgb(${accent} / 0.08)` }}>
+                    <LockIcon /> Lock grade
+                  </motion.button>
+                  <span className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
+                    {outcomeWritten ? 'Optional. The outcome is already in, so it would count as graded after.' : 'Optional. Lock before the result and it counts as graded before the outcome.'}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4">
+            <Field label="Honest re-grade" hint={`Graded ${entryLetter} at entry${locked ? ' (locked)' : ''}. ${REGRADE_HINT}`}>
+              <div data-regrade-options={regradeChoices.join(' ')}>
+                <Select value={regrade} onChange={setRegrade} options={regradeChoices} placeholder="Not re-graded yet" />
+              </div>
+            </Field>
+          </div>
+
+        </div>
+        </div>
+
+        {/* C — the plan and the result. */}
+        <div className="space-y-4">
         <TargetCheckBlock
-          s={{ ...tc, targetType: pending('targetType') ? null : targetType, stopPoints }}
+          s={{ ...tc, targetType: pending('targetType') ? null : targetType }}
           set={setTcPart} ctx={guard} />
 
-        {/* What it paid. Numbers are facts about the trade, so they sit with
-            the rest of the record rather than with the writing — and it keeps
-            the writing column under the height the checklist sets. */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {!gradeOpen && <>
-          <Field quiet label="R" hint="R multiple — e.g. 2.4, or 1 for a one-R loss (saved negative). Leave blank to settle later.">
-            <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-              value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
+        {/* The plan names the breakeven trigger; the two used to be asked twice. */}
+        <div className="grid gap-3 sm:grid-cols-[1fr_6.5rem]">
+          <Field quiet label="Management plan"
+            hint={`What happens to the stop, decided before the trade. It sets the breakeven trigger${beTrigger ? ` (${beTrigger})` : ''}. Fixed for the whole sample, or the sample measures nothing.`}>
+            <Select value={management} onChange={setManagement} options={MANAGEMENTS}
+              placeholder={trade?.mgmt_plan ? `${MGMT_PLAN_LABEL[trade.mgmt_plan]} (older plan)` : 'Which plan?'} />
           </Field>
-          <Field quiet label="Contracts">
-            <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
-          </Field>
-          <Field quiet label="P&L $" hint="What the account made or lost. A loss can be typed as a plain number — it is saved negative.">
-            <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
-              value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
-          </Field>
-          </>}
           <Field quiet label="Stop pts" hint="Stop in points. Optional — it is on the screenshot.">
             <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
           </Field>
         </div>
-        {/* A loss typed positive is saved negative (domain.ts signForOutcome);
-            say so, so the number on the board is never a surprise. */}
+
+        <Field quiet
+          label="Stage"
+          pending={pending('status')}
+          hint={locked
+            ? 'This trade has left Planned, so its grade at entry is locked — it cannot go back.'
+            : 'Settled for a finished trade. Planned hides the outcome until you settle it.'}
+          group>
+          <Segmented value={pending('status') ? null : status} onChange={(v) => { setStatus(v); confirm('status'); }}
+            options={locked ? TRADE_STATUSES.filter((st) => st !== 'Planned') : TRADE_STATUSES} />
+        </Field>
+
+        {/* A Planned trade has no outcome yet, so it is not asked for. */}
         <AnimatePresence initial={false}>
-          {outcome === 'Loss' && ((Number(pnlDollars) > 0) || (Number(rMultiple) > 0)) && (
-            <motion.p key="loss-sign" data-loss-sign
-              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={spring}
-              className="-mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-              A loss — saved as {[
-                Number(rMultiple) > 0 ? `−${Number(rMultiple)}R` : null,
-                Number(pnlDollars) > 0 ? `−$${Number(pnlDollars).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
-              ].filter(Boolean).join(' and ')}.
-            </motion.p>
+          {planned ? (
+            <Collapse key="planned">
+              <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>
+                Planned — the outcome is hidden until you settle it. The score you give it now is kept
+                as the entry grade, so hindsight cannot quietly rewrite it.
+              </p>
+            </Collapse>
+          ) : (
+            <Collapse key="outcome">
+              <div className="space-y-4">
+              <Field quiet label="How did it end" pending={pending('outcome')} group>
+                <Segmented
+                  value={pending('outcome') ? null : outcome}
+                  onChange={(o) => { setOutcome(o); confirm('outcome'); }}
+                  options={OUTCOMES}
+                  accentFor={(o) => OUTCOME_COLOR[o]}
+                  labelFor={(o) => (o === 'Not taken' ? 'Passed' : o)}
+                />
+              </Field>
+
+              {/* What it paid. */}
+              <div className="grid grid-cols-3 gap-2">
+                <Field quiet label="R" hint="R multiple — e.g. 2.4, or 1 for a one-R loss (saved negative). Leave blank to settle later.">
+                  <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                    value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
+                </Field>
+                <Field quiet label="P&L $" hint="What the account made or lost. A loss can be typed as a plain number — it is saved negative.">
+                  <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+                    value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
+                </Field>
+                <Field quiet label="Contracts">
+                  <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
+                </Field>
+              </div>
+              {/* A loss typed positive is saved negative (domain.ts signForOutcome);
+                  say so, so the number on the board is never a surprise. */}
+              <AnimatePresence initial={false}>
+                {outcome === 'Loss' && ((Number(pnlDollars) > 0) || (Number(rMultiple) > 0)) && (
+                  <motion.p key="loss-sign" data-loss-sign
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={spring}
+                    className="-mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                    A loss — saved as {[
+                      Number(rMultiple) > 0 ? `−${Number(rMultiple)}R` : null,
+                      Number(pnlDollars) > 0 ? `−$${Number(pnlDollars).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+                    ].filter(Boolean).join(' and ')}.
+                  </motion.p>
+                )}
+              </AnimatePresence>
+
+              {/* How far it ran, and whether +1R came first — the fastest way to
+                  tell a management problem from a selection problem. */}
+              <div className="grid gap-3 sm:grid-cols-[7.5rem_1fr] sm:items-end">
+                <Field quiet label="Max R reached" hint="How far it went your way before it turned. Check the chart.">
+                  <Input type="number" step="0.1" min="0" inputMode="decimal" placeholder="—"
+                    value={mfeR} onChange={(e) => setMfeR(e.target.value)} />
+                </Field>
+                <TriState inline value={reached1R} onChange={setReached1R}
+                  label="Reached +1R before the stop?"
+                  hint="If most of your losers did, the problem is management rather than selection." />
+              </div>
+              {movedStopSuggested(pending('outcome') ? null : outcome, beTrigger, num(mfeR)) && !mistakeTags.includes('Moved stop') && (
+                <Notice id="moved-stop">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>Breakeven before your {beTrigger} trigger was reached ({num(mfeR)}R) — that is a moved stop.</span>
+                    <button type="button" data-add-moved-stop onClick={() => setMistakeTags((t) => [...t, 'Moved stop'])}
+                      className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'rgb(var(--accent) / 0.55)', color: 'rgb(var(--accent))' }}>
+                      Tag Moved stop
+                    </button>
+                  </div>
+                </Notice>
+              )}
+              </div>
+            </Collapse>
           )}
         </AnimatePresence>
 
-        {/*
-          Excursion. How far it went against me before it worked, and how
-          far in my favour before it turned — the fastest way to learn
-          whether the stop is too tight or the target too greedy, which no
-          win rate will ever tell me.
-        */}
-        <BeTriggerField value={beTrigger} onChange={setBeTrigger} required={stopSet} />
-
-        {!gradeOpen && <TriState inline
-          value={reached1R}
-          onChange={setReached1R}
-          label="Reached +1R before the stop?"
-          hint="If most of your losers did, the problem is management rather than selection."
-        />}
-
-        {/*
-          Recorded here, near the facts, because it only measures anything
-          if it is set before the outcome is known. Answered afterwards it is
-          just the result wearing a different hat.
-        */}
-        <div>
-          <Field quiet label="Confidence at entry" hint="Optional. Only worth anything if you set it before you knew.">
-            <div className="flex gap-1.5">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <motion.button
-                  key={n}
-                  type="button"
-                  aria-pressed={confidence === n}
-                  onClick={() => setConfidence(confidence === n ? null : n)}
-                  whileTap={press}
-                  transition={spring}
-                  animate={{
-                    borderColor: confidence === n ? `rgb(${accent} / 0.6)` : 'var(--glass-stroke)',
-                    background: confidence === n ? `rgb(${accent} / 0.12)` : 'var(--glass-fill)',
-                  }}
-                  className="flex-1 rounded-[calc(10px*var(--rk))] border py-1 text-[12px] font-medium"
-                  style={{ color: confidence === n ? `rgb(${accent})` : 'var(--text-faint)' }}
-                >
-                  {'★'.repeat(n)}
-                </motion.button>
-              ))}
-            </div>
-          </Field>
-          <div className="mt-2">
-            <ConfidenceNotice confidence={confidence} ctx={guard} taken={!gradeOpen && !planned && outcome !== 'Not taken'}
-              onPass={() => { setOutcome('Not taken'); confirm('outcome'); setStatus('Settled'); confirm('status'); }} />
-          </div>
+        {/* A passed setup's questions, the moment "Passed" is chosen. */}
+        <AnimatePresence>
+          {outcome === 'Not taken' && !planned && (
+            <Collapse key="not-taken">
+              <div className="space-y-4 pt-1">
+                <Field quiet label="Would it have hit TP?" hint="Go back and check. Guessing defeats the point." group>
+                  <Segmented
+                    value={wouldHaveHitTp === null ? 'Unknown' : wouldHaveHitTp ? 'Yes' : 'No'}
+                    onChange={(v) => setWouldHaveHitTp(v === 'Unknown' ? null : v === 'Yes')}
+                    options={['Yes', 'No', 'Unknown'] as const}
+                    accentFor={(v) => (v === 'Yes' ? 'var(--outcome-win)' : v === 'No' ? 'var(--outcome-loss)' : 'var(--outcome-neutral)')}
+                  />
+                </Field>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field quiet label="What it would have paid (R)" hint="Go and check. A guess here is worse than a blank.">
+                    <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                      value={wouldBeR} onChange={(e) => setWouldBeR(e.target.value)} />
+                  </Field>
+                  <Field quiet label="R left on the table">
+                    <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                      value={rLeftOnTable} onChange={(e) => setRLeftOnTable(e.target.value)} />
+                  </Field>
+                  <Field quiet label="Real reason" hint="Not the story — the reason." className="sm:col-span-2">
+                    <Select value={skipReason} onChange={setSkipReason} options={SKIP_REASONS} placeholder="Why really?" />
+                  </Field>
+                </div>
+              </div>
+            </Collapse>
+          )}
+        </AnimatePresence>
         </div>
 
-        {/*
-          What worked, where "The setup" used to be. The post-mortem had only a
-          mistakes half, which teaches what to avoid and nothing about what to
-          repeat — and a loss traded well looks exactly like a loss traded
-          badly until this is filled in.
-        */}
-        <Field quiet label="What worked" hint="Pick every one that applies — on losers too. A good trade can lose." group>
-          <TagPicker small value={workedTags} onChange={setWorkedTags} options={tagOptions(WORKED_TAGS, trade?.worked_tags)} tone="win" />
-        </Field>
-
-        {/* The context pills are retired (see CONTEXT_GROUPS); an edit still
-            carries whatever an older trade answered, through `context`. */}
-        </div>
-
-        {/* C — the writing, and the reckoning that goes with it. */}
+        {/* D — the words, and the reckoning that goes with them. */}
         <div className="space-y-4">
-        {/* 3 — the writing. */}
         <Field quiet label="Explanation">
           <ExplanationField
             value={explanation}
             onChange={setExplanation}
             minChars={MIN_EXPLANATION}
             kept={keptExplanation}
-            minRows={5}
+            minRows={4}
             placeholder="What did you see, what did you expect, and what made you click the button?"
           />
         </Field>
 
         {/*
-          3b — the lesson, beside the explanation and just as demanding.
-          What happened and what to do about it are two different thoughts, and
-          only the second one changes anything. Not asked of a Planned trade:
-          there is no outcome to draw a lesson from yet.
+          The lesson, beside the explanation and just as demanding. What
+          happened and what to do about it are two different thoughts, and
+          only the second one changes anything. Not asked of a Planned trade.
         */}
-        {!planned && !gradeOpen && (
+        {!planned && (
           <Field quiet
             label="Lesson"
             hint={`What would you do differently? At least ${MIN_LESSON} characters — a label is not a lesson.`}
@@ -1209,26 +1211,16 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               required
               minChars={MIN_LESSON}
               kept={keptLesson}
-              minRows={5}
+              minRows={4}
               placeholder="Next time: the sweep was there but I took it before the candle closed. Wait for the close, even when it looks like it is leaving without me."
             />
           </Field>
         )}
 
-
-        {/* After the close: the honest part. */}
-        <Field label="Honest re-grade" hint={`Graded ${entryLetter} at entry${locked ? ' (locked)' : ''}. ${REGRADE_HINT}`}>
-          <div data-regrade-options={regradeChoices.join(' ')}>
-            <Select value={regrade} onChange={setRegrade} options={regradeChoices} placeholder="Not re-graded yet" />
-          </div>
-        </Field>
-
         {/*
           What went wrong, in two halves: my execution and the market. Stored
           apart (mistake_tags, market_tags) and read apart in Stats; they share
-          this one spot behind a two-way switch because a second block made
-          the form taller than the screen. The counts on the switch show what
-          is tagged on the half you are not looking at.
+          this one spot behind a two-way switch.
         */}
         <Field quiet
           label={tagSide === 'me' ? 'What went wrong' : 'What the market did'}
@@ -1266,17 +1258,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
             )}
         </Field>
 
-        {/*
-          Your own verdict, directly under your own account of what went wrong.
+        {/* What worked — on losers too. A loss traded well looks exactly like a
+            loss traded badly until this is filled in. */}
+        <Field quiet label="What worked" hint="Pick every one that applies — on losers too. A good trade can lose." group>
+          <TagPicker small value={workedTags} onChange={setWorkedTags} options={tagOptions(WORKED_TAGS, trade?.worked_tags)} tone="win" />
+        </Field>
 
-          It sat under the checklist for a while, so the gap between what the
-          score says and what you believe about yourself would be impossible to
-          miss. On a wide window nothing scrolls any more, so both are on screen
-          together wherever they sit — and the checklist block is the one thing
-          in this form that cannot be split, so anything else stacked on it sets
-          the height of the whole card. This costs nothing and buys the last
-          hundred and thirty pixels.
-        */}
         {/*
           The one question about my own discipline, so it is lit: it glows
           softly until it is answered, then settles into green (yes) or red
@@ -1300,104 +1287,6 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           />
         </div>
         </div>
-
-        {/* D — the score. */}
-        <div className="space-y-4">
-        {/* 5 — the checklist, with the live score. */}
-        <div>
-          <span className="mb-2 block cursor-help text-[11px] font-medium uppercase tracking-[0.07em]"
-            style={{ color: 'var(--text-faint)' }}
-            title="Hover any line for what it means. Phase 3 must fire for an entry to exist. The sweep and the single gap are gates: fail either and the grade stops at C, whatever the total. At 70 or more with the trigger fired and both gates passed, taking it is the rule — hesitating is a rule break, same as oversizing.">
-            Checklist <span aria-hidden className="normal-case opacity-60">ⓘ</span>
-          </span>
-
-          <div className="mb-3 space-y-2">
-            {locked ? (
-              /*
-                The grade the trade was taken on, not the one these answers
-                would get now. The live grade is still shown when they differ,
-                so a correction is visible without rewriting history.
-              */
-              <div data-grade-locked={trade!.grade_letter}>
-                <GradeBadge total={trade!.checklist_score} max={100} size="md" showPrompt
-                  triggerFired={trade!.trigger_fired} letter={trade!.grade_letter} />
-                <p className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-                  Grade at entry, locked when this trade left Planned
-                  {trade!.rubric_version < CURRENT_RUBRIC ? ` (rubric ${trade!.rubric_version})` : ''}. Changing the
-                  boxes is recorded in its history but cannot change it.
-                  {(live.letter !== trade!.grade_letter || live.score !== trade!.checklist_score) && (
-                    <span data-live-grade className="block" style={{ color: 'var(--text-dim)' }}>
-                      These answers now: {live.letter} · {live.score}%.
-                    </span>
-                  )}
-                </p>
-              </div>
-            ) : (
-              <GradeBadge total={live.earned} max={live.possible} size="md" showPrompt
-                triggerFired={live.trigger} letter={live.letter} />
-            )}
-            {/* The gates outrank the total: said in red, above the boxes that caused it. */}
-            <AnimatePresence initial={false}>
-              {modelGate && (
-                <motion.div key="gate" data-gate-banner role="alert"
-                  initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: exitQuick }}
-                  transition={springSoft}
-                  className="rounded-[calc(12px*var(--rk))] border px-3 py-2 text-[12.5px] font-semibold leading-snug"
-                  style={{
-                    color: 'rgb(var(--outcome-loss))', borderColor: 'rgb(var(--outcome-loss) / 0.45)',
-                    background: 'rgb(var(--outcome-loss) / 0.10)',
-                  }}>
-                  {MODEL_GATE_MESSAGE}
-                </motion.div>
-              )}
-              {diagonalCap && (
-                <motion.p key="diag" data-diagonal-cap initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: exitQuick }}
-                  className="text-[11.5px] font-medium leading-snug" style={{ color: 'rgb(var(--amber))' }}>
-                  LRLR (trendline) target — max grade B.
-                </motion.p>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <Checklist answers={checks} onChange={setCheck} accent={accent}
-            sweepTier={sweepTier} onSweepTier={(t) => { setSweepTier(t); confirm('sweepTier'); }}
-            sweepPending={pending('sweepTier')}
-            slot={{
-              /*
-                The target is picked where the rule about it is: on "Targets
-                are clear". Picking one names the target, so it ticks the box
-                when the box was not ticked — untick it if it was not clear.
-              */
-              chk_targets_clear: (
-                <div data-target-picker className="w-[10.5rem] rounded-[calc(10px*var(--rk))]"
-                  title={targetType === WEAK_TARGET ? `${WEAK_TARGET_WARNING} Max grade B.`
-                    : (targetType && TARGET_WHY[targetType]) || 'The target you aimed at — ranked strongest first. Hover an option for why.'}
-                  data-target-warning={targetType === WEAK_TARGET ? '' : undefined}
-                  style={targetType === WEAK_TARGET
-                    // LRLR: the weakest target, max grade B — amber, said on hover.
-                    ? { boxShadow: '0 0 0 1.5px rgb(var(--amber) / 0.7)' }
-                    : pending('targetType') ? { boxShadow: `0 0 0 1.5px rgb(${accent} / 0.6)` } : undefined}>
-                  <Select compact value={pending('targetType') ? null : targetType} placeholder="Target…"
-                    onChange={(v) => {
-                      setTargetType(v); confirm('targetType');
-                      if (checks.chk_targets_clear !== true) setCheck('chk_targets_clear', true);
-                    }}
-                    options={targetTypeOptions(trade?.target_type ?? null)} titleFor={(o) => TARGET_WHY[o]} />
-                </div>
-              ),
-            }} />
-
-          <TrialLiquidity accent={accent}
-            answers={{
-              ...checks, sweep_tier: sweepTier, target_type: targetType,
-              sweep_level: sweepLevel, sweep_futures_confirmed: futuresConfirmed, htf_delivery: htfDelivery,
-            }}
-            sweepTier={sweepTier}
-            sweepLevel={sweepLevel} onSweepLevel={setSweepLevel}
-            futuresConfirmed={futuresConfirmed} onFuturesConfirmed={setFuturesConfirmed}
-            htfDelivery={htfDelivery} onHtfDelivery={setHtfDelivery} />
-        </div>
-        </div>
       </div>
 
 
@@ -1406,7 +1295,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           <AnimatePresence mode="wait">
             <motion.span
               key={!chart && !saved ? 'file' : !reason ? 'reason'
-                : !explanationOk ? 'expl' : !choicesDone ? 'choose' : gradeOpen ? 'lock' : !lessonOk ? 'lesson' : 'ready'}
+                : !explanationOk ? 'expl' : !choicesDone ? 'choose' : !lessonOk ? 'lesson' : 'ready'}
               initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: exitQuick }}
               transition={spring} className="block truncate"
             >
@@ -1414,7 +1303,6 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
                 : !reason ? 'Name your motive to continue.'
                 : !explanationOk ? `${MIN_EXPLANATION - explanation.trim().length} more characters of explanation.`
                 : !choicesDone ? `Still to choose: ${[...missing.map((f) => DEFAULTED_LABEL[f]), ...extrasMissing].join(', ')}.`
-                : gradeOpen ? (confidence == null ? 'Set your confidence, then lock the grade.' : !setupChart ? 'Add a chart of the setup (not the result) to lock the grade.' : 'Ready to lock the grade.')
                 : !lessonOk ? `${MIN_LESSON - lesson.trim().length} more characters of lesson.`
                 : unconfirmed.length
                   ? `Ready. Still on the default: ${unconfirmed.map((f) => DEFAULTED_LABEL[f]).join(', ')}.`
@@ -1428,7 +1316,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           The escape hatch. Shown whenever the full entry is not ready yet, so a
           bad day never ends with no record at all.
         */}
-        {!canSubmit && !submitting && !saved && !gradeOpen && (
+        {!canSubmit && !submitting && !saved && (
           <button
             type="button"
             data-quick-log
@@ -1443,15 +1331,9 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
             Log it fast
           </button>
         )}
-        {gradeOpen ? (
-          <Button variant="primary" accent={accent} disabled={!canLock} onClick={() => void submit('lock')} className="shrink-0" data-lock-grade>
-            {submitting ? 'Locking…' : 'Lock grade'}
-          </Button>
-        ) : (
-          <Button variant="primary" accent={accent} disabled={!canSubmit} onClick={() => void submit()} className="shrink-0" data-save-trade>
-            {submitting ? 'Saving…' : editing ? 'Save changes' : 'Save trade'}
-          </Button>
-        )}
+        <Button variant="primary" accent={accent} disabled={!canSubmit} onClick={() => void submit()} className="shrink-0" data-save-trade>
+          {submitting ? 'Saving…' : editing ? 'Save changes' : 'Save trade'}
+        </Button>
         </div>
       </div>
 
@@ -1466,5 +1348,14 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
         )}
       </AnimatePresence>
     </motion.div>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
+      <rect x="2" y="5.5" width="8" height="5.5" rx="1.4" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M4 5.5V4a2 2 0 0 1 4 0v1.5" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
   );
 }

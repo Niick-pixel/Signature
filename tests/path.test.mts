@@ -157,18 +157,19 @@ test('a step completes itself when every criterion is met, and the next one star
   assert.equal(CURRENT_RUBRIC, listSteps()[0].criteria[0].filter?.rubric === 'current' ? CURRENT_RUBRIC : -1);
 });
 
-test('the export carries the Path, at version 6, and overrides in every format', async () => {
+test('the export carries the Path, at version 8, and overrides in every format', async () => {
   const res = await exportRoute.GET();
   const buf = Buffer.from(await res.arrayBuffer());
   const json = JSON.parse(unzip(buf, 'trades.json').toString('utf8'));
-  assert.equal(json.version, 7);
+  assert.equal(json.version, 8);
+  assert.ok(Array.isArray(json.red_day_skips));
   assert.equal(json.path_steps.length, 6);
   assert.ok(json.path_events.length > 0);
   assert.equal(json.eval_purchases.length, 1);
   assert.ok(json.trades.some((t: { overrides: unknown[] }) => t.overrides.length === 1));
   const csv = unzip(buf, 'trades.csv').toString('utf8');
   const head = csv.split('\n')[0].split(',');
-  for (const c of ['overrides', 'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence']) {
+  for (const c of ['overrides', 'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence', 'r_to_nearest_bucket', 'management']) {
     assert.ok(head.includes(c), c);
   }
   assert.ok(csv.includes('commitment_break: No paid eval until the demo evaluation is passed.'));

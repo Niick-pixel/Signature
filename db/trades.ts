@@ -165,6 +165,8 @@ const WRITABLE = [
   'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'nearest_liquidity_price', 'opposing_swings_between',
   'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence',
   'written_before_outcome',
+  // Form fixes (029).
+  'r_to_nearest_bucket', 'management',
   'undated',
 ] as const;
 
