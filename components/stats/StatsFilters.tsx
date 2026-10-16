@@ -19,7 +19,9 @@ import { pageShortcutAllowed } from '@/lib/keys';
  * session and direction narrow whatever accounts are in view. All of it lives
  * in the URL, so a view can be linked and the back button undoes a click.
  */
-export function StatsFilters({ available, scope }: {
+export function StatsFilters({ available, scope, rubrics = [] }: {
+  /** Rubric versions with trades in them, for the rubric chips. */
+  rubrics?: number[];
   available: Array<{ account: Account; count: number }>;
   scope: StatsScope;
 }) {
@@ -70,7 +72,8 @@ export function StatsFilters({ available, scope }: {
     return () => document.removeEventListener('keydown', onKey);
   });
 
-  const filtered = scope.period !== 'all' || scope.sessions.length > 0 || scope.directions.length > 0;
+  const filtered = scope.period !== 'all' || scope.sessions.length > 0 || scope.directions.length > 0
+    || scope.rubric != null || scope.from != null || scope.to != null;
   return (
     <div data-stats-filters className="space-y-2">
       <Row label="Accounts">
@@ -89,9 +92,27 @@ export function StatsFilters({ available, scope }: {
       </Row>
       <Row label="Period">
         {PERIODS.map((p) => (
-          <Chip key={p.key} on={scope.period === p.key} onClick={() => push({ period: p.key === 'all' ? null : p.key })}>{p.label}</Chip>
+          <Chip key={p.key} on={scope.period === p.key && scope.from == null && scope.to == null}
+            onClick={() => push({ period: p.key === 'all' ? null : p.key, from: null, to: null })}>{p.label}</Chip>
         ))}
+        <span className="mx-1 h-4 w-px" style={{ background: 'var(--glass-stroke)' }} />
+        {/* A custom range, by market day (a backtest's chart date). */}
+        <input type="date" aria-label="From" value={scope.from ?? ''} data-stats-from
+          onChange={(e) => push({ from: e.target.value || null, period: null })}
+          className="glass rounded-full px-2.5 py-0.5 text-[11.5px] outline-none" />
+        <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>to</span>
+        <input type="date" aria-label="To" value={scope.to ?? ''} data-stats-to
+          onChange={(e) => push({ to: e.target.value || null, period: null })}
+          className="glass rounded-full px-2.5 py-0.5 text-[11.5px] outline-none" />
       </Row>
+      {rubrics.length > 1 && (
+        <Row label="Rubric">
+          <Chip on={scope.rubric == null} onClick={() => push({ rubric: null })}>Every rubric</Chip>
+          {rubrics.map((r) => (
+            <Chip key={r} on={scope.rubric === r} onClick={() => push({ rubric: String(r) })}>Rubric {r}</Chip>
+          ))}
+        </Row>
+      )}
       <Row label="Session">
         {SESSIONS.map((s) => (
           <Chip key={s} on={scope.sessions.includes(s)} onClick={() => toggleIn('session', scope.sessions, s)}>{s}</Chip>
@@ -101,7 +122,7 @@ export function StatsFilters({ available, scope }: {
           <Chip key={d} on={scope.directions.includes(d)} onClick={() => toggleIn('dir', scope.directions, d)}>{d}</Chip>
         ))}
         {filtered && (
-          <button type="button" onClick={() => push({ period: null, session: null, dir: null })}
+          <button type="button" onClick={() => push({ period: null, session: null, dir: null, rubric: null, from: null, to: null })}
             className="ml-1 text-[11.5px] underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-dim)' }}>
             Clear filters
           </button>

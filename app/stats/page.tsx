@@ -19,6 +19,7 @@ import { Line, Panel, SignedBars, Stat, type BarRow } from '@/components/stats/B
 import { listPreps } from '@/db/prep';
 import { planSplit } from '@/lib/planMatch';
 import { DrawdownSim } from '@/components/stats/DrawdownSim';
+import { Questions } from '@/components/stats/Questions';
 import { edgeRead, meanRange, winRateRange } from '@/lib/confidence';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { MissedPatternsView } from '@/components/stats/MissedPatterns';
@@ -76,6 +77,9 @@ export default async function StatsPage(
     ...(scope.period !== 'all' ? { period: scope.period } : {}),
     ...(scope.sessions.length ? { session: scope.sessions.join(',') } : {}),
     ...(scope.directions.length ? { dir: scope.directions.join(',') } : {}),
+    ...(scope.rubric != null ? { rubric: String(scope.rubric) } : {}),
+    ...(scope.from ? { from: scope.from } : {}),
+    ...(scope.to ? { to: scope.to } : {}),
   };
 
   /*
@@ -237,7 +241,8 @@ export default async function StatsPage(
             </div>
           </header>
 
-          <div className="mb-5"><StatsFilters available={accounts} scope={scope} /></div>
+          <div className="mb-5"><StatsFilters available={accounts} scope={scope}
+            rubrics={[...new Set(everything.map((t) => t.rubric_version))].sort((a, b) => a - b)} /></div>
 
           {mixesWorlds(scope.accounts) && (
             <p data-mixed-note className="mb-5 rounded-[calc(14px*var(--rk))] px-3.5 py-2.5 text-[12px] leading-relaxed"
@@ -276,6 +281,11 @@ export default async function StatsPage(
               </Panel>
             </div>
           )}
+
+          {/* The questions the journal exists to answer — honesty first (lib/questions). */}
+          <div className="mb-5">
+            <Questions trades={trades} sampleTrades={applyStatsScope(all, { ...scope, rubric: null })} />
+          </div>
 
           {/*
             The rubric 4 trial, where it can be seen: how far the sample has
