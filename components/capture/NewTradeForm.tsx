@@ -171,6 +171,11 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     eqhl: trade?.eqhl_checks ?? { touches: false, untested: false, in_range: false },
   }));
   const setTcPart = (p: Partial<TargetCheckState>) => setTc((prev) => ({ ...prev, ...p }));
+  // Under 1.5R to the nearest liquidity, or 2+ opposing swings: the targets are not clear.
+  const targetsNotClear = [
+    tc.rBucket === '<1' || tc.rBucket === '1-1.5' ? 'under 1.5R to the nearest liquidity' : null,
+    tc.swings === '2+' ? '2+ opposing swings in the way' : null,
+  ].filter(Boolean).join(' and ');
   /*
     "Grade before you look", in one optional click. Lock grade freezes the
     checklist, the sweep, the target and the confidence. Pressed before any
@@ -252,7 +257,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   const [direction, setDirection] = useState<Direction>(trade?.direction ?? 'Long');
   const [session, setSession] = useState<Session>(trade?.session ?? 'NY AM');
   const [setupType, setSetupType] = useState<SetupType>(trade?.setup_type ?? 'iFVG');
-  const [htfBias, setHtfBias] = useState<HtfBias>(trade?.htf_bias ?? 'With bias');
+  // No default: "With bias" is a claim about the trade, so it is chosen, never assumed.
+  const [htfBias, setHtfBias] = useState<HtfBias | null>(trade?.htf_bias ?? null);
   const [premiumDiscount, setPremiumDiscount] = useState<PremiumDiscount>(trade?.premium_discount ?? 'Discount');
   const [targetType, setTargetType] = useState<TargetType>(trade?.target_type ?? 'EQH/EQL');
   const [outcome, setOutcome] = useState<Outcome>(trade?.outcome ?? 'Win');
@@ -344,14 +350,13 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     if (has('direction')) setDirection(v.direction);
     if (has('session')) setSession(v.session);
     if (has('setupType')) setSetupType(v.setupType);
-    if (has('htfBias')) setHtfBias(v.htfBias);
     if (has('premiumDiscount')) setPremiumDiscount(v.premiumDiscount);
     if (has('targetType')) setTargetType(v.targetType);
     if (has('outcome')) setOutcome(v.outcome);
     if (has('mistakeTags')) setMistakeTags(v.mistakeTags);
     if (has('workedTags')) setWorkedTags(v.workedTags);
     if (has('marketTags')) setMarketTags(v.marketTags);
-    if (has('confirmed')) setConfirmed((v.confirmed as DefaultedField[]).filter((f) => f !== 'sweepTier'));
+    if (has('confirmed')) setConfirmed((v.confirmed as DefaultedField[]).filter((f) => f !== 'sweepTier' && f !== 'htfBias'));
     if (has('account')) setAccount(v.account);
     if (has('accountLabel')) setAccountLabel(v.accountLabel);
     if (has('status')) setStatus(v.status);
@@ -428,6 +433,19 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   // Any part of the outcome written in: a lock after this is a lock after the outcome.
   const outcomeWritten = !pending('outcome') || rMultiple.trim() !== '' || pnlDollars.trim() !== '';
   const gradeLocked = gradeLock != null;
+  // When the target check fails, "Targets are clear" is unticked — once, as it
+  // fails; ticking it again after that is my call. A locked grade is left alone.
+  useEffect(() => {
+    if (targetsNotClear && !gradeLocked) setChecks((prev) => (prev.chk_targets_clear === true ? { ...prev, chk_targets_clear: false } : prev));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetsNotClear]);
+  // The verdicts ("Gate failed", "Phase 3 has not fired") wait until the
+  // checklist has been touched: on a blank form they only say it is blank.
+  // Once touched, it stays touched — unticking everything again does not hide them.
+  const touchedNow = editing || sweepTier != null || !pending('targetType') || CHECKLIST_KEYS.some((k) => checks[k] !== false);
+  const [touchedOnce, setTouchedOnce] = useState(false);
+  useEffect(() => { if (touchedNow) setTouchedOnce(true); }, [touchedNow]);
+  const touched = touchedNow || touchedOnce;
   const lockGrade = () => setGradeLock({ at: new Date().toISOString(), beforeOutcome: !outcomeWritten });
   const takenNow = !planned && !pending('outcome') && outcome !== 'Not taken';
   const accent = reason ? reasonAccent(reason) : 'var(--accent)';
@@ -652,7 +670,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
         {/* Mounted only when asked, so it starts from the winner as saved. */}
         {losersPrompt && (
           <SkippedLosers open onDone={() => { setLosersPrompt(false); navigate('/'); }}
-            winner={{ instrument, session, reason: reason ?? 'FOMO', htf_bias: htfBias, premium_discount: premiumDiscount,
+            winner={{ instrument, session, reason: reason ?? 'FOMO', htf_bias: htfBias ?? '', premium_discount: premiumDiscount,
               target_type: targetType, setup_type: setupType, direction }} />
         )}
         <CommitmentSheet
@@ -907,12 +925,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
                 </p>
               </div>
             ) : (
-              <GradeBadge total={live.earned} max={live.possible} size="md" showPrompt
+              <GradeBadge total={live.earned} max={live.possible} size="md" showPrompt={touched}
                 triggerFired={live.trigger} letter={live.letter} />
             )}
             {/* The gates outrank the total: said in red, above the boxes that caused it. */}
             <AnimatePresence initial={false}>
-              {modelGate && (
+              {modelGate && touched && (
                 <motion.div key="gate" data-gate-banner role="alert"
                   initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: exitQuick }}
                   transition={springSoft}
@@ -937,6 +955,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           <fieldset disabled={gradeLocked} data-grade-fieldset={gradeLocked ? 'locked' : 'open'}
             className={`min-w-0 transition-opacity ${gradeLocked ? 'pointer-events-none opacity-60' : ''}`}>
           <Checklist answers={checks} onChange={setCheck} accent={accent}
+            notes={targetsNotClear ? { chk_targets_clear: `Not clear: ${targetsNotClear}.` } : undefined}
             sweepTier={sweepTier} onSweepTier={(t) => { setSweepTier(t); confirm('sweepTier'); }}
             sweepPending={pending('sweepTier')}
             slot={{
@@ -957,7 +976,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
                   <Select compact value={pending('targetType') ? null : targetType} placeholder="Target…"
                     onChange={(v) => {
                       setTargetType(v); confirm('targetType');
-                      if (checks.chk_targets_clear !== true) setCheck('chk_targets_clear', true);
+                      if (checks.chk_targets_clear !== true && !targetsNotClear) setCheck('chk_targets_clear', true);
                     }}
                     options={targetTypeOptions(trade?.target_type ?? null)} titleFor={(o) => TARGET_WHY[o]} />
                 </div>
@@ -1212,7 +1231,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               minChars={MIN_LESSON}
               kept={keptLesson}
               minRows={4}
-              placeholder="Next time: the sweep was there but I took it before the candle closed. Wait for the close, even when it looks like it is leaving without me."
+              placeholder="One thing I'll do differently next time."
             />
           </Field>
         )}

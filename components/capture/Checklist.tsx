@@ -18,6 +18,8 @@ interface ChecklistProps {
   accent?: string;
   /** A control to show inside a row, e.g. the target picker on "Targets are clear". */
   slot?: Partial<Record<ChecklistKey, React.ReactNode>>;
+  /** A short reason shown under a row's label, e.g. why it was unticked. */
+  notes?: Partial<Record<ChecklistKey, React.ReactNode>>;
 }
 
 const ITEM = new Map(CHECKLIST_ITEMS.map((i) => [i.key, i]));
@@ -121,7 +123,7 @@ function SweepTierRow({ value, onChange, pending, accent, label, hint }: {
  * answering is the difference between scoring a trade and rationalising one.
  */
 export function Checklist({
-  answers, onChange, sweepTier, onSweepTier, sweepPending = false, accent = 'var(--accent)', slot}: ChecklistProps) {
+  answers, onChange, sweepTier, onSweepTier, sweepPending = false, accent = 'var(--accent)', slot, notes }: ChecklistProps) {
   return (
     <div className="space-y-3">
       {CHECKLIST_PHASES.map((phase) => {
@@ -230,6 +232,10 @@ export function Checklist({
                           {item.label}
                           {spec.gate && <GateMark />}
                         </span>
+                        {notes?.[item.key] && (
+                          <span data-row-note={item.key} className="mt-0.5 block text-[11px] leading-snug"
+                            style={{ color: 'rgb(var(--outcome-loss))' }}>{notes[item.key]}</span>
+                        )}
                       </span>
                     </motion.button>
 
