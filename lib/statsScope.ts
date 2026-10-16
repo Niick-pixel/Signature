@@ -34,8 +34,8 @@ export interface StatsScope {
   sessions: Session[];
   /** Empty means both directions. */
   directions: Direction[];
-  /** One rubric version, or null for every one. */
-  rubric: number | null;
+  /** Rubric versions in view. Empty means every one. */
+  rubrics: number[];
   /** A date range (YYYY-MM-DD, inclusive). By market day: a backtest's chart date. */
   from: string | null;
   to: string | null;
@@ -69,7 +69,8 @@ export function parseStatsScope(params: Params, available: Account[], remembered
     period: (PERIODS.some((p) => p.key === periodKey) ? periodKey : 'all') as PeriodKey,
     sessions: list(params.session, SESSIONS),
     directions: list(params.dir, DIRECTIONS),
-    rubric: /^\d+$/.test(one(params.rubric) ?? '') ? Number(one(params.rubric)) : null,
+    rubrics: [...new Set((Array.isArray(params.rubric) ? params.rubric.join(',') : params.rubric ?? '')
+      .split(',').filter((r) => /^\d+$/.test(r.trim())).map((r) => Number(r.trim())))].sort((a, b) => a - b),
     from: /^\d{4}-\d{2}-\d{2}$/.test(one(params.from) ?? '') ? one(params.from)! : null,
     to: /^\d{4}-\d{2}-\d{2}$/.test(one(params.to) ?? '') ? one(params.to)! : null,
   };
@@ -99,7 +100,7 @@ export function applyStatsScope(trades: Trade[], scope: StatsScope, now = new Da
     return scope.accounts.includes(t.account)
       && (from == null || (isDated(t) && t.date.slice(0, 10) >= from))
       && (!ranged || (day != null && (scope.from == null || day >= scope.from) && (scope.to == null || day <= scope.to)))
-      && (scope.rubric == null || t.rubric_version === scope.rubric)
+      && (!scope.rubrics.length || scope.rubrics.includes(t.rubric_version))
       && (!scope.sessions.length || scope.sessions.includes(t.session))
       && (!scope.directions.length || scope.directions.includes(t.direction));
   });

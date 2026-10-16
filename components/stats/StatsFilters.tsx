@@ -13,10 +13,10 @@ import { pageShortcutAllowed } from '@/lib/keys';
 /**
  * Everything the Stats page can be narrowed by, in one place.
  *
- * Accounts: a click shows that account, Shift- or Ctrl-click combines it with
- * the ones in view, and "All accounts" is every one — Backtest and Missed
- * included. Period,
- * session and direction narrow whatever accounts are in view. All of it lives
+ * Accounts, rubrics, sessions and directions are multiple choice: a click
+ * adds a chip to the selection or takes it out (Demo + Backtest together,
+ * rubrics 1 and 3, NY AM + London). "All accounts" and "Every rubric" reset
+ * to everything. Period narrows whatever is in view. All of it lives
  * in the URL, so a view can be linked and the back button undoes a click.
  */
 export function StatsFilters({ available, scope, rubrics = [] }: {
@@ -44,12 +44,13 @@ export function StatsFilters({ available, scope, rubrics = [] }: {
     writeAccountCookie(value, 'stats');
     push({ account: value });
   };
-  // A click switches to that account, as it always has; Shift- or Ctrl-click
-  // adds it to (or takes it out of) the accounts already in view.
-  const pickAccount = (a: Account, combine: boolean) => {
-    if (!combine || scope.all) return setAccounts([a]);
+  // A click adds the account to the ones in view, or takes it out. From
+  // "All accounts" it starts a new selection with just that one; Alt-click
+  // shows only that account. Taking out the last one goes back to All.
+  const pickAccount = (a: Account, only: boolean) => {
+    if (only || scope.all) return setAccounts([a]);
     const on = scope.accounts.includes(a);
-    if (on && scope.accounts.length === 1) return; // never nothing
+    if (on && scope.accounts.length === 1) return setAccounts(names);
     setAccounts(on ? scope.accounts.filter((x) => x !== a) : names.filter((x) => x === a || scope.accounts.includes(x)));
   };
   const toggleIn = <T extends string>(key: string, current: readonly T[], value: T) => {
@@ -73,14 +74,14 @@ export function StatsFilters({ available, scope, rubrics = [] }: {
   });
 
   const filtered = scope.period !== 'all' || scope.sessions.length > 0 || scope.directions.length > 0
-    || scope.rubric != null || scope.from != null || scope.to != null;
+    || scope.rubrics.length > 0 || scope.from != null || scope.to != null;
   return (
     <div data-stats-filters className="space-y-2">
       <Row label="Accounts">
         {available.map((a) => (
           <Chip key={a.account} on={!scope.all && scope.accounts.includes(a.account)}
-            onClick={(e) => pickAccount(a.account, e.shiftKey || e.ctrlKey || e.metaKey)}
-            title="Click to show this account · Shift-click to add it to (or take it out of) the accounts in view">
+            onClick={(e) => pickAccount(a.account, e.altKey)}
+            title="Click to add or remove this account · Alt-click to show only this one">
             {accountLabel(a.account)} <span className="ml-1 tabular-nums" style={{ color: 'var(--text-faint)' }}>{a.count}</span>
           </Chip>
         ))}
@@ -107,9 +108,10 @@ export function StatsFilters({ available, scope, rubrics = [] }: {
       </Row>
       {rubrics.length > 1 && (
         <Row label="Rubric">
-          <Chip on={scope.rubric == null} onClick={() => push({ rubric: null })}>Every rubric</Chip>
+          <Chip on={scope.rubrics.length === 0} onClick={() => push({ rubric: null })}>Every rubric</Chip>
           {rubrics.map((r) => (
-            <Chip key={r} on={scope.rubric === r} onClick={() => push({ rubric: String(r) })}>Rubric {r}</Chip>
+            <Chip key={r} on={scope.rubrics.includes(r)}
+              onClick={() => toggleIn('rubric', scope.rubrics.map(String), String(r))}>Rubric {r}</Chip>
           ))}
         </Row>
       )}

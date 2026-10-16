@@ -77,7 +77,7 @@ export default async function StatsPage(
     ...(scope.period !== 'all' ? { period: scope.period } : {}),
     ...(scope.sessions.length ? { session: scope.sessions.join(',') } : {}),
     ...(scope.directions.length ? { dir: scope.directions.join(',') } : {}),
-    ...(scope.rubric != null ? { rubric: String(scope.rubric) } : {}),
+    ...(scope.rubrics.length ? { rubric: scope.rubrics.join(',') } : {}),
     ...(scope.from ? { from: scope.from } : {}),
     ...(scope.to ? { to: scope.to } : {}),
   };
@@ -284,7 +284,7 @@ export default async function StatsPage(
 
           {/* The questions the journal exists to answer — honesty first (lib/questions). */}
           <div className="mb-5">
-            <Questions trades={trades} sampleTrades={applyStatsScope(all, { ...scope, rubric: null })} />
+            <Questions trades={trades} sampleTrades={applyStatsScope(all, { ...scope, rubrics: [] })} />
           </div>
 
           {/*
