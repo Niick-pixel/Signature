@@ -323,6 +323,7 @@ export function parseTradeInput(
         : null,
       be_trigger: oneOf('be_trigger', BE_TRIGGERS),
       below_min_confidence: tri('below_min_confidence'),
+      written_before_outcome: tri('written_before_outcome'),
   };
 
   /*

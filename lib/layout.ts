@@ -1,5 +1,5 @@
 import { aggregate, byReason, leakPairs } from './stats';
-import { BACKTEST_REASON, REASONS, isBacktest, isHypothetical, type Reason } from './domain';
+import { BACKTEST_REASON, REASONS, countsInStats, isBacktest, isHypothetical, type Reason } from './domain';
 import type { Trade } from './types';
 import type { Aggregate } from './stats';
 
@@ -221,7 +221,7 @@ function withBacktestsApart(trades: Trade[], mode: GroupMode): BoardGroup[] {
   if (rest.length === 0 && (backtests.length === 0 || missed.length === 0)) return groupsFor(trades, mode);
   const apart = (key: string, list: Trade[]): BoardGroup[] => (list.length === 0 ? [] : [{
     key, reason: key as Reason, accent: key === MISSED_GROUP ? 'var(--amber)' : reasonAccent(key as Reason),
-    stats: aggregate(list), trades: list,
+    stats: aggregate(list.filter(countsInStats)), trades: list,
   }]);
   return [
     ...groupsFor(rest, mode),
@@ -270,7 +270,7 @@ function groupsFor(trades: Trade[], mode: GroupMode): BoardGroup[] {
       // adjacent regions stay distinguishable.
       reason: list[0].reason,
       accent: `var(--reason-${i % 12})`,
-      stats: aggregate(list),
+      stats: aggregate(list.filter(countsInStats)),
       trades: list,
     }))
     .sort((a, b) => (mode === 'month' ? a.key.localeCompare(b.key) : a.stats.totalR - b.stats.totalR));

@@ -2,7 +2,7 @@ import { adherenceOf } from './adherence';
 import type { PathEvent } from './path';
 import { conditions } from './conditions';
 import {
-  CHECKLIST_ITEMS, CONTEXT_FLAG_LIST, MONEY_ACCOUNTS, SWEEP_TIER_SPEC, isBacktest, isHypothetical, isTaken, type Account,
+  CHECKLIST_ITEMS, CONTEXT_FLAG_LIST, MONEY_ACCOUNTS, SWEEP_TIER_SPEC, countsInStats, isBacktest, isHypothetical, isTaken, type Account,
 } from './domain';
 import { openFlagsFor } from './flags';
 import { repeatedLessons } from './lessons';
@@ -118,7 +118,8 @@ export function monthlyReview(input: MonthlyInput): MonthlyReview {
 
   const monthTrades = trades.filter((t) => inMonth(t.date)).sort((a, b) => a.date.localeCompare(b.date));
   const real = monthTrades.filter((t) => !isHypothetical(t.account));
-  const missed = monthTrades.filter((t) => isHypothetical(t.account));
+  // Hindsight misses are listed with the rest, but counted nowhere.
+  const missed = monthTrades.filter((t) => isHypothetical(t.account) && countsInStats(t));
   const prev = previousMonth(month);
   const prevReal = trades.filter((t) => t.date.slice(0, 7) === prev && !isHypothetical(t.account));
   // Live, Funded, Demo in the app's own order; anything older (a backtest) after.
@@ -319,7 +320,7 @@ export function monthlyReview(input: MonthlyInput): MonthlyReview {
     const pnl = pnlOf(t);
     const verdict = adherenceOf(t);
     const outcome = t.outcome === 'Not taken' ? 'Passed' : `${t.outcome} ${r1(t.r_multiple)}${pnl != null && !isHypothetical(t.account) ? ` (${usd(pnl)})` : ''}`;
-    h(`### ${when(t)} · ${t.account}${isHypothetical(t.account) ? ' (would have)' : ''} · ${t.instrument} ${t.direction} · ${outcome} · \`${ref(t)}\``);
+    h(`### ${when(t)} · ${t.account}${isHypothetical(t.account) ? (countsInStats(t) ? ' (would have, written before)' : ' (would have — Hindsight, not counted)') : ''} · ${t.instrument} ${t.direction} · ${outcome} · \`${ref(t)}\``);
     p(`- **Setup:** ${t.setup_type} · ${t.session} · HTF ${t.htf_bias.toLowerCase()} · ${t.premium_discount} · target ${t.target_type}`);
     p(`- **Why I took it:** ${t.reason}${isHypothetical(t.account) && t.skip_reason ? ` · **why I didn't:** ${t.skip_reason}` : ''}`);
     p(`- **Grade:** ${t.checklist_score} (${t.grade_letter})${t.grade_at_entry != null && t.grade_at_entry !== t.checklist_score ? `, ${t.grade_at_entry} at entry` : ''} · trigger ${t.trigger_fired ? 'fired' : '**did not fire**'} · rules ${verdict === 'followed' ? 'followed' : verdict === 'broken' ? '**broken**' : 'not scored'}${t.followed_rules != null ? ` (I said ${t.followed_rules ? 'followed' : 'broken'})` : ''}${t.graded_post_hoc ? ' · graded after the fact' : ''}${t.regrade ? ` · re-graded ${t.regrade}` : ''}`);

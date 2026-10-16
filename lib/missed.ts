@@ -1,4 +1,4 @@
-import { isHypothetical, isReal, isTaken, SESSIONS, SKIP_REASONS } from './domain';
+import { countsInStats, isHypothetical, isReal, isTaken, SESSIONS, SKIP_REASONS } from './domain';
 import { GRADE_LETTERS } from './grade';
 import type { DailyReview, Trade } from './types';
 
@@ -83,7 +83,8 @@ function newsOf(review: DailyReview | undefined): string | null {
 }
 
 export function missedPatterns(trades: Trade[], reviews: DailyReview[] = []): MissedPatterns {
-  const missed = trades.filter((t) => isHypothetical(t.account) && t.deleted_at == null);
+  // Hindsight stays out: only a miss written down before the move counts.
+  const missed = trades.filter((t) => isHypothetical(t.account) && t.deleted_at == null && countsInStats(t));
   // What you did take, in the accounts you trade — never a backtest, whose
   // "setups seen" were chosen with the chart already scrolled.
   const taken = trades.filter((t) => isReal(t.account)

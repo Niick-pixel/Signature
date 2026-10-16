@@ -61,7 +61,7 @@ const NULLABLE_BOOL_COLUMNS = [
   // Rubric 4 (trial): never checked must not read back as "not confirmed".
   'sweep_futures_confirmed',
   'target_hit', 'target_fresh', 'opposite_taken',
-  'target_check_passed', 'below_min_confidence',
+  'target_check_passed', 'below_min_confidence', 'written_before_outcome',
 ] as const;
 
 function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade {
@@ -164,6 +164,7 @@ const WRITABLE = [
   // Guardrails (026).
   'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'nearest_liquidity_price', 'opposing_swings_between',
   'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence',
+  'written_before_outcome',
   'undated',
 ] as const;
 

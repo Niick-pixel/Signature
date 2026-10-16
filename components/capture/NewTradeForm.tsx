@@ -61,6 +61,7 @@ import { dialogIsOpen } from '@/components/ui/Overlay';
 import type { PastLesson } from '@/lib/lessons';
 import { navigate } from '@/lib/nav';
 import { CommitmentSheet } from '@/components/path/CommitmentSheet';
+import { SkippedLosers } from './SkippedLosers';
 import { PathBanner, usePathSummary } from '@/components/path/PathBanner';
 import type { HeldCommitment } from '@/lib/path';
 import {
@@ -179,6 +180,10 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     and the result chart open. lockedId is that saved trade. skipLock is the
     escape hatch: log it after the fact, marked as graded after the outcome.
   */
+  // Missed (027): was it written down before the move played out?
+  const [writtenBefore, setWrittenBefore] = useState<Tri>(trade?.written_before_outcome ?? null);
+  // After a Missed winner is saved: "did you also log the ones that would have lost?"
+  const [losersPrompt, setLosersPrompt] = useState(false);
   const [lockedId, setLockedId] = useState<string | null>(null);
   const [skipLock, setSkipLock] = useState(false);
   const [uploadedSlots, setUploadedSlots] = useState<string[]>([]);
@@ -452,6 +457,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   const extrasMissing = [
     ...(stopSet && beTrigger == null ? ['Breakeven trigger'] : []),
     ...(backtest && !chartDate && !editing ? ['Chart date'] : []),
+    ...(isHypothetical(account) && writtenBefore == null ? ['Written before the move?'] : []),
   ];
   const choicesDone = missing.length === 0 && extrasMissing.length === 0;
   const canSubmit = (Boolean(chart) || saved)
@@ -550,6 +556,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       opposing_swings_between: tc.swings,
       eqhl_checks: targetType === 'EQH/EQL' && !pending('targetType') ? tc.eqhl : null,
       be_trigger: beTrigger,
+      written_before_outcome: isHypothetical(account) ? writtenBefore : null,
       would_have_hit_tp: wouldHaveHitTp,
       r_left_on_table: num(rLeftOnTable),
       skip_reason: skipReason,
@@ -632,6 +639,13 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       // Saved, so the draft has served its purpose. Leaving it behind would
       // resurrect this trade as a ghost on the next New trade.
       clearDraft();
+      // A missed winner: before leaving, ask about the misses that would have lost.
+      if (!editing && isHypothetical(account) && outcome === 'Win') {
+        try { window.localStorage.setItem(LAST_ACCOUNT_KEY, account); } catch { /* fine */ }
+        setSubmitting(false);
+        setLosersPrompt(true);
+        return;
+      }
       try { window.localStorage.setItem(LAST_ACCOUNT_KEY, account); } catch { /* fine */ }
       // Back to the board — animated closed, not reloaded (lib/nav.ts).
       navigate('/');
@@ -668,6 +682,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           <div className="mt-2 flex"><PathBanner summary={path} compact /></div>
           {!editing && <div className="mt-2 max-w-[34rem]"><LateNotice ctx={guard} backtest={backtest} /></div>}
         </div>
+        {/* Mounted only when asked, so it starts from the winner as saved. */}
+        {losersPrompt && (
+          <SkippedLosers open onDone={() => { setLosersPrompt(false); navigate('/'); }}
+            winner={{ instrument, session, reason: reason ?? 'FOMO', htf_bias: htfBias, premium_discount: premiumDiscount,
+              target_type: targetType, setup_type: setupType, direction }} />
+        )}
         <CommitmentSheet
           open={sheet != null}
           title={sheet?.kind === 'daily' ? 'The day’s loss limit is reached' : undefined}
@@ -811,6 +831,16 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           </Field>
           {/* A missed trade's most useful fact is why it was missed — the
               hesitation patterns on Stats split by exactly this. */}
+          {isHypothetical(account) && (
+            <div className="sm:col-span-2" data-written-before>
+              <TriState inline value={writtenBefore} onChange={setWrittenBefore}
+                label="Written down before the move played out?"
+                hint="Yes only if it existed as a Planned trade or a note before price moved. Logged afterwards it is Hindsight: kept and shown, but left out of every number — otherwise only the winners ever get remembered." />
+              {writtenBefore === false && (
+                <p className="mt-1 text-[11.5px]" style={{ color: 'rgb(var(--accent))' }}>Hindsight — saved, labelled, and kept out of stats.</p>
+              )}
+            </div>
+          )}
           {isHypothetical(account) && outcome !== 'Not taken' && (
             <Field quiet label="Why you didn't take it" hint="Fear, a rule, not at the screen, or it simply went without you." className="sm:col-span-2">
               <Select value={skipReason} onChange={setSkipReason} options={SKIP_REASONS} placeholder="Why really?" />

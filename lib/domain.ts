@@ -510,6 +510,16 @@ export const isSeparate = (account: string | null | undefined): boolean =>
 export const isReal = (account: string | null | undefined): boolean => !isSeparate(account);
 
 /**
+ * Whether a trade may count in any number (027). Every trade does, except a
+ * Missed one that was not written down before the move played out: that is
+ * Hindsight — only ever the winners get remembered that way — and it stays
+ * out of stats, group totals and the hesitation figures. It is still shown.
+ */
+export const countsInStats = (t: { account: string; written_before_outcome?: boolean | null }): boolean =>
+  !isHypothetical(t.account) || t.written_before_outcome === true;
+export const isHindsight = (t: { account: string; written_before_outcome?: boolean | null }): boolean => !countsInStats(t);
+
+/**
  * A loss is a negative number, whatever was typed.
  *
  * P&L and R are stored signed, and the form used to take them as written — so

@@ -5,7 +5,7 @@ import { listTrades } from './trades';
 import { DEFAULT_RULES, belowMinConfidence, stopAfterFor, type RuleSettings } from '../lib/rules';
 import { targetCheck } from '../lib/targetCheck';
 import { adherenceOf } from '../lib/adherence';
-import { isBacktest, isTaken, marketDay } from '../lib/domain';
+import { isBacktest, isHypothetical, isTaken, marketDay } from '../lib/domain';
 import type { Trade, TradeInput } from '../lib/types';
 
 /* --------------------------------------------------------------- settings */
@@ -55,6 +55,15 @@ export function applyRules(input: TradeInput, before: Trade | null, settings = g
     out.graded_post_hoc = before.graded_post_hoc;
     out.grade_locked_at = before.grade_locked_at
       ?? (before.status === 'Planned' && input.status !== 'Planned' ? now : null);
+  }
+
+  // Missed: it existed before the move if it was first saved as a plan, or
+  // was a Planned trade on its way into Missed. Otherwise the answer given.
+  if (isHypothetical(out.account)) {
+    const plannedFirst = (!before && (input.status === 'Planned' || input.status === 'Live'))
+      || (before != null && before.status === 'Planned' && !isHypothetical(before.account))
+      || before?.written_before_outcome === true;
+    if (plannedFirst) out.written_before_outcome = true;
   }
 
   const verdict = targetCheck(out);

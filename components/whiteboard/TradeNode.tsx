@@ -14,7 +14,7 @@ import { motion } from 'framer-motion';
 import { GRADE_COLOR } from '@/lib/grade';
 import { spring, springLayout } from '@/lib/motion';
 import { NODE_H, NODE_W } from '@/lib/layout';
-import type { Outcome } from '@/lib/domain';
+import { isHindsight, type Outcome } from '@/lib/domain';
 import type { Trade } from '@/lib/types';
 import { hasOpenFlags } from '@/lib/flags';
 import { tradeDay } from '@/lib/when';
@@ -139,6 +139,14 @@ function TradeNodeInner({ data }: NodeProps) {
           style={{ color: 'rgba(255,255,255,0.72)' }}>
           {tradeDay(trade, { day: 'numeric', month: 'short' })}
         </span>
+        {/* A miss written down only after the move: shown, never counted. */}
+        {isHindsight(trade) && (
+          <span data-hindsight className="ml-1.5 shrink-0 rounded-full px-1.5 text-[8px] font-semibold uppercase tracking-[0.06em]"
+            style={{ background: 'rgba(255,255,255,0.16)', color: 'rgba(255,255,255,0.85)' }}
+            title="Hindsight: not written down before the move played out. Left out of every number.">
+            Hindsight
+          </span>
+        )}
       </div>
 
       {/*

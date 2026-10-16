@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { listTrades } from '@/db/trades';
 import { accountCookie } from '@/lib/account-pref';
-import { ACCOUNT_VALUES, MIN_SAMPLE, REASON_HUE, isBacktest, isDated, isHypothetical, isReal, isSeparate, type Account } from '@/lib/domain';
+import { ACCOUNT_VALUES, MIN_SAMPLE, REASON_HUE, countsInStats, isBacktest, isDated, isHypothetical, isReal, isSeparate, type Account } from '@/lib/domain';
 import { reasonAccent } from '@/lib/layout';
 import {
   accountsInUse, aggregate, byConfidence, byGradeBand, checklistEdge, discipline, edge,
@@ -53,8 +53,12 @@ const usd = (v: number) =>
 export default async function StatsPage(
   { searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> },
 ) {
-  const all = listTrades();
-  const accounts = accountsInUse(all);
+  // Hindsight — a Missed trade not written down before the move — never
+  // enters a number (lib/domain countsInStats). Counted, and said, below.
+  const everything = listTrades();
+  const all = everything.filter(countsInStats);
+  const hindsight = everything.length - all.length;
+  const accounts = accountsInUse(everything);
 
   // Accounts, period, session and direction, from the URL (lib/statsScope).
   // With no account asked for, the remembered choice; with none, the busiest
@@ -240,6 +244,11 @@ export default async function StatsPage(
               style={{ background: 'rgb(var(--amber) / 0.08)', border: '1px solid rgb(var(--amber) / 0.25)', color: 'rgb(var(--amber))' }}>
               Mixed: real trades are counted together with {scope.accounts.filter((a) => !isReal(a)).map((a) => isBacktest(a) ? 'backtest replays' : 'missed setups').join(' and ')} here.
               Every total below includes them — pick accounts above to see one world at a time.
+            </p>
+          )}
+          {hindsight > 0 && (single == null || isHypothetical(single) || scope.all) && (
+            <p className="mb-5 text-[12px]" style={{ color: 'var(--text-faint)' }} data-hindsight-note>
+              {hindsight} missed trade{hindsight === 1 ? ' is' : 's are'} <b>Hindsight</b> — not written down before the move — and left out of every number here.
             </p>
           )}
           {undatedOut > 0 && (

@@ -204,6 +204,8 @@ export interface Trade {
   be_trigger: BeTrigger | null;
   /** Taken below the minimum confidence — a no-trade by my rules. Set by the server. */
   below_min_confidence: boolean | null;
+  /** Missed only (027): written down before the move played out. Anything else is Hindsight. */
+  written_before_outcome: boolean | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */

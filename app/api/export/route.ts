@@ -35,6 +35,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   // The guardrails (026).
   'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'nearest_liquidity_price', 'opposing_swings_between',
   'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence',
+  // The honest Missed log (027).
+  'written_before_outcome',
 ];
 
 function csvCell(v: unknown): string {
