@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { InCaptureSheet } from './CaptureSheet';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Collapse } from '@/components/ui/Collapse';
 import {
@@ -196,7 +197,10 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
 
   // Arrived through an animated navigation: the transition plays the card's
   // entrance (lib/nav.ts), so its own rise-in would play it twice.
-  const [openedByTransition] = useState(() => typeof document !== 'undefined' && Boolean(document.documentElement.dataset.nav));
+  // Inside the sheet, CaptureSheet animates the card on the compositor; a
+  // second, JS-driven entrance on the same element cost a style pass per frame.
+  const inSheet = useContext(InCaptureSheet);
+  const [openedByTransition] = useState(() => inSheet || (typeof document !== 'undefined' && Boolean(document.documentElement.dataset.nav)));
   const [date, setDate] = useState(() => (trade ? toLocalInput(new Date(trade.date)) : toLocalInput(new Date())));
   /*
     A backtest never asks for the replayed chart's date: it starts on today,
@@ -667,6 +671,19 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
               : 'Name the motive before the data. That is the whole point.'}
           </p>
         </div>
+        {/* A restored draft: a small pill in the header, not a row pushing the form down. */}
+        {restored && (
+          <motion.div data-restored initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={spring}
+            className="flex min-w-0 flex-1 justify-center pt-1">
+            <span className="inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-[11px]"
+              title="These are your unsaved answers, not defaults — the chart needs pasting again."
+              style={{ background: 'rgb(var(--accent) / 0.08)', borderColor: 'rgb(var(--accent) / 0.3)', color: 'rgb(var(--accent))' }}>
+              <span className="truncate">Unsaved draft restored · paste the chart again</span>
+              <button type="button" onClick={() => { clearDraft(); window.location.reload(); }}
+                className="shrink-0 font-medium underline underline-offset-2">Start fresh</button>
+            </span>
+          </motion.div>
+        )}
         {/* Mounted only when asked, so it starts from the winner as saved. */}
         {losersPrompt && (
           <SkippedLosers open onDone={() => { setLosersPrompt(false); navigate('/'); }}
@@ -728,29 +745,6 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
         </div>
       </div>
 
-      {restored && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={spring}
-          className="mb-6 flex flex-wrap items-center gap-3 rounded-[calc(14px*var(--rk))] px-4 py-2.5 text-[12px]"
-          style={{
-            background: 'rgb(var(--accent) / 0.10)',
-            border: '1px solid rgb(var(--accent) / 0.3)',
-            color: 'rgb(var(--accent))',
-          }}
-        >
-          <span>
-            Picked up where you left off. These are your unsaved answers, not defaults — the chart
-            needs pasting again.
-          </span>
-          <button
-            type="button"
-            onClick={() => { clearDraft(); window.location.reload(); }}
-            className="ml-auto underline underline-offset-2"
-          >
-            Start fresh
-          </button>
-        </motion.div>
-      )}
 
       {/*
         Four trains of thought, read left to right in the order a finished

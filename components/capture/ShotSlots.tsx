@@ -97,14 +97,14 @@ export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (ne
           scale: flash ? 1.012 : 1,
         }}
         transition={spring}
-        className="glass relative grid min-h-[118px] cursor-pointer place-items-center overflow-hidden rounded-[calc(24px*var(--rk))] p-4"
+        className="glass relative grid h-[118px] cursor-pointer place-items-center overflow-hidden rounded-[calc(24px*var(--rk))] p-4"
       >
         <AnimatePresence mode="wait">
           {shown ? (
             <motion.div key={shownSlot} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96, transition: exitQuick }} transition={springBouncy} className="relative w-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={shown} alt={`${shownSlot} chart`} className="max-h-[220px] w-full rounded-[calc(16px*var(--rk))] object-contain" />
+              <img src={shown} alt={`${shownSlot} chart`} className="max-h-[86px] w-full rounded-[calc(12px*var(--rk))] object-contain" />
               <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
                 style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}>{shownSlot}</span>
             </motion.div>

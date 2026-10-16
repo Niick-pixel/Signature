@@ -1,4 +1,4 @@
-import { TAKE_IT_THRESHOLD, isTaken } from './domain';
+import { TAKE_IT_THRESHOLD, isHypothetical, isTaken } from './domain';
 import type { Trade } from './types';
 
 /**
@@ -15,13 +15,18 @@ import type { Trade } from './types';
  */
 export const FLAG_KEYS = [
   'claimed_rules_no_trigger',
-  // Retired: no flag is raised under it any more (tags are notes, not rule
-  // breaks). Kept so dismissals already stored against it still validate.
-  'claimed_rules_with_mistakes',
   'no_target_named',
   'direction_against_pd',
   'passed_a_good_setup',
   'took_a_bad_setup',
+  'taken_failed_target_check',
+  'settled_without_r',
+  // Retired: no flag is raised under these any more. Kept so dismissals
+  // already stored against them still validate.
+  // - tags are notes, not rule breaks;
+  'claimed_rules_with_mistakes',
+  // - the form stopped asking for risk long ago (P&L and R carry the money),
+  //   so this one fired on every trade and said nothing.
   'settled_without_risk',
 ] as const;
 
@@ -33,10 +38,13 @@ export interface Flag {
   detail: string;
 }
 
-/**
- * Every rule, as a predicate over a saved trade. Written so each one can be
- * read on its own and argued with.
- */
+/*
+  Only flags worth stopping for: a record that contradicts itself, a rule of
+  the plan broken in a way the record already shows, or a hole that leaves
+  the trade out of the numbers. Nothing that fires on every trade, nothing
+  already said by a tag I chose, and nothing on a Missed trade that the
+  plan would have me glad I missed.
+*/
 const RULES: Array<{ key: FlagKey; label: string; test: (t: Trade) => string | null }> = [
   {
     key: 'claimed_rules_no_trigger',
@@ -45,22 +53,34 @@ const RULES: Array<{ key: FlagKey; label: string; test: (t: Trade) => string | n
       ? 'Without both Phase 3 answers the plan says this entry does not exist, so it cannot also be a trade that followed every rule.'
       : null,
   },
-  // No flag for "said rules followed, but tagged something went wrong": the
-  // tags note what went against a trade, often the market, and following
-  // every rule while the market does not cooperate is no contradiction.
   {
-    key: 'no_target_named',
-    label: 'Taken with no target named',
-    // `=== false` rather than falsy: a box marked N/A was not answered "no",
-    // and flagging it would be the app asserting from silence again.
-    test: (t) => (isTaken(t.outcome) && (t.target_type === 'Other' || t.chk_targets_clear === false))
-      ? 'A target you cannot name is a target you cannot be wrong about.'
+    key: 'took_a_bad_setup',
+    label: 'Taken below the standard',
+    test: (t) => (taken(t) && t.checklist_score < TAKE_IT_THRESHOLD)
+      ? `Scored ${t.checklist_score}, under the ${TAKE_IT_THRESHOLD} line.`
+      : null,
+  },
+  {
+    key: 'taken_failed_target_check',
+    label: 'Taken although the target check failed',
+    test: (t) => (taken(t) && t.target_check_passed === false)
+      ? 'Under 1.5R to the nearest liquidity, too many swings in the way, or the target was not the nearest pool. By your rules this was no trade.'
+      : null,
+  },
+  {
+    key: 'passed_a_good_setup',
+    label: 'Passed on a setup that met the standard',
+    test: (t) => (!isTaken(t.outcome) && t.status !== 'Planned' && t.checklist_score >= TAKE_IT_THRESHOLD && t.trigger_fired)
+      ? `Scored ${t.checklist_score} with the trigger fired. By the plan, taking it was the rule.`
       : null,
   },
   {
     key: 'direction_against_pd',
     label: 'Direction against premium / discount',
     test: (t) => {
+      if (!taken(t)) return null;
+      // Already said by a tag I chose: no need to say it twice.
+      if (t.mistake_tags.includes('Long in premium') || t.mistake_tags.includes('Short in discount')) return null;
       if (t.direction === 'Long' && t.premium_discount === 'Premium') {
         return 'Long from premium — buying where the discount buyers are taking profit.';
       }
@@ -71,27 +91,23 @@ const RULES: Array<{ key: FlagKey; label: string; test: (t: Trade) => string | n
     },
   },
   {
-    key: 'passed_a_good_setup',
-    label: 'Passed on a setup that met the standard',
-    test: (t) => (!isTaken(t.outcome) && t.checklist_score >= TAKE_IT_THRESHOLD && t.trigger_fired)
-      ? `Scored ${t.checklist_score} with the trigger fired. By the plan, taking it was the rule.`
+    key: 'no_target_named',
+    label: 'Taken with no target named',
+    test: (t) => (taken(t) && t.target_type === 'Other' && !t.mistake_tags.includes('No defined target'))
+      ? 'A target you cannot name is a target you cannot be wrong about.'
       : null,
   },
   {
-    key: 'took_a_bad_setup',
-    label: 'Taken below the standard',
-    test: (t) => (isTaken(t.outcome) && t.checklist_score < TAKE_IT_THRESHOLD)
-      ? `Scored ${t.checklist_score}, under the ${TAKE_IT_THRESHOLD} line.`
-      : null,
-  },
-  {
-    key: 'settled_without_risk',
-    label: 'Settled with no risk recorded',
-    test: (t) => (isTaken(t.outcome) && t.risk_dollars == null && t.risk_percent == null)
-      ? 'Without a risk amount this trade cannot appear in any money figure.'
+    key: 'settled_without_r',
+    label: 'No R recorded',
+    test: (t) => (isTaken(t.outcome) && t.status !== 'Planned' && t.r_multiple == null)
+      ? 'Without an R this trade is left out of every R figure — expectancy, win rate by R, the curve.'
       : null,
   },
 ];
+
+/** Taken for real: a Missed trade was not, and a plan has not been yet. */
+const taken = (t: Trade) => isTaken(t.outcome) && t.status !== 'Planned' && !isHypothetical(t.account);
 
 /** Every contradiction in a trade, dismissed ones included. */
 export function flagsFor(trade: Trade): Flag[] {

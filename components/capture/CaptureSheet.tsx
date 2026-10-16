@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { createContext, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { EASE_BOUNCE, EASE_SOFT } from '@/lib/motion';
 
 /**
@@ -16,6 +16,9 @@ import { EASE_BOUNCE, EASE_SOFT } from '@/lib/motion';
  * Opening and closing animate opacity and transform only, on the compositor.
  * Closing is played by lib/nav.ts before it navigates away.
  */
+/** True inside the sheet: it plays the entrance, so the form must not play its own. */
+export const InCaptureSheet = createContext(false);
+
 export function CaptureSheet({ children }: { children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
 
@@ -45,7 +48,7 @@ export function CaptureSheet({ children }: { children: ReactNode }) {
     >
       {/* Same column as the full page (app/new/page.tsx) — see the note there. */}
       <div className="mx-auto w-full max-w-[96rem] px-4 pb-20 pt-4 sm:px-6 2xl:max-w-[132rem] 2xl:pb-10">
-        {children}
+        <InCaptureSheet.Provider value>{children}</InCaptureSheet.Provider>
       </div>
     </div>
   );

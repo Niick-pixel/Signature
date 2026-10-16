@@ -855,6 +855,17 @@ html[data-capture] header.titlebar-drag { z-index: 56; }
 [data-capture-root] [data-sheet] {
   background: color-mix(in srgb, var(--bg-raised) 96%, var(--glass-fill));
 }
+/*
+  No backdrop blur inside the New trade window. The window is solid, so a
+  blur behind any chip or field in it only ever blurs the window itself —
+  and while the window opens (opacity and scale changing every frame) each
+  of the dozens of glass surfaces was re-blurred per frame. Under Sage and
+  Nightfall that was frames of 200–300ms; without it, the opening holds.
+*/
+[data-capture-root] [data-sheet],
+[data-capture-root] [data-sheet] * {
+  backdrop-filter: none !important;
+}
 html[data-nav] [data-sheet] { view-transition-name: sheet; }
 /* The title bar is the same on both sides: no crossfade, no flicker. */
 ::view-transition-old(titlebar) { animation: none; opacity: 0; }
