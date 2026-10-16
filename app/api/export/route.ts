@@ -32,6 +32,9 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'quick_log', 'confidence_at_entry', 'worked_tags', 'market_tags', 'pnl_dollars',
   'mfe_r', 'mae_r', 'reached_1r', 'entry_time', 'exit_time', 'would_be_r', 'macro_time',
   'overrides',
+  // The guardrails (026).
+  'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'nearest_liquidity_price', 'opposing_swings_between',
+  'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence',
 ];
 
 function csvCell(v: unknown): string {
@@ -40,7 +43,10 @@ function csvCell(v: unknown): string {
   const item = (x: unknown) => (x && typeof x === 'object'
     ? (() => { const o = x as TradeOverride; return `${o.kind}: ${o.commitment_text ?? ''} — ${o.reason ?? 'no reason given'}`; })()
     : String(x));
-  const s = Array.isArray(v) ? v.map(item).join('; ') : String(v);
+  const s = Array.isArray(v) ? v.map(item).join('; ')
+    // eqhl_checks: "touches yes; untested no; in_range yes".
+    : typeof v === 'object' ? Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k} ${x ? 'yes' : 'no'}`).join('; ')
+    : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

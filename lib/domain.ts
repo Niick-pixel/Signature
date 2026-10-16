@@ -407,6 +407,8 @@ export const MISTAKE_TAGS = [
   'Long in premium', 'Short in discount', 'Against HTF bias', 'Took it before the sweep',
   "Didn't wait for the close", 'Chased', 'Outside killzone', 'Ignored news', 'No defined target',
   'Moved stop', 'Cut winner early', 'Oversized', 'Revenge', 'Overtraded',
+  // Added by the app when a trade is taken below the minimum confidence.
+  'Low confidence entry',
 ] as const;
 /**
  * No longer offered, still accepted: trades were tagged with them, and a tag
@@ -543,6 +545,27 @@ export function accountOptions(current: Account | null): readonly Account[] {
  * never gets written.
  */
 export const TRADE_STATUSES = ['Planned', 'Live', 'Settled'] as const;
+
+/** What moves the stop to breakeven, decided before the trade (026). */
+export const BE_TRIGGERS = ['1R', 'Structure break', 'None'] as const;
+export type BeTrigger = (typeof BE_TRIGGERS)[number];
+export const BE_TRIGGER_LABEL: Record<BeTrigger, string> = {
+  '1R': '1R', 'Structure break': 'Structure break', None: 'None (hold to stop or target)',
+};
+
+/** Opposing swings between entry and the target (026). */
+export const SWING_COUNTS = ['0', '1', '2+'] as const;
+export type SwingCount = (typeof SWING_COUNTS)[number];
+
+/**
+ * The day a trade belongs to, for per-day rules: the replayed session for a
+ * backtest that names one (chart_date), otherwise the day it was taken.
+ * Null for an undated backtest with no chart date — it belongs to no day.
+ */
+export function marketDay(t: { date: string; undated?: boolean | null; chart_date?: string | null }): string | null {
+  if (t.chart_date) return t.chart_date;
+  return t.undated ? null : t.date.slice(0, 10);
+}
 export type TradeStatus = (typeof TRADE_STATUSES)[number];
 
 /**

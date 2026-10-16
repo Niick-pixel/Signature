@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import { press, spring, springSoft } from '@/lib/motion';
 
 interface SegmentedProps<T extends string> {
-  value: T;
+  /** Null: nothing chosen yet — no option is highlighted. */
+  value: T | null;
   onChange: (value: T) => void;
   options: readonly T[];
   /** Per-option colour, e.g. outcome hues. */

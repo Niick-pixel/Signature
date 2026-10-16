@@ -1,7 +1,7 @@
 import type {
   Account, ChecklistAnswer, Direction, HtfBias, Instrument, MistakeTag, Outcome, PremiumDiscount, Reason,
   Regrade, Session, SetupType, ShotSlot, SkipReason, SweepTier, TargetType, TradeStatus, Tri, WorkedTag, MarketTag,
-  BiasDirection, NewsLevel,
+  BiasDirection, NewsLevel, BeTrigger, SwingCount,
 } from './domain';
 import type { FlagKey } from './flags';
 import type { GradeLetter } from './grade';
@@ -186,12 +186,40 @@ export interface Trade {
    * at the time (migration 025). Empty on every trade that broke nothing.
    */
   overrides: TradeOverride[];
+  /* --- Guardrails (026). All null on trades logged before them. --- */
+  /** When the grade was locked. With graded_post_hoc false: before the outcome existed. */
+  grade_locked_at: string | null;
+  /** A backtest's replayed session (YYYY-MM-DD). Per-day rules use it. */
+  chart_date: string | null;
+  /** The nearest clear liquidity in my direction inside the dealing range. */
+  nearest_liquidity_type: string | null;
+  nearest_liquidity_price: number | null;
+  opposing_swings_between: SwingCount | null;
+  /** R from entry to that liquidity, from entry and stop. Computed. */
+  r_to_nearest: number | null;
+  /** Target is the nearest liquidity, no 2+ swings in the way, at least 1.5R. Null = not enough to tell. */
+  target_check_passed: boolean | null;
+  /** EQH/EQL by definition. */
+  eqhl_checks: EqhlChecks | null;
+  be_trigger: BeTrigger | null;
+  /** Taken below the minimum confidence — a no-trade by my rules. Set by the server. */
+  below_min_confidence: boolean | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */
   deleted_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** The three things that make a level an EQH/EQL by my definition. */
+export interface EqhlChecks {
+  /** Two or more touches within tolerance. */
+  touches: boolean;
+  /** Untested since. */
+  untested: boolean;
+  /** Inside the current dealing range. */
+  in_range: boolean;
 }
 
 /** One promise or limit a trade was logged past, and why. */

@@ -28,7 +28,7 @@ const { migrate } = await import('../db/migrate');
 const db = new DatabaseSync(path.join(DIR, 'journal.db'));
 migrate(db);
 
-test('a pre-Path journal comes through 024 and 025 unchanged', () => {
+test('a pre-Path journal comes through every later migration unchanged', () => {
   const ins = db.prepare(`INSERT INTO trades (id, date, instrument, direction, session, reason, setup_type, htf_bias,
     premium_discount, target_type, outcome, r_multiple, explanation, account, status, graded_post_hoc, market_tags, worked_tags, mistake_tags,
     sweep_tier, chk_sweep, singular_gap, chk_returned_to_fvg, chk_inversion_close, rubric_version, score_at_entry, letter_at_entry, trigger_fired_at_entry, grade_at_entry)
@@ -42,8 +42,10 @@ test('a pre-Path journal comes through 024 and 025 unchanged', () => {
   }
   db.prepare("INSERT INTO cash_events (id, account, kind, amount, date) VALUES (?, 'Funded', 'deposit', 500, '2026-09-01')").run(crypto.randomUUID());
 
+  const oldCols = (db.prepare('PRAGMA table_xinfo(trades)').all() as Array<{ name: string }>).map((c) => c.name);
   const snapshot = () => JSON.stringify({
-    trades: (db.prepare('SELECT * FROM trades ORDER BY id').all() as Record<string, unknown>[]).map(({ overrides: _o, ...r }) => r),
+    trades: (db.prepare('SELECT * FROM trades ORDER BY id').all() as Record<string, unknown>[])
+      .map((r) => Object.fromEntries(oldCols.map((c) => [c, r[c]]))),
     cash: db.prepare('SELECT * FROM cash_events ORDER BY id').all(),
   });
   const before = snapshot();
@@ -52,7 +54,10 @@ test('a pre-Path journal comes through 024 and 025 unchanged', () => {
   migrate(db);
 
   assert.equal(snapshot(), before);
-  assert.equal((db.prepare('SELECT count(*) n FROM trades WHERE overrides IS NOT NULL').get() as { n: number }).n, 0);
+  // Every column added since is empty on every old trade.
+  const added = (db.prepare('PRAGMA table_xinfo(trades)').all() as Array<{ name: string }>).map((c) => c.name).filter((c) => !oldCols.includes(c));
+  assert.ok(added.includes('overrides') && added.includes('grade_locked_at'), added.join(','));
+  for (const c of added) assert.equal((db.prepare(`SELECT count(*) n FROM trades WHERE ${c} IS NOT NULL`).get() as { n: number }).n, 0, c);
   // Every index and trigger came across the rebuild.
   const objs = (db.prepare("SELECT name FROM sqlite_master WHERE tbl_name='trades' AND type IN ('index','trigger') AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>).map((r) => r.name).sort();
   assert.deepEqual(objs, [

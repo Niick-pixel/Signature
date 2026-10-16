@@ -167,7 +167,10 @@ test('the export carries the Path, at version 6, and overrides in every format',
   assert.equal(json.eval_purchases.length, 1);
   assert.ok(json.trades.some((t: { overrides: unknown[] }) => t.overrides.length === 1));
   const csv = unzip(buf, 'trades.csv').toString('utf8');
-  assert.ok(csv.split('\n')[0].endsWith(',overrides'));
+  const head = csv.split('\n')[0].split(',');
+  for (const c of ['overrides', 'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence']) {
+    assert.ok(head.includes(c), c);
+  }
   assert.ok(csv.includes('commitment_break: No paid eval until the demo evaluation is passed.'));
 });
 

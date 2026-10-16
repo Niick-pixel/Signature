@@ -61,6 +61,7 @@ const NULLABLE_BOOL_COLUMNS = [
   // Rubric 4 (trial): never checked must not read back as "not confirmed".
   'sweep_futures_confirmed',
   'target_hit', 'target_fresh', 'opposite_taken',
+  'target_check_passed', 'below_min_confidence',
 ] as const;
 
 function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade {
@@ -93,6 +94,11 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
   trade.worked_tags = parseList(r.worked_tags as string | null, WORKED_TAG_VALUES);
   trade.market_tags = parseList(r.market_tags as string | null, MARKET_TAGS);
   trade.overrides = sanitizeOverrides(r.overrides);
+  trade.eqhl_checks = (() => {
+    if (typeof r.eqhl_checks !== 'string') return null;
+    try { const e = JSON.parse(r.eqhl_checks); return { touches: e.touches === true, untested: e.untested === true, in_range: e.in_range === true }; }
+    catch { return null; }
+  })();
   trade.trigger_fired = Boolean(r.trigger_fired_at_entry ?? r.trigger_fired);
   trade.dismissed_flags = dismissed;
   return trade;
@@ -155,6 +161,9 @@ const WRITABLE = [
   'confidence_at_entry', 'would_be_r', 'playbook_id',
   'contracts', 'risk_dollars', 'risk_percent', 'pnl_dollars', 'stop_points', 'outcome', 'r_multiple',
   'explanation', 'lesson', 'screenshot_path', 'quick_log', 'worked_tags', 'market_tags', 'overrides',
+  // Guardrails (026).
+  'grade_locked_at', 'chart_date', 'nearest_liquidity_type', 'nearest_liquidity_price', 'opposing_swings_between',
+  'r_to_nearest', 'target_check_passed', 'eqhl_checks', 'be_trigger', 'below_min_confidence',
   'undated',
 ] as const;
 
@@ -202,6 +211,7 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
   // NULL, not '[]', when nothing was overridden: an old trade and a new one
   // that broke nothing store the same thing.
   out.overrides = input.overrides?.length ? JSON.stringify(input.overrides) : null;
+  out.eqhl_checks = input.eqhl_checks ? JSON.stringify(input.eqhl_checks) : null;
   return out;
 }
 
@@ -351,7 +361,9 @@ export function updateTrade(id: string, input: TradeInput): Trade | null {
     the trade was taken on stays what it was: correcting a box after you know
     the result is exactly how a C setup that won turns into a B.
   */
-  const open = before.status === 'Planned';
+  // Locked at its first save (026): only an old Planned trade, from before
+  // the lock existed, is still open to re-grading — until it leaves Planned.
+  const open = before.status === 'Planned' && before.grade_locked_at == null;
   const cols = open ? [...UNGRADED, ...FROZEN] : UNGRADED;
   getDb()
     .prepare(`UPDATE trades SET ${cols.map((c) => `${c} = @${c}`).join(', ')} WHERE id = @id`)

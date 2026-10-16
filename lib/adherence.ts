@@ -20,6 +20,8 @@ export type AdherenceInput = {
   rubric_version?: number;
   sweep_tier?: SweepTier | null;
   target_type?: string;
+  /** Taken below the minimum confidence (026): a rule broken. Null on every older trade. */
+  below_min_confidence?: boolean | null;
 } & Partial<Record<ChecklistKey | LegacyChecklistKey, ChecklistAnswer>>;
 
 /**
@@ -68,6 +70,8 @@ export function adherenceOf(t: AdherenceInput): Adherence {
   return t.trigger_fired
     && t.checklist_score >= TAKE_IT_THRESHOLD
     && !failedModelGate(t)
+    // Confidence under the minimum is a no-trade by my rules — a rule, not a tag.
+    && t.below_min_confidence !== true
     ? 'followed'
     : 'broken';
 }

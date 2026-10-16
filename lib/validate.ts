@@ -1,7 +1,7 @@
 import {
   ACCOUNT_VALUES, BACKTEST, CHECKLIST_ITEMS, signForOutcome, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAG_VALUES,
   OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, RENAMED_TARGET_TYPES, SESSIONS, SETUP_TYPES, SKIP_REASONS,
-  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
+  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
   type ChecklistKey, type Regrade, type TradeStatus, type WorkedTag, type MarketTag, type ContextFlag, type MistakeTag, type Tri,
 } from './domain';
 import { REGRADE_HINT, regradeAllowed, type GradeLetter } from './grade';
@@ -308,6 +308,21 @@ export function parseTradeInput(
           )
         : [],
       overrides: sanitizeOverrides(t.overrides),
+      // Guardrails (026). The server settles the lock time, the R and the
+      // verdict itself (db/rules.ts); what arrives here is only kept as given.
+      grade_locked_at: typeof t.grade_locked_at === 'string' ? t.grade_locked_at : null,
+      chart_date: typeof t.chart_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.chart_date) ? t.chart_date : null,
+      nearest_liquidity_type: typeof t.nearest_liquidity_type === 'string' && t.nearest_liquidity_type.trim()
+        ? t.nearest_liquidity_type.trim().slice(0, 60) : null,
+      nearest_liquidity_price: numOrNull('nearest_liquidity_price'),
+      opposing_swings_between: oneOf('opposing_swings_between', SWING_COUNTS),
+      r_to_nearest: numOrNull('r_to_nearest'),
+      target_check_passed: tri('target_check_passed'),
+      eqhl_checks: t.eqhl_checks && typeof t.eqhl_checks === 'object'
+        ? (() => { const e = t.eqhl_checks as Record<string, unknown>; return { touches: e.touches === true, untested: e.untested === true, in_range: e.in_range === true }; })()
+        : null,
+      be_trigger: oneOf('be_trigger', BE_TRIGGERS),
+      below_min_confidence: tri('below_min_confidence'),
   };
 
   /*

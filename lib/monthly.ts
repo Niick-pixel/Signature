@@ -329,6 +329,20 @@ export function monthlyReview(input: MonthlyInput): MonthlyReview {
     if (t.mistake_tags.length) p(`- **Mistakes tagged:** ${t.mistake_tags.join(', ')}`);
     if (t.worked_tags?.length) p(`- **What worked:** ${t.worked_tags.join(', ')}`);
     if (t.market_tags?.length) p(`- **What the market did (outside my control):** ${t.market_tags.join(', ')}`);
+    {
+      const g: string[] = [];
+      if (t.chart_date) g.push(`replayed session ${t.chart_date}`);
+      if (t.grade_locked_at) g.push(`grade locked ${t.graded_post_hoc ? 'after' : '**before**'} the outcome`);
+      if (t.confidence_at_entry != null) g.push(`confidence ${t.confidence_at_entry}/5${t.below_min_confidence ? ' (**below my minimum**)' : ''}`);
+      if (t.be_trigger) g.push(`BE trigger ${t.be_trigger}`);
+      if (g.length) p(`- **Guardrails:** ${g.join(' · ')}`);
+      const tc: string[] = [];
+      if (t.nearest_liquidity_type) tc.push(`nearest ${t.nearest_liquidity_type}${t.nearest_liquidity_price != null ? ` @ ${t.nearest_liquidity_price}` : ''}`);
+      if (t.opposing_swings_between) tc.push(`${t.opposing_swings_between} opposing swings`);
+      if (t.r_to_nearest != null) tc.push(`${t.r_to_nearest}R to nearest`);
+      if (t.eqhl_checks) tc.push(`EQH/EQL: ${t.eqhl_checks.touches ? '2+ touches' : 'not 2 touches'}, ${t.eqhl_checks.untested ? 'untested' : 'tested'}, ${t.eqhl_checks.in_range ? 'in range' : 'out of range'}`);
+      if (tc.length || t.target_check_passed != null) p(`- **Target check:** ${tc.join(' · ')}${t.target_check_passed == null ? '' : t.target_check_passed ? ' — passed' : ' — **failed**'}`);
+    }
     for (const o of t.overrides ?? []) {
       p(`- **Logged past ${o.kind === 'daily_limit' ? 'the daily loss limit' : `a commitment: "${o.commitment_text ?? ''}"`}**${o.step_title ? ` (${o.step_title})` : ''} — ${o.reason ? `my reason: ${o.reason}` : '_no reason given_'}`);
     }

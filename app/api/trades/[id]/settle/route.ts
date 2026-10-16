@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { settleTrade } from '@/db/trades';
+import { settleTrade, updateTrade } from '@/db/trades';
+import { applyRules } from '@/db/rules';
+import type { TradeInput } from '@/lib/types';
 import { OUTCOMES, signForOutcome, type Outcome } from '@/lib/domain';
 
 /** Quick-settle: outcome and R only, without reopening the whole form. */
@@ -22,5 +24,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     r_multiple: signForOutcome(r === null || r === undefined || r === '' ? null : Number(r), body.outcome),
   });
 
-  return updated ? NextResponse.json(updated) : NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // The same rules as a full save: settling a low-confidence plan as taken tags it.
+  const ruled = applyRules(updated as unknown as TradeInput, updated);
+  if (ruled.below_min_confidence !== updated.below_min_confidence || ruled.mistake_tags.length !== updated.mistake_tags.length) {
+    return NextResponse.json(updateTrade(id, ruled));
+  }
+  return NextResponse.json(updated);
 }

@@ -3,6 +3,7 @@ import { getTrade, purgeTrade, softDeleteTrade, updateTrade } from '@/db/trades'
 import { saveScreenshot, deleteScreenshot } from '@/db/screenshots';
 import { parseTradeInput } from '@/lib/validate';
 import { guardTrade, recordTradeOverrides } from '@/db/path';
+import { applyRules } from '@/db/rules';
 
 export async function GET(_r: Request, ctx: { params: Promise<{ id: string }> }) {
   const trade = getTrade((await ctx.params).id);
@@ -44,8 +45,9 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
 
     const screenshot_path = replacing ? await saveScreenshot(image) : existing.screenshot_path;
-    const guarded = guardTrade(check.value, existing);
-    const updated = updateTrade(id, { ...check.value, overrides: guarded.overrides, screenshot_path });
+    const ruled = applyRules(check.value, existing);
+    const guarded = guardTrade(ruled, existing);
+    const updated = updateTrade(id, { ...ruled, overrides: guarded.overrides, screenshot_path });
     if (updated) recordTradeOverrides(id, guarded.added);
 
     // Only drop the old image once the row actually points at the new one.

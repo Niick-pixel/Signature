@@ -8,7 +8,9 @@ import {
   type ManualState, type PathEvent, type PathStep, type StepView,
 } from '../lib/path';
 import { MIN_REASON, sanitizeOverrides } from '../lib/overrides';
-import type { TradeInput, TradeOverride } from '../lib/types';
+import type { Trade, TradeInput, TradeOverride } from '../lib/types';
+import { isTaken, marketDay } from '../lib/domain';
+import { dayLimit } from './rules';
 
 /* ------------------------------------------------------------------ steps */
 
@@ -208,7 +210,7 @@ export function addPurchase(
  * allowed, and nothing is ever refused. Only a change of account checks: a
  * trade already filed under Eval is not asked again on every edit.
  */
-export function guardTrade(input: TradeInput, before: { account: string; overrides: TradeOverride[] } | null): {
+export function guardTrade(input: TradeInput, before: Pick<Trade, 'id' | 'account' | 'overrides' | 'outcome' | 'status' | 'date' | 'undated' | 'chart_date'> | null): {
   overrides: TradeOverride[]; added: TradeOverride[];
 } {
   const sent = input.overrides ?? [];
@@ -224,6 +226,26 @@ export function guardTrade(input: TradeInput, before: { account: string; overrid
         commitment_id: b.commitment.id, commitment_text: b.commitment.text, reason: null, at: new Date().toISOString(),
       };
       added.push(o);
+    }
+  }
+  /*
+    The day's loss limit: a taken trade on a day (its market day — a
+    backtest's chart date) whose losses already reached "stop after".
+    Checked when the trade becomes taken, or moves to another account or day.
+  */
+  const day = marketDay(input);
+  const becameTaken = isTaken(input.outcome) && input.status !== 'Planned'
+    && (!before || !isTaken(before.outcome) || before.status === 'Planned' || before.account !== input.account || marketDay(before) !== day);
+  if (becameTaken && day) {
+    const limit = dayLimit(input.account, day, before?.id ?? null);
+    const key = `day:${day}`;
+    const covered = sent.some((o) => o.kind === 'daily_limit' && o.commitment_id === key);
+    if (limit.reached && !covered) {
+      added.push({
+        kind: 'daily_limit', step_id: null, step_title: null, commitment_id: key,
+        commitment_text: `Stop after ${limit.stopAfter} loss${limit.stopAfter === 1 ? '' : 'es'} (${day})`,
+        reason: null, at: new Date().toISOString(),
+      });
     }
   }
   const overrides = [...sent, ...added.filter((o) => !sent.includes(o))];

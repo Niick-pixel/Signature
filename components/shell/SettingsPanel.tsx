@@ -172,6 +172,10 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               <Button data-settings-path onClick={() => { onClose(); navigate('/path?edit=1'); }}>Edit the path</Button>
             </Section>
 
+            <Section title="Rules" hint="Confidence below the minimum is a no-trade. The day ends after this many losses unless that day's chart prep says otherwise.">
+              <RulesSettings />
+            </Section>
+
             <Section
               title="Theme"
               hint="Six, all in warm creams. Each changes the surfaces, corners and headings, not only the colours."
@@ -502,3 +506,29 @@ export function BottomLeftControls({ children }: { children: React.ReactNode }) 
 }
 
 export type { Preferences };
+
+/** Minimum confidence and the fallback stop-after, saved as they change. */
+function RulesSettings() {
+  const [rules, setRules] = useState<{ minConfidence: number; fallbackStopAfter: number } | null>(null);
+  useEffect(() => { fetch('/api/rules').then((r) => r.json()).then(setRules).catch(() => {}); }, []);
+  const save = (next: Partial<{ minConfidence: number; fallbackStopAfter: number }>) => {
+    if (!rules) return;
+    setRules({ ...rules, ...next });
+    void fetch('/api/rules', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+  };
+  if (!rules) return null;
+  return (
+    <div className="space-y-2.5" data-settings-rules>
+      <div className="flex items-center justify-between gap-3 text-[12px]">
+        <span style={{ color: 'var(--text-dim)' }}>Minimum confidence</span>
+        <Segmented value={String(rules.minConfidence) as '1' | '2' | '3' | '4' | '5'} options={['1', '2', '3', '4', '5'] as const}
+          onChange={(v) => save({ minConfidence: Number(v) })} />
+      </div>
+      <div className="flex items-center justify-between gap-3 text-[12px]">
+        <span style={{ color: 'var(--text-dim)' }}>Stop after (losses)</span>
+        <Segmented value={String(rules.fallbackStopAfter) as '1' | '2' | '3'} options={['1', '2', '3'] as const}
+          onChange={(v) => save({ fallbackStopAfter: Number(v) })} />
+      </div>
+    </div>
+  );
+}
