@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic';
  * wants a readable measure, and the spine beside it wants to show enough of
  * each entry to be recognised.
  */
-export default async function JournalRoute() {
+export default async function JournalRoute({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const { page: openPage } = await searchParams;
   const pages = listJournalPages();
 
   /*
@@ -72,7 +73,7 @@ export default async function JournalRoute() {
             />
           </header>
 
-          <JournalBook initial={pages} tradesByDay={byDay} />
+          <JournalBook key={openPage ?? 'latest'} initial={pages} tradesByDay={byDay} openPage={openPage ?? null} />
         </div>
       </div>
     </div>

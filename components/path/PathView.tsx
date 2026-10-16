@@ -23,7 +23,9 @@ const usd = (v: number) => `$${Math.round(v).toLocaleString()}`;
  * confirmed by hand needs its note or proof, and every promise broken is in
  * the record at the bottom with the reason I gave at the time.
  */
-export function PathView({ steps, events, purchases, eventTrades, startEditing }: {
+export function PathView({ steps, events, purchases, eventTrades, startEditing, redDays }: {
+  /** Red days with a page written, and without (Phase 4). */
+  redDays?: { withPage: number; without: number };
   steps: StepView[];
   events: PathEvent[];
   purchases: EvalPurchase[];
@@ -59,6 +61,19 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing }
             onChanged={() => router.refresh()} />
         ))}
       </ol>
+
+      {redDays && (
+        <section className="glass flex flex-wrap items-center justify-between gap-4 rounded-[calc(24px*var(--rk))] px-6 py-4" data-path-red-days>
+          <div>
+            <h2 className="text-[15px] font-semibold">Red days</h2>
+            <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-faint)' }}>Every losing day gets a page: what I saw, what I did, the rule, one if-then.</p>
+          </div>
+          <div className="flex gap-6 tabular-nums">
+            <div className="text-right"><div className="text-[20px] font-semibold" style={{ color: 'rgb(var(--outcome-win))' }}>{redDays.withPage}</div><div className="text-[11px]" style={{ color: 'var(--text-faint)' }}>with a page</div></div>
+            <div className="text-right"><div className="text-[20px] font-semibold" style={{ color: redDays.without ? 'rgb(var(--accent))' : 'var(--text-faint)' }}>{redDays.without}</div><div className="text-[11px]" style={{ color: 'var(--text-faint)' }}>without</div></div>
+          </div>
+        </section>
+      )}
 
       <section className="glass rounded-[calc(24px*var(--rk))] p-6" data-path-breaks>
         <div className="flex items-baseline justify-between gap-3">

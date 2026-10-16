@@ -10,6 +10,7 @@ import { SCREENSHOTS_DIR } from '@/lib/paths';
 import { makeZip } from '@/lib/zip';
 import type { JournalPage, Trade, TradeOverride } from '@/lib/types';
 import { listEvents, listPurchases, listSteps } from '@/db/path';
+import { getDb } from '@/db/index';
 
 /** Columns in a stable, readable order. Same order every export, so diffs work. */
 const CSV_COLUMNS: Array<keyof Trade> = [
@@ -133,10 +134,11 @@ export async function GET() {
     format: 'signature-journal',
     // Bumped as the payload grew: 2 added cash, 3 added the journal, 4 added the
     // daily and weekly reviews, 5 the chart prep, 6 the Path (its steps, the
-    // record of promises broken, eval purchases) and each trade's overrides.
+    // record of promises broken, eval purchases) and each trade's overrides,
+    // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 6,
+    version: 7,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -148,6 +150,7 @@ export async function GET() {
     path_steps: listSteps(),
     path_events: listEvents(),
     eval_purchases: listPurchases(),
+    red_day_pages: (getDb().prepare('SELECT * FROM red_day_pages ORDER BY day').all() as Record<string, unknown>[]).map((r) => ({ ...r })),
   };
 
   const zip = makeZip([

@@ -2,6 +2,7 @@ import { TitleBar } from '@/components/shell/TitleBar';
 import { PathView, type EventTrade } from '@/components/path/PathView';
 import { listEvents, listPurchases, syncPath } from '@/db/path';
 import { listTrades } from '@/db/trades';
+import { redDayStatus } from '@/db/redDays';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,8 @@ export default async function PathRoute({ searchParams }: { searchParams: Promis
       <TitleBar />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[64rem] px-6 pb-20 pt-4">
-          <PathView steps={steps} events={events} purchases={listPurchases()} eventTrades={eventTrades} startEditing={edit === '1'} />
+          <PathView steps={steps} events={events} purchases={listPurchases()} eventTrades={eventTrades} startEditing={edit === '1'}
+            redDays={(() => { const r = redDayStatus(); return { withPage: r.withPage, without: r.without }; })()} />
         </div>
       </div>
     </div>

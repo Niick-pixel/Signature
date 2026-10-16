@@ -28,14 +28,17 @@ const longDate = (day: string) =>
  * and quiet — a journal with a Save button is a journal with unsaved work in
  * it.
  */
-export function JournalBook({ initial, tradesByDay }: {
+export function JournalBook({ initial, tradesByDay, openPage = null }: {
   initial: JournalPage[];
+  /** Open this page first (?page=<id>) — e.g. a red-day page just written. */
+  openPage?: string | null;
   /** The day's trades, keyed by date, for the strip on each page. */
   tradesByDay: Record<string, DayTradeSummary[]>;
 }) {
   const confirm = useConfirm();
   const [pages, setPages] = useState(initial);
-  const [openId, setOpenId] = useState<string | null>(initial[0]?.id ?? null);
+  const [openId, setOpenId] = useState<string | null>(
+    (openPage && initial.some((p) => p.id === openPage) ? openPage : null) ?? initial[0]?.id ?? null);
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);

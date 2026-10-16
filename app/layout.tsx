@@ -12,6 +12,7 @@ import { Tooltips } from '@/components/shell/Tooltips';
 import { ConfirmProvider } from '@/components/ui/Confirm';
 import { BoardLayer } from '@/components/whiteboard/BoardLayer';
 import { WeekendReview } from '@/components/path/WeekendReview';
+import { RedDayPrompt } from '@/components/path/RedDayPrompt';
 
 export const metadata: Metadata = {
   title: 'Signature',
@@ -47,6 +48,8 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <MorningCheckIn />
           {/* Saturdays and Sundays: how the week went on the Path. */}
           <WeekendReview />
+          {/* After a red day: the page, asked for once, quietly. */}
+          <RedDayPrompt />
           <Shortcuts />
           {/* Every move between screens, animated — see lib/nav.ts. */}
           <NavTransitions />

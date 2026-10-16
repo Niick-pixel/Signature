@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getTrade, importTrade } from '@/db/trades';
 import { restorePath } from '@/db/path';
+import { getDb } from '@/db/index';
 import { importCashEvent, listCashEvents, parseCashInput } from '@/db/cash';
 import { getJournalPage, importJournalPage, parseJournalInput } from '@/db/journal';
 import { getPrep, restorePrep } from '@/db/prep';
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     {
       trades?: unknown; cash?: unknown; journal?: unknown; format?: unknown;
       daily_reviews?: unknown; weekly_reviews?: unknown; session_prep?: unknown;
-      path_steps?: unknown; path_events?: unknown; eval_purchases?: unknown;
+      path_steps?: unknown; path_events?: unknown; eval_purchases?: unknown; red_day_pages?: unknown;
     } | null;
 
   if (!body || !Array.isArray(body.trades)) {
@@ -181,6 +182,15 @@ export async function POST(request: Request) {
   */
   const hadPath = Array.isArray(body.path_steps) && body.path_steps.length > 0;
   restorePath({ steps: body.path_steps, events: body.path_events, purchases: body.eval_purchases });
+  // Red-day pages (version 7), matched on the day and world.
+  if (Array.isArray(body.red_day_pages)) {
+    const put = getDb().prepare('INSERT OR IGNORE INTO red_day_pages (day, world, page_id, created_at) VALUES (?, ?, ?, ?)');
+    for (const r of body.red_day_pages as Record<string, unknown>[]) {
+      if (r && typeof r.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.day) && (r.world === 'real' || r.world === 'backtest')) {
+        put.run(r.day, r.world, typeof r.page_id === 'string' ? r.page_id : null, typeof r.created_at === 'string' ? r.created_at : new Date().toISOString());
+      }
+    }
+  }
 
   return NextResponse.json({
     imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
