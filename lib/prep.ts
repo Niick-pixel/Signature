@@ -40,6 +40,12 @@ export interface PrepStep {
   frames?: string;
   /** What to draw, one line per mark — each ticked as it goes on the chart. */
   marks: string[];
+  /**
+   * Marks no longer asked for, by position. Ticks are stored by position, so
+   * a retired mark keeps its place (old preps still line up) and is just
+   * never shown or counted.
+   */
+  retired?: number[];
   fields: PrepField[];
   /** Offers the order-book heatmap link. */
   heatmap?: boolean;
@@ -124,9 +130,10 @@ export const PREP_STEPS: PrepStep[] = [
     ],
   },
   {
-    id: 'session', title: 'Session and rules', frames: 'NY AM',
+    id: 'session', title: 'Session and rules', frames: 'NY AM', retired: [1],
     marks: [
       'Red-folder release times lined',
+      // Retired: the platform shades the killzone on its own.
       'NY AM killzone shaded',
       'Only the model: a named sweep, one clean FVG, an inversion close',
       'Daily loss limit set in the platform',
@@ -181,7 +188,7 @@ export function parsePrepData(raw: unknown): PrepData {
   for (const [id, v] of Object.entries(obj(r.ticks))) {
     const step = PREP_STEPS.find((s) => s.id === id);
     if (!step || !Array.isArray(v)) continue;
-    ticks[id] = [...new Set(v.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < step.marks.length))].sort();
+    ticks[id] = [...new Set(v.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < step.marks.length && !step.retired?.includes(i)))].sort();
   }
   const answers: Record<string, Answer> = {};
   for (const [key, v] of Object.entries(obj(r.answers))) {
@@ -245,6 +252,11 @@ export function withWeeklyTaken(data: PrepData, carried: ReadonlyArray<{ level: 
   return { ...data, answers };
 }
 
+/** The marks still asked for, each with its stored position. */
+export function liveMarks(step: PrepStep): Array<{ text: string; i: number }> {
+  return step.marks.map((text, i) => ({ text, i })).filter((m) => !step.retired?.includes(m.i));
+}
+
 /** How far through: steps done or skipped, out of all of them. */
 export function prepProgress(data: PrepData): { answered: number; done: number; total: number } {
   const states = Object.values(data.steps);
@@ -272,7 +284,7 @@ export function prepMarkdown(prep: SessionPrep): string {
       .map(([k, v]) => `${k.toLowerCase()} ${v}`);
     const ticked = (d.ticks[step.id] ?? []).length;
     if (!said.length && !ticked) continue;
-    out.push(`- ${step.title}: ${said.join('; ')}${said.length ? ' · ' : ''}${ticked}/${step.marks.length} marked`);
+    out.push(`- ${step.title}: ${said.join('; ')}${said.length ? ' · ' : ''}${ticked}/${liveMarks(step).length} marked`);
   }
   return out.join('\n');
 }

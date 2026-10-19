@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { localDay } from '@/lib/day';
 import { press, spring, springSoft } from '@/lib/motion';
 import {
-  EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, prepProgress, withWeeklyTaken,
+  EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, liveMarks, prepProgress, withWeeklyTaken,
   type Answer, type PrepData, type PrepField, type PrepStep, type SessionPrep,
 } from '@/lib/prep';
 import type { DailyReview } from '@/lib/types';
@@ -217,7 +217,7 @@ function StepView({ step, index, data, change, review, carried }: {
 
       {/* The marks — ticked as each goes on the chart. */}
       <div className="mt-4 space-y-1.5">
-        {step.marks.map((m, i) => {
+        {liveMarks(step).map(({ text: m, i }) => {
           const on = ticks.includes(i);
           return (
             <motion.button key={i} type="button" role="checkbox" aria-checked={on} data-mark={i}
