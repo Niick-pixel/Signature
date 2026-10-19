@@ -1,6 +1,6 @@
 import 'server-only';
 import { getDb } from './index';
-import { parsePrepData, type PrepData, type SessionPrep } from '../lib/prep';
+import { mondayOf, parsePrepData, type PrepData, type SessionPrep } from '../lib/prep';
 
 function hydrate(row: Record<string, unknown>): SessionPrep {
   let data: unknown = {};
@@ -25,6 +25,12 @@ export function previousPrep(day: string): SessionPrep | null {
   const row = getDb().prepare('SELECT * FROM session_prep WHERE day < ? ORDER BY day DESC LIMIT 1').get(day) as
     Record<string, unknown> | undefined;
   return row ? hydrate(row) : null;
+}
+
+/** Preps from the Monday of `day`'s week up to the day before it. */
+export function weekPrepsBefore(day: string): SessionPrep[] {
+  return (getDb().prepare('SELECT * FROM session_prep WHERE day >= ? AND day < ? ORDER BY day').all(mondayOf(day), day) as
+    Record<string, unknown>[]).map(hydrate);
 }
 
 export function listPreps(): SessionPrep[] {

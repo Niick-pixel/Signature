@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { localDay } from '@/lib/day';
 import { press, spring, springSoft } from '@/lib/motion';
 import {
-  EMPTY_PREP, PREP_STEPS, answerKey, answerText, prepProgress,
+  EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, prepProgress, withWeeklyTaken,
   type Answer, type PrepData, type PrepField, type PrepStep, type SessionPrep,
 } from '@/lib/prep';
 import type { DailyReview } from '@/lib/types';
@@ -43,12 +43,16 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
   const [at, setAt] = useState(0);
   const [finished, setFinished] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [carried, setCarried] = useState<Array<{ level: string; day: string }>>([]);
   const touched = useRef(false);
   const mins = minutesToOpen();
 
   useEffect(() => {
-    fetch(`/api/prep?day=${day}`).then((r) => r.json()).then((res: { prep: SessionPrep | null }) => {
-      const d = res.prep?.data ?? structuredClone(EMPTY_PREP);
+    fetch(`/api/prep?day=${day}`).then((r) => r.json()).then((res: { prep: SessionPrep | null; weeklyTaken?: Array<{ level: string; day: string }> }) => {
+      // PWH/PWL taken earlier this week stay taken (lib/prep withWeeklyTaken).
+      const week = res.weeklyTaken ?? [];
+      setCarried(week);
+      const d = withWeeklyTaken(res.prep?.data ?? structuredClone(EMPTY_PREP), week);
       setData(d);
       setStartedAt(res.prep?.started_at ?? null);
       const first = PREP_STEPS.findIndex((s) => !d.steps[s.id]);
@@ -134,7 +138,7 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
           <motion.div key={step.id} data-prep-current={step.id}
             initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -8, transition: { duration: 0.12 } }} transition={springSoft}>
-            <StepView step={step} index={at} data={data} change={change} review={review} />
+            <StepView step={step} index={at} data={data} change={change} review={review} carried={carried} />
             <div className="mt-6 flex items-center gap-2">
               {at > 0 && <Button onClick={() => setAt(at - 1)}>Back</Button>}
               <span className="text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
@@ -159,8 +163,9 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
   );
 }
 
-function StepView({ step, index, data, change, review }: {
+function StepView({ step, index, data, change, review, carried }: {
   step: PrepStep; index: number; data: PrepData; change: (fn: (d: PrepData) => PrepData) => void; review: DailyReview | null;
+  carried: Array<{ level: string; day: string }>;
 }) {
   const { prefs } = usePreferences();
   const ticks = data.ticks[step.id] ?? [];
@@ -174,6 +179,12 @@ function StepView({ step, index, data, change, review }: {
     const key = answerKey(step, field);
     if (value == null || (Array.isArray(value) && value.length === 0)) delete d.answers[key];
     else d.answers[key] = value;
+    // Marked taken: no longer a sweep to wait for.
+    const wait = d.answers[WAIT_KEY];
+    if (key === TAKEN_KEY && Array.isArray(value) && Array.isArray(wait)) {
+      const left = wait.filter((w) => !value.includes(w));
+      if (left.length) d.answers[WAIT_KEY] = left; else delete d.answers[WAIT_KEY];
+    }
     return d;
   });
 
@@ -236,7 +247,10 @@ function StepView({ step, index, data, change, review }: {
       {step.fields.length > 0 && (
         <div className="mt-5 space-y-4">
           {step.fields.map((f) => (
-            <FieldView key={f.id} field={f} value={data.answers[answerKey(step, f)]} onChange={(v) => setAnswer(f, v)} />
+            <FieldView key={f.id} field={f} value={data.answers[answerKey(step, f)]} onChange={(v) => setAnswer(f, v)}
+              // A level already taken is not one to wait for.
+              hide={answerKey(step, f) === WAIT_KEY ? (Array.isArray(data.answers[TAKEN_KEY]) ? data.answers[TAKEN_KEY] as string[] : []) : []}
+              notes={answerKey(step, f) === TAKEN_KEY ? Object.fromEntries(carried.map((c) => [c.level, `since ${weekday(c.day)}`])) : {}} />
           ))}
         </div>
       )}
@@ -250,7 +264,15 @@ const TONE: Record<string, string> = {
   'No trade today': 'var(--amber)', 'Coin flip': 'var(--amber)', 'Being pulled': 'var(--amber)', 'Thin book': 'var(--amber)',
 };
 
-function FieldView({ field, value, onChange }: { field: PrepField; value: Answer | undefined; onChange: (v: Answer | null) => void }) {
+const weekday = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
+
+function FieldView({ field, value, onChange, hide = [], notes = {} }: {
+  field: PrepField; value: Answer | undefined; onChange: (v: Answer | null) => void;
+  /** Options not offered (a level already taken, under "Sweep to wait for"). */
+  hide?: readonly string[];
+  /** A short note per option, e.g. "since Mon" on a weekly level carried in. */
+  notes?: Record<string, string>;
+}) {
   return (
     <div data-prep-field={field.id} role="group" aria-label={field.label}>
       <span className="mb-1.5 block text-[10.5px] font-medium uppercase tracking-[0.07em]" style={{ color: 'var(--text-faint)' }}>
@@ -262,7 +284,7 @@ function FieldView({ field, value, onChange }: { field: PrepField; value: Answer
         </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          {field.options.map((o) => {
+          {field.options.filter((o) => !hide.includes(o)).map((o) => {
             const on = field.kind === 'many' ? Array.isArray(value) && value.includes(o) : value === o;
             const tone = TONE[o] ?? 'var(--accent)';
             return (
@@ -281,6 +303,7 @@ function FieldView({ field, value, onChange }: { field: PrepField; value: Answer
                 transition={spring}
                 className="rounded-full border px-3 py-1.5 text-[12px] font-medium">
                 {o}
+                {notes[o] && on && <span className="ml-1.5 text-[10.5px] font-normal opacity-70" data-carried={o}>{notes[o]}</span>}
               </motion.button>
             );
           })}

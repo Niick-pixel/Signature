@@ -23,6 +23,8 @@ import { reasonAccent } from '@/lib/layout';
 import { MIN_EXPLANATION, MIN_LESSON, type Trade } from '@/lib/types';
 
 const LAST_ACCOUNT_KEY = 'signature.lastAccount';
+/** The setups the checklist was written for: the iFVG model and its variants. */
+const IFVG_SETUPS: readonly string[] = ['iFVG', 'Double iFVG', 'iFVG + SMT'];
 
 /** The questions that start with an answer already in them. */
 const DEFAULTED = [
@@ -31,11 +33,12 @@ const DEFAULTED = [
 ] as const;
 /*
   No biased defaults: these start empty on a new trade and must be chosen —
-  a pre-filled Win or EQH/EQL is an answer nobody gave. Instrument (NQ) and
-  the stage (Settled — every trade is logged after it ends) keep theirs:
-  neither says anything about the trade's quality.
+  a pre-filled Win or EQH/EQL is an answer nobody gave. Instrument (NQ),
+  session (NY AM), setup (iFVG — the one model I trade) and stage (Settled —
+  every trade is logged after it ends) keep theirs: they are how I trade,
+  not claims about this trade's quality.
 */
-const REQUIRED = ['outcome', 'session', 'direction', 'setupType', 'htfBias', 'premiumDiscount', 'targetType'] as const;
+const REQUIRED = ['outcome', 'direction', 'htfBias', 'premiumDiscount', 'targetType'] as const;
 type DefaultedField = (typeof DEFAULTED)[number];
 const DEFAULTED_LABEL: Record<DefaultedField, string> = {
   outcome: 'How it ended', session: 'Session', instrument: 'Instrument', direction: 'Direction',
@@ -97,7 +100,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     "With bias" is never saved without being looked at. An edit starts with
     everything confirmed: those answers were given when the trade was logged.
   */
-  const [confirmed, setConfirmed] = useState<DefaultedField[]>(() => (trade ? [...DEFAULTED] : ['status']));
+  const [confirmed, setConfirmed] = useState<DefaultedField[]>(() => (trade ? [...DEFAULTED] : ['status', 'session', 'setupType']));
   const confirm = (field: DefaultedField) =>
     setConfirmed((prev) => (prev.includes(field) ? prev : [...prev, field]));
   const pending = (field: DefaultedField) => !confirmed.includes(field);
@@ -945,6 +948,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
             </AnimatePresence>
           </div>
 
+          {/* The checklist is the iFVG model. Another setup is off-model: said, not hidden. */}
+          {!IFVG_SETUPS.includes(setupType) && (
+            <div className="mb-3"><Notice id="off-model">
+              <b>{setupType} is off-model.</b> The checklist below is your iFVG model, so this grade measures how far the trade was from it — not how good a {setupType} it was.
+            </Notice></div>
+          )}
           {/* Locked: the grade's answers are frozen; everything else stays open. */}
           <fieldset disabled={gradeLocked} data-grade-fieldset={gradeLocked ? 'locked' : 'open'}
             className={`min-w-0 transition-opacity ${gradeLocked ? 'pointer-events-none opacity-60' : ''}`}>

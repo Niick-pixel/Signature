@@ -198,6 +198,53 @@ export function parsePrepData(raw: unknown): PrepData {
   return { steps, ticks, answers };
 }
 
+/*
+  Weekly levels stay taken for the week. PWH and PWL are last week's high and
+  low: fixed from Monday to Friday, and once one is swept it is gone until the
+  next week starts. Daily levels (PDH/PDL, Asia, London) reset every day.
+*/
+export const WEEKLY_LEVELS = ['PWH', 'PWL'] as const;
+export const TAKEN_KEY = 'liquidity.taken';
+export const WAIT_KEY = 'liquidity.wait';
+
+/** The Monday of a day's week (YYYY-MM-DD in, YYYY-MM-DD out). */
+export function mondayOf(day: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  const x = new Date(Date.UTC(y, m - 1, d));
+  x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7));
+  return x.toISOString().slice(0, 10);
+}
+
+/** Weekly levels already taken earlier this week, each with the first day it was marked. */
+export function weeklyTaken(preps: readonly SessionPrep[], day: string): Array<{ level: string; day: string }> {
+  const monday = mondayOf(day);
+  const out = new Map<string, string>();
+  for (const p of [...preps].sort((a, b) => a.day.localeCompare(b.day))) {
+    if (p.day < monday || p.day >= day) continue;
+    const taken = p.data.answers[TAKEN_KEY];
+    for (const l of Array.isArray(taken) ? taken : []) {
+      if ((WEEKLY_LEVELS as readonly string[]).includes(l) && !out.has(l)) out.set(l, p.day);
+    }
+  }
+  return [...out].map(([level, d]) => ({ level, day: d }));
+}
+
+/**
+ * A day's prep with this week's taken weekly levels carried in — only when
+ * the day has not answered "Already taken" yet, so an answer given today is
+ * never overruled. A level already taken is not one to wait for.
+ */
+export function withWeeklyTaken(data: PrepData, carried: ReadonlyArray<{ level: string }>): PrepData {
+  if (!carried.length || data.answers[TAKEN_KEY] !== undefined) return data;
+  const answers: Record<string, Answer> = { ...data.answers, [TAKEN_KEY]: carried.map((c) => c.level) };
+  const wait = answers[WAIT_KEY];
+  if (Array.isArray(wait)) {
+    const left = wait.filter((w) => !carried.some((c) => c.level === w));
+    if (left.length) answers[WAIT_KEY] = left; else delete answers[WAIT_KEY];
+  }
+  return { ...data, answers };
+}
+
 /** How far through: steps done or skipped, out of all of them. */
 export function prepProgress(data: PrepData): { answered: number; done: number; total: number } {
   const states = Object.values(data.steps);
