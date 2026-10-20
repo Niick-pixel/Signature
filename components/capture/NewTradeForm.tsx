@@ -3,6 +3,8 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InCaptureSheet } from './CaptureSheet';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
+import { clearCarry, readCarry, writeCarry, type Carry } from '@/lib/backtestSession';
+import { SessionTally } from './SessionTally';
 import { checkTrade } from '@/lib/review';
 import { TRADE_RULES } from '@/lib/ruleBook';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -85,7 +87,24 @@ function toLocalInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: {
+type FormProps = {
+  trade?: Trade;
+  pastLessons?: Record<string, PastLesson[]>;
+  backtestLessons?: Record<string, PastLesson[]>;
+};
+
+/**
+ * The form, keyed so "Save & next" (backtest session mode) can start a fresh
+ * one in place — no navigation, no board rebuild — carrying only the
+ * session's context (lib/backtestSession).
+ */
+export function NewTradeForm(props: FormProps) {
+  const [n, setN] = useState(0);
+  return <TradeForm key={n} {...props} onNext={() => setN((x) => x + 1)} />;
+}
+
+function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
+  onNext?: () => void;
   trade?: Trade;
   /** The latest lessons per setup type — worked out on the server, see lib/lessons. */
   pastLessons?: Record<string, PastLesson[]>;
@@ -103,13 +122,16 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     "With bias" is never saved without being looked at. An edit starts with
     everything confirmed: those answers were given when the trade was logged.
   */
+  // Backtest session mode: the context "Save & next" carried from the last trade (read once).
+  const [carry] = useState<Carry | null>(() => (trade || typeof window === 'undefined' ? null : readCarry()));
+  useEffect(() => { clearCarry(); }, []);
   const [confirmed, setConfirmed] = useState<DefaultedField[]>(() => (trade ? [...DEFAULTED] : ['status', 'session', 'setupType']));
   const confirm = (field: DefaultedField) =>
     setConfirmed((prev) => (prev.includes(field) ? prev : [...prev, field]));
   const pending = (field: DefaultedField) => !confirmed.includes(field);
   const firstSlot = SHOT_SLOTS.find((s) => slots[s]) ?? null;
   const chart = trade ? file : (firstSlot ? slots[firstSlot]! : null);
-  const [reason, setReason] = useState<Reason | null>(trade?.reason ?? null);
+  const [reason, setReason] = useState<Reason | null>(trade?.reason ?? (carry?.reason as Reason | null) ?? null);
   const [explanation, setExplanation] = useState(trade?.explanation ?? '');
 
   // One record rather than a useState per flag — there are eleven now, and a
@@ -154,7 +176,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   const [marketTags, setMarketTags] = useState<MarketTag[]>(trade?.market_tags ?? []);
   const [tagSide, setTagSide] = useState<'me' | 'market'>('me');
   const [workedTags, setWorkedTags] = useState<WorkedTag[]>(trade?.worked_tags ?? []);
-  const [account, setAccount] = useState<Account>(trade?.account ?? 'Live');
+  const [account, setAccount] = useState<Account>(trade?.account ?? (carry?.account as Account | undefined) ?? 'Live');
   const [accountLabel, setAccountLabel] = useState(trade?.account_label ?? '');
   const [status, setStatus] = useState<TradeStatus>(trade?.status ?? 'Settled');
   const [pnlDollars, setPnlDollars] = useState(trade?.pnl_dollars?.toString() ?? '');
@@ -165,7 +187,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   const [oppositeTaken, setOppositeTaken] = useState<Tri>(trade?.opposite_taken ?? null);
   // The management plan names the breakeven trigger (029). An older trade's
   // plan A/B and partial level are carried through untouched.
-  const [management, setManagement] = useState<Management | null>(trade?.management ?? null);
+  const [management, setManagement] = useState<Management | null>(trade?.management ?? (carry?.management as Management | null) ?? null);
   const [mfeR, setMfeR] = useState(trade?.mfe_r?.toString() ?? '');
   const [confidence, setConfidence] = useState<number | null>(trade?.confidence_at_entry ?? null);
   // Guardrails (026, 029): the BE trigger comes from the management plan.
@@ -240,7 +262,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
   */
   const path = usePathSummary();
   const [overrides, setOverrides] = useState<TradeOverride[]>(trade?.overrides ?? []);
-  type SaveMode = 'full' | 'quick';
+  type SaveMode = 'full' | 'quick' | 'next';
   // kind 'daily': the day's loss limit, same sheet, same rule — a reason, recorded.
   const [sheet, setSheet] = useState<{ kind: 'commitment' | 'daily'; items: HeldCommitment[]; prev: Account | null; thenSubmit: false | SaveMode } | null>(null);
   // Set when the sheet's reason is in; the save re-runs once the render that
@@ -263,10 +285,10 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     || (o.kind === 'daily_limit')
     || (path?.held ?? []).some((h) => h.commitment.id === o.commitment_id && h.commitment.guard.accounts?.includes(account)));
   const reasonOptions = backtest || reason === BACKTEST_REASON ? REASONS : REASONS.filter((r) => r !== BACKTEST_REASON);
-  const [instrument, setInstrument] = useState<Instrument>(trade?.instrument ?? 'NQ');
+  const [instrument, setInstrument] = useState<Instrument>(trade?.instrument ?? (carry?.instrument as Instrument | undefined) ?? 'NQ');
   const [direction, setDirection] = useState<Direction>(trade?.direction ?? 'Long');
-  const [session, setSession] = useState<Session>(trade?.session ?? 'NY AM');
-  const [setupType, setSetupType] = useState<SetupType>(trade?.setup_type ?? 'iFVG');
+  const [session, setSession] = useState<Session>(trade?.session ?? (carry?.session as Session | undefined) ?? 'NY AM');
+  const [setupType, setSetupType] = useState<SetupType>(trade?.setup_type ?? (carry?.setupType as SetupType | undefined) ?? 'iFVG');
   // No default: "With bias" is a claim about the trade, so it is chosen, never assumed.
   const [htfBias, setHtfBias] = useState<HtfBias | null>(trade?.htf_bias ?? null);
   const [premiumDiscount, setPremiumDiscount] = useState<PremiumDiscount>(trade?.premium_discount ?? 'Discount');
@@ -325,7 +347,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
 
   // The key handler is bound once; the ref keeps it pointed at the current
   // submit rather than a stale closure over the first render's state.
-  const submitRef = useRef<(() => void) | null>(null);
+  const submitRef = useRef<((next?: boolean) => void) | null>(null);
 
   // Only for a new trade: an edit already has the saved values, and restoring
   // a stale draft over them would quietly rewrite a real record.
@@ -407,7 +429,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
       if (e.key === 'Escape' && !typing && !dialogIsOpen()) navigate('/');
       if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         e.preventDefault();
-        submitRef.current?.();
+        // Ctrl/Cmd+Shift+Enter: save and start the next backtest.
+        submitRef.current?.(e.shiftKey && e.key === 'Enter');
       }
     };
     document.addEventListener('keydown', onKey);
@@ -484,6 +507,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     && Boolean(reason) && explanationOk && lessonOk && choicesDone && !submitting;
 
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
+  // Backtest session mode: "Save & next" on a new backtest.
+  const canNext = backtest && !editing && Boolean(onNext);
 
   /*
     Your written rules (lib/ruleBook), checked live as the form is filled —
@@ -669,6 +694,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
         return;
       }
       try { window.localStorage.setItem(LAST_ACCOUNT_KEY, account); } catch { /* fine */ }
+      // Save & next: a fresh form in place, with the session's context carried.
+      if (m === 'next' && onNext) {
+        writeCarry({ account, accountLabel, instrument, session, setupType, management, reason });
+        onNext();
+        return;
+      }
       // Back to the board — animated closed, not reloaded (lib/nav.ts).
       navigate('/');
     } catch (err) {
@@ -679,7 +710,7 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
 
   // Refs are not written during render; this keeps the key handler pointed at
   // the current submit without re-binding the listener on every keystroke.
-  useEffect(() => { submitRef.current = () => { void submit('full'); }; });
+  useEffect(() => { submitRef.current = (next) => { void submit(next && canNext ? 'next' : 'full'); }; });
   useEffect(() => {
     if (!resubmit) return;
     setResubmit(false);
@@ -715,6 +746,8 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
             </span>
           </motion.div>
         )}
+        {/* Backtest session mode: tonight's running tally, and a word when it is time to stop. */}
+        {backtest && !editing && <SessionTally />}
         {/* Mounted only when asked, so it starts from the winner as saved. */}
         {losersPrompt && (
           <SkippedLosers open onDone={() => { setLosersPrompt(false); navigate('/'); }}
@@ -1397,6 +1430,12 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
           >
             Log it fast
           </button>
+        )}
+        {canNext && (
+          <Button accent={accent} disabled={!canSubmit} onClick={() => void submit('next')} className="shrink-0" data-save-next
+            title="Save, and start the next backtest with the same account, session, setup and management (Ctrl+Shift+Enter)">
+            Save &amp; next
+          </Button>
         )}
         <Button variant="primary" accent={accent} disabled={!canSubmit} onClick={() => void submit()} className="shrink-0" data-save-trade>
           {submitting ? 'Saving…' : editing ? 'Save changes' : 'Save trade'}
