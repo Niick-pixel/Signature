@@ -19,11 +19,19 @@ import { pageShortcutAllowed } from '@/lib/keys';
  * to everything. Period narrows whatever is in view. All of it lives
  * in the URL, so a view can be linked and the back button undoes a click.
  */
-export function StatsFilters({ available, scope, rubrics = [] }: {
+export function StatsFilters({ available, scope, rubrics = [], prefix = '', overridden = false }: {
   /** Rubric versions with trades in them, for the rubric chips. */
   rubrics?: number[];
   available: Array<{ account: Account; count: number }>;
   scope: StatsScope;
+  /**
+   * A second set of filters on the same page (the R chart's own): every URL
+   * key gets this prefix, the remembered account is left alone, and an empty
+   * choice is written as '-' so it does not fall back to the page's filters.
+   */
+  prefix?: string;
+  /** The prefixed filters differ from the page's — offer to follow the page again. */
+  overridden?: boolean;
 }) {
   const router = useRouter();
   const here = usePathname();
@@ -32,16 +40,35 @@ export function StatsFilters({ available, scope, rubrics = [] }: {
   const single = scope.accounts.length === 1 ? scope.accounts[0] : null;
 
   // The title bar shows what this screen is showing (never stored from here).
-  useEffect(() => { announceAccount(scope.all ? 'All' : single ?? 'Mixed'); }, [scope.all, single]);
+  useEffect(() => { if (!prefix) announceAccount(scope.all ? 'All' : single ?? 'Mixed'); }, [scope.all, single, prefix]);
 
   const push = (change: Record<string, string | null>) => {
     const next = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(change)) { if (v == null || v === '') next.delete(k); else next.set(k, v); }
-    freshPush(router, `${here}?${next}`);
+    if (prefix) {
+      // Seed the rest of this set from what it shows now, so changing one
+      // row never lets the others fall back to the page's.
+      const seed: Record<string, string> = {
+        account: accountParam(scope.accounts, names), period: scope.period,
+        session: scope.sessions.join(',') || '-', dir: scope.directions.join(',') || '-',
+        rubric: scope.rubrics.join(',') || '-', from: scope.from ?? '', to: scope.to ?? '',
+      };
+      for (const [k, v] of Object.entries(seed)) if (!next.has(prefix + k)) { if (v) next.set(prefix + k, v); }
+    }
+    for (const [k, v] of Object.entries(change)) {
+      const key = prefix + k;
+      if (v == null || v === '') { if (prefix && k !== 'from' && k !== 'to') next.set(key, k === 'period' ? 'all' : '-'); else next.delete(key); }
+      else next.set(key, v);
+    }
+    freshPush(router, `${here}?${next}`, { scroll: false });
+  };
+  const followPage = () => {
+    const next = new URLSearchParams(params.toString());
+    for (const k of [...next.keys()]) if (k.startsWith(prefix)) next.delete(k);
+    freshPush(router, `${here}?${next}`, { scroll: false });
   };
   const setAccounts = (list: Account[]) => {
     const value = accountParam(list, names);
-    writeAccountCookie(value, 'stats');
+    if (!prefix) writeAccountCookie(value, 'stats');
     push({ account: value });
   };
   // A click adds the account to the ones in view, or takes it out. From
@@ -61,7 +88,7 @@ export function StatsFilters({ available, scope, rubrics = [] }: {
   // [ and ] still step through single accounts, then All, wrapping round.
   useEffect(() => {
     const order: Array<Account | 'All'> = [...names, ...(names.length > 1 ? ['All' as const] : [])];
-    if (order.length <= 1) return;
+    if (order.length <= 1 || prefix) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.key !== '[' && e.key !== ']') || !pageShortcutAllowed(e)) return;
       e.preventDefault();
@@ -123,6 +150,12 @@ export function StatsFilters({ available, scope, rubrics = [] }: {
         {DIRECTIONS.map((d) => (
           <Chip key={d} on={scope.directions.includes(d)} onClick={() => toggleIn('dir', scope.directions, d)}>{d}</Chip>
         ))}
+        {prefix && overridden && (
+          <button type="button" onClick={followPage} data-follow-page
+            className="ml-1 text-[11.5px] underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-dim)' }}>
+            Same as the page
+          </button>
+        )}
         {filtered && (
           <button type="button" onClick={() => push({ period: null, session: null, dir: null, rubric: null, from: null, to: null })}
             className="ml-1 text-[11.5px] underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-dim)' }}>

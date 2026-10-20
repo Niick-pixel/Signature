@@ -7,6 +7,8 @@
  * "against my bias") turns up again and again, often in lessons that promise
  * it will not happen again.
  *
+ * The phrases themselves live in lib/phrases.ts, an editable dictionary.
+ *
  * Everything here is local and deterministic — plain pattern matching over
  * the text, the tags and the trade's own fields. No model, no cloud, nothing
  * leaves the machine. Patterns are written for how I actually write (ICT
@@ -18,6 +20,7 @@
  * take (negative), a missed loser is R the hesitation saved (positive).
  */
 import { isHypothetical, isTaken } from './domain';
+import { patternsFor } from './phrases';
 import type { Trade } from './types';
 
 /* --------------------------------------------------------------- themes */
@@ -47,17 +50,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Weak or unclear targets',
     why: 'A target price is not drawn to has no reason to be reached. The trade goes nowhere, stalls, and comes back.',
     rule: 'If I cannot name a clean, untested pool as the target — a data wick, PDH/PDL, a real EQH/EQL — then I do not take it.',
-    patterns: [
-      /\b(no|lack of|without|unclear|weak|random|not (a |that |the )?(clean|strong|good|great|powerful)|unsure (of|about)( the)?|not sure (of|about|when))\b[^.,;\n]{0,25}\btargets?\b/i,
-      /\btargets?\b[^.,;\n]{0,30}\b(unclear|not (that )?(strong|clean|great|accurate|good)|too ambitious|weak|failed)/i,
-      /\b(had|have|felt|feel|feels|with) no attraction\b/i,
-      /\bno (clean |strong |good )?(draw|target)\b/i,
-      /\bnot (a |that )?(good|strong|great) draw\b/i,
-      /\bdraw on liquidity (was|is) (not|no)\b/i,
-      /\b(r?eq[hl]s?)\b[^.\n]{0,40}\b(not accurate|not (that )?strong|unsure|not sure|does not cause|no attraction)/i,
-      /\btrouble with the target/i,
-      /\bfind(ing)? better targets\b/i,
-    ],
+    patterns: patternsFor('target'),
     signal: (t) => tag(t, 'No defined target') || t.target_check_passed === false,
   },
   {
@@ -66,13 +59,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Late entries and chasing',
     why: 'The late entry has the worst price and the tightest room. The first entry is the trade; the second is a chase.',
     rule: 'If the first entry is gone, then I wait for the next setup — I never take the second-best entry.',
-    patterns: [
-      /\b(entered|enter|entering|entry|in)\b[^.,;\n]{0,20}\b(too )?late\b/i,
-      /\blate entry\b/i,
-      /\bchas(e|ed|ing)\b/i,
-      /\bfomo\b|\bfear of missing out\b/i,
-      /\bmissed the (initial|first)\b/i,
-    ],
+    patterns: patternsFor('late'),
     signal: (t) => tag(t, 'Entered late', 'Chased'),
   },
   {
@@ -81,11 +68,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Entering before confirmation',
     why: 'An entry before the sweep or before the inversion closes is a guess that the setup will form.',
     rule: 'If the sweep and the inversion close have not both happened, then there is no trade yet.',
-    patterns: [
-      /\b(too soon|too early)\b/i,
-      /\bbefore the (sweep|close|candle closed?)\b/i,
-      /\b(without|missing|lack of)( certain| a| the| any)? confirmations?\b/i,
-    ],
+    patterns: patternsFor('early'),
     signal: (t) => tag(t, 'Took it before the sweep', "Didn't wait for the close", 'No trigger'),
   },
   {
@@ -94,13 +77,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Trading against the HTF bias',
     why: 'Against the bias, the setup fights the move that pays everyone else.',
     rule: 'If it is against the HTF bias, then it is a pass — logged as Passed, not taken.',
-    patterns: [
-      // Not "no longs due to not going against my bias" — that is following it.
-      /(?<!\bnot (?:going |trading |being )?)\bagainst (my |the )?(htf )?bias\b/i,
-      /\bagainst the (htf )?trend\b/i,
-      /\bcounter[- ]?trend\b/i,
-      /\bdid not check (the )?bias|\bdidn'?t check (the )?bias/i,
-    ],
+    patterns: patternsFor('bias'),
     signal: (t) => t.htf_bias === 'Against bias' || tag(t, 'Against HTF bias'),
   },
   {
@@ -109,13 +86,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Wrong side of the range',
     why: 'Longs belong in discount and shorts in premium. From the middle, the R is thin and the stop is close to nothing.',
     rule: 'If a long is not in discount (or a short in premium), then I wait for price to come to me.',
-    patterns: [
-      /\blongs?\b[^.,;\n]{0,15}\b(on|in|from|at) (premium|equilibrium)\b/i,
-      /\bshorts?\b[^.,;\n]{0,15}\b(on|in|from|at) (discount|equilibrium)\b/i,
-      /\b(buy|buying) (on|in) premium\b|\b(sell|selling) (on|in) discount\b/i,
-      /\b(was|price was|it was|close to|entered) (on |in |at )?equilibrium\b/i,
-      /\bfib( retracement| range)?\b/i,
-    ],
+    patterns: patternsFor('pd'),
     signal: (t) => (isLong(t) && t.premium_discount === 'Premium') || (!isLong(t) && t.premium_discount === 'Discount')
       || tag(t, 'Long in premium', 'Short in discount'),
   },
@@ -125,13 +96,7 @@ export const THEMES: ThemeDef[] = [
     title: 'No sweep, no fuel',
     why: 'The sweep is the fuel. Without liquidity taken first, the inversion has nothing behind it.',
     rule: 'If no named level was swept first, then the move has no fuel — no trade.',
-    patterns: [
-      /\bno (liquidity )?sweep\b|\bwithout a sweep\b|\bno (itl|ith|liquidity) swept\b/i,
-      /\b(no|lack of|without)\b[^.,;\n]{0,15}\b(liquidity( grab| sweep)?|fuel)\b/i,
-      /\b(no|not enough|enough|lack of|didn'?t have|did not have(n't)?|did not had) (the )?fuel\b/i,
-      /\bnot fueling\b/i,
-      /\bbut the sweep level\b/i,
-    ],
+    patterns: patternsFor('sweep'),
     signal: (t) => isTaken(t.outcome) && t.sweep_tier === 'none',
   },
   {
@@ -140,12 +105,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Fear, doubt and hesitation',
     why: 'A trade taken unsure is usually managed badly, and a setup skipped out of fear is R left on the table.',
     rule: 'If I am unsure, then I log it as Passed and check afterwards — doubt is a no-trade by my rules, not a reason to half-take it.',
-    patterns: [
-      /\b(afraid|scared|fearful|nervous)\b/i,
-      /\b(fear)\b(?! of missing)/i,
-      /\b(doubts?|hesitat\w*)\b/i,
-      /\b(unsure|not sure|uncertain)\b/i,
-    ],
+    patterns: patternsFor('fear'),
     signal: (t) => t.confidence_at_entry != null && t.confidence_at_entry <= 2,
   },
   {
@@ -153,22 +113,14 @@ export const THEMES: ThemeDef[] = [
     title: 'Slow price after entry',
     why: 'If it does not go quickly, it usually does not go. Slow price after the entry is the trade telling you something.',
     rule: 'If it takes more than 4 candles to go through the 1m FVG, then I move to breakeven or get out.',
-    patterns: [
-      /\bstall(ed|ing|s)?\b/i,
-      /\bslow(ed|ing)?( down)?\b|\bslow price action\b/i,
-      /\bmomentum (was )?not there\b|\bno momentum\b|\black of momentum\b|\bwithout momentum\b/i,
-      /\bnot much volume\b|\bno volume\b/i,
-    ],
+    patterns: patternsFor('momentum'),
   },
   {
     id: 'stop',
     title: 'Stop placement',
     why: 'A stop inside the level price is likely to revisit gets taken by the retest, even when the idea was right.',
     rule: 'If my stop sits inside the HTF FVG, then I move it past the level where the idea completely fails.',
-    patterns: [
-      /\b(sl|stop( loss)?)\b[^.,;\n]{0,30}\b(inside|too tight|too close|a little wider|wider until)\b/i,
-      /\bplaced the (sl|stop) inside\b/i,
-    ],
+    patterns: patternsFor('stop'),
   },
   {
     id: 'breakeven',
@@ -176,11 +128,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Breakeven too early, stop moved',
     why: 'Moving the stop before the plan says turns small winners into scratches and lets the noise decide.',
     rule: 'If price has not reached my breakeven trigger, then the stop stays exactly where I put it.',
-    patterns: [
-      /\bmoved (my |the )?stop\b/i,
-      /\b(break ?even|be)\b[^.,;\n]{0,25}\b(got hit|was hit|hit|got stopped|came back)\b/i,
-      /\bended up on 0\.\d+r\b/i,
-    ],
+    patterns: patternsFor('breakeven'),
     signal: (t) => tag(t, 'Moved stop'),
   },
   {
@@ -188,13 +136,7 @@ export const THEMES: ThemeDef[] = [
     title: 'Skipped chart prep',
     why: 'A level not marked before the open is a level found in the heat of the trade — usually too late, or wrongly.',
     rule: 'If the HTF FVGs, the fib range and the levels are not marked before the open, then I do not trade until they are.',
-    patterns: [
-      /\bforg(o|e)t to (draw|mark)\b/i,
-      /\b(did not|didn'?t) (mark|draw|check)\b/i,
-      /\bmissed key steps\b|\bmissed this entirely\b/i,
-      /\b(i had no htf|no htf\b|lack(ed)? a htf)/i,
-      /\bdistracted\b/i,
-    ],
+    patterns: patternsFor('prep'),
   },
   {
     id: 'overtrading',
@@ -202,11 +144,7 @@ export const THEMES: ThemeDef[] = [
     title: 'One more trade, the same day',
     why: 'The trade after a loss is the most expensive one in the journal. Tilt rarely feels like tilt.',
     rule: 'If I have taken 2 losses today, then I am done for the day.',
-    patterns: [
-      /\brevenge\b|\btilt(ed)?\b|\bloss streak\b/i,
-      /\bmax 2 losses\b|\bdecided to (long|short) again\b/i,
-      /\banother entry on this day\b/i,
-    ],
+    patterns: patternsFor('overtrading'),
     signal: (t) => tag(t, 'Revenge', 'Overtraded'),
   },
 ];
@@ -269,6 +207,15 @@ export function readable(trades: readonly Trade[]): Trade[] {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/*
+  Sample-size guard. Under EARLY_N trades a pattern is an "early signal",
+  shown but never ranked; and no pattern is named the #1 leak until there
+  are LEAK_MIN_TRADES trades in view — a leak named from eight trades is a
+  coin flip with a headline.
+*/
+export const EARLY_N = 5;
+export const LEAK_MIN_TRADES = 20;
+
 /** Where a theme is said in a trade's own words: the matching sentences. */
 function matches(def: ThemeDef, t: Trade): Array<{ text: string; from: 'lesson' | 'explanation' }> {
   const out: Array<{ text: string; from: 'lesson' | 'explanation' }> = [];
@@ -279,6 +226,17 @@ function matches(def: ThemeDef, t: Trade): Array<{ text: string; from: 'lesson' 
     }
   }
   return out;
+}
+
+/**
+ * The themes on one trade: said in its lesson (part 'lesson'), or anywhere —
+ * the explanation, the lesson, or a tag/field that says the same (part 'any').
+ */
+export function themesOf(t: Trade, part: 'lesson' | 'any' = 'any'): string[] {
+  return THEMES.filter((d) => {
+    const said = matches(d, t);
+    return part === 'lesson' ? said.some((s) => s.from === 'lesson') : said.length > 0 || Boolean(d.signal?.(t));
+  }).map((d) => d.id);
 }
 
 /* ------------------------------------------------------------ results */
@@ -570,7 +528,7 @@ export function analyse(trades: readonly Trade[]): Insights {
     one I have already written a lesson about and that is still happening —
     a lesson written and not followed is the cheapest thing to fix.
   */
-  const candidates = themes.filter((t) => t.netR < 0 && t.n >= 3);
+  const candidates = read.length < LEAK_MIN_TRADES ? [] : themes.filter((t) => t.netR < 0 && t.n >= EARLY_N);
   const focus = candidates.find((t) => t.lessons > 0 && t.recent > 0) ?? candidates[0] ?? null;
   /*
     One trade's sentence is quoted once on the page: the focus picks first,

@@ -13,6 +13,8 @@ import { ConfirmProvider } from '@/components/ui/Confirm';
 import { BoardLayer } from '@/components/whiteboard/BoardLayer';
 import { WeekendReview } from '@/components/path/WeekendReview';
 import { RedDayPrompt } from '@/components/path/RedDayPrompt';
+import { HomeReview } from '@/components/review/HomeReview';
+import { SavedNotice } from '@/components/review/SavedNotice';
 
 export const metadata: Metadata = {
   title: 'Signature',
@@ -50,6 +52,9 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <WeekendReview />
           {/* After a red day: the page, asked for once, quietly. */}
           <RedDayPrompt />
+          {/* The review engine: before the session, and once it is closed (lib/review). */}
+          <HomeReview />
+          <SavedNotice />
           <Shortcuts />
           {/* Every move between screens, animated — see lib/nav.ts. */}
           <NavTransitions />

@@ -19,6 +19,7 @@ import { GradeBadge } from '@/components/ui/GradeBadge';
 import { Select } from '@/components/ui/Select';
 import { OUTCOME_COLOR } from './TradeNode';
 import { FlagList } from './FlagList';
+import { TradeRules } from '@/components/review/TradeRules';
 import { History } from './History';
 import { Lightbox } from './Lightbox';
 import { ShotGallery } from './ShotGallery';
@@ -504,6 +505,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                   <ShotGallery tradeId={trade.id} />
                 </div>
 
+                <TradeRules tradeId={trade.id} version={trade.updated_at} />
                 <FlagList trade={trade} onChanged={onChanged} />
                 <History tradeId={trade.id} />
 

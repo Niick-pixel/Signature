@@ -1,4 +1,5 @@
-import type { Condition, Insights, Phrase, Quote, ThemeResult } from '@/lib/insights';
+import { EARLY_N, LEAK_MIN_TRADES, type Condition, type Insights, type Phrase, type Quote, type ThemeResult } from '@/lib/insights';
+import type { Trends } from '@/lib/review';
 
 /*
   Learning from my own words (lib/insights): what keeps going wrong, said the
@@ -12,7 +13,7 @@ const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefine
 const record = (t: { wins: number; losses: number; breakeven?: number }) =>
   `${t.wins}W · ${t.losses}L${t.breakeven ? ` · ${t.breakeven}BE` : ''}`;
 
-export function Learn({ data }: { data: Insights }) {
+export function Learn({ data, review }: { data: Insights; review?: Trends }) {
   if (data.read < 3 || data.written < 3) {
     return (
       <section data-learn className="glass rounded-[calc(24px*var(--rk))] p-6">
@@ -42,7 +43,13 @@ export function Learn({ data }: { data: Insights }) {
         </p>
       </div>
 
-      {focus && <Focus t={focus} />}
+      {focus ? <Focus t={focus} /> : data.read < LEAK_MIN_TRADES && (
+        <p data-early-signal className="rounded-[calc(14px*var(--rk))] px-3.5 py-2.5 text-[12px]"
+          style={{ background: 'rgb(var(--accent) / 0.07)', border: '1px solid rgb(var(--accent) / 0.25)', color: 'var(--text-dim)' }}>
+          <b>Early signal.</b> {data.read} of {LEAK_MIN_TRADES} trades in view — the patterns below are worth reading, but none is named
+          the #1 leak until there are {LEAK_MIN_TRADES}.
+        </p>
+      )}
 
       {shown.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2" data-themes>
@@ -94,6 +101,35 @@ export function Learn({ data }: { data: Insights }) {
           )}
         </Card>
       </div>
+
+      {review && review.n > 0 && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card title="Your rules, last 10 vs the 10 before"
+            note="How often each written rule was kept (lib/ruleBook). A trade that never answered the field is not counted either way. Under 5 answered trades it is an early signal.">
+            <RuleTrends review={review} />
+          </Card>
+          <Card title="Does a better grade pay more?"
+            note="Average R by the grade at entry. If an A does not beat a C, the grading is not measuring the edge yet.">
+            {review.grades.length === 0 ? <Empty>No graded trades yet.</Empty> : (
+              <ul className="space-y-1.5" data-grade-honesty>
+                {review.grades.map((g) => (
+                  <li key={g.letter} className="flex items-baseline justify-between gap-3 text-[12px]">
+                    <span style={{ color: 'var(--text-dim)' }}>Grade {g.letter} <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>· {g.n}</span>
+                      {g.early && <EarlyTag />}</span>
+                    <span className="tabular-nums font-semibold" style={{ color: g.avgR == null ? 'var(--text-faint)' : tone(g.avgR) }}>{g.avgR == null ? '—' : `${signed(g.avgR, 2)} avg`}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {review.repeats.length > 0 && (
+              <p className="mt-4 text-[11.5px] leading-snug" style={{ color: 'var(--text-dim)' }} data-lesson-repeats>
+                <b>Lesson repeated:</b> {review.repeats.length} time{review.repeats.length === 1 ? '' : 's'} a lesson was written and the same
+                pattern came back within 5 trades — most often <b>{mostCommon(review.repeats.map((r) => r.title))}</b>.
+              </p>
+            )}
+          </Card>
+        </div>
+      )}
 
       {data.costly.length > 0 && (
         <Card title="What costs you"
@@ -168,6 +204,7 @@ function ThemeCard({ t }: { t: ThemeResult }) {
         {t.n} trade{t.n === 1 ? '' : 's'} · {record(t)}{t.missed ? ` · ${t.missed} missed` : ''}
         {t.avgR != null && t.othersAvgR != null && ` · avg ${signed(t.avgR, 2)} vs ${signed(t.othersAvgR, 2)}`}
         {t.lessons > 0 && ` · in ${t.lessons} lesson${t.lessons === 1 ? '' : 's'}`}
+        {t.n < EARLY_N && <EarlyTag />}
       </p>
       <div className="mt-3 space-y-2">{t.quotes.slice(0, 2).map((q) => <QuoteLine key={q.tradeId} q={q} />)}</div>
       {t.evidence.length > 0 && <div className="mt-3"><Evidence rows={contrast(t.evidence)} /></div>}
@@ -302,4 +339,40 @@ function Pill({ tone: t, children }: { tone: 'win' | 'loss'; children: React.Rea
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>{children}</p>;
+}
+
+function EarlyTag() {
+  return (
+    <span className="ml-1.5 rounded-full border px-1.5 py-px text-[9.5px] font-medium"
+      title={`Fewer than ${EARLY_N} trades: an early signal, not a verdict.`}
+      style={{ color: 'rgb(var(--amber))', borderColor: 'rgb(var(--amber) / 0.35)' }}>early signal</span>
+  );
+}
+
+const mostCommon = (xs: string[]) => [...xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>())]
+  .sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+
+function RuleTrends({ review }: { review: Trends }) {
+  const pctText = (c: { pct: number | null; kept: number; of: number }) => (c.pct == null ? '—' : `${Math.round(c.pct * 100)}%`);
+  return (
+    <ul className="space-y-2" data-rule-trends>
+      {review.rules.map((r) => (
+        <li key={r.id} className="flex items-baseline justify-between gap-3 text-[12px]" title={r.text}>
+          <span className="min-w-0 truncate" style={{ color: 'var(--text-dim)' }}>
+            {r.short}{r.scope === 'day' && <span style={{ color: 'var(--text-faint)' }}> · day</span>}{r.early && <EarlyTag />}
+          </span>
+          <span className="shrink-0 tabular-nums">
+            <b style={{ color: r.last10.pct == null ? 'var(--text-faint)' : r.last10.pct >= 0.8 ? 'rgb(var(--outcome-win))' : r.last10.pct < 0.5 ? 'rgb(var(--outcome-loss))' : 'var(--text)' }}>
+              {pctText(r.last10)}</b>
+            <span style={{ color: 'var(--text-faint)' }}> {r.last10.of ? `of ${r.last10.of}` : ''} · before {pctText(r.prev10)}</span>
+            {r.change != null && r.change !== 0 && (
+              <span className="ml-1.5 font-semibold" style={{ color: r.change > 0 ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>
+                {r.change > 0 ? '▲' : '▼'}{Math.abs(r.change)}
+              </span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 }

@@ -61,11 +61,13 @@ test('phrases that set losers apart from winners', () => {
 
 test('the focus is the costliest repeated pattern; conditions compare with and without', () => {
   const trades = [
-    ...[1, 2, 3, 4].map(() => t({ mistake_tags: ['No trigger'], lesson: 'I entered too soon, before the close.' })),
-    ...[1, 2, 3, 4].map(() => t({ outcome: 'Win', r_multiple: 2, worked_tags: ['Waited for the close'], lesson: 'Waited for the close.' })),
+    ...Array.from({ length: 10 }, () => t({ mistake_tags: ['No trigger'], lesson: 'I entered too soon, before the close.' })),
+    ...Array.from({ length: 10 }, () => t({ outcome: 'Win', r_multiple: 2, worked_tags: ['Waited for the close'], lesson: 'Waited for the close.' })),
   ];
   const r = analyse(trades);
   assert.equal(r.focus?.id, 'early');
+  // Under 20 trades in view, no pattern is named the #1 leak.
+  assert.equal(analyse(trades.slice(0, 19)).focus, null);
   assert.equal(r.costly[0].label, 'Tagged “No trigger”');
   assert.ok(r.paying.some((c) => c.label === '“Waited for the close”'));
   assert.ok(!r.paying.some((c) => c.id.startsWith('mistake:')), 'a mistake tag is never listed as paying');
@@ -79,4 +81,11 @@ test('plans and passes are not read', () => {
 test('"not going against my bias" is following it, not breaking it', () => {
   const r = analyseTheme(theme('bias'), [t({ lesson: 'No longs due to not going against my bias.' }), t({ lesson: 'I went against my bias.' })]);
   assert.equal(r.n, 1);
+});
+
+test('the phrase dictionary: plain phrases match whole words, * spans a few words', async () => {
+  const { compilePhrase } = await import('../lib/phrases');
+  assert.ok(compilePhrase('unsure * target').test('I was unsure of the target.'));
+  assert.ok(compilePhrase('no clean target').test('No clean target, again'));
+  assert.ok(!compilePhrase('late').test('the plate'));
 });

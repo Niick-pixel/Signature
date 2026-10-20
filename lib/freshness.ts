@@ -57,9 +57,10 @@ export function watchWrites(): void {
 }
 
 /** Push through the router, loading fresh if anything changed since the last move. */
-export function freshPush(router: { push: (href: string) => void; refresh: () => void }, href: string): void {
+export function freshPush(router: { push: (href: string, opts?: { scroll?: boolean }) => void; refresh: () => void }, href: string,
+  opts?: { scroll?: boolean }): void {
   // refresh() drops the whole client cache; the push right behind it then
   // fetches its screen from the server instead of showing the cached copy.
   if (takeStale()) router.refresh();
-  router.push(href);
+  router.push(href, opts);
 }

@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InCaptureSheet } from './CaptureSheet';
+import { TRADE_SAVED } from '@/components/review/SavedNotice';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Collapse } from '@/components/ui/Collapse';
 import {
@@ -630,6 +631,10 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
         } catch { /* not JSON; show the raw beginning of the response */ }
         throw new Error(`${detail} (HTTP ${res.status})`);
       }
+      // The rules this trade broke, shown for a moment after the save (components/review/SavedNotice).
+      const savedTrade = await res.json().catch(() => null) as { id?: string } | null;
+      const tradeId = savedId ?? savedTrade?.id;
+      if (tradeId && !isHypothetical(account)) window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: tradeId }));
       // Saved, so the draft has served its purpose. Leaving it behind would
       // resurrect this trade as a ghost on the next New trade.
       clearDraft();

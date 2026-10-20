@@ -7,6 +7,8 @@ import {
   accountsInUse, aggregate, deliveryOnlyVerdict, edge, equityCurves, money, preGradedOnly, rByReason,
 } from '@/lib/stats';
 import { analyse } from '@/lib/insights';
+import { trends } from '@/lib/review';
+import { reviewInputs } from '@/db/review';
 import { Learn, WhyYouWin } from '@/components/stats/Learn';
 import { EquityChart } from '@/components/stats/EquityChart';
 import { HypotheticalNote } from '@/components/money/MissedCard';
@@ -99,7 +101,30 @@ export default async function StatsPage(
   const wrRange = winRateRange(agg.wins, agg.wins + agg.losses);
   const expRange = meanRange(withR.map((t) => t.r_multiple as number));
   const expRead = edgeRead(expRange);
-  const curves = equityCurves(trades);
+  /*
+    The R chart has its own filters (c_account, c_session, …), starting from
+    the page's: once any is set, the chart shows its own selection — another
+    account, another session — without changing anything else on the page.
+  */
+  const chartKeys = Object.keys(params).filter((k) => k.startsWith('c_'));
+  const chartScope = chartKeys.length
+    ? parseStatsScope({
+        account: params.c_account ?? account,
+        period: params.c_period ?? scope.period,
+        session: params.c_session ?? (scope.sessions.join(',') || undefined),
+        dir: params.c_dir ?? (scope.directions.join(',') || undefined),
+        rubric: params.c_rubric ?? (scope.rubrics.join(',') || undefined),
+        from: params.c_from ?? scope.from ?? undefined,
+        to: params.c_to ?? scope.to ?? undefined,
+      }, accounts.map((a) => a.account))
+    : scope;
+  const chartTrades = chartKeys.length
+    ? (preOnly ? preGradedOnly(applyStatsScope(all, chartScope)) : applyStatsScope(all, chartScope)).filter((t) => !noQuick || !t.quick_log)
+    : trades;
+  const curves = equityCurves(chartTrades);
+  const chartTaken = chartTrades.filter((t) => t.outcome !== 'Not taken');
+  // The review engine: my rules, last 10 against the 10 before, and grade honesty.
+  const review = (() => { const { ctxFor, cfg } = reviewInputs(); return trends(trades, ctxFor, cfg); })();
   const preGraded = taken.filter((t) => !t.graded_post_hoc).length;
   // What my own writing says keeps going wrong (lib/insights).
   const insights = analyse(trades);
@@ -261,15 +286,19 @@ export default async function StatsPage(
                   )}
                 </div>
                 <Panel
-                  n={withR.length}
+                  n={chartTaken.filter((t) => t.r_multiple != null).length}
                   title="Your R, trade by trade"
-                  note={`Cumulative R in the order the trades happened — all of them, then split by whether the checklist says the rules were followed. ${preGraded} of ${taken.length} graded before the outcome.`}
+                  note={`Cumulative R in the order the trades happened — all of them, then split by whether the checklist says the rules were followed. ${preGraded} of ${taken.length} graded before the outcome. These filters are the chart's own; the rest of the page keeps the ones above.`}
                 >
+                  <div className="mb-4" data-chart-filters>
+                    <StatsFilters available={accounts} scope={chartScope} prefix="c_" overridden={chartKeys.length > 0}
+                      rubrics={[...new Set(everything.map((t) => t.rubric_version))].sort((a, b) => a - b)} />
+                  </div>
                   <EquityChart all={curves.all} followed={curves.followed} broken={curves.broken} />
                 </Panel>
               </div>
 
-              <Learn data={insights} />
+              <Learn data={insights} review={review} />
 
               <WhyYouWin data={insights}>
                 <Panel n={agg.taken} title="R by reason" note="Why you took each trade, net R, worst first.">
