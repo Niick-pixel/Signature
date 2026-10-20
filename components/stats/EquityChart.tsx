@@ -21,10 +21,12 @@ interface Series { key: string; label: string; points: CurvePoint[]; color: stri
  * end of each line — because the colours alone are never enough for everyone,
  * and the end label is where the eye already is.
  */
-export function EquityChart({ followed, broken }: { followed: CurvePoint[]; broken: CurvePoint[] }) {
+export function EquityChart({ followed, broken, all }: { followed: CurvePoint[]; broken: CurvePoint[]; all?: CurvePoint[] }) {
   const [hover, setHover] = useState<{ x: number; i: number } | null>(null);
 
   const series: Series[] = [
+    // Every trade, the line that is the result; the two below split it by the rules.
+    ...(all ? [{ key: 'all', label: 'All trades', points: all, color: 'var(--accent)', dashed: false }] : []),
     { key: 'followed', label: 'Rules followed', points: followed, color: 'var(--series-a)', dashed: false },
     { key: 'broken', label: 'Rule broken', points: broken, color: 'var(--series-b)', dashed: true },
   ].filter((s) => s.points.length > 0);
