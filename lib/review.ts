@@ -221,8 +221,24 @@ export interface BeforeYouTrade {
   /** Why there is no #1 leak yet, when there is not. */
   leakWaiting: string | null;
   lastSession: { day: string; trades: number; broken: Array<{ short: string; count: number }> } | null;
-  topRule: { text: string; short: string; daysSince: number | null; lastBroken: string | null } | null;
+  /** The rule behind the #1 leak (linked), or — when the leak has none — the costliest rule. */
+  topRule: { text: string; short: string; daysSince: number | null; lastBroken: string | null; linked: boolean } | null;
 }
+
+/**
+ * The written rule behind each pattern, where there is one: keeping it is
+ * what fixing the pattern looks like. Patterns with no rule of their own
+ * (fear, slow price, …) have none here.
+ */
+export const LEAK_RULES: Record<string, string> = {
+  early: 'inversion',
+  sweep: 'sweep',
+  target: 'named-target',
+  pd: 'pd',
+  overtrading: 'stop-after-losses',
+  breakeven: 'management',
+  prep: 'max-r',
+};
 
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000);
 
@@ -242,14 +258,19 @@ export function beforeYouTrade(trades: readonly Trade[], today: string, ctxFor: 
     for (const t of s) for (const b of brokenFor(t, breaks, cfg, eras)) counts.set(b.short, (counts.get(b.short) ?? 0) + 1);
     lastSession = { day: lastDay, trades: s.length, broken: [...counts].sort((a, b) => b[1] - a[1]).map(([short, count]) => ({ short, count })) };
   }
-  const { top } = ruleImpacts(trades, ctxFor, cfg);
+  const { rows, top } = ruleImpacts(trades, ctxFor, cfg);
+  // The rule behind the #1 leak; with no leak, or one with no rule, the costliest rule.
+  const linkedId = ins.focus ? LEAK_RULES[ins.focus.id] : undefined;
+  const linked = linkedId ? rows.find((r) => r.id === linkedId) ?? null : null;
+  const pick = linked ?? top;
   return {
     leak: ins.focus ? { title: ins.focus.title, rule: ins.focus.rule, n: ins.focus.n, netR: ins.focus.netR } : null,
     leakWaiting: ins.focus ? null : ins.read < LEAK_MIN_TRADES
       ? `Early signal: ${ins.read} of ${LEAK_MIN_TRADES} trades before a #1 leak is named.`
       : 'No pattern is costing you R repeatedly right now.',
     lastSession,
-    topRule: top ? { text: top.text, short: top.short, lastBroken: top.lastBroken, daysSince: top.lastBroken ? daysBetween(top.lastBroken, today) : null } : null,
+    topRule: pick ? { text: pick.text, short: pick.short, lastBroken: pick.lastBroken, linked: pick === linked,
+      daysSince: pick.lastBroken ? daysBetween(pick.lastBroken, today) : null } : null,
   };
 }
 

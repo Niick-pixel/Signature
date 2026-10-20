@@ -110,9 +110,13 @@ function Before({ b }: { b: BeforeYouTrade }) {
       )}
       {b.topRule && (
         <div data-before-rule>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Your costliest rule</div>
-          <div>{b.topRule.text} <span style={{ color: 'var(--text-faint)' }}>
-            {b.topRule.daysSince == null ? '' : b.topRule.daysSince === 0 ? '— broken today' : `— last broken ${b.topRule.daysSince} day${b.topRule.daysSince === 1 ? '' : 's'} ago`}
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+            {b.topRule.linked ? 'The rule behind it' : 'Your costliest rule'}
+          </div>
+          <div>{b.topRule.text} <span style={{ color: b.topRule.daysSince == null ? 'rgb(var(--outcome-win))' : 'var(--text-faint)' }}>
+            {b.topRule.daysSince == null ? '— never broken'
+              : b.topRule.daysSince === 0 ? '— broken today'
+              : `— last broken ${b.topRule.daysSince} day${b.topRule.daysSince === 1 ? '' : 's'} ago`}
           </span></div>
         </div>
       )}

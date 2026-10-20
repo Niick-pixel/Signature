@@ -151,6 +151,10 @@ test('before you trade: the leak waits for 20 trades; last session; days since t
   ];
   const b = beforeYouTrade(ts, '2026-10-21');
   assert.equal(b.lastSession?.day, '2026-10-20');
+  // The #1 leak is "no sweep, no fuel", so the line is the rule behind it.
+  assert.equal(b.leak?.title, 'No sweep, no fuel');
+  assert.equal(b.topRule?.text, TRADE_RULES.find((r) => r.id === 'sweep')!.text);
+  assert.equal(b.topRule?.linked, true);
   assert.equal(b.topRule?.lastBroken, '2026-10-06');
   assert.equal(b.topRule?.daysSince, 15);
   const small = beforeYouTrade(ts.slice(0, 10), '2026-10-21');
