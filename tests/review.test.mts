@@ -28,17 +28,21 @@ test('each trade rule, broken on its own', () => {
     ['sweep', { sweep_tier: 'none' }],
     ['inversion', { trigger_fired: false }],
     ['named-target', { target_type: 'Other' }],
-    ['named-target', { target_type: 'Horizontal liquidity pool' }],
-    ['min-r', { r_to_nearest_bucket: '1.5-2' }],
+    ['named-target', { target_type: 'Order block' }],
+    ['min-r', { r_to_nearest_bucket: '1-1.5' }],
     ['min-r', { r_to_nearest_bucket: null, r_to_nearest: 1.4 }],
     ['pd', { premium_discount: 'Premium' }],
-    ['pd', { premium_discount: 'Equilibrium' }],
     ['pd', { direction: 'Short', premium_discount: 'Discount' }],
     ['killzone', { chk_killzone: false }],
     ['management', { management: null, mgmt_plan: null }],
     ['max-r', { mfe_r: null }],
   ];
   for (const [id, x] of cases) assert.deepEqual(ids(checkTrade(t(x))), [id], `${id} ${JSON.stringify(x)}`);
+  // Your answers: a horizontal pool is a named pool, equilibrium is fine, 1.5R is enough.
+  assert.deepEqual(checkTrade(t({ target_type: 'Horizontal liquidity pool' })), []);
+  assert.deepEqual(checkTrade(t({ premium_discount: 'Equilibrium' })), []);
+  assert.deepEqual(checkTrade(t({ direction: 'Short', premium_discount: 'Equilibrium' })), []);
+  assert.deepEqual(checkTrade(t({ r_to_nearest_bucket: '1.5-2' })), []);
   assert.equal(TRADE_RULES.length, 8);
 });
 
@@ -48,7 +52,7 @@ test('silence is not a break: unanswered fields are not counted', () => {
   assert.deepEqual(checkTrade(t({ management: null, mgmt_plan: 'A' })), []);
   // A bucket straddling a custom minimum cannot tell.
   assert.deepEqual(checkTrade(t({ r_to_nearest_bucket: '1.5-2' }), { ...DEFAULT_RULE_CONFIG, minR: 1.75 }), []);
-  assert.deepEqual(checkTrade(t({ r_to_nearest_bucket: '1.5-2' }), { ...DEFAULT_RULE_CONFIG, minR: 1.5 }), []);
+  assert.deepEqual(ids(checkTrade(t({ r_to_nearest_bucket: '1.5-2' }), { ...DEFAULT_RULE_CONFIG, minR: 2 })), ['min-r']);
 });
 
 test('missed trades and passes break nothing', () => {
@@ -71,8 +75,8 @@ test('day rules: the third trade after two losses, the 10-minute cooldown, the n
   const e = d('11:00', { outcome: 'Loss', r_multiple: -1, exit_time: '11:20' });
   const f = d('11:25');
   assert.deepEqual(checkDay([e, f]).find((r) => r.id === 'cooldown')?.tradeIds, [f.id]);
-  // News: from the prep, or a trade's own checklist.
-  assert.deepEqual(checkDay([d('09:50')], DEFAULT_RULE_CONFIG, { newsInKillzone: true })[0].id, 'news-day');
+  // Red-folder day: from the morning check-in, or a trade's own checklist.
+  assert.deepEqual(checkDay([d('09:50')], DEFAULT_RULE_CONFIG, { redFolder: true })[0].id, 'news-day');
   const g = d('09:50', { chk_no_news: false }); const h = d('10:10');
   assert.deepEqual(checkDay([g, h]).find((r) => r.id === 'news-day')?.tradeIds, [g.id, h.id]);
   assert.equal(DAY_RULES.length, 3);

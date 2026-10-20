@@ -1,5 +1,6 @@
 import 'server-only';
 import { getPrep } from './prep';
+import { getDailyReview } from './reviews';
 import { getRuleSettings } from './rules';
 import { listTrades } from './trades';
 import { countsInStats } from '../lib/domain';
@@ -9,8 +10,9 @@ import type { Trade } from '../lib/types';
 
 /**
  * What the review engine needs from the database: the trades that count
- * (Hindsight stays out, as everywhere), each day's context from that
- * morning's prep — the news, the "stop after" — and the rule settings.
+ * (Hindsight stays out, as everywhere), each day's context — a red-folder
+ * day from the morning check-in, the "stop after" from the prep — and the
+ * rule settings.
  */
 export function reviewInputs(): { trades: Trade[]; ctxFor: (day: string) => DayContext; cfg: RuleConfig } {
   const settings = getRuleSettings();
@@ -19,7 +21,7 @@ export function reviewInputs(): { trades: Trade[]; ctxFor: (day: string) => DayC
     if (!cache.has(day)) {
       const prep = getPrep(day)?.data ?? null;
       cache.set(day, {
-        newsInKillzone: prep?.answers['session.news'] === 'Inside the killzone',
+        redFolder: getDailyReview(day)?.news === 'High',
         maxLosses: stopAfterFor(prep, settings),
       });
     }

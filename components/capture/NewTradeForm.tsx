@@ -3,6 +3,8 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InCaptureSheet } from './CaptureSheet';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
+import { checkTrade } from '@/lib/review';
+import { TRADE_RULES } from '@/lib/ruleBook';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Collapse } from '@/components/ui/Collapse';
 import {
@@ -482,6 +484,27 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
     && Boolean(reason) && explanationOk && lessonOk && choicesDone && !submitting;
 
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
+
+  /*
+    Your written rules (lib/ruleBook), checked live as the form is filled —
+    the same check the notice after saving shows, so nothing there is a
+    surprise. Trade rules only: the day rules need the rest of the day.
+    Quiet until the checklist is touched, and on an edit a rule whose field
+    the original trade never had (it predates the question) is left out.
+  */
+  const previewBroken = !touched || isHypothetical(account) || (!planned && !pending('outcome') && outcome === 'Not taken') ? [] : checkTrade({
+    ...(trade ?? {}),
+    id: trade?.id ?? 'draft', deleted_at: null, account,
+    status: planned ? 'Planned' : 'Settled', outcome: planned ? 'Not taken' : pending('outcome') ? 'Win' : outcome,
+    sweep_tier: sweepTier, trigger_fired: live.trigger,
+    target_type: pending('targetType') ? null : targetType,
+    r_to_nearest_bucket: tc.rBucket, r_to_nearest: trade?.r_to_nearest ?? null,
+    direction, premium_discount: pending('premiumDiscount') || pending('direction') ? null : premiumDiscount,
+    chk_killzone: checks.chk_killzone, management, mgmt_plan: trade?.mgmt_plan ?? null, mfe_r: num(mfeR),
+  } as Trade).filter((r) => {
+    const rule = TRADE_RULES.find((x) => x.id === r.id);
+    return !(trade && rule?.answered && !rule.answered(trade));
+  });
 
   /**
    * Save. `quick` is "Log it fast": whatever is written, past the minimums and
@@ -1316,6 +1339,23 @@ export function NewTradeForm({ trade, pastLessons = {}, backtestLessons = {} }: 
         </div>
       </div>
 
+
+      <AnimatePresence initial={false}>
+        {previewBroken.length > 0 && (
+          <motion.div key="rule-preview" data-rule-preview={previewBroken.length}
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={spring}
+            className="mt-5 flex flex-wrap items-center gap-1.5 text-[11.5px]">
+            <span style={{ color: 'var(--text-faint)' }}>Breaks your rules:</span>
+            {previewBroken.map((r) => (
+              <span key={r.id} title={r.text} className="rounded-full border px-2.5 py-0.5"
+                style={{ borderColor: 'rgb(var(--outcome-loss) / 0.35)', color: 'rgb(var(--outcome-loss))', background: 'rgb(var(--outcome-loss) / 0.06)' }}>
+                {r.short}
+              </span>
+            ))}
+            <span style={{ color: 'var(--text-faint)' }}>— saved either way.</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="mt-5 flex items-center justify-between gap-5">
         <div className="min-w-0 text-[12px]" style={{ color: 'var(--text-faint)' }}>

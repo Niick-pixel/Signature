@@ -17,6 +17,9 @@
 import { RETIRED_TARGET_TYPES, isBacktest, isHypothetical, isTaken } from './domain';
 import type { Trade } from './types';
 
+/** Target types that are not a named pool: "Other" and the retired ones — except the horizontal pool, which still is. */
+const NOT_NAMED: readonly string[] = RETIRED_TARGET_TYPES.filter((t) => t !== 'Horizontal liquidity pool');
+
 export interface RuleConfig {
   /** Minimum R to the target for the R rule. */
   minR: number;
@@ -26,7 +29,7 @@ export interface RuleConfig {
   cooldownMinutes: number;
 }
 
-export const DEFAULT_RULE_CONFIG: RuleConfig = { minR: 2, maxLosses: 2, cooldownMinutes: 10 };
+export const DEFAULT_RULE_CONFIG: RuleConfig = { minR: 1.5, maxLosses: 2, cooldownMinutes: 10 };
 
 export type Verdict = boolean | null;
 
@@ -48,8 +51,8 @@ export interface TradeRule {
 
 /** What a day rule needs to know beyond the trades: the news that day. */
 export interface DayContext {
-  /** The morning's prep said the news falls inside the killzone. */
-  newsInKillzone?: boolean;
+  /** A red-folder (high-impact) day, from the morning check-in. */
+  redFolder?: boolean;
   maxLosses?: number;
 }
 
@@ -88,8 +91,8 @@ export const TRADE_RULES: TradeRule[] = [
   },
   {
     id: 'named-target', scope: 'trade', short: 'Named pool target',
-    text: 'The target is a named pool from the current list — not "Other", not a retired type.',
-    test: (t) => (t.target_type ? !(RETIRED_TARGET_TYPES as readonly string[]).includes(t.target_type) : null),
+    text: 'The target is a named pool — not "Other", not a retired type (a horizontal liquidity pool still counts).',
+    test: (t) => (t.target_type ? !NOT_NAMED.includes(t.target_type) : null),
   },
   {
     id: 'min-r', scope: 'trade', short: 'Enough R',
@@ -105,11 +108,11 @@ export const TRADE_RULES: TradeRule[] = [
     },
   },
   {
-    id: 'pd', scope: 'trade', short: 'Discount long / premium short',
-    text: 'Longs from discount, shorts from premium.',
+    id: 'pd', scope: 'trade', short: 'Right side of the range',
+    text: 'No longs from premium, no shorts from discount. Equilibrium is fine when the setup is valid.',
     test: (t) => {
       if (!t.premium_discount) return null;
-      return t.direction === 'Long' ? t.premium_discount === 'Discount' : t.premium_discount === 'Premium';
+      return t.direction === 'Long' ? t.premium_discount !== 'Premium' : t.premium_discount !== 'Discount';
     },
   },
   {
@@ -169,12 +172,12 @@ export const DAY_RULES: DayRule[] = [
     },
   },
   {
-    id: 'news-day', scope: 'day', short: 'No news-conflict day',
-    text: 'No trade on a day the news conflicts with the session.',
+    id: 'news-day', scope: 'day', short: 'No red-folder day',
+    text: 'No trade on a red-folder (high-impact news) day.',
     broken: (day, _cfg, ctx) => {
-      // The prep said the news falls inside the killzone, or the trade's own
+      // The morning check-in said high-impact news, or a trade's own
       // checklist said there was an NFP / FOMC / CPI conflict.
-      const conflict = ctx.newsInKillzone === true || day.some((t) => t.chk_no_news === false);
+      const conflict = ctx.redFolder === true || day.some((t) => t.chk_no_news === false);
       return conflict ? day.map((t) => t.id) : [];
     },
   },
