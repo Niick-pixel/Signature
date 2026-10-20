@@ -155,7 +155,11 @@ function copyJournal(from, to) {
   }
   if (!isEmptyOrMissing(to)) throw new Error('The new folder must be empty.');
   fs.mkdirSync(to, { recursive: true });
-  fs.cpSync(from, to, { recursive: true, errorOnExist: true, force: false });
+  // Entry by entry into the (empty) target: newer Node refuses to cpSync a
+  // folder onto one that already exists, even an empty one, with errorOnExist.
+  for (const entry of fs.readdirSync(from)) {
+    fs.cpSync(path.join(from, entry), path.join(to, entry), { recursive: true, errorOnExist: true, force: false });
+  }
   if (isJournal(from) && !isJournal(to)) throw new Error('The copy did not complete.');
   const size = (d) => fs.statSync(path.join(d, 'journal.db')).size;
   if (isJournal(from) && size(from) !== size(to)) throw new Error('The copied journal does not match the original.');
