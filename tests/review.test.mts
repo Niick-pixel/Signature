@@ -178,3 +178,31 @@ test('a rule says nothing about trades logged before its field existed', async (
   assert.deepEqual(checkTrade(old, DEFAULT_RULE_CONFIG, eras), []);
   assert.deepEqual(ids(checkTrade(skipped, DEFAULT_RULE_CONFIG, eras)), ['max-r']);
 });
+
+test('weekly focus: kept in a row and the week so far; default is the rule behind the #1 leak', async () => {
+  const { focusStatus, defaultFocus, mondayOfDay } = await import('../lib/review');
+  assert.equal(mondayOfDay('2026-10-22'), '2026-10-19');
+  const at = (d: string, x: Record<string, unknown> = {}) => t({ date: `${d}T09:45`, created_at: `${d}T15:00:00.000Z`, ...x });
+  const ts = [
+    at('2026-10-15', { trigger_fired: false, outcome: 'Loss', r_multiple: -1 }),
+    at('2026-10-19'), at('2026-10-20', { trigger_fired: false, outcome: 'Loss', r_multiple: -1 }), at('2026-10-21'), at('2026-10-22'),
+  ];
+  const f = focusStatus(ts, 'inversion', '2026-10-22', true)!;
+  assert.deepEqual([f.streak, f.week.kept, f.week.broken], [2, 3, 1]);
+  const leak = [
+    ...Array.from({ length: 6 }, (_, i) => at(`2026-10-0${i + 1}`, { mistake_tags: ['No trigger'], outcome: 'Loss', r_multiple: -1, lesson: 'Entered too soon.' })),
+    ...Array.from({ length: 14 }, (_, i) => at(`2026-10-${String(i + 7).padStart(2, '0')}`)),
+  ];
+  assert.equal(defaultFocus(leak), 'inversion');
+});
+
+test('session strip: real trades only, losses vs limit, the last loss for the cooldown, red folder', async () => {
+  const { sessionStrip } = await import('../lib/review');
+  const ts = [
+    t({ date: '2026-10-22T09:40', created_at: '2026-10-22T15:55:00.000Z', outcome: 'Loss', r_multiple: -1 }),
+    t({ date: '2026-10-22T10:10', created_at: '2026-10-22T16:20:00.000Z' }),
+    t({ account: 'Backtest (FX Replay)', date: '2026-10-22T21:00', outcome: 'Loss', r_multiple: -1 }),
+  ];
+  const s = sessionStrip(ts, '2026-10-22', { maxLosses: 2, redFolder: true });
+  assert.deepEqual([s.trades, s.losses, s.limit, s.lastLossAt, s.redFolder], [2, 1, 2, '2026-10-22T15:55:00.000Z', true]);
+});

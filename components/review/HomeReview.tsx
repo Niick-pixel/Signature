@@ -7,7 +7,9 @@ import { springSoft, exitQuick, press, spring } from '@/lib/motion';
 import { localDay } from '@/lib/day';
 import { BOARD_SHOWN } from '@/lib/keys';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
-import type { BeforeYouTrade, CloseLine } from '@/lib/review';
+import type { BeforeYouTrade, CloseLine, SessionStrip } from '@/lib/review';
+import { SessionStripView } from './SessionStripView';
+import { FocusPill, type FocusData } from './FocusPill';
 
 type Today =
   | { mode: 'before'; before: BeforeYouTrade }
@@ -29,13 +31,17 @@ export function HomeReview() {
   const [data, setData] = useState<Today | null>(null);
   const [folded, setFolded] = useState(false);
 
+  const [strip, setStrip] = useState<SessionStrip | null>(null);
+  const [focus, setFocus] = useState<FocusData | null>(null);
   const load = useCallback(() => {
     const today = localDay();
-    fetch(`/api/review/today?today=${today}`).then((r) => (r.ok ? r.json() : null))
-      .then((r: Today | null) => {
-        setData(r);
-        try { setFolded(window.localStorage.getItem(FOLD_KEY) === `${today}:${r?.mode}`); } catch { /* shown */ }
-      }).catch(() => {});
+    const get = (u: string) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    void get(`/api/review/today?today=${today}`).then((r: Today | null) => {
+      setData(r);
+      try { setFolded(window.localStorage.getItem(FOLD_KEY) === `${today}:${r?.mode}`); } catch { /* shown */ }
+    });
+    void get(`/api/review/strip?today=${today}`).then(setStrip);
+    void get(`/api/review/focus?today=${today}`).then(setFocus);
   }, []);
   useEffect(() => {
     const t = window.setTimeout(load, 1200);
@@ -49,24 +55,29 @@ export function HomeReview() {
     try { if (v && data?.mode) window.localStorage.setItem(FOLD_KEY, `${localDay()}:${data.mode}`); else window.localStorage.removeItem(FOLD_KEY); } catch { /* fine */ }
   };
 
-  const visible = path === '/' && data?.mode != null
+  const visible = data?.mode != null
     && (data.mode === 'close' ? data.close.length > 0 : Boolean(data.before.leak || data.before.lastSession || data.before.topRule));
   const title = data?.mode === 'close' ? 'Session close' : 'Before you trade';
 
+  if (path !== '/') return null;
   return (
+    // The board's bottom-left column: today's strip, the week's focus, then the card.
+    <div data-home-column className="pointer-events-none fixed bottom-[7.5rem] left-6 z-[44] flex w-[min(21rem,calc(100vw-3rem))] flex-col items-start gap-2 [&>*]:pointer-events-auto">
+    <SessionStripView strip={strip} />
+    <FocusPill data={focus} onChanged={load} />
     <AnimatePresence>
       {visible && (folded ? (
         <motion.button key="pill" type="button" data-home-review="folded" onClick={() => fold(false)}
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={springSoft}
           whileTap={press}
-          className="glass fixed bottom-[7.5rem] left-6 z-[44] rounded-full px-3.5 py-1.5 text-[11.5px] font-medium"
+          className="glass rounded-full px-3.5 py-1.5 text-[11.5px] font-medium"
           style={{ color: 'rgb(var(--accent))', borderColor: 'rgb(var(--accent) / 0.4)' }}>
           {title}
         </motion.button>
       ) : (
         <motion.section key="card" data-home-review={data!.mode}
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8, transition: exitQuick }} transition={springSoft}
-          className="glass fixed bottom-[7.5rem] left-6 z-[44] w-[min(21rem,calc(100vw-3rem))] rounded-[calc(20px*var(--rk))] p-4"
+          className="glass w-full rounded-[calc(20px*var(--rk))] p-4"
           style={{ background: 'color-mix(in srgb, var(--bg-raised) 95%, transparent)', borderColor: 'rgb(var(--accent) / 0.35)',
             boxShadow: 'var(--shadow-panel), 0 0 26px -12px rgb(var(--accent) / 0.55)' }}>
           <div className="flex items-baseline justify-between gap-2">
@@ -78,6 +89,7 @@ export function HomeReview() {
         </motion.section>
       ))}
     </AnimatePresence>
+    </div>
   );
 }
 

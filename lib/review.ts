@@ -344,3 +344,82 @@ export const sessionTrades = (trades: readonly Trade[], day: string, tz?: string
   trades.filter((t) => !t.deleted_at && !isHypothetical(t.account) && loggedDay(t, tz) === day);
 
 
+
+/* --------------------------------------------------------- weekly focus */
+
+export interface FocusStatus {
+  ruleId: string;
+  text: string;
+  short: string;
+  /** Chosen for this week, or the default (the rule behind the #1 leak). */
+  chosen: boolean;
+  /** Trades logged this week that kept it / broke it. */
+  week: { kept: number; broken: number };
+  /** Kept in a row, most recent trades first (trades it cannot judge are skipped). */
+  streak: number;
+}
+
+/** The week's Monday for a local day ('YYYY-MM-DD'). */
+export function mondayOfDay(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/** The default focus: the rule behind the #1 leak, else the costliest rule, else the inversion close. */
+export function defaultFocus(trades: readonly Trade[], ctxFor: (day: string) => DayContext = () => ({}), cfg: RuleConfig = DEFAULT_RULE_CONFIG): string {
+  const ins = analyse(trades);
+  const linked = ins.focus ? LEAK_RULES[ins.focus.id] : undefined;
+  return linked ?? ruleImpacts(trades, ctxFor, cfg).top?.id ?? 'inversion';
+}
+
+export function focusStatus(trades: readonly Trade[], ruleId: string, today: string, chosen: boolean,
+  ctxFor: (day: string) => DayContext = () => ({}), cfg: RuleConfig = DEFAULT_RULE_CONFIG, tz?: string): FocusStatus | null {
+  const tradeRule = TRADE_RULES.find((r) => r.id === ruleId);
+  const dayRule = DAY_RULES.find((r) => r.id === ruleId);
+  const rule = tradeRule ?? dayRule;
+  if (!rule) return null;
+  const ts = reviewed(trades);
+  const eras = fieldEras(trades);
+  const breaks = dayBreaksByTrade(trades, ctxFor, cfg);
+  const verdict = (t: Trade): Verdict => (tradeRule ? verdictOf(tradeRule, t, cfg, eras)
+    : ruleDay(t) ? !(breaks.get(t.id) ?? []).some((b) => b.id === ruleId) : null);
+  const monday = mondayOfDay(today);
+  const week = ts.filter((t) => { const d = loggedDay(t, tz); return d >= monday && d <= today; });
+  let streak = 0;
+  for (const t of [...ts].reverse()) {
+    const v = verdict(t);
+    if (v == null) continue;
+    if (!v) break;
+    streak += 1;
+  }
+  return {
+    ruleId, text: rule.text, short: rule.short, chosen,
+    week: { kept: week.filter((t) => verdict(t) === true).length, broken: week.filter((t) => verdict(t) === false).length },
+    streak,
+  };
+}
+
+/* --------------------------------------------------------- live session */
+
+export interface SessionStrip {
+  /** Real trades today (backtests have no day). */
+  trades: number;
+  losses: number;
+  limit: number;
+  /** When today's last loss was logged (ISO), for the cooldown timer. */
+  lastLossAt: string | null;
+  cooldownMinutes: number;
+  redFolder: boolean;
+}
+
+/** Today's real trading, for the strip on the board: losses against the limit, the cooldown, the news. */
+export function sessionStrip(trades: readonly Trade[], today: string, ctx: DayContext, cfg: RuleConfig = DEFAULT_RULE_CONFIG): SessionStrip {
+  const day = trades.filter((t) => dayCheckable(t) && t.date.slice(0, 10) === today).sort((a, b) => a.date.localeCompare(b.date));
+  const losses = day.filter((t) => t.outcome === 'Loss');
+  const last = losses.map((t) => (t.created_at.endsWith('Z') ? t.created_at : `${t.created_at}Z`)).sort().pop() ?? null;
+  return {
+    trades: day.length, losses: losses.length, limit: ctx.maxLosses ?? cfg.maxLosses,
+    lastLossAt: last, cooldownMinutes: cfg.cooldownMinutes, redFolder: ctx.redFolder === true,
+  };
+}

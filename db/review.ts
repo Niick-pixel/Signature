@@ -3,6 +3,7 @@ import { getPrep } from './prep';
 import { getDailyReview } from './reviews';
 import { getRuleSettings } from './rules';
 import { listTrades } from './trades';
+import { getDb } from './index';
 import { countsInStats } from '../lib/domain';
 import { stopAfterFor } from '../lib/rules';
 import { DEFAULT_RULE_CONFIG, type DayContext, type RuleConfig } from '../lib/ruleBook';
@@ -32,4 +33,15 @@ export function reviewInputs(): { trades: Trade[]; ctxFor: (day: string) => DayC
     ctxFor,
     cfg: { ...DEFAULT_RULE_CONFIG, maxLosses: settings.fallbackStopAfter || DEFAULT_RULE_CONFIG.maxLosses },
   };
+}
+
+/** This week's chosen focus rule (app_settings 'focus:<monday>'), or null when none was chosen. */
+export function getFocus(monday: string): string | null {
+  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get(`focus:${monday}`) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setFocus(monday: string, ruleId: string): void {
+  getDb().prepare('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run(`focus:${monday}`, ruleId);
 }
