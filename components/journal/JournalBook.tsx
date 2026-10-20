@@ -12,6 +12,7 @@ import { Overlay } from '@/components/ui/Overlay';
 import { RichText } from './RichText';
 import { DayStrip, type DayTradeSummary } from './DayStrip';
 import { useConfirm } from '@/components/ui/Confirm';
+import { WeekReviewButton } from './WeekReviewButton';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const longDate = (day: string) =>
@@ -176,6 +177,7 @@ export function JournalBook({ initial, tradesByDay, openPage = null }: {
         <Button variant="primary" onClick={() => setPicking(true)} className="w-full">
           New page
         </Button>
+        <WeekReviewButton />
 
         <div className="mt-3">
           <Input

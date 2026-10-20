@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { listEvents, markWeekendReview, syncPath, weekendReviewDone } from '@/db/path';
 import { createJournalPage, parseJournalInput } from '@/db/journal';
 import { summarise } from '@/lib/pathSummary';
+import { reviewInputs, setFocus } from '@/db/review';
+import { weekReview, weekReviewHtml } from '@/lib/weekly';
+import { defaultFocus } from '@/lib/review';
+import { RULES } from '@/lib/ruleBook';
+
+/** The Monday after `week`. */
+const nextMonday = (week: string) => { const d = new Date(`${week}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); };
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -13,7 +20,14 @@ export async function GET(request: Request) {
   const startIso = new Date(`${week}T00:00:00`).toISOString();
   const broken = listEvents().filter((e) => e.kind !== 'step_done' && e.at >= startIso && e.at < end.toISOString());
   const done = listEvents().filter((e) => e.kind === 'step_done' && e.at >= startIso && e.at < end.toISOString());
-  return NextResponse.json({ due: !weekendReviewDone(week), summary: summarise(syncPath()), broken, stepsDone: done });
+  // The week, pre-written (lib/weekly), and next week's suggested focus rule.
+  const { trades, ctxFor, cfg } = reviewInputs();
+  const prewritten = weekReview(trades, week, ctxFor, cfg);
+  return NextResponse.json({
+    due: !weekendReviewDone(week), summary: summarise(syncPath()), broken, stepsDone: done, prewritten,
+    focusRule: prewritten.next.ruleId ?? defaultFocus(trades, ctxFor, cfg),
+    rules: RULES.map((r) => ({ id: r.id, short: r.short, text: r.text })),
+  });
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -31,19 +45,26 @@ export async function POST(request: Request) {
   const kept = Array.isArray(b?.kept) ? (b.kept as unknown[]).map(String) : [];
   const brokenList = Array.isArray(b?.brokenList) ? (b.brokenList as unknown[]).map(String) : [];
   const stepLine = String(b?.stepLine ?? '');
+  // Next week's focus rule, for the pill on the board (db/review setFocus).
+  const focusRule = typeof b?.focusRule === 'string' && RULES.some((r) => r.id === b.focusRule) ? b.focusRule : null;
+  const { trades, ctxFor, cfg } = reviewInputs();
+  const prewritten = weekReviewHtml(weekReview(trades, week, ctxFor, cfg));
 
   const body = [
     `<h2>Where I am on the Path</h2>`, stepLine ? `<p><b>${esc(stepLine)}</b></p>` : '', progress ? para(progress) : '',
+    prewritten,
     `<h2>Commitments</h2>`,
     kept.length ? `<p>Kept:</p><ul>${kept.map((k) => `<li>${esc(k)}</li>`).join('')}</ul>` : '',
     brokenList.length ? `<p>Broken:</p><ul>${brokenList.map((k) => `<li>${esc(k)}</li>`).join('')}</ul>` : '<p>None broken this week.</p>',
     commitments ? para(commitments) : '',
     `<h2>One rule for next week</h2>`, para(focus),
+    focusRule ? `<p>Focus rule on the board: <b>${esc(RULES.find((r) => r.id === focusRule)!.text)}</b></p>` : '',
   ].join('');
   // Through the journal's own sanitiser, like any page written by hand.
   const parsed = parseJournalInput({ day, title: `Weekly review · week of ${week}`, body });
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const page = createJournalPage(parsed.value);
   markWeekendReview(week);
+  if (focusRule) setFocus(nextMonday(week), focusRule);
   return NextResponse.json({ page }, { status: 201 });
 }
