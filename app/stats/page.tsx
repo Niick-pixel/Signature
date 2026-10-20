@@ -7,6 +7,8 @@ import {
   accountsInUse, aggregate, deliveryOnlyVerdict, edge, equityCurves, money, preGradedOnly, rByReason,
 } from '@/lib/stats';
 import { analyse } from '@/lib/insights';
+import { gradePredictors, managementLab, targetScorecard } from '@/lib/lab';
+import { Lab } from '@/components/stats/Lab';
 import { trends } from '@/lib/review';
 import { reviewInputs } from '@/db/review';
 import { Learn, WhyYouWin } from '@/components/stats/Learn';
@@ -126,6 +128,8 @@ export default async function StatsPage(
   // The review engine: my rules, last 10 against the 10 before, and grade honesty.
   const review = (() => { const { ctxFor, cfg } = reviewInputs(); return trends(trades, ctxFor, cfg); })();
   const preGraded = taken.filter((t) => !t.graded_post_hoc).length;
+  // The page's filters, for the "see the trades" links (app/stats/trades).
+  const pageQuery = new URLSearchParams({ account, ...filterParams }).toString();
   // What my own writing says keeps going wrong (lib/insights).
   const insights = analyse(trades);
   const reasonRows: BarRow[] = rByReason(trades).map((g) => ({
@@ -298,7 +302,9 @@ export default async function StatsPage(
                 </Panel>
               </div>
 
-              <Learn data={insights} review={review} />
+              <Learn data={insights} review={review} query={pageQuery} />
+
+              <Lab targets={targetScorecard(trades)} lab={managementLab(trades)} grades={gradePredictors(trades)} query={pageQuery} />
 
               <WhyYouWin data={insights}>
                 <Panel n={agg.taken} title="R by reason" note="Why you took each trade, net R, worst first.">

@@ -13,7 +13,11 @@ const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefine
 const record = (t: { wins: number; losses: number; breakeven?: number }) =>
   `${t.wins}W · ${t.losses}L${t.breakeven ? ` · ${t.breakeven}BE` : ''}`;
 
-export function Learn({ data, review }: { data: Insights; review?: Trends }) {
+/** The Stats filters as a query string, carried by every "see the trades" link. */
+const tradesHref = (query: string, key: 'theme' | 'phrase' | 'target', value: string) =>
+  `/stats/trades?${query}${query ? '&' : ''}${key}=${encodeURIComponent(value)}`;
+
+export function Learn({ data, review, query = '' }: { data: Insights; review?: Trends; query?: string }) {
   if (data.read < 3 || data.written < 3) {
     return (
       <section data-learn className="glass rounded-[calc(24px*var(--rk))] p-6">
@@ -43,7 +47,7 @@ export function Learn({ data, review }: { data: Insights; review?: Trends }) {
         </p>
       </div>
 
-      {focus ? <Focus t={focus} /> : data.read < LEAK_MIN_TRADES && (
+      {focus ? <Focus t={focus} query={query} /> : data.read < LEAK_MIN_TRADES && (
         <p data-early-signal className="rounded-[calc(14px*var(--rk))] px-3.5 py-2.5 text-[12px]"
           style={{ background: 'rgb(var(--accent) / 0.07)', border: '1px solid rgb(var(--accent) / 0.25)', color: 'var(--text-dim)' }}>
           <b>Early signal.</b> {data.read} of {LEAK_MIN_TRADES} trades in view — the patterns below are worth reading, but none is named
@@ -53,7 +57,7 @@ export function Learn({ data, review }: { data: Insights; review?: Trends }) {
 
       {shown.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2" data-themes>
-          {shown.map((t) => <ThemeCard key={t.id} t={t} />)}
+          {shown.map((t) => <ThemeCard key={t.id} t={t} query={query} />)}
         </div>
       )}
       {more.length > 0 && (
@@ -62,7 +66,7 @@ export function Learn({ data, review }: { data: Insights; review?: Trends }) {
             {more.length} more pattern{more.length === 1 ? '' : 's'}, seen less often
           </summary>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {more.map((t) => <ThemeCard key={t.id} t={t} />)}
+            {more.map((t) => <ThemeCard key={t.id} t={t} query={query} />)}
           </div>
         </details>
       )}
@@ -95,8 +99,8 @@ export function Learn({ data, review }: { data: Insights; review?: Trends }) {
           note="Phrases in your writing that show up on losing trades far more than on winners — and the other way round. The losing list is how a bad trade sounds before it loses.">
           {data.loserPhrases.length === 0 && data.winnerPhrases.length === 0 ? <Empty>Needs a few winners and losers with writing.</Empty> : (
             <div className="grid gap-4 sm:grid-cols-2" data-phrases>
-              <Phrases title="On your losers" rows={data.loserPhrases} side="losers" />
-              <Phrases title="On your winners" rows={data.winnerPhrases} side="winners" />
+              <Phrases title="On your losers" rows={data.loserPhrases} side="losers" query={query} />
+              <Phrases title="On your winners" rows={data.winnerPhrases} side="winners" query={query} />
             </div>
           )}
         </Card>
@@ -164,13 +168,15 @@ export function WhyYouWin({ data, children }: { data: Insights; children?: React
 
 /* ---------------------------------------------------------------- parts */
 
-function Focus({ t }: { t: ThemeResult }) {
+function Focus({ t, query }: { t: ThemeResult; query: string }) {
   return (
     <article data-focus={t.id} className="glass rounded-[calc(24px*var(--rk))] p-6"
       style={{ borderColor: 'rgb(var(--accent) / 0.45)', boxShadow: 'var(--shadow-card), 0 0 34px -14px rgb(var(--accent) / 0.65)' }}>
       <div className="text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'rgb(var(--accent))' }}>Work on this next</div>
       <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-[20px] font-semibold tracking-tight">{t.title}</h3>
+        <h3 className="text-[20px] font-semibold tracking-tight">
+          <a href={tradesHref(query, 'theme', t.id)} className="hover:underline" title="See every trade with it">{t.title}</a>
+        </h3>
         <span className="tabular-nums text-[18px] font-semibold" style={{ color: tone(t.netR) }}>{signed(t.netR)}</span>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: 'var(--text-dim)' }}>
@@ -182,6 +188,9 @@ function Focus({ t }: { t: ThemeResult }) {
         {t.lessons > 0 && t.firstLesson && <> You have written this lesson <b>{t.lessons}×</b> since {day(t.firstLesson)}{t.afterFirstLesson.n > 0 && <>, and it has happened {t.afterFirstLesson.n} more time{t.afterFirstLesson.n === 1 ? '' : 's'} since ({signed(t.afterFirstLesson.netR)})</>}.</>}
       </p>
       <Rule text={t.rule} big />
+      <a href={tradesHref(query, 'theme', t.id)} data-see-trades className="mt-3 inline-block text-[12px] font-medium" style={{ color: 'rgb(var(--accent))' }}>
+        See the {t.n} trade{t.n === 1 ? '' : 's'}, charts side by side →
+      </a>
       <div className="mt-4 grid gap-4 md:grid-cols-[1fr_15rem]">
         <div className="space-y-2.5">{t.quotes.map((q) => <QuoteLine key={q.tradeId} q={q} />)}</div>
         <div className="space-y-3">
@@ -193,11 +202,13 @@ function Focus({ t }: { t: ThemeResult }) {
   );
 }
 
-function ThemeCard({ t }: { t: ThemeResult }) {
+function ThemeCard({ t, query }: { t: ThemeResult; query: string }) {
   return (
     <article data-theme={t.id} className="glass flex flex-col rounded-[calc(22px*var(--rk))] p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-[14.5px] font-semibold tracking-tight">{t.title}</h3>
+        <h3 className="text-[14.5px] font-semibold tracking-tight">
+          <a href={tradesHref(query, 'theme', t.id)} className="hover:underline" title="See every trade with it">{t.title}</a>
+        </h3>
         <span className="tabular-nums text-[14px] font-semibold" style={{ color: tone(t.netR) }}>{signed(t.netR)}</span>
       </div>
       <p className="mt-0.5 text-[11.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
@@ -299,7 +310,7 @@ function Conditions({ rows }: { rows: Condition[] }) {
   );
 }
 
-function Phrases({ title, rows, side }: { title: string; rows: Phrase[]; side: 'losers' | 'winners' }) {
+function Phrases({ title, rows, side, query }: { title: string; rows: Phrase[]; side: 'losers' | 'winners'; query: string }) {
   const hue = side === 'losers' ? '--outcome-loss' : '--outcome-win';
   return (
     <div>
@@ -307,11 +318,11 @@ function Phrases({ title, rows, side }: { title: string; rows: Phrase[]; side: '
       {rows.length === 0 ? <Empty>Nothing distinctive yet.</Empty> : (
         <div className="flex flex-wrap gap-1.5">
           {rows.map((p) => (
-            <span key={p.text} className="rounded-full border px-2.5 py-1 text-[11.5px]"
-              title={`In ${p.losers} losing and ${p.winners} winning trades`}
+            <a key={p.text} href={tradesHref(query, 'phrase', p.text)} data-phrase={p.text} className="rounded-full border px-2.5 py-1 text-[11.5px] hover:brightness-95"
+              title={`In ${p.losers} losing and ${p.winners} winning trades — click to see them`}
               style={{ borderColor: `rgb(var(${hue}) / 0.3)`, background: `rgb(var(${hue}) / 0.06)` }}>
               {p.text} <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{side === 'losers' ? p.losers : p.winners}</span>
-            </span>
+            </a>
           ))}
         </div>
       )}

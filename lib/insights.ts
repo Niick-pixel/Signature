@@ -239,6 +239,21 @@ export function themesOf(t: Trade, part: 'lesson' | 'any' = 'any'): string[] {
   }).map((d) => d.id);
 }
 
+/** The sentences of a trade that say a theme (empty when only a tag or field does). */
+export function themeSentences(t: Trade, id: string): Array<{ text: string; from: 'lesson' | 'explanation' }> {
+  const def = THEMES.find((d) => d.id === id);
+  return def ? matches(def, t) : [];
+}
+
+/** The sentences of a trade's writing that contain a phrase (as "Your words" counts them). */
+export function phraseSentences(t: Trade, phrase: string): Array<{ text: string; from: 'lesson' | 'explanation' }> {
+  const out: Array<{ text: string; from: 'lesson' | 'explanation' }> = [];
+  for (const [from, body] of [['lesson', t.lesson ?? ''], ['explanation', t.explanation ?? '']] as const) {
+    for (const s of sentences(body, false)) if (phrases(s).has(phrase)) out.push({ text: clip(s, 220), from });
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------ results */
 
 export interface ThemeResult {

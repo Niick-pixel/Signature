@@ -29,6 +29,7 @@ import { accountLabel, isReal } from '@/lib/domain';
 import { LiveFlow } from './LiveFlow';
 import { dialogIsOpen } from '@/components/ui/Overlay';
 import { BOARD_SHOWN, boardShown, captureOpen } from '@/lib/keys';
+import { OPEN_TRADE_KEY } from '@/components/stats/OpenOnBoard';
 import { JOURNAL_CHANGED, journalVersion } from '@/lib/freshness';
 import { GroupViewer } from './GroupViewer';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
@@ -516,6 +517,20 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
       [Math.max(...all.x) + M, Math.max(...all.y) + M],
     ];
   }, [layout.clusters, layout.nodes, scale, board.notes]);
+
+  // A trade asked for elsewhere ("Open on the board", Stats → trades): its panel opens when the board is shown.
+  useEffect(() => {
+    if (readOnly) return;
+    const take = () => {
+      try {
+        const id = window.sessionStorage.getItem(OPEN_TRADE_KEY);
+        if (id) { window.sessionStorage.removeItem(OPEN_TRADE_KEY); setOpenId(id); }
+      } catch { /* storage unavailable */ }
+    };
+    take();
+    window.addEventListener(BOARD_SHOWN, take);
+    return () => window.removeEventListener(BOARD_SHOWN, take);
+  }, [readOnly]);
 
   const onOpen = useCallback((id: string) => {
     if (readOnly) return;
