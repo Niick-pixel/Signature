@@ -866,6 +866,15 @@ html[data-capture] header.titlebar-drag { z-index: 56; }
 [data-capture-root] [data-sheet] * {
   backdrop-filter: none !important;
 }
+/*
+  The same for what floats over the board — the review column (strip, focus,
+  card, the rule menu) and the saved notice. They are solid; a blur behind
+  them re-blurred the moving board on every frame of a pan.
+*/
+[data-home-column], [data-home-column] *,
+[data-saved-notice], [data-saved-notice] * {
+  backdrop-filter: none !important;
+}
 html[data-nav] [data-sheet] { view-transition-name: sheet; }
 /* The title bar is the same on both sides: no crossfade, no flicker. */
 ::view-transition-old(titlebar) { animation: none; opacity: 0; }

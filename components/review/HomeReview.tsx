@@ -10,6 +10,7 @@ import { JOURNAL_CHANGED } from '@/lib/freshness';
 import type { BeforeYouTrade, CloseLine, SessionStrip } from '@/lib/review';
 import { SessionStripView } from './SessionStripView';
 import { FocusPill, type FocusData } from './FocusPill';
+import { CloseX } from './CloseX';
 
 type Today =
   | { mode: 'before'; before: BeforeYouTrade }
@@ -17,6 +18,8 @@ type Today =
   | { mode: null };
 
 const FOLD_KEY = 'signature:home-review-folded';
+const HIDE_KEY = 'signature:home-review-hidden';
+const MIN_KEY = 'signature:home-review-minimized';
 const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 
 /**
@@ -31,6 +34,22 @@ export function HomeReview() {
   const [data, setData] = useState<Today | null>(null);
   const [folded, setFolded] = useState(false);
 
+  // Hidden for today, per item (strip, focus, card); the whole column minimized until reopened.
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [minimized, setMinimized] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(window.localStorage.getItem(HIDE_KEY) ?? 'null') as { day: string; items: string[] } | null;
+      if (raw?.day === localDay()) setHidden(raw.items);
+      setMinimized(window.localStorage.getItem(MIN_KEY) === '1');
+    } catch { /* shown */ }
+  }, []);
+  const hide = (item: string) => setHidden((h) => {
+    const next = [...new Set([...h, item])];
+    try { window.localStorage.setItem(HIDE_KEY, JSON.stringify({ day: localDay(), items: next })); } catch { /* fine */ }
+    return next;
+  });
+  const minimize = (v: boolean) => { setMinimized(v); try { if (v) window.localStorage.setItem(MIN_KEY, '1'); else window.localStorage.removeItem(MIN_KEY); } catch { /* fine */ } };
   const [strip, setStrip] = useState<SessionStrip | null>(null);
   const [focus, setFocus] = useState<FocusData | null>(null);
   const load = useCallback(() => {
@@ -60,19 +79,34 @@ export function HomeReview() {
   const title = data?.mode === 'close' ? 'Session close' : 'Before you trade';
 
   if (path !== '/') return null;
+  const stripShows = Boolean(strip && (strip.trades > 0 || strip.redFolder));
+  const anything = (stripShows && !hidden.includes('strip')) || (focus?.focus && !hidden.includes('focus')) || (visible && !hidden.includes('card'));
+  if (!anything) return null;
+  if (minimized) {
+    return (
+      <div data-home-column="minimized" className="fixed bottom-[7.5rem] left-6 z-[44]">
+        <button type="button" onClick={() => minimize(false)} data-home-restore
+          className="rounded-full border px-3.5 py-1.5 text-[11.5px] font-medium"
+          style={{ background: 'var(--bg-raised)', borderColor: 'rgb(var(--accent) / 0.4)', color: 'rgb(var(--accent))', boxShadow: 'var(--shadow-card)' }}>
+          Review ▴
+        </button>
+      </div>
+    );
+  }
   return (
     // The board's bottom-left column: today's strip, the week's focus, then the card.
     <div data-home-column className="pointer-events-none fixed bottom-[7.5rem] left-6 z-[44] flex w-[min(21rem,calc(100vw-3rem))] flex-col items-start gap-2 [&>*]:pointer-events-auto">
-    <SessionStripView strip={strip} />
-    <FocusPill data={focus} onChanged={load} />
+    <CloseX kind="minimize" onClick={() => minimize(true)} label="Minimize — tuck all of this into one button" className="border bg-[var(--bg-raised)]" />
+    {!hidden.includes('strip') && <SessionStripView strip={strip} onHide={() => hide('strip')} />}
+    {!hidden.includes('focus') && <FocusPill data={focus} onChanged={load} onHide={() => hide('focus')} />}
     <AnimatePresence>
-      {visible && (folded ? (
+      {visible && !hidden.includes('card') && (folded ? (
         <motion.button key="pill" type="button" data-home-review="folded" onClick={() => fold(false)}
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={springSoft}
           whileTap={press}
           className="glass rounded-full px-3.5 py-1.5 text-[11.5px] font-medium"
           style={{ color: 'rgb(var(--accent))', borderColor: 'rgb(var(--accent) / 0.4)' }}>
-          {title}
+          {title} ▴
         </motion.button>
       ) : (
         <motion.section key="card" data-home-review={data!.mode}
@@ -82,8 +116,10 @@ export function HomeReview() {
             boxShadow: 'var(--shadow-panel), 0 0 26px -12px rgb(var(--accent) / 0.55)' }}>
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-[13.5px] font-semibold tracking-tight">{title}</h2>
-            <motion.button type="button" onClick={() => fold(true)} whileTap={press} transition={spring}
-              className="text-[11px]" style={{ color: 'var(--text-faint)' }} aria-label="Fold">Fold</motion.button>
+            <div className="flex items-center gap-0.5">
+              <CloseX kind="minimize" onClick={() => fold(true)} label="Fold to a small button" />
+              <CloseX onClick={() => hide('card')} label="Hide for today" />
+            </div>
           </div>
           {data!.mode === 'before' ? <Before b={data!.before} /> : <Close lines={(data as { close: CloseLine[] }).close} />}
         </motion.section>
