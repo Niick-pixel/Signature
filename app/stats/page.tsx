@@ -9,6 +9,9 @@ import { reviewInputs } from '@/db/review';
 import { dayBreaksByTrade, fieldEras, planBreaks } from '@/lib/review';
 import { edgeMetrics } from '@/lib/edge/metrics';
 import { EdgeHero } from '@/components/stats/EdgeHero';
+import { BehaviourCard } from '@/components/stats/BehaviourCard';
+import { hesitations, tradeStates } from '@/lib/edge/state';
+import { tiltIndex } from '@/lib/edge/tilt';
 import { getPrep } from '@/db/prep';
 import { planDay, planMatch } from '@/lib/planMatch';
 import { successSystem } from '@/lib/successSystem';
@@ -104,6 +107,10 @@ export default async function StatsPage(
   // The canonical metrics (lib/edge/metrics), over settled trades in the order they happened.
   const settled = trades.filter((t) => t.outcome !== 'Not taken' && t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date));
   const metrics = edgeMetrics(settled.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) })));
+  // Behaviour and state: computed from the order of the trades (lib/edge/state, tilt).
+  const states = tradeStates(settled, ctxFor);
+  const tilt = tiltIndex(settled, states, (t) => planBreaks(t, breaks, cfg, eras));
+  const hesitation = hesitations(all.filter((t) => scope.accounts.includes(t.account) || isHypothetical(t.account)));
   const scopeLabel = scope.all ? 'all accounts' : scope.accounts.map((a) => (isBacktest(a) ? 'Backtest' : a)).join(' + ');
   const preps = new Map<string, ReturnType<typeof getPrep>>();
   const prepOf = (day: string) => { if (!preps.has(day)) preps.set(day, getPrep(day)); return preps.get(day) ?? null; };
@@ -180,6 +187,7 @@ export default async function StatsPage(
                 <EquityChart all={curves.all} followed={curves.followed} broken={curves.broken} />
               </section>
 
+              <BehaviourCard tilt={tilt} hesitation={hesitation} />
               <SuccessCard s={success} />
               <WordsTable map={words} trades={wordTrades} />
               <Ledger s={success} query={pageQuery} />

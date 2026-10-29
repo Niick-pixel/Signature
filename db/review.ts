@@ -4,10 +4,10 @@ import { getDailyReview } from './reviews';
 import { getRuleSettings } from './rules';
 import { listTrades } from './trades';
 import { getDb } from './index';
-import { newsRedDays } from './news';
+import { listNews, newsRedDays } from './news';
 import { countsInStats } from '../lib/domain';
 import { stopAfterFor } from '../lib/rules';
-import { DEFAULT_RULE_CONFIG, type DayContext, type RuleConfig } from '../lib/ruleBook';
+import { DEFAULT_RULE_CONFIG, isFirstFriday, type DayContext, type RuleConfig } from '../lib/ruleBook';
 import type { Trade } from '../lib/types';
 
 /**
@@ -27,6 +27,8 @@ export function reviewInputs(): { trades: Trade[]; ctxFor: (day: string) => DayC
       cache.set(day, {
         redFolder: getDailyReview(day)?.news === 'High' || newsRed.has(day),
         maxLosses: stopAfterFor(prep, settings),
+        // No calendar for a first Friday: NFP, nearly always.
+        nfpGuess: isFirstFriday(day) && listNews(day, day).length === 0,
       });
     }
     return cache.get(day)!;

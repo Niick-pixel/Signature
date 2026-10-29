@@ -31,7 +31,8 @@ export interface TradeViewProps {
   exec: ExecutionRow | null;
   bars: { bars: Bar[]; source_name: string | null } | null;
   plan: PlanMatch;
-  broken: string[];
+  /** Rules broken: checked by the computer (auto) or said by you (self). */
+  broken: Array<{ short: string; text: string; source: 'auto' | 'self' }>;
   prev: string | null;
   next: string | null;
   metrics: TradeMetrics;
@@ -179,7 +180,16 @@ export function TradeView(p: TradeViewProps) {
             <Card title="Your rules">
               {p.broken.length === 0
                 ? <p className="text-[12px]" style={{ color: 'rgb(var(--outcome-win))' }}>Every rule the record can check was kept.</p>
-                : <div className="flex flex-wrap gap-1.5" data-trade-broken>{p.broken.map((b) => <Chip key={b} color="rgb(var(--outcome-loss))">{b}</Chip>)}</div>}
+                : <div className="flex flex-wrap gap-1.5" data-trade-broken>{p.broken.map((b) => (
+                    <span key={b.short} title={b.text} className="inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-2.5 pr-1 text-[11.5px]"
+                      style={{ borderColor: 'rgb(var(--outcome-loss) / 0.35)', color: 'rgb(var(--outcome-loss))', background: 'rgb(var(--outcome-loss) / 0.06)' }}>
+                      {b.short}
+                      <span className="rounded-full px-1.5 text-[9px] font-semibold uppercase tracking-[0.06em]" data-break-source={b.source}
+                        style={{ background: b.source === 'auto' ? 'rgb(var(--outcome-loss) / 0.14)' : 'var(--glass-fill-strong)', color: b.source === 'auto' ? 'rgb(var(--outcome-loss))' : 'var(--text-dim)' }}>
+                        {b.source}
+                      </span>
+                    </span>
+                  ))}</div>}
               {(p.tilt?.length ?? 0) > 0 && (
                 <div className="mt-3" data-trade-tilt>
                   <div className="mb-1 text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Tilt</div>

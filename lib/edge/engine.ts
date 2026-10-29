@@ -9,6 +9,7 @@ import { completeness, PREDICTORS, FIELDS } from './fields';
 import { nPerGroup } from './power';
 import { DEFAULT_HALF_LIFE, type Window } from './recency';
 import { hashString } from './rng';
+import { tradeStates, withState } from './state';
 import type { Thresholds } from './verdict';
 import { pnlOf } from '../stats';
 import type { Trade } from '../types';
@@ -43,7 +44,8 @@ export function runEngine(input: readonly Trade[], opts: EngineOptions = {}): En
   const metrics = edgeMetrics(trades.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) })));
   const result: EngineResult = {
     hash, window, n: trades.length, metrics,
-    explorer: explore(trades, PREDICTORS, { halfLife, thresholds: opts.thresholds }),
+    // State is computed over the trades in view, in order: trade of the day, losses in a row before…
+    explorer: explore(withState(trades, tradeStates(trades)), PREDICTORS, { halfLife, thresholds: opts.thresholds }),
     nFor05R: metrics.sd ? nPerGroup(metrics.sd, 0.5) : null,
     completeness: completeness(trades, FIELDS),
   };

@@ -20,7 +20,7 @@ export function SessionStripView({ strip, onHide }: { strip: SessionStrip | null
     return () => window.clearInterval(t);
   }, [cooling]);
   if (!strip || (strip.trades === 0 && !strip.redFolder)) return null;
-  const done = strip.limit > 0 && strip.losses >= strip.limit;
+  const done = (strip.limit > 0 && strip.streak >= strip.limit) || (strip.maxTrades > 0 && strip.trades >= strip.maxTrades);
   const chip = (hue: string, children: React.ReactNode, key: string) => (
     <span key={key} className="rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums"
       style={{ borderColor: `rgb(var(${hue}) / 0.4)`, color: `rgb(var(${hue}))`, background: `rgb(var(${hue}) / 0.08)` }}>{children}</span>
@@ -28,7 +28,7 @@ export function SessionStripView({ strip, onHide }: { strip: SessionStrip | null
   return (
     <div data-session-strip className="glass flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5"
       style={{ background: 'color-mix(in srgb, var(--bg-raised) 95%, transparent)' }}>
-      {strip.trades > 0 && chip(done ? '--outcome-loss' : '--accent', <>{done ? 'Done for today · ' : 'Today · '}{strip.losses}/{strip.limit} losses</>, 'losses')}
+      {strip.trades > 0 && chip(done ? '--outcome-loss' : '--accent', <>{done ? 'Done for today · ' : 'Today · '}{strip.trades}/{strip.maxTrades} trades · {strip.streak}/{strip.limit} losses in a row</>, 'losses')}
       {cooling && chip('--amber', <>Cooldown {mmss(until - now)}</>, 'cool')}
       {strip.redFolder && chip('--outcome-loss', <>Red folder day</>, 'news')}
       <CloseX onClick={onHide} label="Hide for today" />

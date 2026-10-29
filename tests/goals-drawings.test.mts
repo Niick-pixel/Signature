@@ -20,7 +20,9 @@ let n = 0;
 const t = (date: string, o: Record<string, unknown> = {}) => {
   n += 1;
   return { id: `t${n}`, date, account: 'Topstep 50K', status: 'Taken', direction: 'Long', outcome: 'Win', r_multiple: 1, session: 'NY AM',
-    grade_letter: 'A', graded_post_hoc: 0, mistake_tags: [], created_at: `${date.slice(0, 10)}T15:00:00`, deleted_at: null, undated: 0, ...o } as never;
+    grade_letter: 'A', graded_post_hoc: 0, mistake_tags: [], created_at: `${date.slice(0, 10)}T15:00:00`, deleted_at: null, undated: 0,
+    // A loss carries a loss's R unless the test says otherwise (R decides a trade's class).
+    ...(o.outcome === 'Loss' && o.r_multiple === undefined ? { r_multiple: -1 } : {}), ...o } as never;
 };
 const prep = (done: number, side?: string) => ({
   steps: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f'].slice(0, done).map((k) => [k, 'done'])),

@@ -7,6 +7,7 @@
  */
 import { prepProgress, type PrepData } from './prep';
 import { planMatch } from './planMatch';
+import { afterLossStop } from './ruleBook';
 import type { DailyReview, Trade } from './types';
 
 export interface GradePart { id: 'prepared' | 'in_plan' | 'side' | 'count' | 'stop'; label: string; kept: boolean | null; detail: string }
@@ -52,10 +53,10 @@ export function dayGrade(day: string, trades: readonly Trade[], prep: PrepData |
   }
 
   if (ts.length) {
-    let losses = 0; let after = 0;
-    for (const t of ts) { if (losses >= stopAfter) after += 1; if (t.outcome === 'Loss') losses += 1; }
-    parts.push({ id: 'stop', label: `Stopped after ${stopAfter} loss${stopAfter === 1 ? '' : 'es'}`, kept: after === 0,
-      detail: after ? `${after} trade${after === 1 ? '' : 's'} after the stop` : losses >= stopAfter ? 'Stopped on time' : `${losses} loss${losses === 1 ? '' : 'es'}` });
+    const after = afterLossStop(ts, stopAfter).length;
+    const losses = ts.filter((t) => t.outcome === 'Loss').length;
+    parts.push({ id: 'stop', label: `Stopped after ${stopAfter} loss${stopAfter === 1 ? '' : 'es'} in a row`, kept: after === 0,
+      detail: after ? `${after} trade${after === 1 ? '' : 's'} after the stop` : `${losses} loss${losses === 1 ? '' : 'es'}` });
   }
 
   const judged = parts.filter((p) => p.kept != null);

@@ -38,6 +38,8 @@ test('each trade rule, broken on its own', () => {
     ['max-r', { mfe_r: null }],
     ['threshold', { checklist_score: 65 }],
     ['min-confidence', { below_min_confidence: true }],
+    ['eq-pool', { into_eq_pool: true }],
+    ['risk', { risk_percent: 1.5 }],
   ];
   for (const [id, x] of cases) assert.deepEqual(ids(checkTrade(t(x))), [id], `${id} ${JSON.stringify(x)}`);
   // Your answers: a horizontal pool is a named pool, equilibrium is fine, 1.5R is enough.
@@ -45,7 +47,8 @@ test('each trade rule, broken on its own', () => {
   assert.deepEqual(checkTrade(t({ premium_discount: 'Equilibrium' })), []);
   assert.deepEqual(checkTrade(t({ direction: 'Short', premium_discount: 'Equilibrium' })), []);
   assert.deepEqual(checkTrade(t({ r_to_nearest_bucket: '1.5-2' })), []);
-  assert.equal(TRADE_RULES.length, 11);
+  assert.equal(TRADE_RULES.length, 13);
+  assert.deepEqual(checkTrade(t({ risk_percent: 1, into_eq_pool: false })), []);
   // The model gate's other half: a rubric 2+ trade with overlapping gaps; unanswered says nothing.
   assert.deepEqual(ids(checkTrade(t({ singular_gap: false }))), ['one-gap']);
   assert.deepEqual(checkTrade(t({ singular_gap: null })), []);
@@ -87,10 +90,26 @@ test('day rules: the third trade after two losses, the 10-minute cooldown, the n
   assert.deepEqual(checkDay([d('09:50')], DEFAULT_RULE_CONFIG, { redFolder: true })[0].id, 'news-day');
   const g = d('09:50', { chk_no_news: false }); const h = d('10:10');
   assert.deepEqual(checkDay([g, h]).find((r) => r.id === 'news-day')?.tradeIds, [g.id, h.id]);
-  assert.equal(DAY_RULES.length, 3);
+  // Three trades: the third breaks "at most 2 a day" as well.
+  assert.deepEqual(day.find((r) => r.id === 'max-trades')?.tradeIds, [c.id]);
+  assert.equal(DAY_RULES.length, 4);
+  // Losses in a row: a win in between resets the run (two losses in the day, not in a row, is not the stop).
+  const l1 = d('09:31', { outcome: 'Loss', r_multiple: -1 }); const w1 = d('09:50', { outcome: 'Win', r_multiple: 2 }); const l2 = d('10:05', { outcome: 'Loss', r_multiple: -1 }); const x = d('10:40');
+  assert.equal(checkDay([l1, w1, l2, x], { ...DEFAULT_RULE_CONFIG, maxTrades: 10 }).find((r) => r.id === 'stop-after-losses'), undefined);
+  // A first Friday with no calendar is very likely NFP.
+  assert.deepEqual(checkDay([d('09:50')], DEFAULT_RULE_CONFIG, { nfpGuess: true })[0].id, 'news-day');
 });
 
-test('backtests (and undated trades) skip the day rules', () => {
+test('backtests are checked per replay session: max trades and the loss stop, never the clock or the news', () => {
+  const bt = (time: string, s: number | null, x: Record<string, unknown> = {}) => t({ account: 'Backtest (FX Replay)', date: `2026-10-17T${time}`, session_index: s, outcome: 'Loss', r_multiple: -1, ...x });
+  const a = bt('16:11', 10); const b = bt('16:12', 10); const c = bt('18:16', 10); const other = bt('18:20', 11);
+  const breaks = dayBreaksByTrade([a, b, c, other] as never[], () => ({ redFolder: true }));
+  assert.deepEqual((breaks.get(c.id) ?? []).map((r) => r.id).sort(), ['max-trades', 'stop-after-losses'], 'the Oct 17 sequence: the third replay loss');
+  assert.equal(breaks.get(b.id), undefined, 'no cooldown in a replay (its times are when it was logged)');
+  assert.equal(breaks.get(other.id), undefined, 'another session starts clean; no news in a replay');
+});
+
+test('backtests without a session (and undated trades) skip the day rules', () => {
   const bt = (time: string) => t({ account: 'Backtest (FX Replay)', date: `2026-10-15T${time}`, outcome: 'Loss', r_multiple: -1 });
   assert.deepEqual(checkDay([bt('21:00'), bt('21:02'), bt('21:04')]), []);
   assert.deepEqual(checkDay([t({ undated: true, outcome: 'Loss', r_multiple: -1 }), t({ undated: true })]), []);
@@ -133,7 +152,7 @@ test('session close: at most three lines, ranked by |R impact| × recency', () =
     t({ date: '2026-10-16T10:05', outcome: 'Win', r_multiple: 3, worked_tags: ['Waited for the close'] }),
   ];
   const history = [
-    ...Array.from({ length: 6 }, () => t({ outcome: 'Loss', r_multiple: -1, lesson: 'No clean target again.' })),
+    ...Array.from({ length: 6 }, (_, i) => t({ date: `2026-09-0${i + 1}T09:45`, outcome: 'Loss', r_multiple: -1, lesson: 'No clean target again.' })),
     ...session,
   ];
   const lines = sessionClose(session, history);

@@ -1,6 +1,6 @@
 # The Edge Engine, in plain language
 
-This guide explains every number the Stats page shows and how it's worked out. It grows with each milestone; this version covers **Milestone 2: the canonical metrics.**
+This guide explains every number the Stats page shows and how it's worked out. It grows with each milestone; this version covers Milestones 2 to 5.
 
 Everything runs on your computer, with no internet, no AI and no cloud. The same data always gives the same numbers.
 
@@ -213,3 +213,70 @@ The Setup anatomy explorer compares each level of each pre-trade field (e.g. "Li
 | Speed and determinism | 2,000 trades compute in under 300 ms, cached by a hash of the data, identical on every run |
 
 **Your journal today:** every row is Too early. At 9 real trades nothing can be tested yet; that's the honest answer.
+
+---
+
+# Milestone 5: rules the computer checks, and the state you traded in
+
+## 17. Auto checks and self-reported breaks
+
+Every rule break now carries where it came from:
+- **auto**: the rule book found it from the fields you logged
+- **self**: you ticked it under "rules you broke" after the trade
+
+Both count toward *broke the plan* (section 5), and the same rule found both ways counts once. The trade page shows each break with a small *auto* or *self* badge.
+
+**New checks:**
+- **At most 2 trades** a day (setting `maxTrades`). The 3rd trade and later are flagged.
+- **No trade after 2 losses in a row.** This used to count any 2 losses that day; now a win or a breakeven resets the run.
+- **Risk at most 1%** (setting `maxRiskPct`).
+- **News day:** a red-folder event, the box "no news" left unticked, or the first Friday of the month with no news saved (probably NFP).
+
+**Backtests have no dates.** Day rules run per **replay session** instead of per day: at most 2 trades and nothing after 2 losses in a row. The 10-minute cooldown and the news rule are skipped, because a replay's clock is when you logged it, not market time. A backtest without a session number is never checked by day rules; nothing is guessed.
+
+The day strip on Review counts real trades only and shows "X/2 trades · Y/2 losses in a row".
+
+## 18. The state of each trade (computed, never asked)
+
+| Field | What it is |
+|---|---|
+| Trade no. | 1 for the first trade of the day (or replay session), 2 for the second… |
+| Losses in a row before | the run of losses right before this trade, that day. A win or breakeven resets it. |
+| R before | R already made or lost that day before this trade |
+| Minutes since last loss | from the last loss's exit time (or entry if no exit time); real days only |
+| After | first of the day, after a win, after a loss, after a breakeven |
+| News conflict | red-folder or probable-NFP day; real days only |
+
+All of these are known before the entry, so they are registered as *pre* fields and the explorer (section 14) can test them like any setup field.
+
+## 19. Tilt index
+
+A 3 × 3 grid: **losses in a row before** (0, 1, 2+) against **which trade of the day** (1st, 2nd, 3rd+). Each cell is the mean R of the trades taken in that state, **shrunk toward your overall mean** (section 12) so one cell with 2 trades can't make a claim. Hover a cell for its trade count, its 80% range and its raw mean.
+
+The grid is neutral on purpose: cell shading shows the distance from your mean, never good or bad. A good number on a 3rd trade is not a reason to take more trades.
+
+Beside the grid, **Tilt rules the computer caught** lists each day or replay session where max-trades, stop-after-losses or cooldown was broken: each trade in order with its R, the rules it broke, and auto or self.
+
+## 20. Hesitation
+
+A missed setup counts as **hesitation**, a rule break by not acting, when:
+- it was logged in real time (written before the outcome)
+- it scored at least the threshold (70)
+- the trigger fired
+
+Missed setups logged in hindsight are left out, because they are cherry-picked. The page says how many were left out.
+
+## 21. Checked by tests
+
+`tests/edge-state.test.mts`:
+- trade numbers
+- consecutive losses (a win or breakeven resets)
+- R before
+- minutes from the exit time
+- a new day starts over
+- backtests grouped by session, never date, with no minutes or news
+- a backtest without a session stays unchecked
+- tilt cells add up to every trade, shrunk between raw and mean, empty cells at the mean
+- sequences only where a tilt rule broke, non-tilt rules left out
+- replay session labels
+- hesitation's real-time filter and hindsight count

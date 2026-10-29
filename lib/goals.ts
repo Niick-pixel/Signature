@@ -4,6 +4,7 @@
  * trade; it only says how often it was kept, the streak, and when it broke.
  */
 import { TRADER_UTC_OFFSET_HOURS } from './planMatch';
+import { afterLossStop } from './ruleBook';
 import type { Trade } from './types';
 
 export type GoalKind = 'session_only' | 'max_trades' | 'stop_after' | 'same_day' | 'pre_graded' | 'no_tag' | 'min_grade' | 'prep_done' | 'study';
@@ -14,7 +15,7 @@ export interface GoalCheckin { goal_id: string; week: string; rating: number | n
 export const GOAL_KINDS: Array<{ kind: GoalKind; label: string; hint: string; unit: 'day' | 'week'; defaults: GoalParams; title: (p: GoalParams) => string }> = [
   { kind: 'session_only', label: 'Only my session', hint: 'Every trade in the sessions you choose.', unit: 'day', defaults: { sessions: ['NY AM'] }, title: (p) => `Only ${(p.sessions ?? []).join(' / ') || 'NY AM'}` },
   { kind: 'max_trades', label: 'A trade limit', hint: 'No more than this many trades in a day.', unit: 'day', defaults: { n: 2 }, title: (p) => `At most ${p.n ?? 2} trade${(p.n ?? 2) === 1 ? '' : 's'} a day` },
-  { kind: 'stop_after', label: 'Stop after losses', hint: 'No trade after this many losses in a day.', unit: 'day', defaults: { n: 2 }, title: (p) => `Done after ${p.n ?? 2} loss${(p.n ?? 2) === 1 ? '' : 'es'}` },
+  { kind: 'stop_after', label: 'Stop after losses', hint: 'No trade after this many losses in a row.', unit: 'day', defaults: { n: 2 }, title: (p) => `Done after ${p.n ?? 2} loss${(p.n ?? 2) === 1 ? '' : 'es'} in a row` },
   { kind: 'same_day', label: 'Journal the same day', hint: 'Every trade logged on the day it was taken.', unit: 'day', defaults: {}, title: () => 'Journal every trade the same day' },
   { kind: 'pre_graded', label: 'Grade before the outcome', hint: 'Every trade graded before you knew how it ended.', unit: 'day', defaults: {}, title: () => 'Grade every trade before the outcome' },
   { kind: 'no_tag', label: 'Drop a mistake', hint: 'Not one trade with this mistake tag.', unit: 'day', defaults: { tag: 'Chased' }, title: (p) => `No “${p.tag ?? 'Chased'}”` },
@@ -54,8 +55,8 @@ function judgeDay(g: Goal, day: string, ts: Trade[], ctx: GoalContext): GoalDay 
     case 'session_only': { const out = ts.filter((t) => !(p.sessions ?? ['NY AM']).includes(t.session)); return { day, kept: !out.length, why: out.length ? `${out.length} outside (${out[0].session})` : `${ts.length} in session` }; }
     case 'max_trades': return { day, kept: ts.length <= (p.n ?? 2), why: `${ts.length} trade${ts.length === 1 ? '' : 's'}` };
     case 'stop_after': {
-      let losses = 0; let after = 0;
-      for (const t of ts) { if (losses >= (p.n ?? 2)) after += 1; if (t.outcome === 'Loss') losses += 1; }
+      const after = afterLossStop(ts, p.n ?? 2).length;
+      const losses = ts.filter((t) => t.outcome === 'Loss').length;
       return { day, kept: !after, why: after ? `${after} after the stop` : `${losses} loss${losses === 1 ? '' : 'es'}` };
     }
     case 'same_day': { const late = ts.filter((t) => loggedDay(t) > day); return { day, kept: !late.length, why: late.length ? `${late.length} logged later` : 'All logged that day' }; }

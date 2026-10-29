@@ -161,7 +161,7 @@ export function whatIf(all: readonly Trade[], rules: readonly WhatIfRule[]): Wha
 /* ───────────────────────── tilt ───────────────────────── */
 
 export type TiltKind = 'fast' | 'bigger' | 'after_two';
-export const TILT_LABEL: Record<TiltKind, string> = { fast: 'Back in fast after a loss', bigger: 'Sized up after a loss', after_two: 'Kept going after two losses' };
+export const TILT_LABEL: Record<TiltKind, string> = { fast: 'Back in fast after a loss', bigger: 'Sized up after a loss', after_two: 'Kept going after two losses in a row' };
 export interface TiltEvent { tradeId: string; day: string; at: string; gap: number | null; kinds: TiltKind[]; r: number; prevR: number }
 export interface Tilt {
   /** Your usual wait between trades in a day, minutes (median), when there are enough. */
@@ -198,10 +198,11 @@ export function tilt(all: readonly Trade[]): Tilt {
 
   const events: TiltEvent[] = []; const afterLoss: Trade[] = [];
   for (const list of days.values()) {
+    // Losses in a row before this trade (a win or breakeven resets the run).
     let losses = 0;
     for (let i = 1; i < list.length; i += 1) {
       const prev = list[i - 1]; const t = list[i];
-      if (prev.outcome === 'Loss') losses += 1;
+      losses = prev.outcome === 'Loss' ? losses + 1 : 0;
       if (prev.outcome !== 'Loss') continue;
       afterLoss.push(t);
       const gap = gapOf(prev, t);

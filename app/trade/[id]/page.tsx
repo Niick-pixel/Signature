@@ -8,7 +8,7 @@ import { notesForTrade } from '@/db/study';
 import { shotsFor } from '@/db/shots';
 import { drawingsFor } from '@/db/drawings';
 import { reviewInputs } from '@/db/review';
-import { brokenFor, dayBreaksByTrade, fieldEras } from '@/lib/review';
+import { dayBreaksByTrade, fieldEras, planBreaks } from '@/lib/review';
 import { planDay, planMatch } from '@/lib/planMatch';
 import { excursion, tradeMetrics } from '@/lib/executions';
 import { analysable } from '@/lib/analytics';
@@ -35,7 +35,8 @@ export default async function TradePage({ params }: { params: Promise<{ id: stri
 
   const { trades, ctxFor, cfg } = reviewInputs();
   const breaks = dayBreaksByTrade(trades, ctxFor, cfg);
-  const broken = brokenFor(trade, breaks, cfg, fieldEras(trades)).map((b) => b.short);
+  // The plan's rules: the computer's checks (auto) and the ones you said you broke (self).
+  const broken = planBreaks(trade, breaks, cfg, fieldEras(trades)).map((b) => ({ short: b.short, text: b.text, source: b.source ?? 'auto' }));
 
   // Neighbours in time, for ← and →: every live trade, in the order traded.
   const order = listTrades().filter((t) => !t.deleted_at).sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));

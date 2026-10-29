@@ -20,6 +20,7 @@ import {
   MOVED_TO_BE, PLANNED_RRS, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS, closureLetter, closureScore,
 } from '../anatomy';
 import type { Trade } from '../types';
+import type { TradeState } from './state';
 
 export type Timing = 'pre' | 'in' | 'outcome' | 'post' | 'meta';
 export type FieldValue = string | number | boolean | null;
@@ -41,6 +42,8 @@ export interface FieldDef {
   get: (t: Trade) => FieldValue;
 }
 
+/** The state the engine attached (lib/edge/state withState); absent outside the engine. */
+const st = (t: Trade) => (t as Trade & { __state?: TradeState }).__state;
 const col = (key: keyof Trade) => (t: Trade) => (t[key] ?? null) as FieldValue;
 const tri = (key: keyof Trade) => (t: Trade) => (t[key] == null ? null : Boolean(t[key]));
 
@@ -107,6 +110,16 @@ export const FIELDS: FieldDef[] = [
   { key: 'grade', label: 'Grade', kind: 'cat', options: ['A+', 'A', 'B', 'C', 'D', 'F'], timing: 'pre', objective: false, source: 'trade', predictor: false, get: col('grade_letter') },
   { key: 'pre_state', label: 'Calm before entry', kind: 'num', range: [1, 5], timing: 'pre', objective: false, source: 'trade', predictor: true, get: col('pre_state') },
   { key: 'confidence_at_entry', label: 'Confidence', kind: 'num', range: [1, 5], timing: 'pre', objective: false, source: 'trade', predictor: false, get: col('confidence_at_entry') },
+  // ── pre, derived from the journal: the state the trade was taken in (lib/edge/state)
+  { key: 'trade_no', label: 'Trade of the day', kind: 'cat', options: ['1st', '2nd', '3rd+'], timing: 'pre', objective: true, source: 'derived', predictor: true,
+    get: (t) => { const n = st(t)?.tradeNo; return n == null ? null : n >= 3 ? '3rd+' : n === 2 ? '2nd' : '1st'; } },
+  { key: 'after_result', label: 'Came after', kind: 'cat', options: ['First of the day', 'A win', 'A loss', 'A breakeven'], timing: 'pre', objective: true, source: 'derived', predictor: true,
+    get: (t) => { const a = st(t)?.after; return a == null ? null : ({ first: 'First of the day', win: 'A win', loss: 'A loss', be: 'A breakeven' } as const)[a]; } },
+  { key: 'losses_in_row_before', label: 'Losses in a row before', kind: 'cat', options: ['0', '1', '2+'], timing: 'pre', objective: true, source: 'derived', predictor: true,
+    get: (t) => { const n = st(t)?.lossesInRowBefore; return n == null ? null : n >= 2 ? '2+' : String(n); } },
+  { key: 'day_r_before', label: 'Day so far', kind: 'cat', options: ['Up', 'Flat', 'Down'], timing: 'pre', objective: true, source: 'derived', predictor: true,
+    get: (t) => { const s = st(t); if (!s || s.tradeNo == null || s.tradeNo === 1) return null; return s.rBefore! > 0.1 ? 'Up' : s.rBefore! < -0.1 ? 'Down' : 'Flat'; } },
+  { key: 'news_conflict', label: 'Red-folder day', kind: 'bool', timing: 'pre', objective: true, source: 'derived', predictor: true, get: (t) => st(t)?.newsConflict ?? null },
   { key: 'graded_first', label: 'Graded before the outcome', kind: 'bool', timing: 'meta', objective: true, source: 'derived', predictor: false, get: (t) => !t.graded_post_hoc },
 
   // ── in: during the trade

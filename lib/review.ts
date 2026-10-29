@@ -7,12 +7,13 @@
  * lib/insights.ts). Everything is descriptive: nothing here can refuse a
  * trade.
  */
-import { DAY_RULES, DEFAULT_RULE_CONFIG, TRADE_RULES, checkable, dayCheckable, type DayContext, type RuleConfig, type Verdict } from './ruleBook';
+import { DAY_RULES, DEFAULT_RULE_CONFIG, TRADE_RULES, checkable, dayCheckable, dayKey, isSessionKey, type DayContext, type RuleConfig, type Verdict } from './ruleBook';
+import { isBacktest } from './domain';
 import { EARLY_N, LEAK_MIN_TRADES, THEMES, analyse, themesOf, type ThemeResult } from './insights';
 import { isHypothetical, isTaken } from './domain';
 import type { Trade } from './types';
 
-export interface BrokenRule { id: string; scope: 'trade' | 'day'; text: string; short: string; kind?: 'trading' | 'logging' }
+export interface BrokenRule { id: string; scope: 'trade' | 'day'; text: string; short: string; kind?: 'trading' | 'logging'; source?: 'auto' | 'self' }
 
 const asBroken = (r: { id: string; scope: 'trade' | 'day'; text: string; short: string; kind?: 'trading' | 'logging' }): BrokenRule =>
   ({ id: r.id, scope: r.scope, text: r.text, short: r.short, ...(r.kind === 'logging' ? { kind: 'logging' as const } : {}) });
@@ -52,8 +53,8 @@ export function checkTrade(t: Trade, cfg: RuleConfig = DEFAULT_RULE_CONFIG, eras
 
 /* ------------------------------------------------------------------ day */
 
-/** A trade's day for day rules (local 'YYYY-MM-DD'), or null when no day rule applies to it. */
-export const ruleDay = (t: Trade): string | null => (dayCheckable(t) ? t.date.slice(0, 10) : null);
+/** A trade's day for day rules: the local date, or 'session:N' for a backtest's replay session; null when none applies. */
+export const ruleDay = dayKey;
 
 /** The day rules one day's trades broke, and by which trades. Backtests and undated trades are skipped. */
 export function checkDay(trades: readonly Trade[], cfg: RuleConfig = DEFAULT_RULE_CONFIG, ctx: DayContext = {}):
@@ -73,7 +74,7 @@ export function dayBreaksByTrade(trades: readonly Trade[], ctxFor: (day: string)
   }
   const out = new Map<string, BrokenRule[]>();
   for (const [d, ts] of days) {
-    for (const b of checkDay(ts, cfg, ctxFor(d))) {
+    for (const b of checkDay(ts, cfg, isSessionKey(d) ? { backtest: true } : ctxFor(d))) {
       for (const id of b.tradeIds) out.set(id, [...(out.get(id) ?? []), { id: b.id, scope: b.scope, text: b.text, short: b.short }]);
     }
   }
@@ -87,7 +88,13 @@ export function dayBreaksByTrade(trades: readonly Trade[], ctxFor: (day: string)
  */
 export function planBreaks(t: Trade, dayBreaks: Map<string, BrokenRule[]>, cfg: RuleConfig = DEFAULT_RULE_CONFIG,
   eras?: Map<string, string>): BrokenRule[] {
-  return brokenFor(t, dayBreaks, cfg, eras).filter((b) => b.kind !== 'logging');
+  const auto = brokenFor(t, dayBreaks, cfg, eras).filter((b) => b.kind !== 'logging').map((b) => ({ ...b, source: 'auto' as const }));
+  // The rules you say you broke (036), where the computer did not already catch them.
+  const self = (t.rule_breaks_manual ?? []).filter((id) => !auto.some((b) => b.id === id)).flatMap((id) => {
+    const r = TRADE_RULES.find((x) => x.id === id);
+    return r ? [{ id: r.id, scope: 'trade' as const, text: r.text, short: r.short, source: 'self' as const }] : [];
+  });
+  return [...auto, ...self];
 }
 
 /** Every rule a trade broke: its own, and the day's it took part in. */
@@ -416,7 +423,10 @@ export interface SessionStrip {
   /** Real trades today (backtests have no day). */
   trades: number;
   losses: number;
+  /** Losses in a row at the end of the day so far, against the limit. */
+  streak: number;
   limit: number;
+  maxTrades: number;
   /** When today's last loss was logged (ISO), for the cooldown timer. */
   lastLossAt: string | null;
   cooldownMinutes: number;
@@ -425,11 +435,13 @@ export interface SessionStrip {
 
 /** Today's real trading, for the strip on the board: losses against the limit, the cooldown, the news. */
 export function sessionStrip(trades: readonly Trade[], today: string, ctx: DayContext, cfg: RuleConfig = DEFAULT_RULE_CONFIG): SessionStrip {
-  const day = trades.filter((t) => dayCheckable(t) && t.date.slice(0, 10) === today).sort((a, b) => a.date.localeCompare(b.date));
+  const day = trades.filter((t) => dayCheckable(t) && !isBacktest(t.account) && t.date.slice(0, 10) === today).sort((a, b) => a.date.localeCompare(b.date));
   const losses = day.filter((t) => t.outcome === 'Loss');
+  let streak = 0;
+  for (const t of day) streak = t.outcome === 'Loss' ? streak + 1 : 0;
   const last = losses.map((t) => (t.created_at.endsWith('Z') ? t.created_at : `${t.created_at}Z`)).sort().pop() ?? null;
   return {
-    trades: day.length, losses: losses.length, limit: ctx.maxLosses ?? cfg.maxLosses,
+    trades: day.length, losses: losses.length, streak, limit: ctx.maxLosses ?? cfg.maxLosses, maxTrades: cfg.maxTrades,
     lastLossAt: last, cooldownMinutes: cfg.cooldownMinutes, redFolder: ctx.redFolder === true,
   };
 }

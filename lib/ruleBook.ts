@@ -28,9 +28,13 @@ export interface RuleConfig {
   maxLosses: number;
   /** Minutes to wait after a loss before the next trade. */
   cooldownMinutes: number;
+  /** Trades allowed per day (or replay session). */
+  maxTrades: number;
+  /** Risk per trade, % of the account, when the trade records it. */
+  maxRiskPct: number;
 }
 
-export const DEFAULT_RULE_CONFIG: RuleConfig = { minR: 1.5, maxLosses: 2, cooldownMinutes: 10 };
+export const DEFAULT_RULE_CONFIG: RuleConfig = { minR: 1.5, maxLosses: 2, cooldownMinutes: 10, maxTrades: 2, maxRiskPct: 1 };
 
 export type Verdict = boolean | null;
 
@@ -61,6 +65,10 @@ export interface DayContext {
   /** A red-folder (high-impact) day, from the morning check-in. */
   redFolder?: boolean;
   maxLosses?: number;
+  /** The first Friday of the month with no news calendar for that day: very likely NFP. */
+  nfpGuess?: boolean;
+  /** A replay session rather than a market day: no clock times, no news. */
+  backtest?: boolean;
 }
 
 export interface DayRule {
@@ -144,6 +152,16 @@ export const TRADE_RULES: TradeRule[] = [
     test: (t) => (t.below_min_confidence == null ? null : !t.below_min_confidence),
   },
   {
+    id: 'eq-pool', scope: 'trade', short: 'Not into an EQ pool',
+    text: 'No long into EQH, no short into EQL.',
+    test: (t) => (t.into_eq_pool == null ? null : !t.into_eq_pool),
+  },
+  {
+    id: 'risk', scope: 'trade', short: 'Risk within 1%',
+    text: 'Risk per trade at or under 1% of the account.',
+    test: (t, cfg) => (t.risk_percent == null ? null : t.risk_percent <= cfg.maxRiskPct),
+  },
+  {
     id: 'management', scope: 'trade', short: 'Management plan set', kind: 'logging',
     text: 'The management plan is decided and recorded.',
     test: (t) => t.management != null || t.mgmt_plan != null,
@@ -164,26 +182,47 @@ export function lossKnownAt(t: Trade): string {
   return t.exit_time && /^\d{2}:\d{2}/.test(t.exit_time) ? `${t.date.slice(0, 10)}T${t.exit_time.slice(0, 5)}` : t.date;
 }
 
+/**
+ * The trades taken after `max` losses in a row, in one day's (or session's)
+ * order. A win or breakeven resets the run. The one definition of "stop
+ * after N losses" — the day rule, the plan grade and goals all use it.
+ */
+export function afterLossStop<T extends Pick<Trade, 'id' | 'outcome' | 'r_multiple'>>(day: readonly T[], max: number): T[] {
+  if (max <= 0) return [];
+  let run = 0; let stopped = false;
+  const out: T[] = [];
+  for (const t of day) {
+    if (stopped) { out.push(t); continue; }
+    const loss = t.r_multiple != null ? t.r_multiple < -0.1 : t.outcome === 'Loss';
+    run = loss ? run + 1 : 0;
+    if (run >= max) stopped = true;
+  }
+  return out;
+}
+
+/** The first Friday of its month (local 'YYYY-MM-DD'). */
+export function isFirstFriday(day: string): boolean {
+  const d = new Date(`${day}T12:00:00Z`);
+  return d.getUTCDay() === 5 && d.getUTCDate() <= 7;
+}
+
 export const DAY_RULES: DayRule[] = [
   {
-    id: 'stop-after-losses', scope: 'day', short: 'Done after 2 losses',
-    text: 'No trade after the 2nd loss of the day.',
-    broken: (day, cfg, ctx) => {
-      const max = ctx.maxLosses ?? cfg.maxLosses;
-      if (max <= 0) return [];
-      let losses = 0;
-      const out: string[] = [];
-      for (const t of day) {
-        if (losses >= max) out.push(t.id);
-        if (t.outcome === 'Loss') losses += 1;
-      }
-      return out;
-    },
+    id: 'max-trades', scope: 'day', short: 'At most 2 trades',
+    text: 'At most 2 trades a day (or replay session).',
+    broken: (day, cfg) => (cfg.maxTrades > 0 ? day.slice(cfg.maxTrades).map((t) => t.id) : []),
+  },
+  {
+    id: 'stop-after-losses', scope: 'day', short: 'Done after 2 losses in a row',
+    text: 'No trade after 2 losses in a row.',
+    broken: (day, cfg, ctx) => afterLossStop(day, ctx.maxLosses ?? cfg.maxLosses).map((t) => t.id),
   },
   {
     id: 'cooldown', scope: 'day', short: '10 minutes after a loss',
     text: 'No trade within 10 minutes after a loss.',
-    broken: (day, cfg) => {
+    broken: (day, cfg, ctx) => {
+      // A replay has no clock: its times are when it was logged.
+      if (ctx.backtest) return [];
       const out: string[] = [];
       for (let i = 1; i < day.length; i++) {
         const prev = day[i - 1];
@@ -196,11 +235,13 @@ export const DAY_RULES: DayRule[] = [
   },
   {
     id: 'news-day', scope: 'day', short: 'No red-folder day',
-    text: 'No trade on a red-folder (high-impact news) day.',
+    text: 'No trade on a red-folder (NFP / FOMC / CPI) day.',
     broken: (day, _cfg, ctx) => {
-      // The morning check-in said high-impact news, or a trade's own
-      // checklist said there was an NFP / FOMC / CPI conflict.
-      const conflict = ctx.redFolder === true || day.some((t) => t.chk_no_news === false);
+      if (ctx.backtest) return [];
+      // The morning check-in or the news calendar said high-impact news, a
+      // trade's own checklist said there was a conflict, or it is the first
+      // Friday with no calendar for the day — NFP, nearly always.
+      const conflict = ctx.redFolder === true || ctx.nfpGuess === true || day.some((t) => t.chk_no_news === false);
       return conflict ? day.map((t) => t.id) : [];
     },
   },
@@ -211,5 +252,14 @@ export const RULES: Rule[] = [...TRADE_RULES, ...DAY_RULES];
 /** A trade the rules are about: taken for real (not Missed, not a pass). Planned trades are checked too — before the fact. */
 export const checkable = (t: Trade) => !t.deleted_at && !isHypothetical(t.account) && (isTaken(t.outcome) || t.status === 'Planned');
 
-/** Trades a day rule can see: real, taken, dated, not a backtest. */
-export const dayCheckable = (t: Trade) => checkable(t) && isTaken(t.outcome) && t.status !== 'Planned' && !isBacktest(t.account) && !t.undated;
+/**
+ * Trades a day rule can see: taken, and either a real trade with a date or a
+ * backtest with a replay session (backtests have no market date; the session
+ * stands in for the day).
+ */
+export const dayCheckable = (t: Trade) => checkable(t) && isTaken(t.outcome) && t.status !== 'Planned'
+  && (isBacktest(t.account) ? t.session_index != null : !t.undated);
+
+/** The key day rules group by: the date for a real trade, the replay session for a backtest. */
+export const dayKey = (t: Trade): string | null => (!dayCheckable(t) ? null : isBacktest(t.account) ? `session:${t.session_index}` : t.date.slice(0, 10));
+export const isSessionKey = (k: string) => k.startsWith('session:');
