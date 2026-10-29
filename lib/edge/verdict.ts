@@ -15,12 +15,17 @@ export const MEANINGFUL_R = 0.1;
 
 export interface Verdict { level: VerdictLevel; direction: 'positive' | 'negative' | null; p: number }
 
-export function verdict(o: { n: number; pPositive: number; lo80: number; hi80: number; heldOutOfSample?: boolean }): Verdict {
+/** The probability each level needs. The insight ledger (milestone 10) raises them when its claims did not hold. */
+export interface Thresholds { hint: number; likely: number; confirmed: number }
+export const DEFAULT_THRESHOLDS: Thresholds = { hint: 0.75, likely: 0.9, confirmed: 0.975 };
+export const MIN_N = 8;
+
+export function verdict(o: { n: number; pPositive: number; lo80: number; hi80: number; heldOutOfSample?: boolean }, t: Thresholds = DEFAULT_THRESHOLDS): Verdict {
   const direction = o.pPositive >= 0.5 ? 'positive' : 'negative';
   const p = direction === 'positive' ? o.pPositive : 1 - o.pPositive;
-  if (o.n < 8 || (o.lo80 < -MEANINGFUL_R && o.hi80 > MEANINGFUL_R)) return { level: 'too-early', direction: null, p };
-  if (p >= 0.975 && o.n >= 30 && o.heldOutOfSample) return { level: 'confirmed', direction, p };
-  if (p >= 0.9 && o.n >= 15) return { level: 'likely', direction, p };
-  if (p >= 0.75) return { level: 'hint', direction, p };
+  if (o.n < MIN_N || (o.lo80 < -MEANINGFUL_R && o.hi80 > MEANINGFUL_R)) return { level: 'too-early', direction: null, p };
+  if (p >= t.confirmed && o.n >= 30 && o.heldOutOfSample) return { level: 'confirmed', direction, p };
+  if (p >= t.likely && o.n >= 15) return { level: 'likely', direction, p };
+  if (p >= t.hint) return { level: 'hint', direction, p };
   return { level: 'too-early', direction: null, p };
 }

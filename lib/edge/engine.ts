@@ -1,0 +1,53 @@
+/**
+ * The Edge Engine's entry point: one call computes everything the Stats page
+ * shows for a set of trades, cached by a hash of the trades and the options,
+ * so the same data never recomputes and never changes between reloads.
+ */
+import { edgeMetrics, type EdgeMetrics } from './metrics';
+import { explore, type Explorer } from './explorer';
+import { completeness, PREDICTORS, FIELDS } from './fields';
+import { nPerGroup } from './power';
+import { DEFAULT_HALF_LIFE, type Window } from './recency';
+import { hashString } from './rng';
+import type { Thresholds } from './verdict';
+import { pnlOf } from '../stats';
+import type { Trade } from '../types';
+
+export interface EngineOptions { window?: Window; halfLife?: number; rubric?: number; thresholds?: Thresholds }
+export interface EngineResult {
+  hash: string; window: Window; n: number;
+  metrics: EdgeMetrics;
+  explorer: Explorer;
+  /** Trades per group to tell a 0.5R difference at your spread (α 0.05, power 0.8). */
+  nFor05R: number | null;
+  completeness: ReturnType<typeof completeness>;
+}
+
+const cache = new Map<string, EngineResult>();
+const CACHE_SIZE = 16;
+
+export function datasetHash(trades: readonly Trade[], opts: EngineOptions = {}): string {
+  const key = trades.map((t) => `${t.id}:${t.r_multiple}:${t.updated_at ?? ''}`).join('|');
+  return hashString(`${key}#${JSON.stringify(opts)}`).toString(36);
+}
+
+/** `trades`: settled with an R (any order — sorted here, oldest first). */
+export function runEngine(input: readonly Trade[], opts: EngineOptions = {}): EngineResult {
+  const window = opts.window ?? 'all';
+  const sorted = [...input].filter((t) => t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
+  const trades = window === 'rubric' && opts.rubric != null ? sorted.filter((t) => t.rubric_version === opts.rubric) : sorted;
+  const hash = datasetHash(trades, opts);
+  const hit = cache.get(hash);
+  if (hit) return hit;
+  const halfLife = window === 'recent' ? (opts.halfLife ?? DEFAULT_HALF_LIFE) : null;
+  const metrics = edgeMetrics(trades.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) })));
+  const result: EngineResult = {
+    hash, window, n: trades.length, metrics,
+    explorer: explore(trades, PREDICTORS, { halfLife, thresholds: opts.thresholds }),
+    nFor05R: metrics.sd ? nPerGroup(metrics.sd, 0.5) : null,
+    completeness: completeness(trades, FIELDS),
+  };
+  cache.set(hash, result);
+  if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value as string);
+  return result;
+}

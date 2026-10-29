@@ -144,3 +144,72 @@ At the reveal, **Similar past setups** shows:
 **How "nearest" is measured (Gower distance):** for each field both trades recorded, a match adds 0 and a difference adds 1. A number adds its gap divided by its range (closure 9 vs 7 adds 0.2). The distance is the average. Fields either trade left blank are skipped. You need at least 3 shared fields, and k = min(10, ⌊past trades ÷ 3⌋).
 
 That prediction is saved with the trade (the `predictions` table, carried in backups). Milestone 10 scores how often these predictions were right.
+
+---
+
+# Milestone 4: the engine core
+
+## 11. Every number carries its uncertainty
+
+| What | How |
+|---|---|
+| Expectancy | bootstrap, 5,000 seeded resamples, giving 80% and 95% intervals and P(edge > 0) (section 3) |
+| Proportions (win rates) | Wilson interval; where a probability is needed, a Beta posterior. Its quantiles are computed exactly from the incomplete beta function, implemented in `lib/edge/dist.ts` (no libraries). |
+| Comparing two groups | the difference of their shrunk means, its standard deviation, and P(difference > 0) |
+
+## 12. Shrinkage: small groups can't shout
+
+Every slice's mean R is pulled toward the overall mean:
+
+  **shrunk = (n · its mean + k · overall mean) ÷ (n + k)**, uncertainty ≈ √(σ² ÷ (n + k))
+
+**k** measures how much your groups truly differ, compared with the noise in each:
+- k = σ² ÷ τ², where τ² = (spread of the group means) − (the spread you'd expect from noise alone)
+- groups that barely differ give a large k (shrink hard)
+- groups that really differ give a small k (barely shrink)
+- k stays between 5 and 60; with fewer than 3 groups there's nothing to measure, so k = 20
+
+Win rates start from Beta(your win rate × 20, (1 − your win rate) × 20): a prior worth 20 trades.
+
+## 13. Recency
+
+With the **Recent-weighted** window, a trade counts **0.5^(age ÷ 60)**, its age measured in trades. The trade 60 trades ago counts half; the one 120 ago counts a quarter.
+
+Every formula then uses the **effective n** = (Σ weights)² ÷ Σ weights² instead of the plain count.
+
+There are three windows:
+- **All history** (no weighting)
+- **Recent-weighted**
+- **This rubric version only**
+
+## 14. Evidence gates and multiple comparisons
+
+The Setup anatomy explorer compares each level of each pre-trade field (e.g. "Liquidity event = None") with the rest of your trades:
+1. Both sides are shrunk (section 12) and recency-weighted (section 13).
+2. A raw **p-value** comes from Welch's t-test, using Student's t with Welch–Satterthwaite degrees of freedom. It's honest with 8–10 trades a side, where a normal approximation is overconfident.
+3. **Benjamini–Hochberg at q = 0.10** across the whole table: when 40 comparisons are scanned, a few look strong by chance. A row that doesn't survive can't say more than *Too early*.
+4. Survivors get a verdict (section 4) from the shrunk difference.
+
+**Extra rules:**
+- **Hidden rows:** fewer than 3 trades on either side, or no variation at all.
+- **Not tested:** fewer than 8 trades on either side.
+- **Maturity tier 0:** under 30 trades, a row stays Too early unless the gap is extreme (P ≥ 99% and at least 0.5R).
+
+## 15. Trades needed
+
+- **To tell two groups apart by 0.5R:** n per group ≈ 2 · (1.96 + 0.84)² · σ² ÷ 0.5² (95% confidence, 80% power).
+- **On your data today:** about 119 trades per group for real accounts, about 73 across all accounts.
+
+## 16. Proven on synthetic data
+
+`lib/edge/synthetic.ts` generates seeded trades with a known effect: "liquidity event = None" loses 0.5R, with results spread ±0.7R. The tests confirm:
+
+| Case | Result |
+|---|---|
+| 150 trades | the effect is found (a negative verdict that survives the correction) in at least 14 of 20 runs |
+| 30 trades | Too early in at least 17 of 20 runs |
+| No effect at all, 150 trades | at most 4 of 40 runs claim anything |
+| Leakage | the explorer refuses any outcome or post field (R, exit, tags, lesson, regrade, grade) |
+| Speed and determinism | 2,000 trades compute in under 300 ms, cached by a hash of the data, identical on every run |
+
+**Your journal today:** every row is Too early. At 9 real trades nothing can be tested yet; that's the honest answer.
