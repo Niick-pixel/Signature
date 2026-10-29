@@ -145,6 +145,11 @@ export default async function StatsPage(
           <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <h1 className="text-[22px] font-semibold tracking-tight">Stats</h1>
             <div className="flex flex-wrap items-center gap-3">
+              <a href="/analytics" className="rounded-full border px-3.5 py-1.5 text-[12px] font-medium" data-analytics-link
+                style={{ borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))', background: 'rgb(var(--accent) / 0.08)' }}
+                title="Time of day, confluences that pay, psychology, news, and Ask your journal (A)">
+                Analytics →
+              </a>
 
               <a
                 href={`/stats?${new URLSearchParams({

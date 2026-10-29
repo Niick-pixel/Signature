@@ -12,6 +12,7 @@ import { ThemeGrid } from './ThemeGrid';
 import { DashboardSettings } from '@/components/settings/DashboardSettings';
 import { TradeSettings } from '@/components/settings/TradeSettings';
 import { PropSettings } from '@/components/settings/PropSettings';
+import { AnalyticsSettings } from '@/components/settings/AnalyticsSettings';
 import { navigate } from '@/lib/nav';
 import { SETTINGS_TOGGLE, SHEET_OPEN } from './Shortcuts';
 
@@ -225,6 +226,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             <DashboardSettings Section={Section} />
             <TradeSettings Section={Section} />
             <PropSettings Section={Section} />
+            <AnalyticsSettings Section={Section} />
 
             <Section
               title="Whiteboard"

@@ -90,7 +90,27 @@ export interface Preferences {
   propWarnPct: number;
   /** Show passed, failed and archived accounts in the hub. */
   propShowEnded: boolean;
+  /** Phase 4. Analytics: which tab opens, which trades, and how it reads them. */
+  analyticsTab: AnalyticsTab;
+  analyticsWorld: 'real' | 'backtest' | 'all';
+  /** Fewer trades than this is an "early signal": shown, never ranked best or worst. */
+  analyticsMinN: number;
+  /** The dial and heatmap in New York time, or the journal's own clock. */
+  analyticsClock: 'ny' | 'local';
+  /** Trades at or after this hour (journal clock) count as late. */
+  analyticsLateHour: number;
+  /** Words looked for in the writing on the Psychology tab. */
+  analyticsWords: string[];
+  /** Minutes either side of a high-impact event that count as "near the news". */
+  newsWindow: number;
+  /** How many of your own sentences Ask quotes back. */
+  askQuotes: number;
 }
+
+export const ANALYTICS_TABS = ['time', 'confluences', 'psychology', 'news', 'ask'] as const;
+export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
+export const ANALYTICS_TAB_LABEL: Record<AnalyticsTab, string> = { time: 'Time', confluences: 'Confluences', psychology: 'Psychology', news: 'News', ask: 'Ask your journal' };
+export const DEFAULT_WORDS = ['fear', 'fomo', 'revenge', 'rushed', 'impatient', 'hesitat', 'bored', 'tired', 'confident', 'calm', 'greedy', 'frustrat'];
 
 export const TRADE_SECTIONS = ['metrics', 'chips', 'chart', 'executions', 'shots', 'rules', 'notes'] as const;
 export type TradeSection = (typeof TRADE_SECTIONS)[number];
@@ -162,6 +182,14 @@ export const DEFAULT_PREFERENCES: Preferences = {
   propDayBoundary: 'cme',
   propWarnPct: 25,
   propShowEnded: false,
+  analyticsTab: 'time',
+  analyticsWorld: 'all',
+  analyticsMinN: 5,
+  analyticsClock: 'ny',
+  analyticsLateHour: 13,
+  analyticsWords: DEFAULT_WORDS,
+  newsWindow: 30,
+  askQuotes: 3,
 };
 
 export const TEXT_SIZES = ['Small', 'Normal', 'Large', 'Huge'] as const;
@@ -211,6 +239,7 @@ export function readPreferences(): Preferences {
       scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
       sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
+      analyticsWords: Array.isArray(saved.analyticsWords) ? saved.analyticsWords.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.analyticsWords,
       checklistItems: Array.isArray(saved.checklistItems) ? saved.checklistItems.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.checklistItems,
     };
   } catch {

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { exportExecutions } from '@/db/executions';
 import { exportProp } from '@/db/prop';
+import { exportNews } from '@/db/news';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
@@ -144,7 +145,7 @@ export async function GET() {
     // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 10,
+    version: 11,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -163,6 +164,8 @@ export async function GET() {
     ...exportExecutions(),
     // Version 10: prop accounts and payouts (costs ride in eval_purchases).
     ...exportProp(),
+    // Version 11: the news calendar.
+    ...exportNews(),
   };
 
   const zip = makeZip([
