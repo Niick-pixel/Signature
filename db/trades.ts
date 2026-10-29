@@ -167,6 +167,8 @@ const WRITABLE = [
   'written_before_outcome',
   // Form fixes (029).
   'r_to_nearest_bucket', 'management',
+  // Executions (030).
+  'exit_price', 'fees_dollars',
   'undated',
 ] as const;
 

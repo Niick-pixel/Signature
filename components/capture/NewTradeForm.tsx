@@ -607,6 +607,9 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       grade_locked_at: trade ? trade.grade_locked_at : gradeLock?.at ?? null,
       // No longer asked; an older trade keeps what it holds.
       entry_price: trade?.entry_price ?? null,
+      // From an executions import; the form never shows them, an edit keeps them.
+      exit_price: trade?.exit_price ?? null,
+      fees_dollars: trade?.fees_dollars ?? null,
       take_profit: trade?.take_profit ?? null,
       stop_loss: trade?.stop_loss ?? null,
       chart_date: trade?.chart_date ?? null,

@@ -61,3 +61,25 @@ export function writeDraft(values: Record<string, unknown>): void {
 export function clearDraft(): void {
   try { window.localStorage.removeItem(KEY); } catch { /* as above */ }
 }
+
+/** Whether a half-written trade is waiting (something actually written in it). */
+export function hasRealDraft(): boolean {
+  const d = readDraft();
+  return !!d && worthKeeping(d.values);
+}
+
+/**
+ * Starts the next New trade from facts already known — an imported
+ * execution's time, instrument, direction, size and P&L. Merged into any
+ * draft so nothing written is lost; the trade's answers (the checklist, the
+ * grade, the explanation) are never seeded.
+ */
+export function seedDraft(values: Record<string, unknown>, known: string[] = []): void {
+  const prior = readDraft();
+  // The form shows a defaulted answer only once confirmed; what the platform recorded is known, so it counts as given.
+  const was = Array.isArray(prior?.values.confirmed) ? prior!.values.confirmed as string[] : ['status', 'session', 'setupType'];
+  const confirmed = [...new Set([...was, ...known])];
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify({ savedAt: new Date().toISOString(), values: { ...(prior?.values ?? {}), ...values, confirmed } }));
+  } catch { /* storage unavailable: the form simply opens empty */ }
+}

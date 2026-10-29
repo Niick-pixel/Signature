@@ -63,7 +63,33 @@ export interface Preferences {
   sidebarSections: Record<SidebarSection, boolean>;
   /** The pre-entry checklist in the Today panel, ticked fresh each day. */
   checklistItems: string[];
+  /** Phase 2. Where a trade opens from the Dashboard, the Today panel and Stats: its own page, or the board's panel. */
+  openTradeIn: 'page' | 'board';
+  /** The trade page's sections, on or off. */
+  tradeSections: Record<TradeSection, boolean>;
+  /** Minutes of chart shown before entry and after exit. */
+  chartPad: 15 | 30 | 60 | 120;
+  /** Executions import: the platform (or detect), the clock its file is written in, and how to match. */
+  importPlatform: 'auto' | 'tradovate' | 'ninjatrader' | 'rithmic' | 'generic';
+  importZone: 'journal' | 'America/New_York' | 'America/Chicago' | 'UTC';
+  /** A round trip matches a trade entered within this many minutes. */
+  importWindow: number;
+  /** Fill only empty fields (false), or replace what the trade holds (true). */
+  importOverwrite: boolean;
+  /** Write P&L net of fees (true) or gross (false). */
+  importPnlAfterFees: boolean;
+  /** Round-turn dollars per contract, used when the file carries no commission. 0 = none. */
+  importFeePerContract: number;
+  /** Link stored, unlinked executions to trades logged later (the "Log it" path), on its own. */
+  importAutoLink: boolean;
 }
+
+export const TRADE_SECTIONS = ['metrics', 'chips', 'chart', 'executions', 'shots', 'rules', 'notes'] as const;
+export type TradeSection = (typeof TRADE_SECTIONS)[number];
+export const TRADE_SECTION_LABEL: Record<TradeSection, string> = {
+  metrics: 'Numbers (planned vs actual R, time held, fees)', chips: 'Plan, confluences and tags', chart: 'Price chart',
+  executions: 'Executions (fills)', shots: 'Screenshots', rules: 'Rules kept / broken', notes: 'Explanation and lesson',
+};
 
 export const DASH_BLOCKS = ['hero', 'tiles', 'chart', 'week', 'score', 'recent'] as const;
 export type DashBlock = (typeof DASH_BLOCKS)[number];
@@ -114,6 +140,16 @@ export const DEFAULT_PREFERENCES: Preferences = {
   sidebar: 'dashboard',
   sidebarSections: { plan: true, checklist: true, focus: true, rules: true, recent: true },
   checklistItems: DEFAULT_CHECKLIST,
+  openTradeIn: 'page',
+  tradeSections: { metrics: true, chips: true, chart: true, executions: true, shots: true, rules: true, notes: true },
+  chartPad: 30,
+  importPlatform: 'auto',
+  importZone: 'journal',
+  importWindow: 10,
+  importOverwrite: false,
+  importPnlAfterFees: true,
+  importFeePerContract: 0,
+  importAutoLink: true,
 };
 
 export const TEXT_SIZES = ['Small', 'Normal', 'Large', 'Huge'] as const;
@@ -162,6 +198,7 @@ export function readPreferences(): Preferences {
       dashBlocks: { ...DEFAULT_PREFERENCES.dashBlocks, ...(saved.dashBlocks ?? {}) },
       scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
       sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
+      tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
       checklistItems: Array.isArray(saved.checklistItems) ? saved.checklistItems.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.checklistItems,
     };
   } catch {

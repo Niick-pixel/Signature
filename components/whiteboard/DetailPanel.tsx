@@ -538,6 +538,9 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                         <a href={`/new?edit=${trade.id}`} className="outline-none">
                           <Button tabIndex={-1}>Edit</Button>
                         </a>
+                        <a href={`/trade/${trade.id}`} className="outline-none" data-full-page>
+                          <Button tabIndex={-1}>Full page</Button>
+                        </a>
                         <Button onClick={duplicate} disabled={busy}>Duplicate</Button>
                         <div className="ml-auto">
                           <Button variant="danger" data-delete-trade onClick={() => setDeleting(true)}>Delete…</Button>

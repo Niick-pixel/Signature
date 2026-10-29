@@ -9,6 +9,7 @@ import { parsePrepData } from '@/lib/prep';
 import { getDailyReview, getWeeklyReview, restoreCheckIn, restoreReviewCreated, saveDailyReview, saveWeeklyReview } from '@/db/reviews';
 import { BIAS_DIRECTIONS, NEWS_LEVELS } from '@/lib/domain';
 import { parseTradeInput } from '@/lib/validate';
+import { restoreExecutions } from '@/db/executions';
 
 /**
  * Restores trades from an export.
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       trades?: unknown; cash?: unknown; journal?: unknown; format?: unknown;
       daily_reviews?: unknown; weekly_reviews?: unknown; session_prep?: unknown;
       path_steps?: unknown; path_events?: unknown; eval_purchases?: unknown; red_day_pages?: unknown; red_day_skips?: unknown;
+      executions?: unknown; execution_unlinks?: unknown; trade_bars?: unknown;
     } | null;
 
   if (!body || !Array.isArray(body.trades)) {
@@ -202,7 +204,10 @@ export async function POST(request: Request) {
     }
   }
 
+  // After the trades, so links point at rows that exist.
+  const executions = restoreExecutions(body);
+
   return NextResponse.json({
-    imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
+    executions, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
   });
 }

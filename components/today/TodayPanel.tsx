@@ -6,11 +6,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { CloseX } from '@/components/review/CloseX';
 import { FocusPill, type FocusData } from '@/components/review/FocusPill';
-import { OPEN_TRADE_KEY } from '@/components/stats/OpenOnBoard';
+import { openTrade } from '@/components/trade/openTrade';
 import { BOARD_SHOWN } from '@/lib/keys';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import { localDay } from '@/lib/day';
-import { navigate } from '@/lib/nav';
 import { springSoft, exitQuick } from '@/lib/motion';
 
 interface TodayData {
@@ -144,8 +143,8 @@ export function TodayPanel() {
                   <ul className="space-y-1.5">
                     {data.recent.map((t) => (
                       <li key={t.id}>
-                        <button type="button" className="flex w-full items-baseline justify-between gap-2 text-left hover:opacity-80" title="Open on the board"
-                          onClick={() => { try { window.sessionStorage.setItem(OPEN_TRADE_KEY, t.id); } catch { /* fine */ } navigate('/'); }}>
+                        <button type="button" className="flex w-full items-baseline justify-between gap-2 text-left hover:opacity-80" title={prefs.openTradeIn === 'page' ? 'Open the trade' : 'Open on the board'}
+                          onClick={() => openTrade(t.id, prefs.openTradeIn)}>
                           <span className="min-w-0 truncate">
                             <b className="font-medium">{t.setup} {t.direction === 'Long' ? '↗' : '↘'}</b>
                             <span style={{ color: 'var(--text-faint)' }}> · {new Date(t.at.endsWith('Z') ? t.at : `${t.at}Z`).toLocaleDateString(undefined, { weekday: 'short' })} · {t.account.replace(' (FX Replay)', '')}</span>

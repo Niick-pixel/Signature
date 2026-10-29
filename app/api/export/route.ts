@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { exportExecutions } from '@/db/executions';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
@@ -40,6 +41,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'written_before_outcome',
   // Form fixes (029).
   'r_to_nearest_bucket', 'management',
+  // Executions (030).
+  'exit_price', 'fees_dollars',
 ];
 
 function csvCell(v: unknown): string {
@@ -140,7 +143,7 @@ export async function GET() {
     // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 8,
+    version: 9,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -155,6 +158,8 @@ export async function GET() {
     red_day_pages: (getDb().prepare('SELECT * FROM red_day_pages ORDER BY day').all() as Record<string, unknown>[]).map((r) => ({ ...r })),
     // Version 8: red days skipped on purpose.
     red_day_skips: (getDb().prepare('SELECT * FROM red_day_skips ORDER BY day').all() as Record<string, unknown>[]).map((r) => ({ ...r })),
+    // Version 9: platform executions, hand unlinks and chart bars.
+    ...exportExecutions(),
   };
 
   const zip = makeZip([

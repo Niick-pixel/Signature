@@ -140,6 +140,10 @@ export interface Trade {
   dismissed_flags: Record<string, string | null>;
 
   entry_price: number | null;
+  /** The average exit price — from an executions import, or empty. */
+  exit_price: number | null;
+  /** Commissions and fees for the round trip, positive dollars. */
+  fees_dollars: number | null;
   take_profit: number | null;
   stop_loss: number | null;
 

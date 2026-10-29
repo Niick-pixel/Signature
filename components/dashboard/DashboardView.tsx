@@ -5,8 +5,7 @@ import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
 import { press, spring, springSoft } from '@/lib/motion';
-import { OPEN_TRADE_KEY } from '@/components/stats/OpenOnBoard';
-import { navigate } from '@/lib/nav';
+import { openTrade } from '@/components/trade/openTrade';
 import { overallScore, SCORE_AXES, type DashboardData, type DashWorld, type TileValues } from '@/lib/dashboard';
 
 /*
@@ -59,7 +58,7 @@ export function DashboardView({ data, today }: { data: Record<DashWorld, Dashboa
           </div>
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
             {b.score && <Card title="Discipline score" note="How you trade, not what you made. Hover an axis for what it measures; choose the axes in Customize."><Score d={d} enabled={prefs.scoreAxes} /></Card>}
-            {b.recent && <Card title="Recent trades"><Recent d={d} money={money} /></Card>}
+            {b.recent && <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>}
           </div>
         </div>
       )}
@@ -258,13 +257,13 @@ function Score({ d, enabled }: { d: DashboardData; enabled: Record<string, boole
   );
 }
 
-function Recent({ d, money }: { d: DashboardData; money: boolean }) {
+function Recent({ d, money, openIn }: { d: DashboardData; money: boolean; openIn: 'page' | 'board' }) {
   return (
     <ul className="divide-y" style={{ borderColor: 'var(--glass-stroke)' }} data-dash-recent>
       {d.recent.map((t) => (
         <li key={t.id}>
           <button type="button" className="flex w-full items-center justify-between gap-3 py-2 text-left text-[12px] hover:opacity-80"
-            onClick={() => { try { window.sessionStorage.setItem(OPEN_TRADE_KEY, t.id); } catch { /* fine */ } navigate('/'); }}
+            onClick={() => openTrade(t.id, openIn)}
             title="Open on the board">
             <span className="min-w-0 truncate">
               <b className="font-medium">{t.setup} {t.direction}</b>

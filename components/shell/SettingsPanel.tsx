@@ -10,6 +10,7 @@ import { usePreferences } from './PreferencesProvider';
 import { TEXT_SCALE, TEXT_SIZES, textSizeOf, type Preferences } from '@/lib/preferences';
 import { ThemeGrid } from './ThemeGrid';
 import { DashboardSettings } from '@/components/settings/DashboardSettings';
+import { TradeSettings } from '@/components/settings/TradeSettings';
 import { navigate } from '@/lib/nav';
 import { SETTINGS_TOGGLE, SHEET_OPEN } from './Shortcuts';
 
@@ -221,6 +222,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </Section>
 
             <DashboardSettings Section={Section} />
+            <TradeSettings Section={Section} />
 
             <Section
               title="Whiteboard"

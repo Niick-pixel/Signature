@@ -263,6 +263,8 @@ export function parseTradeInput(
       // every trade logged from the plain form is.
       graded_post_hoc: t.graded_post_hoc !== false,
       entry_price: numOrNull('entry_price'),
+      exit_price: numOrNull('exit_price'),
+      fees_dollars: positiveOrNull('fees_dollars'),
       take_profit: numOrNull('take_profit'),
       stop_loss: numOrNull('stop_loss'),
       would_have_hit_tp: t.would_have_hit_tp == null ? null : t.would_have_hit_tp === true,
