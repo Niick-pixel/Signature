@@ -8,6 +8,11 @@ import { REGRADE_HINT, regradeAllowed, type GradeLetter } from './grade';
 import { CURRENT_RUBRIC, HTF_DELIVERIES, SWEEP_LEVELS, gradeUnder } from './rubric';
 import { MIN_EXPLANATION, MIN_LESSON, type TradeInput } from './types';
 import { sanitizeOverrides } from './overrides';
+import {
+  BIAS_TIMEFRAMES, EMOTIONS_AFTER, ENTRY_METHODS, EXIT_REASONS, FVG_QUALITIES, LIQUIDITY_EVENTS, MAE_BUCKETS, MFE_BUCKETS,
+  MOVED_TO_BE, PLANNED_RRS, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS,
+} from './anatomy';
+import { TRADE_RULES } from './ruleBook';
 
 /**
  * Whose standard a piece of writing is held to.
@@ -32,6 +37,12 @@ export interface WritingFloor {
     status?: TradeStatus; letter?: GradeLetter; regrade?: Regrade | null;
     /** Its stored date, kept when an undated backtest is edited without one. */
     date?: string;
+    /**
+     * The stored trade. An Edge Engine field (036) missing from the payload
+     * keeps its stored value, so a client that does not know a field yet can
+     * never wipe it — the pre-filled backtest session, a blind grade.
+     */
+    stored?: Record<string, unknown>;
   };
   restoring?: boolean;
 }
@@ -67,6 +78,13 @@ export function parseTradeInput(
     if (v === null || v === undefined || v === '') return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
+  };
+  const keep = <T,>(field: string, v: T): T =>
+    (t[field] === undefined && floor.previous?.stored && field in floor.previous.stored ? floor.previous.stored[field] as T : v);
+  /** A whole number in [lo, hi], or null — an out-of-range tap is a bug, not a reason to refuse the save. */
+  const intIn = (field: string, lo: number, hi: number): number | null => {
+    const n = numOrNull(field);
+    return n == null ? null : Math.min(hi, Math.max(lo, Math.round(n)));
   };
   const clamp = (n: number | null, lo: number, hi: number): number | null =>
     n == null ? null : Math.min(hi, Math.max(lo, Math.round(n)));
@@ -328,6 +346,34 @@ export function parseTradeInput(
       written_before_outcome: tri('written_before_outcome'),
       r_to_nearest_bucket: oneOf('r_to_nearest_bucket', R_BUCKETS),
       management: oneOf('management', MANAGEMENTS),
+      // The Edge Engine's structured fields (036). Anything unknown reads as "not recorded". A key the payload leaves out keeps the stored value.
+      session_index: keep('session_index', (() => { const n = numOrNull('session_index'); return n != null && n >= 1 ? Math.round(n) : null; })()),
+      htf_bias_tf: keep('htf_bias_tf', oneOf('htf_bias_tf', BIAS_TIMEFRAMES)),
+      liquidity_event: keep('liquidity_event', oneOf('liquidity_event', LIQUIDITY_EVENTS)),
+      sweep_tf: keep('sweep_tf', oneOf('sweep_tf', TIMEFRAMES)),
+      fvg_tf: keep('fvg_tf', oneOf('fvg_tf', TIMEFRAMES)),
+      entry_tf: keep('entry_tf', oneOf('entry_tf', TIMEFRAMES)),
+      fvg_quality: keep('fvg_quality', oneOf('fvg_quality', FVG_QUALITIES)),
+      candle_strength: keep('candle_strength', intIn('candle_strength', 0, 4)),
+      inversion_speed: keep('inversion_speed', intIn('inversion_speed', 0, 3)),
+      rr_score: keep('rr_score', intIn('rr_score', 0, 3)),
+      cisd: keep('cisd', tri('cisd')),
+      smt_state: keep('smt_state', oneOf('smt_state', SMT_STATES)),
+      into_eq_pool: keep('into_eq_pool', tri('into_eq_pool')),
+      planned_rr: keep('planned_rr', oneOf('planned_rr', PLANNED_RRS)),
+      entry_method: keep('entry_method', oneOf('entry_method', ENTRY_METHODS)),
+      stop_method: keep('stop_method', oneOf('stop_method', STOP_METHODS)),
+      pre_state: keep('pre_state', intIn('pre_state', 1, 5)),
+      exit_reason: keep('exit_reason', oneOf('exit_reason', EXIT_REASONS)),
+      mfe_bucket: keep('mfe_bucket', oneOf('mfe_bucket', MFE_BUCKETS)),
+      mae_bucket: keep('mae_bucket', oneOf('mae_bucket', MAE_BUCKETS)),
+      target_hit_later: keep('target_hit_later', oneOf('target_hit_later', TRI_ANSWERS)),
+      moved_to_be: keep('moved_to_be', oneOf('moved_to_be', MOVED_TO_BE)),
+      blind_grade: keep('blind_grade', typeof t.blind_grade === 'string' && ['A+', 'A', 'B', 'C', 'D', 'F'].includes(t.blind_grade) ? t.blind_grade : null),
+      entry_line_x: keep('entry_line_x', (() => { const n = numOrNull('entry_line_x'); return n == null ? null : Math.min(1, Math.max(0, n)); })()),
+      rule_breaks_manual: keep('rule_breaks_manual', Array.isArray(t.rule_breaks_manual)
+        ? [...new Set(t.rule_breaks_manual.filter((v): v is string => typeof v === 'string' && TRADE_RULES.some((r) => r.id === v)))] : []),
+      emotion_after: keep('emotion_after', oneOf('emotion_after', EMOTIONS_AFTER)),
   };
 
   /*

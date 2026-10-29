@@ -1,0 +1,31 @@
+-- Rolls back 036_edge_fields.sql: drops only what it added. Run with
+-- `npm run migrate:rollback 036`, the app closed, after a backup.
+DROP INDEX IF EXISTS predictions_trade;
+DROP TABLE IF EXISTS predictions;
+ALTER TABLE trades DROP COLUMN session_index;
+ALTER TABLE trades DROP COLUMN htf_bias_tf;
+ALTER TABLE trades DROP COLUMN liquidity_event;
+ALTER TABLE trades DROP COLUMN sweep_tf;
+ALTER TABLE trades DROP COLUMN fvg_tf;
+ALTER TABLE trades DROP COLUMN entry_tf;
+ALTER TABLE trades DROP COLUMN fvg_quality;
+ALTER TABLE trades DROP COLUMN candle_strength;
+ALTER TABLE trades DROP COLUMN inversion_speed;
+ALTER TABLE trades DROP COLUMN rr_score;
+ALTER TABLE trades DROP COLUMN cisd;
+ALTER TABLE trades DROP COLUMN smt_state;
+ALTER TABLE trades DROP COLUMN into_eq_pool;
+ALTER TABLE trades DROP COLUMN planned_rr;
+ALTER TABLE trades DROP COLUMN entry_method;
+ALTER TABLE trades DROP COLUMN stop_method;
+ALTER TABLE trades DROP COLUMN pre_state;
+ALTER TABLE trades DROP COLUMN exit_reason;
+ALTER TABLE trades DROP COLUMN mfe_bucket;
+ALTER TABLE trades DROP COLUMN mae_bucket;
+ALTER TABLE trades DROP COLUMN target_hit_later;
+ALTER TABLE trades DROP COLUMN moved_to_be;
+ALTER TABLE trades DROP COLUMN blind_grade;
+ALTER TABLE trades DROP COLUMN entry_line_x;
+ALTER TABLE trades DROP COLUMN rule_breaks_manual;
+ALTER TABLE trades DROP COLUMN emotion_after;
+DELETE FROM schema_migrations WHERE name = '036_edge_fields.sql';

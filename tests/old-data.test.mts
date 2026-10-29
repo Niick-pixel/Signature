@@ -57,7 +57,12 @@ test('a pre-Path journal comes through every later migration unchanged', () => {
   // Every column added since is empty on every old trade.
   const added = (db.prepare('PRAGMA table_xinfo(trades)').all() as Array<{ name: string }>).map((c) => c.name).filter((c) => !oldCols.includes(c));
   assert.ok(added.includes('overrides') && added.includes('grade_locked_at'), added.join(','));
-  for (const c of added) assert.equal((db.prepare(`SELECT count(*) n FROM trades WHERE ${c} IS NOT NULL`).get() as { n: number }).n, 0, c);
+  // Except the replay session (036), which is pre-filled on backtests only — one per evening logged, in order.
+  for (const c of added.filter((x) => x !== 'session_index')) assert.equal((db.prepare(`SELECT count(*) n FROM trades WHERE ${c} IS NOT NULL`).get() as { n: number }).n, 0, c);
+  assert.equal((db.prepare("SELECT count(*) n FROM trades WHERE session_index IS NOT NULL AND account != 'Backtest (FX Replay)'").get() as { n: number }).n, 0);
+  const sessions = db.prepare("SELECT substr(date, 1, 10) d, session_index s FROM trades WHERE account = 'Backtest (FX Replay)' ORDER BY d").all() as Array<{ d: string; s: number }>;
+  assert.ok(sessions.length > 0 && sessions.every((x) => x.s >= 1));
+  for (let i = 1; i < sessions.length; i++) assert.equal(sessions[i].s, sessions[i].d === sessions[i - 1].d ? sessions[i - 1].s : sessions[i - 1].s + 1);
   // Every index and trigger came across the rebuild.
   const objs = (db.prepare("SELECT name FROM sqlite_master WHERE tbl_name='trades' AND type IN ('index','trigger') AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>).map((r) => r.name).sort();
   assert.deepEqual(objs, [

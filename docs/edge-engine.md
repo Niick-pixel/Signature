@@ -94,3 +94,53 @@ The Stats page opens on **every real account together** (Live, Demo, Eval, Funde
 - slices add up to the whole
 - avg win is over wins only (19.1R ÷ 11 = 1.74R in the fixture, not the old 19.5R ÷ 19 = 1.03R)
 - the bootstrap is identical on every run
+
+---
+
+# Milestone 3: the data the engine reads
+
+## 8. New fields (migration 036)
+
+Every new field is optional and blank on old trades, and blank means "not recorded", never "no". Nothing existing was dropped or renamed.
+- **Undo:** `npm run migrate:rollback 036` (app closed, after a backup) removes only what 036 added.
+- **Updates keep your data:** an edit that doesn't mention a new field keeps its stored value, so an older screen can never wipe it.
+
+| Group | Fields |
+|---|---|
+| Backtests | **Replay session** (1, 2, 3…) in place of a market date. Old backtests were pre-filled one session per evening they were logged (11 sessions on your data). The pre-fill doesn't touch "last edited". |
+| Setup (tap chips) | liquidity event · bias timeframe · sweep / FVG / entry timeframe · FVG quality · inversion candle (strength 0–4, speed 0–3, R:R 0–3, giving the **closure score /10**: 10 A+, 9 A, 8 A−, 7 B+, 6 B, 5 B−, 3–4 C, 0–2 F) · CISD · SMT · into an EQ pool · planned R:R · entry method · stop method · calm 1–5 |
+| Outcome | exit reason · max in favour (R bucket) · max heat (R bucket) · moved to BE · target hit later |
+| After | emotion after · rules you say you broke (shown "self"; the rule book's own checks are "auto") |
+| Later milestones | blind grade, entry line on the screenshot (Blind Re-grade) |
+
+Existing fields stand in where they already say the same thing:
+- killzone is the session, or Outside when the checklist says so
+- clean path is the checklist box
+- FVG clean or overlapping is the single-gap gate
+- the honest re-grade is the after-grade
+
+## 9. The field registry (`lib/edge/fields.ts`)
+
+One list of every field, each with:
+- **when it was knowable**:
+  - *pre*: before the entry
+  - *in*: during the trade
+  - *outcome*: how it ended
+  - *post*: reflection afterwards
+  - *meta*: source, account, rubric, session
+- **whether it's objective**: a fact off the chart, or a judgement hindsight can colour
+
+**The leakage firewall:** only *pre* fields marked as predictors may be used to predict R. A test fails if any outcome or post field (R, exit, tags, lesson, regrade…) ever reaches a predictive module. Adding a field to the registry makes it analyzable everywhere.
+
+## 10. The form: setup first, then the reveal
+
+For a new trade, the stage, outcome and reflection sections stay folded behind **Reveal outcome fields**. You fill in the setup without the result in front of you. Nothing is refused: pressing Save before the reveal simply opens it. Editing a trade shows everything.
+
+At the reveal, **Similar past setups** shows:
+- the nearest past trades, matched by setup fields only, never by how they ended
+- their average R, also shown pulled toward your overall average: (n · their mean + 20 · your mean) ÷ (n + 20), so 3 trades can't make an extreme claim
+- a win chance from a Beta posterior that starts at your overall win rate, worth 20 trades
+
+**How "nearest" is measured (Gower distance):** for each field both trades recorded, a match adds 0 and a difference adds 1. A number adds its gap divided by its range (closure 9 vs 7 adds 0.2). The distance is the average. Fields either trade left blank are skipped. You need at least 3 shared fields, and k = min(10, ⌊past trades ÷ 3⌋).
+
+That prediction is saved with the trade (the `predictions` table, carried in backups). Milestone 10 scores how often these predictions were right.

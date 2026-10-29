@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --conditions=react-server --import tsx --test \"tests/*.test.mts\"",
     "migrate": "tsx --conditions=react-server db/cli-migrate.ts",
+    "migrate:rollback": "tsx --conditions=react-server db/cli-rollback.ts",
     "desktop": "electron .",
     "desktop:build": "next build && node scripts/assemble-standalone.mjs && electron-builder --win nsis portable zip",
     "predesktop": "node scripts/ensure-electron.mjs"

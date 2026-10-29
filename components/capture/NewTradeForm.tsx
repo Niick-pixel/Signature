@@ -5,6 +5,7 @@ import { InCaptureSheet } from './CaptureSheet';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
 import { clearCarry, readCarry, writeCarry, type Carry } from '@/lib/backtestSession';
 import { SessionTally } from './SessionTally';
+import { OutcomeAnatomy, PostAnatomy, SetupAnatomy, SimilarCard, anatomyOf, type Anatomy, type AnatomyKey, type SimilarResult } from './SetupAnatomy';
 import { checkTrade } from '@/lib/review';
 import { TRADE_RULES } from '@/lib/ruleBook';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -190,6 +191,29 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   const [management, setManagement] = useState<Management | null>(trade?.management ?? (carry?.management as Management | null) ?? null);
   const [mfeR, setMfeR] = useState(trade?.mfe_r?.toString() ?? '');
   const [confidence, setConfidence] = useState<number | null>(trade?.confidence_at_entry ?? null);
+  // The setup's anatomy and the management/outcome taps (Edge Engine, 036).
+  const [anat, setAnat] = useState<Anatomy>(() => anatomyOf(trade));
+  const setA = <K extends AnatomyKey>(k: K, v: Anatomy[K]) => setAnat((prev) => ({ ...prev, [k]: v }));
+  /*
+    A new trade's outcome and reflection stay folded until the setup is in:
+    filling the setup first keeps it from being coloured by the result. The
+    reveal shows what similar past setups did — kept, so the engine can score
+    its own predictions later. An edit opens with everything showing.
+  */
+  const [revealed, setRevealed] = useState(Boolean(trade));
+  const [similar, setSimilar] = useState<SimilarResult | null>(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [lastSession, setLastSession] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isBacktest(account)) return;
+    let live = true;
+    void fetch('/api/backtest-session').then((r) => r.json()).then((d: { last: number | null; suggested: number }) => {
+      if (!live) return;
+      setLastSession(d.last);
+      setAnat((prev) => (prev.session_index == null ? { ...prev, session_index: d.suggested } : prev));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [account]);
   // Guardrails (026, 029): the BE trigger comes from the management plan.
   const beTrigger = management ? BE_FROM_MANAGEMENT[management] : trade?.be_trigger ?? null;
   const [tc, setTc] = useState<TargetCheckState>(() => ({
@@ -332,7 +356,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
     context, sweepLevel, futuresConfirmed, htfDelivery, mistakeTags, workedTags, marketTags, account, accountLabel, status,
     contracts, pnlDollars, stopPoints, rMultiple,
     reached1R, wouldBeR, confirmed,
-    targetHit, targetFresh, oppositeTaken, management, mfeR,
+    targetHit, targetFresh, oppositeTaken, management, mfeR, anat, revealed,
   }), [
     undated,
     date, instrument, direction, session, reason, setupType, htfBias,
@@ -340,7 +364,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
     context, sweepLevel, futuresConfirmed, htfDelivery, mistakeTags, workedTags, marketTags, account, accountLabel, status,
     contracts, pnlDollars, stopPoints, rMultiple,
     reached1R, wouldBeR, confirmed,
-    targetHit, targetFresh, oppositeTaken, management, mfeR,
+    targetHit, targetFresh, oppositeTaken, management, mfeR, anat, revealed,
   ]);
 
   const [restored, setRestored] = useState(false);
@@ -403,6 +427,8 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
     if (has('management')) setManagement(v.management);
     if (has('mfeR')) setMfeR(v.mfeR);
     if (has('wouldBeR')) setWouldBeR(v.wouldBeR);
+    if (has('anat')) setAnat({ ...anatomyOf(null), ...(v.anat as Partial<Anatomy>) });
+    if (has('revealed')) setRevealed(Boolean(v.revealed));
     // Only claim to have restored something if something was actually written.
     const raw = draft.values as Record<string, unknown>;
     const real = ['explanation', 'lesson', 'reason']
@@ -536,8 +562,28 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
    * with or without a chart, marked quick_log so stats can leave it out. It
    * still needs a reason — one click, and the one thing the journal is for.
    */
+  /** Opens the outcome fields and asks what similar past setups did — by the setup's fields only. */
+  async function reveal() {
+    setRevealed(true);
+    if (editing) return;
+    setSimLoading(true);
+    const draft = {
+      account, direction: pending('direction') ? null : direction, setup_type: pending('setupType') ? null : setupType, session,
+      htf_bias: pending('htfBias') ? null : htfBias, premium_discount: pending('premiumDiscount') ? null : premiumDiscount,
+      sweep_tier: sweepTier, target_type: pending('targetType') ? null : targetType, ...checks,
+      checklist_score: live.score, grade_letter: live.letter, ...anat,
+    };
+    try {
+      const r = await fetch('/api/similar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft }) });
+      setSimilar(r.ok ? await r.json() : null);
+    } catch { setSimilar(null); }
+    setSimLoading(false);
+  }
+
   async function submit(mode: SaveMode | boolean = 'full') {
     const m: SaveMode = mode === true ? 'quick' : mode === false ? 'full' : mode;
+    // Nothing is refused: a save before the reveal opens the outcome fields, which the trade needs anyway.
+    if (!revealed) { void reveal(); setError('The outcome fields are open now — fill in how it ended, then save.'); return; }
     const quick = m === 'quick';
     if (quick ? (!reason || submitting || !choicesDone) : (!canSubmit || !reason)) return;
     const unexplained = brokenFor(account);
@@ -664,6 +710,9 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       r_multiple: isPlanned ? null : num(rMultiple),
       explanation: explanation.trim(), lesson: lesson.trim() || null,
       quick_log: quick,
+      // The setup's anatomy and the management taps (036). Only backtests carry a replay session.
+      ...anat,
+      session_index: isBacktest(account) ? anat.session_index : null,
     }));
 
     try {
@@ -686,6 +735,13 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       const savedTrade = await res.json().catch(() => null) as { id?: string } | null;
       const tradeId = savedId ?? savedTrade?.id;
       if (tradeId && !isHypothetical(account)) window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: tradeId }));
+      // The prediction shown at the reveal, kept against this trade for the engine to score (036).
+      if (tradeId && !savedId && similar && similar.n > 0) {
+        void fetch('/api/predictions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          trade_id: tradeId, model: 'knn-gower-v1', n: similar.n, mean_r: similar.meanR, shrunk_r: similar.shrunkR, p_win: similar.pWin,
+          neighbours: similar.neighbours.map((x) => x.id),
+        }) }).catch(() => {});
+      }
       // Saved, so the draft has served its purpose. Leaving it behind would
       // resurrect this trade as a ghost on the next New trade.
       clearDraft();
@@ -1147,6 +1203,19 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           </Field>
         </div>
 
+        <SetupAnatomy a={anat} set={setA} backtest={isBacktest(account)} lastSession={lastSession} />
+
+        {!revealed ? (
+          <motion.button type="button" onClick={() => void reveal()} whileTap={press} transition={spring} data-reveal-outcome
+            className="w-full rounded-[calc(16px*var(--rk))] border px-4 py-3.5 text-left"
+            style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.06)', boxShadow: '0 0 18px rgb(var(--accent) / 0.12)' }}>
+            <span className="block text-[13px] font-semibold" style={{ color: 'rgb(var(--accent))' }}>Reveal outcome fields →</span>
+            <span className="mt-0.5 block text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
+              The setup first, so the result cannot colour it. Opening shows what similar past setups did — stage, outcome and lesson are all there.
+            </span>
+          </motion.button>
+        ) : (<>
+        {!editing && <SimilarCard s={similar} loading={simLoading} />}
         <Field quiet
           label="Stage"
           pending={pending('status')}
@@ -1231,6 +1300,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
                   </div>
                 </Notice>
               )}
+              <OutcomeAnatomy a={anat} set={setA} />
               </div>
             </Collapse>
           )}
@@ -1266,9 +1336,11 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
             </Collapse>
           )}
         </AnimatePresence>
+        </>)}
         </div>
 
         {/* D — the words, and the reckoning that goes with them. */}
+        {revealed && (
         <div className="space-y-4">
         <Field quiet label="Explanation">
           <ExplanationField
@@ -1372,7 +1444,9 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
             hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
           />
         </div>
+        <PostAnatomy a={anat} set={setA} />
         </div>
+        )}
       </div>
 
 

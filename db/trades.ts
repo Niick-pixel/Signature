@@ -62,6 +62,8 @@ const NULLABLE_BOOL_COLUMNS = [
   'sweep_futures_confirmed',
   'target_hit', 'target_fresh', 'opposite_taken',
   'target_check_passed', 'below_min_confidence', 'written_before_outcome',
+  // Edge Engine (036): unanswered is not "no".
+  'cisd', 'into_eq_pool',
 ] as const;
 
 function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade {
@@ -100,6 +102,11 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
     catch { return null; }
   })();
   trade.trigger_fired = Boolean(r.trigger_fired_at_entry ?? r.trigger_fired);
+  trade.rule_breaks_manual = (() => {
+    if (typeof r.rule_breaks_manual !== 'string') return [];
+    try { const v: unknown = JSON.parse(r.rule_breaks_manual); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; }
+    catch { return []; }
+  })();
   trade.dismissed_flags = dismissed;
   return trade;
 }
@@ -170,6 +177,8 @@ const WRITABLE = [
   // Executions (030).
   'exit_price', 'fees_dollars',
   'undated',
+  // The Edge Engine's structured fields (036).
+  'session_index', 'htf_bias_tf', 'liquidity_event', 'sweep_tf', 'fvg_tf', 'entry_tf', 'fvg_quality', 'candle_strength', 'inversion_speed', 'rr_score', 'cisd', 'smt_state', 'into_eq_pool', 'planned_rr', 'entry_method', 'stop_method', 'pre_state', 'exit_reason', 'mfe_bucket', 'mae_bucket', 'target_hit_later', 'moved_to_be', 'blind_grade', 'entry_line_x', 'rule_breaks_manual', 'emotion_after',
 ] as const;
 
 /**
@@ -217,6 +226,7 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
   // that broke nothing store the same thing.
   out.overrides = input.overrides?.length ? JSON.stringify(input.overrides) : null;
   out.eqhl_checks = input.eqhl_checks ? JSON.stringify(input.eqhl_checks) : null;
+  out.rule_breaks_manual = input.rule_breaks_manual?.length ? JSON.stringify(input.rule_breaks_manual) : null;
   return out;
 }
 

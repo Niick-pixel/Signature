@@ -214,6 +214,39 @@ export interface Trade {
   r_to_nearest_bucket: RBucket | null;
   /** The management plan, which names the BE trigger (029). */
   management: Management | null;
+  /* --- The Edge Engine's structured fields (036). All null on older trades: "not recorded". --- */
+  /** Backtests: the replay session (1, 2, 3…), in place of a market date. */
+  session_index: number | null;
+  htf_bias_tf: string | null;
+  liquidity_event: string | null;
+  sweep_tf: string | null;
+  fvg_tf: string | null;
+  entry_tf: string | null;
+  fvg_quality: string | null;
+  /** The inversion candle: strength 0–4, speed 0–3, R:R 0–3 → closure score /10 (lib/anatomy). */
+  candle_strength: number | null;
+  inversion_speed: number | null;
+  rr_score: number | null;
+  cisd: boolean | null;
+  smt_state: string | null;
+  /** Longing into EQH / shorting into EQL — against the plan. */
+  into_eq_pool: boolean | null;
+  planned_rr: string | null;
+  entry_method: string | null;
+  stop_method: string | null;
+  /** How calm before the entry, 1–5. */
+  pre_state: number | null;
+  exit_reason: string | null;
+  mfe_bucket: string | null;
+  mae_bucket: string | null;
+  target_hit_later: string | null;
+  moved_to_be: string | null;
+  blind_grade: string | null;
+  /** Where the entry candle sits on the screenshot, 0–1 from the left (Blind Re-grade). */
+  entry_line_x: number | null;
+  /** Rules you say you broke (rule-book ids); the computer's own checks are separate. */
+  rule_breaks_manual: string[];
+  emotion_after: string | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */

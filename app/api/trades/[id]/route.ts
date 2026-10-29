@@ -40,6 +40,7 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
         // re-grade can only go down from there.
         status: existing.status, letter: existing.grade_letter, regrade: existing.regrade,
         date: existing.date,
+        stored: existing as unknown as Record<string, unknown>,
       } },
     );
     if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });

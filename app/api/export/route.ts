@@ -6,6 +6,7 @@ import { exportStudy } from '@/db/study';
 import { exportGoals } from '@/db/goals';
 import { exportDrawings } from '@/db/drawings';
 import { exportTags } from '@/db/tags';
+import { exportPredictions } from '@/db/predictions';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
@@ -49,6 +50,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'r_to_nearest_bucket', 'management',
   // Executions (030).
   'exit_price', 'fees_dollars',
+  // The Edge Engine's structured fields (036).
+  'session_index', 'htf_bias_tf', 'liquidity_event', 'sweep_tf', 'fvg_tf', 'entry_tf', 'fvg_quality', 'candle_strength', 'inversion_speed', 'rr_score', 'cisd', 'smt_state', 'into_eq_pool', 'planned_rr', 'entry_method', 'stop_method', 'pre_state', 'exit_reason', 'mfe_bucket', 'mae_bucket', 'target_hit_later', 'moved_to_be', 'blind_grade', 'entry_line_x', 'rule_breaks_manual', 'emotion_after',
 ];
 
 function csvCell(v: unknown): string {
@@ -149,7 +152,7 @@ export async function GET() {
     // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 14,
+    version: 15,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -176,6 +179,7 @@ export async function GET() {
     ...exportGoals(),
     ...exportDrawings(),
     ...exportTags(),
+    ...exportPredictions(),
   };
 
   const zip = makeZip([
