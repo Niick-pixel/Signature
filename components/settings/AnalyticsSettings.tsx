@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Segmented } from '@/components/ui/Segmented';
 import { Button } from '@/components/ui/Button';
+import { ThemeWords } from './ThemeWords';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { ANALYTICS_TABS, ANALYTICS_TAB_LABEL, DEFAULT_WORDS, type Preferences } from '@/lib/preferences';
 
@@ -62,6 +63,7 @@ export function AnalyticsSettings({ Section }: { Section: SectionComp }) {
             <Button onClick={() => update({ analyticsWords: DEFAULT_WORDS })}>Back to the default</Button>
           </div>
         </L>
+        <ThemeWords />
         <Link href="/analytics?tab=news" className="text-[11px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>News currencies and red-folder days →</Link>
       </div>
     </Section>

@@ -13,7 +13,7 @@
 import { compare, type Comparison } from './compare';
 import { nPerGroup } from './power';
 import type { TradeState } from './state';
-import { THEMES, themesOf } from '../insights';
+import { allThemes, themesWith, type ThemeWord } from './text';
 import type { Trade } from '../types';
 import type { Thresholds } from './verdict';
 
@@ -42,7 +42,8 @@ const STATES: Array<{ key: string; label: string; test: (s: TradeState) => boole
   { key: 'day-down', label: 'Trading while the day is down', test: (s) => (s.tradeNo ?? 0) >= 2 && (s.rBefore ?? 0) < -0.1, experiment: 'Once the day is red, close the chart.' },
 ];
 
-export function weeklyFocus(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds; sd?: number | null } = {}): Focus {
+export function weeklyFocus(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds; sd?: number | null; words?: readonly ThemeWord[] } = {}): Focus {
+  const dict = opts.words ?? []; const THEMES = allThemes(dict);
   const n = trades.length;
   const rs = trades.map((t) => t.r_multiple as number);
   const recentIds = new Set(trades.slice(-RECENT).map((t) => t.id));
@@ -62,7 +63,7 @@ export function weeklyFocus(trades: readonly Trade[], breaks: (t: Trade) => Brea
   const rules = new Map<string, string>();
   br.flat().forEach((b) => rules.set(b.id, b.short));
   for (const [id, short] of rules) add('rule', id, `Broke: ${short}`, (_, i) => br[i].some((b) => b.id === id), `Keep “${short}” on every trade.`);
-  const themes = trades.map((t) => themesOf(t));
+  const themes = trades.map((t) => themesWith(t, dict));
   for (const d of THEMES) add('theme', d.id, d.title, (_, i) => themes[i].includes(d.id), d.rule);
   for (const s of STATES) add('state', s.key, s.label, (t) => { const x = st(t); return x ? s.test(x) : false; }, s.experiment);
   const methods = new Set(trades.map((t) => t.entry_method).filter(Boolean) as string[]);

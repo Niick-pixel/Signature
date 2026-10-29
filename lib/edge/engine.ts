@@ -14,7 +14,7 @@ import type { Thresholds } from './verdict';
 import { pnlOf } from '../stats';
 import type { Trade } from '../types';
 
-export interface EngineOptions { window?: Window; halfLife?: number; rubric?: number; thresholds?: Thresholds }
+export interface EngineOptions { window?: Window; halfLife?: number; rubric?: number; thresholds?: Thresholds; backtest?: { trades: readonly Trade[]; weight: number } }
 export interface EngineResult {
   hash: string; window: Window; n: number;
   metrics: EdgeMetrics;
@@ -37,7 +37,8 @@ export function runEngine(input: readonly Trade[], opts: EngineOptions = {}): En
   const window = opts.window ?? 'all';
   const sorted = [...input].filter((t) => t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
   const trades = window === 'rubric' && opts.rubric != null ? sorted.filter((t) => t.rubric_version === opts.rubric) : sorted;
-  const hash = datasetHash(trades, opts);
+  const { backtest, ...rest } = opts;
+  const hash = datasetHash(trades, { ...rest, bt: backtest ? `${backtest.weight}:${datasetHash(backtest.trades)}` : null } as never);
   const hit = cache.get(hash);
   if (hit) return hit;
   const halfLife = window === 'recent' ? (opts.halfLife ?? DEFAULT_HALF_LIFE) : null;
@@ -45,7 +46,7 @@ export function runEngine(input: readonly Trade[], opts: EngineOptions = {}): En
   const result: EngineResult = {
     hash, window, n: trades.length, metrics,
     // State is computed over the trades in view, in order: trade of the day, losses in a row before…
-    explorer: explore(withState(trades, tradeStates(trades)), PREDICTORS, { halfLife, thresholds: opts.thresholds }),
+    explorer: explore(withState(trades, tradeStates(trades)), PREDICTORS, { halfLife, thresholds: opts.thresholds, backtest: backtest ? { trades: withState(backtest.trades, tradeStates(backtest.trades)), weight: backtest.weight } : undefined }),
     nFor05R: metrics.sd ? nPerGroup(metrics.sd, 0.5) : null,
     completeness: completeness(trades, FIELDS),
   };

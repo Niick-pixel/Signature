@@ -510,3 +510,76 @@ Tests: `tests/edge-score.test.mts`. It covers:
 - hindsight-graded trades never scored
 - each walk-forward step equal to a full refit
 - quality, execution, the firewall and speed
+
+---
+
+# Milestone 9: text, missed trades, backtests as a prior
+
+## 37. Your words for mistake themes (the theme dictionary)
+
+**Settings → Analytics → Your words for mistake themes.** Map any phrase to a built-in theme, or to a new theme of your own. Examples: "didn't wait" → entering before confirmation; "fomo" → a new theme called FOMO. The words are stored in the `theme_dictionary` table and carried in backups.
+
+**How a phrase matches a lesson sentence:**
+- **Stemming:** "waiting", "waited" and "waits" all match "wait". It's a light suffix stripper.
+- **In order:** the phrase's words must appear in sequence.
+- **Negation:** no match right after a negation (not, no, never, without, didn't, don't… within two words), unless the phrase itself starts with one, like "didn't wait". So "I never jumped in" is **not** "jumped in".
+
+The focus card (section 26) and the mistake ledger (section 29) read your dictionary on top of the built-in detection, including lessons not yet learned.
+
+## 38. N — Journal language, rebuilt
+
+**Diagnostic, never predictive.** This text was written after the outcome. Processing:
+1. **Outcome words removed:** loss, lost, won, win, stopped, SL, hit, TP, mistake, wrong, profit, BE, good, bad…
+2. **Domain normaliser:**
+   - "1 min", "1m", "1-min" → `tf:1m`
+   - "4 hours" → `tf:4h`
+   - "eqh" or "equal highs" → `EQH`
+   - "previous day high" → `PDH`
+   - "asian high" → `ASIA_HIGH`
+   - "fair value gap" → `FVG`
+   - "inverse fvg" → `IFVG`
+   - "order block" → `OB`
+3. **Phrases of 1–3 words**, each on at least 5 trades. A shorter phrase found on exactly the same trades as a longer one is dropped.
+4. **Statistics:** each phrase is compared against the rest (section 25), and Benjamini–Hochberg runs across the table. Only survivors may say more than Too early.
+5. **Suggestions:** a token that's really a structured fact gets a suggestion, for example "You write EQH in 7 trades — log it in the liquidity event or target field instead".
+
+## 39. M — Missed trades and hesitation
+
+- **Real-time missed setups only.** Hindsight entries are cherry-picked, so they're left out and counted.
+- **Would have won vs lost:** from would-be R, or from "would have hit TP" (±1R) where there's no R.
+- **R left on the table:** the sum of the positive would-be R.
+- **By reason:** fear, rule, distracted, missed it.
+- **Skip quality:** the checklist scores of skips against takes (the gap with an 80% range) and the would-have-won rates (Wilson range).
+
+How to read skip quality, from 8 real-time skips:
+
+| Result | Meaning |
+|---|---|
+| Skips score clearly lower (whole 80% range below −3 points) | the filter is working |
+| Skips score about the same and win about as often (within 5 points of your take rate) | **hesitation is the leak** |
+| Otherwise | not clear yet |
+
+## 40. Backtests as a discounted prior
+
+On real accounts, when backtests exist, section G offers **Backtests as a prior** with each replay trade worth 0.1, **0.3** (default) or 0.5 of a live trade. Replay is optimistic (no fear, hindsight exposure), so it's discounted.
+
+For each level, the replay trades join as pseudo-trades:
+
+  **shrunk = (n · live mean + w · m · replay mean + k · μ) ÷ (n + w · m + k)**
+
+- w = the weight
+- m = the replay trades at that level
+- μ = the overall mean, live and replay blended with the same weight
+
+The spread shrinks with the extra pseudo-trades: √(σ² ÷ (n + w·m + k)).
+
+**Backtest vs live:** each level's shrunk live mean beside its shrunk replay mean. A big gap on the same setup means **execution, not the setup**.
+
+Tests: `tests/edge-text.test.mts`. It covers:
+- stemming, negation and negative phrases
+- dictionary themes, including new ones, in the ledger
+- outcome words removed, normalisation and suggestions
+- duplicate phrases dropped, the BH gate
+- missed stats with both readings (hesitation and filter)
+- the replay prior pulling more with more weight
+- the 037 tables: blind grades leave "last edited" alone, backup round-trip, rollback

@@ -14,7 +14,8 @@
  *  - each loss with its tags, breaks and lesson
  */
 import { compare, type Comparison } from './compare';
-import { THEMES, themeSentences, themesOf, sentences } from '../insights';
+import { sentences } from '../insights';
+import { allThemes, lessonQuotes as quotesFor, themesWith, type ThemeWord } from './text';
 import type { Trade } from '../types';
 import type { Thresholds } from './verdict';
 
@@ -32,10 +33,11 @@ export const CONTRADICTIONS: Array<[string, string, string]> = [['early', 'late'
 
 const dayOf = (t: Trade) => (t.undated || !t.date ? (t.session_index ? `Session ${t.session_index}` : '') : t.date.slice(0, 10));
 
-export function ledgerV2(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds } = {}): LedgerV2 {
+export function ledgerV2(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds; words?: readonly ThemeWord[] } = {}): LedgerV2 {
+  const dict = opts.words ?? []; const THEMES = allThemes(dict);
   const n = trades.length;
   const rs = trades.map((t) => t.r_multiple as number);
-  const th = trades.map((t) => themesOf(t));
+  const th = trades.map((t) => themesWith(t, dict));
   const slice = Math.max(1, Math.ceil(n / TREND_SLICES));
   const themes: ThemeCost[] = THEMES.map((d) => {
     const idx = trades.map((_, i) => i).filter((i) => th[i].includes(d.id));
@@ -46,7 +48,7 @@ export function ledgerV2(trades: readonly Trade[], breaks: (t: Trade) => Break[]
   }).filter((x) => x.n > 0).sort((a, b) => a.totalR - b.totalR);
 
   // Lessons only: what you told yourself to do next time.
-  const lessonQuotes = (id: string, from: number) => trades.slice(from).flatMap((t) => themeSentences(t, id).filter((s) => s.from === 'lesson').slice(0, 1).map((s) => ({ id: t.id, date: dayOf(t), text: s.text })));
+  const lessonQuotes = (id: string, from: number) => trades.slice(from).flatMap((t) => quotesFor(t, id, dict).slice(0, 1).map((text) => ({ id: t.id, date: dayOf(t), text })));
   const windowFrom = Math.max(0, n - REPEAT_WINDOW);
   // Most-repeated first; one quote per trade.
   const repeated: Repeated[] = THEMES.map((d) => ({ id: d.id, title: d.title, rule: d.rule, quotes: lessonQuotes(d.id, windowFrom) }))

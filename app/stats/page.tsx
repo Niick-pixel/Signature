@@ -1,6 +1,4 @@
 import { cookies } from 'next/headers';
-import { wordMap } from '@/lib/wordPatterns';
-import { analysable } from '@/lib/analytics';
 import { listTrades } from '@/db/trades';
 import { accountCookie } from '@/lib/account-pref';
 import { countsInStats, isBacktest, isDated, isHypothetical, isReal, isSeparate } from '@/lib/domain';
@@ -38,8 +36,13 @@ import { similarSetups } from '@/lib/edge/similar';
 import { QualityPanel, skillVerdict } from '@/components/stats/QualityPanel';
 import { SimilarLookup } from '@/components/stats/SimilarLookup';
 import { ExecutionPanel } from '@/components/stats/ExecutionPanel';
+import { MissedPanel } from '@/components/stats/MissedPanel';
+import { LanguagePanel } from '@/components/stats/LanguagePanel';
+import { listThemeWords } from '@/db/edge';
+import { language } from '@/lib/edge/text';
+import { missedStats } from '@/lib/edge/missed';
+import { BACKTEST_WEIGHT } from '@/lib/edge/explorer';
 import { PRESETS, type PropRules } from '@/lib/prop';
-import { WordsTable } from '@/components/stats/SuccessView';
 import { HypotheticalNote } from '@/components/money/MissedCard';
 import { StatsFilters } from '@/components/stats/StatsFilters';
 import { accountParam, applyStatsScope, mixesWorlds, parseStatsScope } from '@/lib/statsScope';
@@ -145,10 +148,24 @@ export default async function StatsPage(
   // Tier 2 and up: recency weighting on by default.
   const window = winParam === 'recent' || winParam === 'rubric' || winParam === 'all' ? winParam : unlocked(mat, 'recencyDefault') ? 'recent' : 'all';
   const latestRubric = settled.length ? Math.max(...settled.map((t) => t.rubric_version ?? 0)) : undefined;
-  const engine = runEngine(settled, { window, rubric: latestRubric });
+  // Backtests as a discounted prior (§5.13): on real accounts, when backtests exist and you turn it on.
+  const backtests = all.filter((t) => isBacktest(t.account) && t.r_multiple != null && t.outcome !== 'Not taken');
+  const btEligible = backtests.length > 0 && !scope.accounts.some((a) => isBacktest(a));
+  const btWeight = Number(one(params.btw)) || BACKTEST_WEIGHT;
+  const btPrior = btEligible && one(params.prior) === 'backtest';
+  const engine = runEngine(settled, { window, rubric: latestRubric, backtest: btPrior ? { trades: backtests, weight: btWeight } : undefined });
+  // Backtest vs live, level by level: a big gap means execution, not the setup.
+  const btEngine = btEligible ? runEngine(backtests, { window: 'all' }) : null;
+  const btGap = btEngine ? engine.explorer.rows.filter((r) => !r.hidden).flatMap((r) => {
+    const b = btEngine.explorer.rows.find((x) => x.field === r.field && x.level === r.level && !x.hidden);
+    return b ? [{ label: `${r.label} = ${r.level}`, live: r.shrunk, liveN: r.n, bt: b.shrunk, btN: b.n, gap: r.shrunk - b.shrunk }] : [];
+  }).sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, 8) : [];
   const issues = integrity(settled, metrics, { noR: trades.filter((t) => t.outcome !== 'Not taken' && t.status === 'Settled' && t.r_multiple == null).length });
-  const focus = weeklyFocus(stateful, breaksOf, { sd: metrics.sd });
-  const ledger = ledgerV2(settled, breaksOf);
+  const themeWords = listThemeWords();
+  const focus = weeklyFocus(stateful, breaksOf, { sd: metrics.sd, words: themeWords });
+  const ledger = ledgerV2(settled, breaksOf, { words: themeWords });
+  const lang = language(settled);
+  const missed = missedStats(everything.filter((t) => scope.accounts.includes(t.account) || isHypothetical(t.account)));
   const rs = settled.map((t) => t.r_multiple as number);
   const cone = equityCone(rs);
   const kept = settled.filter((t) => breaksOf(t).length === 0);
@@ -182,10 +199,6 @@ export default async function StatsPage(
   const winHref = (w: string) => `/stats?${new URLSearchParams({ account, ...filterParams, win: w }).toString()}`;
   const lockNote = (f: Parameters<typeof unlocked>[1], what: string) => (unlocked(mat, f) ? null
     : `${what} unlocks at 30 trades (${30 - settled.length} to go). Shown as a preview — every row reads Too early until then.`);
-  // Your words (lib/wordPatterns): diagnostic only, until the language rebuild (milestone 9).
-  const words = wordMap(analysable(trades), { minN: 3 });
-  const shownIds = new Set(words.words.flatMap((w) => w.tradeIds.slice(0, 8)));
-  const wordTrades = trades.filter((t) => shownIds.has(t.id)).map((t) => ({ id: t.id, date: t.date, r: t.r_multiple, setup: t.setup_type, text: `${t.lesson ?? ''}\n${t.explanation ?? ''}` }));
   const trial = TRIAL_RUBRIC != null ? trialVerdict : null;
 
   const toggle = (on: boolean, key: 'pregraded' | 'quick') => `/stats?${new URLSearchParams({
@@ -271,7 +284,34 @@ export default async function StatsPage(
                   ))}
                   <span style={{ color: 'var(--text-faint)' }}>· {engine.n} trades{window === 'recent' ? ' · half-life 60 trades' : ''}</span>
                 </div>
+                {btEligible && (
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11.5px]" data-bt-prior>
+                    <span style={{ color: 'var(--text-faint)' }}>Backtests as a prior:</span>
+                    <a href={`/stats?${new URLSearchParams({ account, ...filterParams, win: window }).toString()}`} className="rounded-full border px-2.5 py-0.5" style={pill(!btPrior)}>Off</a>
+                    {[0.1, 0.3, 0.5].map((w) => (
+                      <a key={w} href={`/stats?${new URLSearchParams({ account, ...filterParams, win: window, prior: 'backtest', btw: String(w) }).toString()}`} className="rounded-full border px-2.5 py-0.5" style={pill(btPrior && btWeight === w)} data-bt-weight={w}>
+                        each replay = {w} of a live trade
+                      </a>
+                    ))}
+                    <span style={{ color: 'var(--text-faint)' }}>· {backtests.length} backtests · replay is optimistic (no fear, hindsight), so it is discounted</span>
+                  </div>
+                )}
                 <AnatomyExplorer rows={visibleRows} mu={engine.explorer.mu} tests={engine.explorer.tests} hidden={engine.explorer.rows.length - visibleRows.length} thumbs={thumbs} />
+                {btGap.length > 0 && (
+                  <div className="mt-4" data-bt-gap>
+                    <div className="mb-1 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>Backtest vs live — a big gap on the same setup means execution, not the setup</div>
+                    <table className="w-full text-[12px]"><tbody>
+                      {btGap.map((g) => (
+                        <tr key={g.label} className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}>
+                          <td className="py-1.5">{g.label}</td>
+                          <td className="text-right tabular-nums">live {g.live >= 0 ? '+' : '−'}{Math.abs(g.live).toFixed(2)}R ({g.liveN})</td>
+                          <td className="text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>replay {g.bt >= 0 ? '+' : '−'}{Math.abs(g.bt).toFixed(2)}R ({g.btN})</td>
+                          <td className="text-right tabular-nums" style={{ color: 'var(--text-faint)' }}>gap {g.gap >= 0 ? '+' : '−'}{Math.abs(g.gap).toFixed(2)}R</td>
+                        </tr>
+                      ))}
+                    </tbody></table>
+                  </div>
+                )}
               </Collapsible>
 
               <div id="similar" />
@@ -302,9 +342,15 @@ export default async function StatsPage(
                 <LedgerView l={ledger} thumbs={thumbs} />
               </Collapsible>
 
-              <Collapsible id="language" title="Journal language" summary="Diagnostic, not predictive — written after the result"
-                help="Words from text written after the outcome. They describe how you talk about trades; they can never say what wins.">
-                <WordsTable map={words} trades={wordTrades} />
+              <Collapsible id="missed" title="Missed trades & hesitation"
+                help="Missed setups logged in real time only — hindsight entries are cherry-picked, so they are left out and counted. Skip quality compares the checklist scores and would-have-won rates of your skips and your takes."
+                summary={missed.realtime ? `${missed.realtime} real-time skips · ${missed.wouldWin} would have won · ${missed.rLeft >= 0 ? '+' : '−'}${Math.abs(missed.rLeft).toFixed(1)}R left` : `No real-time missed setups${missed.hindsightLeftOut ? ` (${missed.hindsightLeftOut} hindsight left out)` : ''}`}>
+                <MissedPanel m={missed} thumbs={thumbs} />
+              </Collapsible>
+
+              <Collapsible id="language" title="Journal language" summary={`Diagnostic, not predictive · ${lang.phrases.length} phrases${lang.suggestions.length ? ` · ${lang.suggestions.length} could be structured fields` : ''}`}
+                help="Phrases from text written after the outcome, outcome words removed, shrunk and corrected. They describe how you talk about trades; they can never say what wins.">
+                <LanguagePanel l={lang} thumbs={thumbs} />
               </Collapsible>
 
               <p className="pt-1 text-center text-[11px]" style={{ color: 'var(--text-faint)' }}>

@@ -51,7 +51,15 @@ export interface ExplorerRow {
 }
 export interface Explorer { rows: ExplorerRow[]; tests: number; mu: number; n: number; q: number }
 
-export interface ExploreOptions { halfLife?: number | null; thresholds?: Thresholds; prior?: { mu: number; pBar: number } }
+export interface ExploreOptions {
+  halfLife?: number | null; thresholds?: Thresholds; prior?: { mu: number; pBar: number };
+  /**
+   * Backtests as a discounted prior (§5.13): each replay trade counts `weight` (default 0.3) of a
+   * live one, added to its level as pseudo-trades — replay is optimistic (no fear, hindsight).
+   */
+  backtest?: { trades: readonly Trade[]; weight: number };
+}
+export const BACKTEST_WEIGHT = 0.3;
 
 function levelOf(f: FieldDef, v: FieldValue, median: number | null): string | null {
   if (v == null) return null;
@@ -68,6 +76,16 @@ export function explore(trades: readonly Trade[], fields: readonly FieldDef[] = 
   const rs = trades.map((t) => t.r_multiple as number);
   const global = weightedMoments(rs, w);
   const rows: ExplorerRow[] = [];
+  const bt = opts.backtest?.trades.filter((t) => t.r_multiple != null) ?? []; const btW = opts.backtest?.weight ?? 0;
+  const btRs = bt.map((t) => t.r_multiple as number);
+  // With backtests as the prior, the overall mean blends both, replay discounted.
+  const prior = opts.prior ?? (bt.length && btW > 0 ? (() => {
+    const sw = w.reduce((a, b) => a + b, 0);
+    const mu = (rs.reduce((a, r, i) => a + w[i] * r, 0) + btW * btRs.reduce((a, b) => a + b, 0)) / (sw + btW * bt.length);
+    const W = rs.filter((r) => resultClass(r) === 'W').length + btW * btRs.filter((r) => resultClass(r) === 'W').length;
+    const L = rs.filter((r) => resultClass(r) === 'L').length + btW * btRs.filter((r) => resultClass(r) === 'L').length;
+    return { mu, pBar: W + L ? W / (W + L) : 0.5 };
+  })() : undefined);
 
   for (const f of fields) {
     const vals = trades.map((t) => f.get(t));
@@ -84,17 +102,24 @@ export function explore(trades: readonly Trade[], fields: readonly FieldDef[] = 
       wins: idx.filter((i) => resultClass(rs[i]) === 'W').reduce((a, i) => a + w[i], 0),
       losses: idx.filter((i) => resultClass(rs[i]) === 'L').reduce((a, i) => a + w[i], 0),
     }));
-    const sh = shrinkGroups(groups, opts.prior ? { prior: opts.prior } : {});
+    const sh = shrinkGroups(groups, prior ? { prior } : {});
     const mu = sh.mu;
+    // Replay trades at each level, as discounted pseudo-trades.
+    const btAt = new Map<string, number[]>();
+    if (btW > 0) bt.forEach((t, i) => { const l = levelOf(f, f.get(t), median); if (l != null) btAt.set(l, [...(btAt.get(l) ?? []), btRs[i]]); });
+    const pseudo = (xs: number[]) => ({ a: btW * xs.length, sum: btW * xs.reduce((a, b) => a + b, 0) });
     // Two levels mirror each other: one row says it (Yes, or the first level).
     const levels = groups.length === 2 ? [groups.find((g) => g.key === 'Yes') ?? groups[0]] : groups;
     for (const g of levels) {
-      const s = sh.groups.find((x) => x.key === g.key)!;
+      const s0 = sh.groups.find((x) => x.key === g.key)!;
       const restIdx = groups.filter((o) => o.key !== g.key).flatMap((o) => o.idx);
       const rest = weightedMoments(restIdx.map((i) => rs[i]), restIdx.map((i) => w[i]));
       const lvl = weightedMoments(g.x, g.w);
-      const restShrunk = (rest.nEff * rest.mean + sh.k * mu) / (rest.nEff + sh.k);
-      const restSd = Math.sqrt(sh.sigma2 / (rest.nEff + sh.k));
+      const pg = pseudo(btAt.get(g.key) ?? []);
+      const pr = pseudo([...btAt].filter(([k]) => k !== g.key).flatMap(([, xs]) => xs));
+      const s = { ...s0, shrunk: (lvl.nEff * lvl.mean + pg.sum + sh.k * mu) / (lvl.nEff + pg.a + sh.k), sd: Math.sqrt(sh.sigma2 / (lvl.nEff + pg.a + sh.k)) };
+      const restShrunk = (rest.nEff * rest.mean + pr.sum + sh.k * mu) / (rest.nEff + pr.a + sh.k);
+      const restSd = Math.sqrt(sh.sigma2 / (rest.nEff + pr.a + sh.k));
       const diff = s.shrunk - restShrunk; const diffSd = Math.sqrt(s.sd ** 2 + restSd ** 2);
       // Welch: each side's own variance, Student's t with Welch–Satterthwaite degrees of freedom —
       // honest with 8 or 10 trades a side, where the normal approximation is overconfident.
@@ -127,5 +152,5 @@ export function explore(trades: readonly Trade[], fields: readonly FieldDef[] = 
     else if (trades.length < TIER1 && !(r.verdict = v, v.p >= 0.99 && Math.abs(r.diff) >= 0.5)) { r.verdict = { ...v, level: 'too-early', direction: null }; r.reason = `under ${TIER1} trades, only an extreme gap speaks`; }
     else { r.verdict = v; r.reason = v.level === 'too-early' ? 'interval still spans good and bad' : null; }
   }
-  return { rows, tests: testedRows.length, mu: opts.prior?.mu ?? global.mean, n: trades.length, q: BH_Q };
+  return { rows, tests: testedRows.length, mu: prior?.mu ?? global.mean, n: trades.length, q: BH_Q };
 }
