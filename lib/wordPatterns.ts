@@ -17,7 +17,7 @@ could would should able per via etc since week weeks start started starting new 
 right left need needed know knew think thought see saw seen look looked looking felt feel feeling want wanted try tried gonna gotta put keep kept say said
 use used overall though however something everything nothing anything yesterday tomorrow morning hour hours minute minutes little big pretty quite
 another every whole sure probably definitely actually literally basically almost enough rather instead without within along across already ever never
-always usually sometimes often else wasn isn aren don didn doesn couldve wouldve shouldve thats theres heres whats lets cause.split(/\s+/));
+always usually sometimes often else wasn isn aren don didn doesn couldve wouldve shouldve thats theres heres whats lets cause`.split(/\s+/));
 
 /** A light stem: plural, -ed, -ing, -ly and doubled final consonants folded together. */
 export function stem(w: string): string {
