@@ -51,6 +51,8 @@ export interface Preferences {
   hidePnl: boolean;
   /** Which trades the Dashboard counts. */
   dashWorld: 'real' | 'backtest' | 'all';
+  /** Chosen accounts (account, or account|label). Empty: the world above decides. */
+  dashAccounts: string[];
   /** Lead with dollars or with R. */
   dashUnit: 'money' | 'r';
   /** Each Dashboard block, on or off. */
@@ -205,6 +207,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   hidePnl: false,
   dashWorld: 'real',
   dashUnit: 'money',
+  dashAccounts: [],
   dashBlocks: { hero: true, tiles: true, chart: true, week: true, score: true, recent: true, prop: true },
   scoreAxes: { rules: true, honesty: true, consistency: true, profitFactor: true, avgR: true, winRate: true },
   sidebar: 'dashboard',
@@ -299,6 +302,7 @@ export function readPreferences(): Preferences {
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
       // The first version's sources: classic → quotes, both → traders and tips.
       quoteSource: (({ classic: 'quotes', both: 'traders' } as Record<string, QuoteSource>)[saved.quoteSource as string] ?? saved.quoteSource ?? DEFAULT_PREFERENCES.quoteSource) as QuoteSource,
+      dashAccounts: Array.isArray(saved.dashAccounts) ? saved.dashAccounts.filter((x) => typeof x === 'string') : [],
       looks: Array.isArray(saved.looks) ? saved.looks.filter((l) => l && typeof l.id === 'string') : [],
       customQuotes: Array.isArray(saved.customQuotes) ? saved.customQuotes.filter((x) => typeof x === 'string') : [],
       analyticsWords: Array.isArray(saved.analyticsWords) ? saved.analyticsWords.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.analyticsWords,

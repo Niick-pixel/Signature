@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { localDay } from '@/lib/day';
+import { nyMinutes as nyMinutesOf } from '@/lib/planMatch';
 import { press, spring, springSoft } from '@/lib/motion';
 import {
   EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, liveMarks, prepProgress, withWeeklyTaken,
@@ -208,11 +209,8 @@ function StepView({ step, index, data, change, review, carried }: {
       <h3 className="mt-1 text-[19px] font-semibold tracking-tight">{step.title}</h3>
 
       {step.id === 'session' && (
-        <p className="mt-2 text-[12px]" style={{ color: 'var(--text-dim)' }}>
-          {review?.news
-            ? <>News today: <strong>{review.news === 'None' ? 'nothing major' : review.news.toLowerCase()}</strong>{review.news_note ? ` — ${review.news_note}` : ''}</>
-            : 'No news noted in the morning.'}
-        </p>
+        <SessionNews review={review} answered={data.answers[answerKey(step, step.fields.find((f) => f.id === 'news')!)] != null}
+          onAnswer={(v) => setAnswer(step.fields.find((f) => f.id === 'news')!, v)} />
       )}
 
       {/* The marks — ticked as each goes on the chart. */}
@@ -244,9 +242,9 @@ function StepView({ step, index, data, change, review, carried }: {
       </div>
 
       {/* The answers — taps, not typing. */}
-      {step.fields.length > 0 && (
+      {step.fields.some((f) => !f.hidden) && (
         <div className="mt-5 space-y-4">
-          {step.fields.map((f) => (
+          {step.fields.filter((f) => !f.hidden).map((f) => (
             <FieldView key={f.id} field={f} value={data.answers[answerKey(step, f)]} onChange={(v) => setAnswer(f, v)}
               // A level already taken is not one to wait for.
               hide={answerKey(step, f) === WAIT_KEY ? (Array.isArray(data.answers[TAKEN_KEY]) ? data.answers[TAKEN_KEY] as string[] : []) : []}
@@ -370,4 +368,47 @@ export function usePrepProgress(): { answered: number; total: number } | null {
   if (prep === undefined) return null;
   const p = prepProgress(prep?.data ?? EMPTY_PREP);
   return { answered: p.answered, total: p.total };
+}
+
+interface SessionNewsData { events: Array<{ id: string; at: string; title: string; impact: string; currency: string }>; answer: string; window: { from: string; to: string }; currencies: string[]; auto: boolean; syncedAt: string | null; error?: string }
+
+/**
+ * Step 6's news: the red and orange releases inside your session (New York
+ * time) from ForexFactory's calendar, and the News answer filled in from
+ * them — still yours to change.
+ */
+function SessionNews({ review, answered, onAnswer }: { review: DailyReview | null; answered: boolean; onAnswer: (v: string) => void }) {
+  const [d, setD] = useState<SessionNewsData | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => fetch(`/api/news/session?day=${localDay()}`).then((r) => r.json()).then((j: SessionNewsData) => setD(j)).catch(() => {}), []);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (d && !answered && (d.syncedAt || d.events.length)) onAnswer(d.answer); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [d]);
+  const refresh = async () => { setBusy(true); await fetch('/api/news/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: true }) }); await load(); setBusy(false); };
+  const ny = (at: string) => { const m = nyMinutesOf(at); return m == null ? at.slice(11, 16) : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} NY`; };
+  if (!d) return <p className="mt-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading the calendar…</p>;
+  return (
+    <div className="mt-2 rounded-[calc(12px*var(--rk))] border px-3 py-2.5 text-[12px]" style={{ borderColor: 'var(--glass-stroke)' }} data-session-news={d.events.length}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span style={{ color: 'var(--text-dim)' }}>
+          {d.events.length ? <>News in your session ({d.window.from}–{d.window.to} NY, {d.currencies.join('/')})</> : <>No red or orange {d.currencies.join('/')} news in your session ({d.window.from}–{d.window.to} NY)</>}
+        </span>
+        {d.auto && <button type="button" onClick={refresh} disabled={busy} className="shrink-0 text-[10.5px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>{busy ? 'Pulling…' : 'Refresh'}</button>}
+      </div>
+      {d.events.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {d.events.map((e) => (
+            <li key={e.id} className="flex items-center gap-2">
+              <span className="size-2 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
+              <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.at.slice(11, 16)} <span className="text-[10.5px]">({ny(e.at)})</span></span>
+              <b className="font-medium">{e.title}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-1.5 text-[10.5px]" style={{ color: d.error ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
+        {d.error ?? (d.auto ? (d.syncedAt ? `From ForexFactory, pulled ${new Date(d.syncedAt).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'From ForexFactory.') : 'ForexFactory pull is off — Analytics → News.')}
+        {review?.news ? ` Morning check-in said: ${review.news === 'None' ? 'nothing major' : review.news.toLowerCase()}.` : ''}
+      </p>
+    </div>
+  );
 }

@@ -10,5 +10,7 @@ export async function PATCH(request: Request) {
   return NextResponse.json(saveNewsSettings({
     currencies: raw == null ? undefined : raw.split(',').map((c) => c.trim().toUpperCase()),
     marksRed: typeof b.marksRed === 'boolean' ? b.marksRed : undefined,
+    ffAuto: typeof b.ffAuto === 'boolean' ? b.ffAuto : undefined,
+    window: b.window && typeof b.window === 'object' ? b.window as { from: string; to: string } : undefined,
   }));
 }

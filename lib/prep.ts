@@ -31,6 +31,8 @@ export interface PrepField {
   /** one — a single pill; many — any number of pills; pick — a dropdown. */
   kind: 'one' | 'many' | 'pick';
   options: string[];
+  /** No longer asked; answers already saved still read (plan match, exports). */
+  hidden?: boolean;
 }
 
 export interface PrepStep {
@@ -141,8 +143,9 @@ export const PREP_STEPS: PrepStep[] = [
     ],
     fields: [
       { id: 'news', label: 'News', kind: 'one', options: ['None today', 'Before the open', 'Inside the killzone'] },
-      { id: 'first', label: 'First entry', kind: 'pick', options: ['From the open (9:30)', 'After 9:45', 'After 10:00', '15 min after the news'] },
-      { id: 'done', label: 'Done by', kind: 'pick', options: ['11:00', '11:30', '12:00', 'The close'] },
+      // Retired from the form: the session is the same every day. Old answers still read.
+      { id: 'first', label: 'First entry', kind: 'pick', options: ['From the open (9:30)', 'After 9:45', 'After 10:00', '15 min after the news'], hidden: true },
+      { id: 'done', label: 'Done by', kind: 'pick', options: ['11:00', '11:30', '12:00', 'The close'], hidden: true },
       { id: 'stop', label: 'Stop after', kind: 'one', options: ['1 loss', '2 losses', 'Daily limit'] },
     ],
   },

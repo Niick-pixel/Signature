@@ -372,6 +372,94 @@
     radial-gradient(46rem 36rem at 62% 96%, rgba(60, 120, 140, 0.14), transparent 62%);
 }
 
+/* PAPER — clean white and cool gray. Crisp, neutral, nothing warm. */
+:root[data-theme='paper'] {
+  --bg: #eef0f2;
+  --bg-raised: #ffffff;
+  --text: #16191d;
+  --text-dim: #464c55;
+  --text-faint: #6b727c;
+  --glass-fill: rgba(255, 255, 255, 0.72);
+  --glass-fill-strong: rgba(255, 255, 255, 0.9);
+  --glass-stroke: rgba(22, 30, 42, 0.1);
+  --glass-specular: rgba(255, 255, 255, 0.95);
+  --glass-blur: blur(16px) saturate(120%);
+  --node-fill: rgba(255, 255, 255, 0.97);
+  --shadow-card: 0 1px 2px rgba(20, 28, 40, 0.05), 0 8px 20px -12px rgba(20, 28, 40, 0.18);
+  --shadow-panel: 0 4px 10px rgba(20, 28, 40, 0.06), 0 44px 96px -30px rgba(20, 28, 40, 0.22);
+  --accent: 47 93 124;
+  --board-dots: rgba(22, 30, 42, 0.16);
+  --mark-ground: #ffffff;
+  --mark-ink: #16191d;
+  --mark-gap: color-mix(in srgb, #2f5d7c 34%, transparent);
+  --rk: 1.1;
+}
+:root[data-theme='paper'] body::before {
+  background:
+    radial-gradient(42rem 34rem at 14% 8%, rgba(170, 186, 204, 0.28), transparent 62%),
+    radial-gradient(38rem 30rem at 88% 20%, rgba(210, 214, 222, 0.32), transparent 62%),
+    radial-gradient(46rem 36rem at 60% 96%, rgba(180, 192, 206, 0.22), transparent 62%);
+}
+
+/* MIST — soft gray on gray, rounder, low contrast chrome, ink-black type. */
+:root[data-theme='mist'] {
+  --bg: #e4e5e7;
+  --bg-raised: #f5f5f6;
+  --text: #1b1c1f;
+  --text-dim: #4a4c52;
+  --text-faint: #6c6f76;
+  --glass-fill: rgba(250, 250, 251, 0.62);
+  --glass-fill-strong: rgba(252, 252, 253, 0.86);
+  --glass-stroke: rgba(30, 32, 38, 0.1);
+  --glass-specular: rgba(255, 255, 255, 0.9);
+  --glass-blur: blur(18px) saturate(110%);
+  --node-fill: rgba(247, 247, 248, 0.96);
+  --shadow-card: 0 2px 4px rgba(25, 27, 32, 0.05), 0 10px 22px -12px rgba(25, 27, 32, 0.2);
+  --shadow-panel: 0 4px 10px rgba(25, 27, 32, 0.06), 0 44px 96px -30px rgba(25, 27, 32, 0.24);
+  --accent: 59 59 59;
+  --board-dots: rgba(30, 32, 38, 0.18);
+  --mark-ground: #f5f5f6;
+  --mark-ink: #1b1c1f;
+  --mark-gap: color-mix(in srgb, #3b3b3b 30%, transparent);
+  --rk: 1.35;
+}
+:root[data-theme='mist'] body::before {
+  background:
+    radial-gradient(42rem 34rem at 18% 10%, rgba(200, 202, 208, 0.4), transparent 62%),
+    radial-gradient(38rem 30rem at 86% 18%, rgba(226, 228, 232, 0.5), transparent 62%),
+    radial-gradient(46rem 36rem at 60% 96%, rgba(190, 194, 200, 0.3), transparent 62%);
+}
+
+/* GRAPHITE — neutral charcoal and soft white. Dark without colour. */
+:root[data-theme='graphite'] {
+  --bg: #141517;
+  --bg-raised: #1d1f22;
+  --text: #ecedef;
+  --text-dim: #b4b8bf;
+  --text-faint: #8d929a;
+  --glass-fill: rgba(236, 238, 242, 0.05);
+  --glass-fill-strong: rgba(236, 238, 242, 0.09);
+  --glass-stroke: rgba(236, 238, 242, 0.12);
+  --glass-specular: rgba(240, 242, 246, 0.35);
+  --glass-blur: blur(20px) saturate(120%);
+  --node-fill: rgba(30, 32, 35, 0.96);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.6), 0 6px 18px -8px rgba(0, 0, 0, 0.6);
+  --shadow-panel: 0 2px 4px rgba(0, 0, 0, 0.6), 0 40px 96px -24px rgba(0, 0, 0, 0.82);
+  --accent: 200 205 212;
+  --board-dots: rgba(236, 238, 242, 0.12);
+  --mark-ground: #1d1f22;
+  --mark-ink: #ecedef;
+  --mark-gap: color-mix(in srgb, #c8cdd4 26%, transparent);
+  --scrollbar: rgba(236, 238, 242, 0.16);
+  --scrollbar-hover: rgba(236, 238, 242, 0.28);
+}
+:root[data-theme='graphite'] body::before {
+  background:
+    radial-gradient(42rem 34rem at 18% 8%, rgba(120, 128, 140, 0.16), transparent 62%),
+    radial-gradient(38rem 30rem at 88% 22%, rgba(160, 166, 176, 0.08), transparent 62%),
+    radial-gradient(46rem 36rem at 62% 96%, rgba(100, 108, 120, 0.12), transparent 62%);
+}
+
 /*
   Switching theme: the new theme opens out as a circle from the click (see
   applyTheme). The browser's default cross-fade is switched off so it does

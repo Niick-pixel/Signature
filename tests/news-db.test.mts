@@ -41,3 +41,43 @@ test('backup restores events once', () => {
   assert.equal(D.restoreNews(dump), 3);
   assert.equal(D.restoreNews(dump), 0);
 });
+
+test('ForexFactory feed: parsed on its own offset, session news by New York window, red and orange USD only, the prep answer', async () => {
+  const N = await import('../lib/news');
+  const { nyMinutes } = await import('../lib/planMatch');
+  const feed = JSON.stringify([
+    { title: 'CPI m/m', country: 'USD', date: '2026-10-29T08:30:00-04:00', impact: 'High', forecast: '0.3%', previous: '0.4%' },
+    { title: 'Pending Home Sales m/m', country: 'USD', date: '2026-10-29T10:00:00-04:00', impact: 'Medium' },
+    { title: 'Crude Oil Inventories', country: 'USD', date: '2026-10-29T10:30:00-04:00', impact: 'Low' },
+    { title: 'German Prelim CPI m/m', country: 'EUR', date: '2026-10-29T08:00:00-04:00', impact: 'High' },
+    { title: 'FOMC Statement', country: 'USD', date: '2026-10-29T14:00:00-04:00', impact: 'High' },
+    { title: 'bad', country: 'USD', date: 'soon' },
+  ]);
+  const { events, skipped } = N.parseFfFeed(feed, -6);
+  assert.equal(skipped, 1);
+  assert.equal(events[0].at, '2026-10-29T06:30', '8:30 New York (EDT) is 6:30 Costa Rica');
+  const inSession = N.sessionNews(events, '2026-10-29', ['USD'], { from: '08:30', to: '12:00' }, nyMinutes);
+  assert.deepEqual(inSession.map((e) => e.title), ['CPI m/m', 'Pending Home Sales m/m']);
+  assert.equal(N.newsAnswer(inSession, nyMinutes), 'Inside the killzone');
+  assert.equal(N.newsAnswer(inSession.slice(0, 1), nyMinutes), 'Before the open');
+  assert.equal(N.newsAnswer([], nyMinutes), 'None today');
+  // After the clocks change (EST), 8:30 New York is 7:30 Costa Rica — and still inside the window.
+  const est = N.parseFfFeed(JSON.stringify([{ title: 'NFP', country: 'USD', date: '2026-11-06T08:30:00-05:00', impact: 'High' }]), -6).events;
+  assert.equal(est[0].at, '2026-11-06T07:30');
+  assert.equal(N.sessionNews(est, '2026-11-06', ['USD'], { from: '08:30', to: '12:00' }, nyMinutes).length, 1);
+});
+
+test('sync: a stale pull fetches, a fresh one waits, a failure changes nothing', async () => {
+  const D2 = await import('../db/news');
+  const feed = JSON.stringify([{ title: 'Retail Sales m/m', country: 'USD', date: '2026-10-30T08:30:00-04:00', impact: 'High' }]);
+  let calls = 0;
+  const ok = (async () => { calls += 1; return new Response(feed, { status: 200 }); }) as unknown as typeof fetch;
+  const r1 = await D2.syncForexFactory(true, ok);
+  assert.equal(r1.added, 1); assert.ok(r1.syncedAt);
+  const r2 = await D2.syncForexFactory(false, ok);
+  assert.equal(r2.skipped, true); assert.equal(calls, 1);
+  const down = (async () => { throw new Error('offline'); }) as unknown as typeof fetch;
+  const r3 = await D2.syncForexFactory(true, down);
+  assert.match(r3.error!, /Could not reach/);
+  assert.equal(D2.listNews('2026-10-30', '2026-10-30').length, 1);
+});

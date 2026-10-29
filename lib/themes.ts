@@ -60,6 +60,24 @@ export const THEMES: readonly ThemeInfo[] = [
     preview: { bg: '#0e1220', raised: '#161b2b', text: '#f1e8d6', accent: '#daae60', stroke: 'rgba(226,204,160,0.2)', radius: 10 },
     chrome: { color: '#0e1220', symbolColor: '#c9bb9c' },
   },
+  {
+    id: 'paper', name: 'Paper', mode: 'light',
+    blurb: 'Clean white and cool gray. Crisp and neutral.',
+    preview: { bg: '#eef0f2', raised: '#ffffff', text: '#16191d', accent: '#2f5d7c', stroke: 'rgba(22,30,42,0.12)', radius: 11 },
+    chrome: { color: '#eef0f2', symbolColor: '#464c55' },
+  },
+  {
+    id: 'mist', name: 'Mist', mode: 'light',
+    blurb: 'Soft gray on gray, rounder, ink-black type.',
+    preview: { bg: '#e4e5e7', raised: '#f5f5f6', text: '#1b1c1f', accent: '#3b3b3b', stroke: 'rgba(30,32,38,0.12)', radius: 14 },
+    chrome: { color: '#e4e5e7', symbolColor: '#4a4c52' },
+  },
+  {
+    id: 'graphite', name: 'Graphite', mode: 'dark',
+    blurb: 'Neutral charcoal and soft white. Dark without colour.',
+    preview: { bg: '#141517', raised: '#1d1f22', text: '#ecedef', accent: '#c8cdd4', stroke: 'rgba(236,238,242,0.14)', radius: 10 },
+    chrome: { color: '#141517', symbolColor: '#b4b8bf' },
+  },
 ];
 
 export const THEME_KEY = 'signature:theme';

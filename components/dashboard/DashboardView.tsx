@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
 import { PropMini } from '@/components/prop/PropMini';
 import { motion } from 'framer-motion';
@@ -22,21 +22,40 @@ const pct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(1)}%
 const tone = (v: number | null) => (v == null ? 'var(--text-faint)' : v > 0 ? 'rgb(var(--outcome-win))' : v < 0 ? 'rgb(var(--outcome-loss))' : 'var(--text)');
 const WORLD_LABEL: Record<DashWorld, string> = { real: 'Real accounts', backtest: 'Backtests', all: 'Real and backtests' };
 
-export function DashboardView({ data, today }: { data: Record<DashWorld, DashboardData>; today: string }) {
+export interface AccountOption { key: string; label: string; n: number }
+
+export function DashboardView({ data, today, accounts = [] }: { data: Record<DashWorld, DashboardData>; today: string; accounts?: AccountOption[] }) {
   const { prefs, update } = usePreferences();
-  const d = data[prefs.dashWorld] ?? data.real;
+  const chosen = prefs.dashAccounts.filter((k) => accounts.some((a) => a.key === k));
+  const [picked, setPicked] = useState<DashboardData | null>(null);
+  // Chosen accounts are worked out on the server (app/api/dashboard); the three worlds come with the page.
+  useEffect(() => {
+    if (!chosen.length) { setPicked(null); return; }
+    let live = true;
+    void fetch(`/api/dashboard?accounts=${encodeURIComponent(chosen.join(','))}&today=${today}`).then((r) => r.json()).then((j) => { if (live) setPicked(j); }).catch(() => {});
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen.join(','), today]);
+  const d = (chosen.length && picked) ? picked : data[prefs.dashWorld] ?? data.real;
   const money = prefs.dashUnit === 'money' && d.total.money != null;
   const b = prefs.dashBlocks;
+  const toggle = (k: string) => update({ dashAccounts: chosen.includes(k) ? chosen.filter((x) => x !== k) : [...chosen, k] });
+  const scope = chosen.length ? chosen.map((k) => accounts.find((a) => a.key === k)?.label ?? k).join(', ') : WORLD_LABEL[d.world];
   return (
-    <div className="mx-auto w-full max-w-[76rem] px-6 pb-20 pt-4" data-dashboard>
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-            {new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {WORLD_LABEL[d.world]}
+    <div className="mx-auto flex w-full max-w-[80rem] flex-col px-6 pb-6 pt-3 xl:h-full" data-dashboard>
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[20px] font-semibold leading-tight tracking-tight">Dashboard</h1>
+          <p className="truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
+            {new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · {scope}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5" data-dash-accounts>
+          <Pill on={!chosen.length} onClick={() => update({ dashAccounts: [] })} title={`Everything in ${WORLD_LABEL[prefs.dashWorld].toLowerCase()} (Settings → Dashboard)`}>All</Pill>
+          {accounts.filter((a) => !a.key.includes('|') || chosen.includes(a.key) || accounts.filter((x) => x.key.startsWith(`${a.key.split('|')[0]}|`)).length > 1).map((a) => (
+            <Pill key={a.key} on={chosen.includes(a.key)} onClick={() => toggle(a.key)} title={`${a.n} trade${a.n === 1 ? '' : 's'}`}>{a.label}</Pill>
+          ))}
+          <span className="mx-1 h-4 w-px" style={{ background: 'var(--glass-stroke)' }} />
           <Chip on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data="hide-pnl">
             {prefs.hidePnl ? 'Show P&L' : 'Hide P&L'}
           </Chip>
@@ -48,25 +67,43 @@ export function DashboardView({ data, today }: { data: Record<DashWorld, Dashboa
 
       {d.total.trades === 0 ? (
         <div className="glass rounded-[calc(24px*var(--rk))] p-10 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>
-          No trades in {WORLD_LABEL[d.world].toLowerCase()} yet. Change what the Dashboard counts in Customize.
+          No trades in {scope.toLowerCase()} yet.
         </div>
       ) : (
-        <div className="space-y-4">
-          {b.hero && <Hero d={d} money={money} />}
-          {b.tiles && <Tiles d={d} money={money} />}
-          <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-            {b.chart && <Card title="Cumulative" note={money ? 'Net P&L, in the order traded' : 'Net R, in the order traded'}><Curve d={d} money={money} /></Card>}
-            {b.week && <Card title="This week" note="Net per day, Monday to Sunday"><Week d={d} money={money} today={today} /></Card>}
-          </div>
-          <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-            {b.score && <Card title="Discipline score" note="How you trade, not what you made. Hover an axis for what it measures; choose the axes in Customize."><Score d={d} enabled={prefs.scoreAxes} /></Card>}
-            {b.recent && <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>}
-            {b.prop && <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} />}
-          </div>
-          {prefs.quoteOnDashboard && <QuoteOfDay className="mt-10" />}
+        // One screen: three rows, the middle one takes what is left.
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          {(b.hero || b.tiles) && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {b.hero && <Hero d={d} money={money} />}
+              {b.tiles && <Tiles d={d} money={money} />}
+            </div>
+          )}
+          {(b.chart || b.week) && (
+            <div className="grid min-h-[13rem] flex-1 gap-3 lg:grid-cols-[1.7fr_1fr]">
+              {b.chart && <Card title="Cumulative" note={money ? 'Net P&L, in the order traded' : 'Net R, in the order traded'} grow><Curve d={d} money={money} /></Card>}
+              {b.week && <Card title="This week" note="Net per day" grow><Week d={d} money={money} today={today} /></Card>}
+            </div>
+          )}
+          {(b.score || b.recent || b.prop) && (
+            <div className="grid gap-3 lg:grid-cols-[1.25fr_1fr_0.8fr]">
+              {b.score && <Card title="Discipline score" note="Hover an axis for what it measures"><Score d={d} enabled={prefs.scoreAxes} /></Card>}
+              {b.recent && <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>}
+              {b.prop ? <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} empty={prefs.quoteOnDashboard ? <Card title="Today's line"><QuoteOfDay className="text-left" /></Card> : null} />
+                : prefs.quoteOnDashboard && <Card title="Today's line"><QuoteOfDay className="text-left" /></Card>}
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+function Pill({ on, onClick, title, children }: { on: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={title} className="rounded-full border px-2.5 py-1 text-[11.5px] font-medium"
+      style={{ borderColor: on ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: on ? 'rgb(var(--accent) / 0.12)' : 'transparent', color: on ? 'rgb(var(--accent))' : 'var(--text-dim)' }}>
+      {children}
+    </button>
   );
 }
 
@@ -80,15 +117,15 @@ function Chip({ on = false, onClick, title, children, data }: { on?: boolean; on
   );
 }
 
-function Card({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+function Card({ title, note, children, grow }: { title: string; note?: string; children: React.ReactNode; grow?: boolean }) {
   return (
     <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={springSoft}
-      className="glass rounded-[calc(22px*var(--rk))] p-5">
+      className={`glass flex min-h-0 flex-col rounded-[calc(20px*var(--rk))] px-4 py-3.5 ${grow ? 'h-full' : ''}`}>
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{title}</h2>
-        {note && <span className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{note}</span>}
+        <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{title}</h2>
+        {note && <span className="truncate text-[10px]" style={{ color: 'var(--text-faint)' }}>{note}</span>}
       </div>
-      <div className="mt-3">{children}</div>
+      <div className={`mt-2 ${grow ? 'min-h-0 flex-1' : ''}`}>{children}</div>
     </motion.section>
   );
 }
@@ -97,12 +134,12 @@ function Hero({ d, money }: { d: DashboardData; money: boolean }) {
   const main = money ? d.total.money : d.total.r;
   const week = money ? d.week7.money : d.week7.r;
   return (
-    <section data-dash-hero className="py-6 text-center">
-      <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--text-faint)' }}>Total {money ? 'P&L' : 'R'}</div>
-      <div className="mt-1 text-[56px] font-semibold leading-none tracking-tight tabular-nums sm:text-[72px]" style={{ color: tone(main) }} data-money={money ? '' : undefined}>
+    <section data-dash-hero className="glass rounded-[calc(18px*var(--rk))] px-4 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>Total {money ? 'P&L' : 'R'}</div>
+      <div className="mt-1 text-[30px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: tone(main) }} data-money={money ? '' : undefined}>
         {money ? usd(main) : rr(main, 1)}
       </div>
-      <div className="mt-3 text-[12.5px] tabular-nums" style={{ color: 'var(--text-dim)' }}>
+      <div className="mt-1.5 truncate text-[11px] tabular-nums" style={{ color: 'var(--text-dim)' }}>
         {d.week7.trades === 0 ? 'Nothing in the last 7 days'
           : <><span style={{ color: tone(week) }} data-money={money ? '' : undefined}>{money ? usd(week ?? 0) : rr(week, 1)}</span> in the last 7 days</>}{' '}
         · {d.total.wins}W / {d.total.losses}L · {d.total.trades} trades
@@ -129,10 +166,10 @@ function Tiles({ d, money }: { d: DashboardData; money: boolean }) {
       : { label: 'Profit factor', value: a.profitFactor?.toFixed(2) ?? '—', sub: 'R won over R lost', delta: delta(n.profitFactor, p.profitFactor, 'x'), money: false },
   ];
   return (
-    <div className="grid gap-3 sm:grid-cols-3" data-dash-tiles>
+    <>
       {tiles.map((t) => (
         <motion.div key={t.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={springSoft}
-          className="glass rounded-[calc(18px*var(--rk))] px-4 py-3.5">
+          className="glass rounded-[calc(18px*var(--rk))] px-4 py-3" data-dash-tile>
           <div className="flex items-start justify-between gap-2">
             <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{t.label}</span>
             {t.delta && (
@@ -142,11 +179,11 @@ function Tiles({ d, money }: { d: DashboardData; money: boolean }) {
               </span>
             )}
           </div>
-          <div className="mt-1.5 text-[24px] font-semibold leading-none tabular-nums" data-money={t.money ? '' : undefined}>{t.value}</div>
+          <div className="mt-1 text-[22px] font-semibold leading-none tabular-nums" data-money={t.money ? '' : undefined}>{t.value}</div>
           <div className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }} data-money={t.money ? '' : undefined}>{t.sub}</div>
         </motion.div>
       ))}
-    </div>
+    </>
   );
 }
 
@@ -163,12 +200,12 @@ function Curve({ d, money }: { d: DashboardData; money: boolean }) {
   const hue = last >= 0 ? '--outcome-win' : '--outcome-loss';
   const shown = hover ?? pts.length - 1;
   return (
-    <div data-dash-curve>
+    <div className="flex h-full min-h-[9rem] flex-col" data-dash-curve>
       <div className="mb-1 flex items-baseline justify-between text-[11.5px] tabular-nums">
         <span style={{ color: 'var(--text-faint)' }}>{d.curve[shown].day}</span>
         <b style={{ color: tone(pts[shown]) }} data-money={money ? '' : undefined}>{money ? usd(pts[shown]) : rr(pts[shown], 1)}</b>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-[200px] w-full" preserveAspectRatio="none"
+      <svg viewBox={`0 0 ${W} ${H}`} className="min-h-0 w-full flex-1" preserveAspectRatio="none"
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => { const r = (e.currentTarget as SVGElement).getBoundingClientRect(); setHover(Math.max(0, Math.min(pts.length - 1, Math.round(((e.clientX - r.left) / r.width) * (pts.length - 1))))); }}>
         <defs>
@@ -191,16 +228,16 @@ function Week({ d, money, today }: { d: DashboardData; money: boolean; today: st
   const max = Math.max(1e-9, ...vals.map(Math.abs));
   const net = vals.reduce((s, v) => s + v, 0);
   return (
-    <div data-dash-week>
+    <div className="flex h-full min-h-[9rem] flex-col" data-dash-week>
       {d.week.some((w) => w.trades)
-        ? <div className="mb-2 text-[22px] font-semibold tabular-nums" style={{ color: tone(net) }} data-money={money ? '' : undefined}>{money ? usd(net) : rr(net, 1)}</div>
-        : <div className="mb-2 text-[13px]" style={{ color: 'var(--text-faint)' }}>No trades yet this week.</div>}
-      <div className="flex h-[150px] items-end gap-2">
+        ? <div className="mb-1 text-[18px] font-semibold tabular-nums" style={{ color: tone(net) }} data-money={money ? '' : undefined}>{money ? usd(net) : rr(net, 1)}</div>
+        : <div className="mb-1 text-[12.5px]" style={{ color: 'var(--text-faint)' }}>No trades yet this week.</div>}
+      <div className="flex min-h-0 flex-1 items-end gap-2">
         {d.week.map((w, i) => {
           const v = vals[i];
           return (
-            <div key={w.day} className="flex flex-1 flex-col items-center gap-1" title={`${w.day}: ${w.trades} trade${w.trades === 1 ? '' : 's'}, ${money ? usd(v) : rr(v, 1)}`}>
-              <motion.div initial={{ height: 0 }} animate={{ height: `${Math.max(w.trades ? 6 : 2, (Math.abs(v) / max) * 120)}px` }} transition={springSoft}
+            <div key={w.day} className="flex h-full flex-1 flex-col items-center justify-end gap-1" title={`${w.day}: ${w.trades} trade${w.trades === 1 ? '' : 's'}, ${money ? usd(v) : rr(v, 1)}`}>
+              <motion.div initial={{ height: 0 }} animate={{ height: `${Math.max(w.trades ? 6 : 2, (Math.abs(v) / max) * 85)}%` }} transition={springSoft}
                 className="w-full rounded-[6px]"
                 style={{ background: !w.trades ? 'var(--glass-stroke)' : v >= 0 ? 'rgb(var(--outcome-win) / 0.75)' : 'rgb(var(--outcome-loss) / 0.75)',
                   outline: w.day === today ? '1.5px solid rgb(var(--accent) / 0.6)' : undefined, outlineOffset: 2 }} />
@@ -225,16 +262,16 @@ function Score({ d, enabled }: { d: DashboardData; enabled: Record<string, boole
   };
   const shape = axes.map((a, i) => at(i, ((d.axes[a.key] ?? 0) / 100) * R).join(',')).join(' ');
   return (
-    <div className="flex flex-wrap items-center gap-5" data-dash-score={score ?? ''}>
+    <div className="flex flex-wrap items-center gap-3" data-dash-score={score ?? ''}>
       <div className="text-center">
-        <div className="text-[48px] font-semibold leading-none tabular-nums"
+        <div className="text-[36px] font-semibold leading-none tabular-nums"
           style={{ color: score == null ? 'var(--text-faint)' : score >= 70 ? 'rgb(var(--outcome-win))' : score >= 45 ? 'rgb(var(--accent))' : 'rgb(var(--outcome-loss))' }}>
           {score ?? '—'}
         </div>
         <div className="mt-1 text-[10.5px]" style={{ color: 'var(--text-faint)' }}>out of 100</div>
       </div>
       {axes.length >= 3 && (
-        <svg viewBox="0 0 200 200" className="h-[190px] w-[190px]">
+        <svg viewBox="0 0 200 200" className="h-[150px] w-[150px]">
           {[0.33, 0.66, 1].map((k) => (
             <polygon key={k} points={axes.map((_, i) => at(i, R * k).join(',')).join(' ')} fill="none" stroke="var(--glass-stroke)" />
           ))}
@@ -250,7 +287,7 @@ function Score({ d, enabled }: { d: DashboardData; enabled: Record<string, boole
           })}
         </svg>
       )}
-      <ul className="min-w-[9rem] flex-1 space-y-1 text-[11.5px] tabular-nums">
+      <ul className="min-w-[8rem] flex-1 space-y-0.5 text-[11px] tabular-nums">
         {axes.map((a) => (
           <li key={a.key} className="flex justify-between gap-3" title={a.hint}>
             <span style={{ color: 'var(--text-dim)' }}>{a.label}</span><b>{d.axes[a.key] ?? '—'}</b>
@@ -264,9 +301,9 @@ function Score({ d, enabled }: { d: DashboardData; enabled: Record<string, boole
 function Recent({ d, money, openIn }: { d: DashboardData; money: boolean; openIn: 'page' | 'board' }) {
   return (
     <ul className="divide-y" style={{ borderColor: 'var(--glass-stroke)' }} data-dash-recent>
-      {d.recent.map((t) => (
+      {d.recent.slice(0, 5).map((t) => (
         <li key={t.id}>
-          <button type="button" className="flex w-full items-center justify-between gap-3 py-2 text-left text-[12px] hover:opacity-80"
+          <button type="button" className="flex w-full items-center justify-between gap-3 py-1.5 text-left text-[12px] hover:opacity-80"
             onClick={() => openTrade(t.id, openIn)}
             title="Open on the board">
             <span className="min-w-0 truncate">

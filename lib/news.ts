@@ -124,3 +124,59 @@ export function redDays(events: readonly Pick<NewsEvent, 'at' | 'currency' | 'im
   const want = new Set(currencies.map((c) => c.toUpperCase()));
   return new Set(events.filter((e) => e.impact === 'High' && want.has(e.currency.toUpperCase())).map((e) => e.at.slice(0, 10)));
 }
+
+/* ───────────── ForexFactory's weekly feed ───────────── */
+
+/** The feed ForexFactory publishes for its calendar (the page itself is behind bot protection). */
+export const FF_FEED_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
+
+/**
+ * ForexFactory's JSON: [{ title, country, date: "2026-10-29T08:30:00-04:00", impact, forecast, previous }].
+ * The date carries its own offset, so it lands on the journal clock exactly.
+ */
+export function parseFfFeed(text: string, journalOffsetHours = -6): { events: NewsEvent[]; skipped: number } {
+  let rows: unknown;
+  try { rows = JSON.parse(text); } catch { return { events: [], skipped: 0 }; }
+  if (!Array.isArray(rows)) return { events: [], skipped: 0 };
+  const events: NewsEvent[] = []; let skipped = 0;
+  for (const r of rows as Record<string, unknown>[]) {
+    const title = typeof r?.title === 'string' ? r.title.trim() : '';
+    const utc = typeof r?.date === 'string' ? Date.parse(r.date) : NaN;
+    if (!title || !Number.isFinite(utc)) { skipped += 1; continue; }
+    const j = new Date(utc + journalOffsetHours * 3600_000);
+    const at = `${j.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2, '0')}-${String(j.getUTCDate()).padStart(2, '0')}T${String(j.getUTCHours()).padStart(2, '0')}:${String(j.getUTCMinutes()).padStart(2, '0')}`;
+    const impact = impactOf(String(r.impact ?? '')) ?? 'Low';
+    // "All Day" and "Tentative" items come at midnight New York.
+    const allDay = /T00:00:00/.test(String(r.date)) && impact === 'Holiday';
+    events.push({ at, all_day: allDay, currency: String(r.country ?? 'USD').toUpperCase().slice(0, 3), title: title.slice(0, 160), impact });
+  }
+  return { events, skipped };
+}
+
+/** "08:30" → minutes. */
+export const hhmmToMin = (s: string) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim()); return m ? +m[1] * 60 + +m[2] : null; };
+
+export interface SessionWindow { from: string; to: string }
+
+/**
+ * The releases that matter for the session: red and orange (High, Medium),
+ * in the counted currencies, inside the window — set in New York time, so
+ * daylight saving moves it on its own.
+ */
+export function sessionNews<T extends Pick<NewsEvent, 'at' | 'currency' | 'impact' | 'all_day'>>(events: readonly T[], day: string, currencies: readonly string[],
+  window: SessionWindow, nyMinutes: (date: string) => number | null): T[] {
+  const want = new Set(currencies.map((c) => c.toUpperCase()));
+  const from = hhmmToMin(window.from) ?? 0; const to = hhmmToMin(window.to) ?? 24 * 60;
+  return events.filter((e) => {
+    if (e.at.slice(0, 10) !== day || e.all_day || !want.has(e.currency.toUpperCase())) return false;
+    if (e.impact !== 'High' && e.impact !== 'Medium') return false;
+    const m = nyMinutes(e.at);
+    return m != null && m >= from && m <= to;
+  }).sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/** The chart prep's "News" answer from the day's session releases. */
+export function newsAnswer(events: ReadonlyArray<Pick<NewsEvent, 'at'>>, nyMinutes: (date: string) => number | null): 'None today' | 'Before the open' | 'Inside the killzone' {
+  if (!events.length) return 'None today';
+  return events.some((e) => (nyMinutes(e.at) ?? 0) >= 9 * 60 + 30) ? 'Inside the killzone' : 'Before the open';
+}

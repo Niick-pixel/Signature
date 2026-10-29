@@ -16,7 +16,7 @@ import { JOURNAL_CHANGED } from '@/lib/freshness';
 interface Data {
   world: string; count: number; minN: number;
   time: TimeView; confluences: ConfluenceRow[]; psychology: Psychology;
-  news: NewsView & { monday: string; settings: { currencies: string[]; marksRed: boolean }; total: number };
+  news: NewsView & { monday: string; settings: { currencies: string[]; marksRed: boolean; ffAuto: boolean; window: { from: string; to: string }; syncedAt: string | null }; total: number };
 }
 
 const signedR = (v: number | null | undefined) => (v == null ? '—' : `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(2)}R`);
@@ -301,6 +301,8 @@ function News({ v, monday, setMonday, reload }: { v: Data['news']; monday: strin
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [form, setForm] = useState({ day: monday, time: '08:30', title: '', currency: 'USD', impact: 'High' });
   const [ccy, setCcy] = useState(v.settings.currencies.join(', '));
+  const [win, setWin] = useState(v.settings.window);
+  useEffect(() => { setWin(v.settings.window); }, [v.settings.window.from, v.settings.window.to]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setCcy(v.settings.currencies.join(', ')); }, [v.settings.currencies]);
   const shift = (n: number) => { const d = new Date(`${monday}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7 * n); setMonday(d.toISOString().slice(0, 10)); };
   const upload = async (f: File) => {
@@ -401,6 +403,20 @@ function News({ v, monday, setMonday, reload }: { v: Data['news']; monday: strin
         <Card title="What news means">
           <label className="block text-[11px]" style={{ color: 'var(--text-faint)' }}>Currencies that count
             <input value={ccy} onChange={(e) => setCcy(e.target.value)} onBlur={() => saveSettings({ currencies: ccy })} className={`${input} mt-1 w-full`} style={st} aria-label="Currencies" /></label>
+          <label className="mt-3 flex items-start gap-2 text-[11.5px]" data-ff-auto>
+            <input type="checkbox" checked={v.settings.ffAuto} onChange={(e) => saveSettings({ ffAuto: e.target.checked })} className="mt-0.5" />
+            <span>Pull ForexFactory&apos;s calendar on its own (at most every 6 hours; the only time the app goes online for news).</span>
+          </label>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            My session (New York time)
+            <input type="time" value={win.from} onChange={(e) => setWin({ ...win, from: e.target.value })} onBlur={() => saveSettings({ window: win })} className={input} style={st} aria-label="Session from" />
+            to
+            <input type="time" value={win.to} onChange={(e) => setWin({ ...win, to: e.target.value })} onBlur={() => saveSettings({ window: win })} className={input} style={st} aria-label="Session to" />
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <Pill onClick={async () => { const r = await fetch('/api/news/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: true }) }); const j = await r.json(); setMsg(j.error ? { ok: false, text: j.error } : { ok: true, text: `ForexFactory: ${j.added} new, ${j.already} already here.` }); reload(); }}>Pull now</Pill>
+            <span className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{v.settings.syncedAt ? `Last pulled ${new Date(v.settings.syncedAt).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Not pulled yet'}</span>
+          </div>
           <label className="mt-3 flex items-start gap-2 text-[11.5px]">
             <input type="checkbox" checked={v.settings.marksRed} onChange={(e) => saveSettings({ marksRed: e.target.checked })} className="mt-0.5" />
             <span>A high-impact event marks its day red-folder for the rules (as the morning check-in does). Flagged, never blocked.</span>

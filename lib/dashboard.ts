@@ -15,6 +15,15 @@ export function inWorld(t: Trade, world: DashWorld): boolean {
   return world === 'all' || (world === 'backtest') === isBacktest(t.account);
 }
 
+/** One account as the filter knows it: the account, or the account and its label ("Eval|Apex-1"). */
+export const accountKey = (t: Pick<Trade, 'account' | 'account_label'>) => (t.account_label?.trim() ? `${t.account}|${t.account_label.trim()}` : t.account);
+export const accountKeyLabel = (key: string) => { const [a, l] = key.split('|'); return l ? `${l} (${a.replace(' (FX Replay)', '')})` : a.replace(' (FX Replay)', ''); };
+
+/** In the chosen accounts: an account key matches itself; a bare account matches every label on it. */
+export function inAccounts(t: Trade, keys: ReadonlySet<string>): boolean {
+  return inWorld(t, 'all') && (keys.has(accountKey(t)) || keys.has(t.account));
+}
+
 /** The day a trade counts on: its date, or for an undated backtest the day it was logged. */
 export const dayOf = (t: Trade): string => (t.undated
   ? new Date(t.created_at.endsWith('Z') ? t.created_at : `${t.created_at}Z`).toLocaleDateString('en-CA')
@@ -105,8 +114,8 @@ export interface DashboardData {
   recent: Array<{ id: string; day: string; account: string; setup: string; direction: string; outcome: string; r: number | null; money: number | null }>;
 }
 
-export function dashboardData(trades: readonly Trade[], world: DashWorld, today: string, rulesKeptShare: number | null): DashboardData {
-  const ts = trades.filter((t) => inWorld(t, world)).sort((a, b) => a.date.localeCompare(b.date));
+export function dashboardData(trades: readonly Trade[], world: DashWorld, today: string, rulesKeptShare: number | null, accounts?: ReadonlySet<string>): DashboardData {
+  const ts = trades.filter((t) => (accounts?.size ? inAccounts(t, accounts) : inWorld(t, world))).sort((a, b) => a.date.localeCompare(b.date));
   const since = (n: number) => addDays(today, -n + 1);
   const between = (from: string, to: string) => ts.filter((t) => { const d = dayOf(t); return d >= from && d <= to; });
   let cr = 0; let cm = 0; let priced = false;
