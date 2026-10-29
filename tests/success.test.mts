@@ -38,8 +38,11 @@ test('the system: bands, the costliest habit, themes, newest first', () => {
   assert.equal(s.n, 8);
   const hi = s.bands.find((b) => b.id === 'high')!; const lo = s.bands.find((b) => b.id === 'low')!;
   assert.equal(hi.n, 5); assert.equal(lo.n, 3); assert.equal(lo.avgR, -1);
-  assert.match(s.line, /Your process pays/);
-  assert.ok(s.focus && /given up/.test(s.focus));
+  assert.match(s.line, /high-scoring trades did better/);
+  assert.equal(s.focus, null, 'no "matters most" call from checks written after the result');
+  // A gap within two standard errors is called noise, with the trades needed.
+  const noisy = S.successSystem([t(1, { lesson: 'Waited for the close.' }), t(-1, { lesson: 'Waited for the close.' }), t(0.5), t(-1, { explanation: 'Chased it.', mistake_tags: ['Chased'], graded_post_hoc: true, grade_letter: 'C' }), t(1, { explanation: 'Chased it.', mistake_tags: ['Chased'], graded_post_hoc: true, grade_letter: 'C' }), t(0.2)], ctx);
+  assert.match(noisy.line, /Can't tell yet/);
   assert.equal(s.themes[0].n, 3);
   assert.equal(s.trades[0].id, ts[ts.length - 1].id);
   const plan = s.habits.find((h) => h.id === 'plan')!;

@@ -10,7 +10,7 @@ const t = (d: string, x: Record<string, unknown> = {}) => {
     id: `w${n}`, date: `${d}T09:45`, created_at: `${d}T15:00:00.000Z`, account: 'Demo', status: 'Settled', outcome: 'Win',
     r_multiple: 2, direction: 'Long', premium_discount: 'Discount', sweep_tier: 'major', trigger_fired: true, target_type: 'PDH/PDL',
     r_to_nearest_bucket: '2+', chk_killzone: true, chk_no_news: true, management: 'BE at 1R', mfe_r: 2, undated: false,
-    setup_type: 'iFVG', grade_letter: 'A', mistake_tags: [], worked_tags: [], explanation: '', lesson: '', screenshot_path: null,
+    setup_type: 'iFVG', grade_letter: 'A', checklist_score: 85, mistake_tags: [], worked_tags: [], explanation: '', lesson: '', screenshot_path: null,
     deleted_at: null, ...x,
   } as never;
 };

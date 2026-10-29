@@ -14,7 +14,8 @@
  * Nothing here blocks anything. Broken rules are listed after the fact
  * (lib/review.ts), never used to refuse a save.
  */
-import { RETIRED_TARGET_TYPES, isBacktest, isHypothetical, isTaken } from './domain';
+import { RETIRED_TARGET_TYPES, TAKE_IT_THRESHOLD, isBacktest, isHypothetical, isScored, isTaken } from './domain';
+import { GATES_SINCE } from './rubric';
 import type { Trade } from './types';
 
 /** Target types that are not a named pool: "Other" and the retired ones — except the horizontal pool, which still is. */
@@ -40,6 +41,12 @@ export interface TradeRule {
   /** Short label, for a chip. */
   short: string;
   test: (t: Trade, cfg: RuleConfig) => Verdict;
+  /**
+   * 'logging' rules are about the journal being complete (max R logged, the
+   * management plan recorded), not about the trade: they show where they
+   * always did, but never count as breaking the plan (lib/edge/metrics adherence).
+   */
+  kind?: 'trading' | 'logging';
   /**
    * Whether the trade answered the field this rule reads. A trade logged
    * before the first one that ever did predates the question, so the rule
@@ -121,13 +128,29 @@ export const TRADE_RULES: TradeRule[] = [
     test: (t) => (t.chk_killzone == null ? null : t.chk_killzone),
   },
   {
-    id: 'management', scope: 'trade', short: 'Management plan set',
+    id: 'threshold', scope: 'trade', short: 'Checklist at the threshold',
+    text: `The checklist scored at least ${TAKE_IT_THRESHOLD} before the entry.`,
+    test: (t) => (isScored(t) ? t.checklist_score >= TAKE_IT_THRESHOLD : null),
+  },
+  {
+    // The model gate is "a named sweep AND one clean gap"; the sweep half is the rule above.
+    id: 'one-gap', scope: 'trade', short: 'One clean gap',
+    text: 'One clean gap, not overlapping ones — the model (rubric 2 and later).',
+    test: (t) => ((t.rubric_version ?? 1) >= GATES_SINCE && t.singular_gap != null ? t.singular_gap : null),
+  },
+  {
+    id: 'min-confidence', scope: 'trade', short: 'Confidence at the minimum',
+    text: 'Taken at or above the minimum confidence.',
+    test: (t) => (t.below_min_confidence == null ? null : !t.below_min_confidence),
+  },
+  {
+    id: 'management', scope: 'trade', short: 'Management plan set', kind: 'logging',
     text: 'The management plan is decided and recorded.',
     test: (t) => t.management != null || t.mgmt_plan != null,
     answered: (t) => t.management != null || t.mgmt_plan != null,
   },
   {
-    id: 'max-r', scope: 'trade', short: 'Max R logged',
+    id: 'max-r', scope: 'trade', short: 'Max R logged', kind: 'logging',
     text: 'How far it ran (max R reached) is logged.',
     test: (t) => t.mfe_r != null,
     answered: (t) => t.mfe_r != null,

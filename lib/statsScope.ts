@@ -50,8 +50,8 @@ const list = <T extends string>(v: string | string[] | undefined, allowed: reado
 
 /**
  * The scope asked for. `remembered` is the last account choice (the cookie);
- * with neither, the busiest real account — Missed and Backtest open only by
- * choosing them or All.
+ * with neither, every real account together (Live, Demo, Eval, Funded) —
+ * Missed and Backtest open only by choosing them or All.
  */
 export function parseStatsScope(params: Params, available: Account[], remembered?: string): StatsScope {
   const asked = one(params.account) ?? remembered ?? '';
@@ -60,7 +60,7 @@ export function parseStatsScope(params: Params, available: Account[], remembered
   else {
     const picked = list(asked, ACCOUNT_VALUES).filter((a) => available.includes(a));
     accounts = picked.length ? available.filter((a) => picked.includes(a))
-      : [available.find((a) => isReal(a)) ?? available[0] ?? 'Live'];
+      : (available.some((a) => isReal(a)) ? available.filter((a) => isReal(a)) : [available[0] ?? 'Live']);
   }
   const periodKey = one(params.period);
   return {

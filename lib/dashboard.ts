@@ -3,6 +3,7 @@
  * the trades (Hindsight already out) and one number the review engine knows
  * (how many recent trades kept every rule).
  */
+import { resultClass } from './edge/metrics';
 import { isBacktest, isHypothetical, isTaken } from './domain';
 import { pnlOf } from './stats';
 import type { Trade } from './types';
@@ -39,26 +40,29 @@ export function totals(ts: readonly Trade[]): Totals {
   const priced = ts.map(pnlOf).filter((v): v is number => v != null);
   return {
     trades: ts.length,
-    wins: ts.filter((t) => t.outcome === 'Win').length,
-    losses: ts.filter((t) => t.outcome === 'Loss').length,
+    wins: ts.filter((t) => classOf(t) === 'W').length,
+    losses: ts.filter((t) => classOf(t) === 'L').length,
     money: priced.length ? round(priced.reduce((s, v) => s + v, 0)) : null,
     r: round(ts.reduce((s, t) => s + (t.r_multiple ?? 0), 0)),
   };
 }
 
+/** W / L / BE from R where recorded (lib/edge/metrics), from the label only where it never was. */
+const classOf = (t: Trade) => (t.r_multiple != null ? resultClass(t.r_multiple) : t.outcome === 'Win' ? 'W' : t.outcome === 'Loss' ? 'L' : 'BE');
+
 export interface TileValues { winRate: number | null; avgWinR: number | null; profitFactor: number | null; avgWin: number | null; avgLoss: number | null }
 
 export function tileValues(ts: readonly Trade[]): TileValues {
-  const decided = ts.filter((t) => t.outcome === 'Win' || t.outcome === 'Loss');
-  const winsR = ts.filter((t) => (t.r_multiple ?? 0) > 0).map((t) => t.r_multiple as number);
-  const lossR = ts.filter((t) => (t.r_multiple ?? 0) < 0).map((t) => Math.abs(t.r_multiple as number));
-  const winsM = ts.map(pnlOf).filter((v): v is number => v != null && v > 0);
-  const lossM = ts.map(pnlOf).filter((v): v is number => v != null && v < 0).map(Math.abs);
-  const sumW = winsR.reduce((s, v) => s + v, 0);
-  const sumL = lossR.reduce((s, v) => s + v, 0);
+  // Canonical classes (lib/edge/metrics): averages over wins only and losses only; PF over every positive and negative R.
+  const wins = ts.filter((t) => classOf(t) === 'W'); const losses = ts.filter((t) => classOf(t) === 'L');
+  const winsR = wins.map((t) => t.r_multiple as number);
+  const winsM = wins.map(pnlOf).filter((v): v is number => v != null);
+  const lossM = losses.map(pnlOf).filter((v): v is number => v != null).map(Math.abs);
+  const sumW = ts.filter((t) => (t.r_multiple ?? 0) > 0).reduce((s, t) => s + (t.r_multiple as number), 0);
+  const sumL = Math.abs(ts.filter((t) => (t.r_multiple ?? 0) < 0).reduce((s, t) => s + (t.r_multiple as number), 0));
   const r = (v: number | null) => (v == null ? null : round(v));
   return {
-    winRate: decided.length ? round(decided.filter((t) => t.outcome === 'Win').length / decided.length, 3) : null,
+    winRate: wins.length + losses.length ? round(wins.length / (wins.length + losses.length), 3) : null,
     avgWinR: r(mean(winsR)),
     profitFactor: sumL > 0 ? round(sumW / sumL) : null,
     avgWin: r(mean(winsM)),
@@ -66,7 +70,6 @@ export function tileValues(ts: readonly Trade[]): TileValues {
   };
 }
 
-/** The discipline score's axes, each 0–100. Null when there is nothing to measure it on. */
 export interface ScoreAxes { rules: number | null; honesty: number | null; consistency: number | null; profitFactor: number | null; avgR: number | null; winRate: number | null }
 export const SCORE_AXES: Array<{ key: keyof ScoreAxes; label: string; hint: string }> = [
   { key: 'rules', label: 'Rules kept', hint: 'Of your last 20 trades, the share that broke none of your written rules.' },

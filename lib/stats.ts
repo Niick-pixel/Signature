@@ -6,6 +6,7 @@ import {
   type TargetType,
 } from './domain';
 import { adherenceGap, adherenceOf, derivedAdherence, type AdherenceGap } from './adherence';
+import { resultClass } from './edge/metrics';
 import { GRADE_BUCKETS, GRADE_LETTERS } from './grade';
 import { TRIAL_SAMPLE, trialEventOf } from './rubric';
 export { trialEventOf };
@@ -124,11 +125,15 @@ export interface Edge {
 
 export function edge(trades: Trade[]): Edge {
   const taken = trades.filter((t) => isTaken(t.outcome) && t.r_multiple != null);
-  const wins = taken.filter((t) => (t.r_multiple as number) > 0);
-  const losses = taken.filter((t) => (t.r_multiple as number) < 0);
+  // Result classes come from R (lib/edge/metrics): a +0.05R "breakeven" is not a win.
+  const wins = taken.filter((t) => resultClass(t.r_multiple as number) === 'W');
+  const losses = taken.filter((t) => resultClass(t.r_multiple as number) === 'L');
 
-  const rWon = wins.reduce((sum, t) => sum + (t.r_multiple as number), 0);
-  const rLost = Math.abs(losses.reduce((sum, t) => sum + (t.r_multiple as number), 0));
+  // Profit factor's sums take every positive and negative R, small breakevens included.
+  const rWon = taken.filter((t) => (t.r_multiple as number) > 0).reduce((sum, t) => sum + (t.r_multiple as number), 0);
+  const rLost = Math.abs(taken.filter((t) => (t.r_multiple as number) < 0).reduce((sum, t) => sum + (t.r_multiple as number), 0));
+  const winsR = wins.reduce((sum, t) => sum + (t.r_multiple as number), 0);
+  const lossesR = Math.abs(losses.reduce((sum, t) => sum + (t.r_multiple as number), 0));
 
   // Streaks run in the order the trades happened, oldest first.
   const chronological = [...taken].sort((a, b) => a.date.localeCompare(b.date));
@@ -137,10 +142,11 @@ export function edge(trades: Trade[]): Edge {
   let longestWinStreak = 0;
   let longestLossStreak = 0;
   for (const t of chronological) {
-    if (t.outcome === 'Win') {
+    const c = resultClass(t.r_multiple as number);
+    if (c === 'W') {
       winStreak += 1; lossStreak = 0;
       longestWinStreak = Math.max(longestWinStreak, winStreak);
-    } else if (t.outcome === 'Loss') {
+    } else if (c === 'L') {
       lossStreak += 1; winStreak = 0;
       longestLossStreak = Math.max(longestLossStreak, lossStreak);
     } else {
@@ -152,8 +158,8 @@ export function edge(trades: Trade[]): Edge {
   return {
     rWon,
     rLost,
-    avgWinR: wins.length ? rWon / wins.length : null,
-    avgLossR: losses.length ? rLost / losses.length : null,
+    avgWinR: wins.length ? winsR / wins.length : null,
+    avgLossR: losses.length ? lossesR / losses.length : null,
     expectancy: taken.length ? (rWon - rLost) / taken.length : null,
     profitFactor: rLost > 0 ? rWon / rLost : null,
     bestR: rs.length ? Math.max(...rs) : null,
@@ -165,8 +171,11 @@ export function edge(trades: Trade[]): Edge {
 
 export function aggregate(trades: Trade[]): Aggregate {
   const taken = trades.filter((t) => isTaken(t.outcome));
-  const wins = taken.filter((t) => t.outcome === 'Win').length;
-  const losses = taken.filter((t) => t.outcome === 'Loss').length;
+  // By R where there is one (lib/edge/metrics), by the label only where R was never recorded.
+  const cls = (t: Trade) => (t.r_multiple != null ? resultClass(t.r_multiple)
+    : t.outcome === 'Win' ? 'W' : t.outcome === 'Loss' ? 'L' : t.outcome === 'Breakeven' ? 'BE' : 'S');
+  const wins = taken.filter((t) => cls(t) === 'W').length;
+  const losses = taken.filter((t) => cls(t) === 'L').length;
   const decided = wins + losses;
   const totalR = taken.reduce((sum, t) => sum + (t.r_multiple ?? 0), 0);
 
@@ -176,8 +185,8 @@ export function aggregate(trades: Trade[]): Aggregate {
     passed: trades.length - taken.length,
     wins,
     losses,
-    breakeven: taken.filter((t) => t.outcome === 'Breakeven').length,
-    scratched: taken.filter((t) => t.outcome === 'Scratched').length,
+    breakeven: taken.filter((t) => cls(t) === 'BE').length,
+    scratched: taken.filter((t) => cls(t) === 'S').length,
     winRate: decided ? wins / decided : null,
     totalR,
     avgR: taken.length ? totalR / taken.length : null,
@@ -566,10 +575,11 @@ function curve(trades: Trade[]): CurvePoint[] {
     });
 }
 
-export function equityCurves(trades: Trade[]): EquityCurves {
+/** `followed` decides the split; pages that know the day rules pass lib/review planBreaks through it. */
+export function equityCurves(trades: Trade[], followed: (t: Trade) => boolean = derivedAdherence): EquityCurves {
   return {
-    followed: curve(trades.filter((t) => derivedAdherence(t))),
-    broken: curve(trades.filter((t) => !derivedAdherence(t))),
+    followed: curve(trades.filter((t) => followed(t))),
+    broken: curve(trades.filter((t) => !followed(t))),
     all: curve(trades),
   };
 }

@@ -73,16 +73,16 @@ export function SuccessCard({ s }: { s: SuccessSystem }) {
 
       <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--glass-stroke)' }}>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Habit by habit</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Habit by habit · diagnostic<Help>Descriptive only, being rebuilt into the Edge Engine. Tags, words and lessons are written after the result, so they cannot predict it; rows with fewer than 3 trades on either side, or no variation, are hidden; no colour here means good or bad.</Help></span>
           {s.focus && <span className="text-[12px] font-medium" style={{ color: 'rgb(var(--accent))' }} data-success-focus>{s.focus}</span>}
         </div>
         <table className="w-full text-[12.5px]" data-habits>
           <thead><tr style={{ color: 'var(--text-faint)' }}>
             <th className={`${th} text-left`}>Habit</th><th className={`${th} text-right`}>Kept</th><th className={`${th} w-[22%] pl-3 text-left`} />
-            <th className={`${th} text-right`}>Kept avg</th><th className={`${th} text-right`}>Broken avg</th><th className={`${th} text-right`}><span className="inline-flex items-center gap-1">Effect<Help side="left">What the broken trades did against keeping the habit, in R over all of them. Negative: breaking it cost you. Positive: so far, breaking it has not hurt — worth a look, or a sign the sample is small.</Help></span></th>
+            <th className={`${th} text-right`}>Kept avg</th><th className={`${th} text-right`}>Broken avg</th><th className={`${th} text-right`}><span className="inline-flex items-center gap-1">Kept − broken<Help side="left">Mean R kept minus mean R broken, per trade. No uncertainty yet — it is not evidence either way until the Edge Engine adds intervals.</Help></span></th>
           </tr></thead>
           <tbody>
-            {s.habits.map((h) => (
+            {s.habits.filter((h) => h.kept >= 3 && h.applies - h.kept >= 3).map((h) => (
               <tr key={h.id} className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}>
                 <td className="py-1.5"><span className="inline-flex items-center gap-1.5">{h.label}<Help>{h.hint}</Help></span></td>
                 <td className="text-right tabular-nums">{h.applies ? `${h.kept}/${h.applies}` : '—'}</td>
@@ -91,9 +91,9 @@ export function SuccessCard({ s }: { s: SuccessSystem }) {
                     <div className="h-full rounded-full" style={{ width: `${h.applies ? (h.kept / h.applies) * 100 : 0}%`, background: 'rgb(var(--accent))' }} />
                   </div>
                 </td>
-                <td className="text-right tabular-nums" style={{ color: tone(h.keptAvgR) }}>{signedR(h.keptAvgR)}</td>
-                <td className="text-right tabular-nums" style={{ color: tone(h.brokenAvgR) }}>{signedR(h.brokenAvgR)}</td>
-                <td className="text-right font-semibold tabular-nums" style={{ color: tone(h.costR) }}>{h.costR ? signedR(h.costR, 1) : '—'}</td>
+                <td className="text-right tabular-nums">{signedR(h.keptAvgR)}</td>
+                <td className="text-right tabular-nums">{signedR(h.brokenAvgR)}</td>
+                <td className="text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>{h.keptAvgR != null && h.brokenAvgR != null ? signedR(h.keptAvgR - h.brokenAvgR) : '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -124,7 +124,7 @@ export function WordsTable({ map, trades }: { map: WordMap; trades: WordTrade[] 
   const byId = useMemo(() => new Map(trades.map((t) => [t.id, t])), [trades]);
   const maxWeek = Math.max(1, ...map.words.flatMap((w) => w.weeks));
   return (
-    <Section title="Your words" help={`Every word and two-word phrase in your explanations and lessons, found automatically, forms of a word folded together ("chased", "chasing"). Each is set against what those trades did. Your average: ${signedR(map.avgR)} over ${map.read} trades with writing.`}
+    <Section title="Your words · diagnostic" help={`Written after the result, so a word that goes with losses (\"mistake\", \"unsure\") is an echo of the loss, not its cause. Every word and two-word phrase in your explanations and lessons, found automatically, forms of a word folded together ("chased", "chasing"). Each is set against what those trades did. Your average: ${signedR(map.avgR)} over ${map.read} trades with writing.`}
       right={
         <div className="flex rounded-full border p-0.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
           {(['cost', 'pay', 'rising', 'all'] as const).map((v) => (

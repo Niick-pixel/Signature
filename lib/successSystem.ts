@@ -137,15 +137,22 @@ export function successSystem(trades: readonly Trade[], ctx: SuccessContext): Su
     return { id: d.id, title: d.title, rule: d.rule, n: list.length, avgR: avg(list.map((s) => s.r)) ?? 0, netR: round(list.reduce((a, s) => a + s.r, 0)) };
   }).filter((x) => x.n > 0).sort((a, b) => a.netR - b.netR);
 
+  // Honest about the sample: a band difference within two standard errors is noise, and says so.
   const [hi, , lo] = bands;
-  const line = withScore.length < 6 ? 'A few more journaled trades and the score starts to say something.'
-    : hi.n && lo.n && hi.avgR != null && lo.avgR != null
-      ? hi.avgR > lo.avgR
-        ? `Your process pays: trades scoring 80+ average ${signedR(hi.avgR)} (${hi.n}), under 50 average ${signedR(lo.avgR)} (${lo.n}).`
-        : `Not yet: your low-scoring trades (${signedR(lo.avgR)}) have done as well as the high ones (${signedR(hi.avgR)}) — the sample may be small, or the checks need honesty.`
-      : `Average score ${avgScoreOf(withScore)} over ${withScore.length} trades — both ends need trades before they can be compared.`;
-  const worst = [...habits].filter((h) => h.costR < 0 && h.applies - h.kept >= 2).sort((a, b) => a.costR - b.costR)[0];
-  const focus = worst ? `${worst.label} matters most right now: broken ${worst.applies - worst.kept} times at ${signedR(worst.brokenAvgR!)} a trade, kept at ${signedR(worst.keptAvgR!)} — ${signedR(worst.costR)} given up.` : null;
+  const rsAll = withScore.map((x) => x.r);
+  const mAll = rsAll.length ? rsAll.reduce((a, b) => a + b, 0) / rsAll.length : 0;
+  const sdAll = rsAll.length > 1 ? Math.sqrt(rsAll.reduce((a, r) => a + (r - mAll) ** 2, 0) / (rsAll.length - 1)) : 1;
+  const perBand = Math.ceil((2 * (1.96 + 0.84) ** 2 * sdAll ** 2) / 0.25);
+  const se = hi.n && lo.n ? Math.sqrt(sdAll ** 2 / hi.n + sdAll ** 2 / lo.n) : null;
+  const line = withScore.length < 6 || hi.avgR == null || lo.avgR == null || se == null
+    ? `Can't tell yet — both ends need trades. About ${perBand} trades per band are needed to tell a 0.5R difference.`
+    : Math.abs(hi.avgR - lo.avgR) < 2 * se
+      ? `Can't tell yet: 80+ trades average ${signedR(hi.avgR)} (${hi.n}), under 50 ${signedR(lo.avgR)} (${lo.n}) — a gap this size is within the noise. About ${perBand} trades per band are needed to tell a 0.5R difference.`
+      : hi.avgR > lo.avgR
+        ? `Your high-scoring trades did better: ${signedR(hi.avgR)} (${hi.n}) against ${signedR(lo.avgR)} (${lo.n}) under 50.`
+        : `Your low-scoring trades did better so far (${signedR(lo.avgR)}, ${lo.n} against ${signedR(hi.avgR)}, ${hi.n}) — read with care: the score uses checks written after the result.`;
+  // No "matters most" call from this table: several checks are written after the result (Edge Engine audit).
+  const focus: string | null = null;
 
   return { n: scored.length, avgScore: withScore.length ? avgScoreOf(withScore) : null, bands, habits, weeks, themes, trades: [...scored].reverse(), line, focus };
 }

@@ -12,10 +12,10 @@ import { EARLY_N, LEAK_MIN_TRADES, THEMES, analyse, themesOf, type ThemeResult }
 import { isHypothetical, isTaken } from './domain';
 import type { Trade } from './types';
 
-export interface BrokenRule { id: string; scope: 'trade' | 'day'; text: string; short: string }
+export interface BrokenRule { id: string; scope: 'trade' | 'day'; text: string; short: string; kind?: 'trading' | 'logging' }
 
-const asBroken = (r: { id: string; scope: 'trade' | 'day'; text: string; short: string }): BrokenRule =>
-  ({ id: r.id, scope: r.scope, text: r.text, short: r.short });
+const asBroken = (r: { id: string; scope: 'trade' | 'day'; text: string; short: string; kind?: 'trading' | 'logging' }): BrokenRule =>
+  ({ id: r.id, scope: r.scope, text: r.text, short: r.short, ...(r.kind === 'logging' ? { kind: 'logging' as const } : {}) });
 
 /* ---------------------------------------------------------------- trade */
 
@@ -78,6 +78,16 @@ export function dayBreaksByTrade(trades: readonly Trade[], ctxFor: (day: string)
     }
   }
   return out;
+}
+
+/**
+ * The rules a trade broke that count as breaking the plan: trade and day
+ * rules, logging rules left out. The one definition of adherence
+ * (lib/edge/metrics) — every page asks this.
+ */
+export function planBreaks(t: Trade, dayBreaks: Map<string, BrokenRule[]>, cfg: RuleConfig = DEFAULT_RULE_CONFIG,
+  eras?: Map<string, string>): BrokenRule[] {
+  return brokenFor(t, dayBreaks, cfg, eras).filter((b) => b.kind !== 'logging');
 }
 
 /** Every rule a trade broke: its own, and the day's it took part in. */

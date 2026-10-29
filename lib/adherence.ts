@@ -2,6 +2,8 @@ import {
   TAKE_IT_THRESHOLD, isScored, type ChecklistAnswer, type ChecklistKey, type LegacyChecklistKey, type SweepTier,
 } from './domain';
 import { GATES_SINCE, gradeUnder } from './rubric';
+import { DEFAULT_RULE_CONFIG, TRADE_RULES } from './ruleBook';
+import type { Trade } from './types';
 
 /**
  * Everything the derivation needs, and nothing else — so it can be computed
@@ -67,11 +69,12 @@ export type Adherence = 'followed' | 'broken' | 'unscored';
  */
 export function adherenceOf(t: AdherenceInput): Adherence {
   if (!isScored(t)) return 'unscored';
-  return t.trigger_fired
-    && t.checklist_score >= TAKE_IT_THRESHOLD
-    && !failedModelGate(t)
-    // Confidence under the minimum is a no-trade by my rules — a rule, not a tag.
-    && t.below_min_confidence !== true
+  // The rule book's trade rules are the definition (lib/ruleBook.ts): the
+  // threshold, the trigger, the model gate and minimum confidence are rules
+  // there, alongside the sweep, the target, the range side and the killzone.
+  // Logging rules (max R logged, management recorded) never count. Day rules
+  // need the whole day, so pages with it use lib/review planBreaks instead.
+  return TRADE_RULES.every((r) => r.kind === 'logging' || r.test(t as unknown as Trade, DEFAULT_RULE_CONFIG) !== false)
     ? 'followed'
     : 'broken';
 }

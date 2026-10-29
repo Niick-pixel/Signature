@@ -4,9 +4,11 @@ import { analysable } from '@/lib/analytics';
 import { listTrades } from '@/db/trades';
 import { accountCookie } from '@/lib/account-pref';
 import { countsInStats, isBacktest, isDated, isHypothetical, isReal, isSeparate } from '@/lib/domain';
-import { accountsInUse, aggregate, deliveryOnlyVerdict, edge, equityCurves, money, preGradedOnly } from '@/lib/stats';
+import { accountsInUse, aggregate, deliveryOnlyVerdict, equityCurves, pnlOf, preGradedOnly } from '@/lib/stats';
 import { reviewInputs } from '@/db/review';
-import { brokenFor, dayBreaksByTrade, fieldEras } from '@/lib/review';
+import { dayBreaksByTrade, fieldEras, planBreaks } from '@/lib/review';
+import { edgeMetrics } from '@/lib/edge/metrics';
+import { EdgeHero } from '@/components/stats/EdgeHero';
 import { getPrep } from '@/db/prep';
 import { planDay, planMatch } from '@/lib/planMatch';
 import { successSystem } from '@/lib/successSystem';
@@ -92,20 +94,22 @@ export default async function StatsPage(
     // Not on Backtest's page: a replay's verdict is its own.
     single && isSeparate(single) ? [] : sameFilters(all.filter((t) => isHypothetical(t.account))));
   const agg = aggregate(trades);
-  const m = money(trades);
-  const e = edge(trades);
-  const curves = equityCurves(trades);
   const pageQuery = new URLSearchParams({ account, ...filterParams }).toString();
 
-  // The success system: each trade scored from its own journal entry (lib/successSystem).
+  // One definition of adherence: nothing broken in the rule book, trade and day rules (lib/review planBreaks).
   const { trades: allTrades, ctxFor, cfg } = reviewInputs();
   const breaks = dayBreaksByTrade(allTrades, ctxFor, cfg);
   const eras = fieldEras(allTrades);
+  const curves = equityCurves(trades, (t) => planBreaks(t, breaks, cfg, eras).length === 0);
+  // The canonical metrics (lib/edge/metrics), over settled trades in the order they happened.
+  const settled = trades.filter((t) => t.outcome !== 'Not taken' && t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date));
+  const metrics = edgeMetrics(settled.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) })));
+  const scopeLabel = scope.all ? 'all accounts' : scope.accounts.map((a) => (isBacktest(a) ? 'Backtest' : a)).join(' + ');
   const preps = new Map<string, ReturnType<typeof getPrep>>();
   const prepOf = (day: string) => { if (!preps.has(day)) preps.set(day, getPrep(day)); return preps.get(day) ?? null; };
   const success = successSystem(analysable(trades), {
     plan: (t) => { if (t.undated || isBacktest(t.account)) return null; const st = planMatch(t, prepOf(planDay(t))?.data ?? null).status; return st === 'in' || st === 'off' ? st : null; },
-    broken: (t) => brokenFor(t, breaks, cfg, eras).map((b) => b.short),
+    broken: (t) => planBreaks(t, breaks, cfg, eras).map((b) => b.short),
   });
   // Your words (lib/wordPatterns): the writing goes along only for the trades behind the words shown.
   const words = wordMap(analysable(trades), { minN: 3 });
@@ -169,17 +173,7 @@ export default async function StatsPage(
             <div className="glass rounded-[calc(24px*var(--rk))] p-8 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>Nothing to measure yet.</div>
           ) : (
             <div className="space-y-5">
-              {/* The raw numbers, in one strip: no ranges, no verdicts. */}
-              <div className="glass grid grid-cols-2 gap-y-4 rounded-[calc(20px*var(--rk))] px-5 py-4 sm:grid-cols-4 lg:grid-cols-8" data-stats-numbers>
-                <Num label="Trades" value={String(agg.taken)} sub={`${agg.wins}W ${agg.losses}L ${agg.breakeven + agg.scratched}BE`} />
-                <Num label="Win rate" value={pct(agg.winRate)} />
-                <Num label="Avg win" value={r2(e.avgWinR)} tone="win" />
-                <Num label="Avg loss" value={e.avgLossR == null ? '—' : signed(-Math.abs(e.avgLossR), 2)} tone="loss" />
-                <Num label="Expectancy" value={r2(e.expectancy)} tone={(e.expectancy ?? 0) >= 0 ? 'win' : 'loss'} />
-                <Num label="Profit factor" value={e.profitFactor == null ? '—' : e.profitFactor.toFixed(2)} />
-                <Num label="Net R" value={signed(agg.totalR, 1)} tone={agg.totalR >= 0 ? 'win' : 'loss'} />
-                <Num label="Net P&L" value={m.priced ? usd(m.net) : '—'} tone={m.net >= 0 ? 'win' : 'loss'} money />
-              </div>
+              <EdgeHero m={metrics} scopeLabel={scopeLabel} />
 
               <section className="glass rounded-[calc(20px*var(--rk))] px-5 py-4" data-card>
                 <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Equity, trade by trade</h2>
@@ -203,13 +197,3 @@ export default async function StatsPage(
   );
 }
 
-function Num({ label, value, sub, tone, money: isMoney }: { label: string; value: string; sub?: string; tone?: 'win' | 'loss'; money?: boolean }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{label}</div>
-      <div className="text-[19px] font-semibold leading-tight tabular-nums" data-money={isMoney ? '' : undefined}
-        style={{ color: tone && value !== '—' ? `rgb(var(--outcome-${tone}))` : 'var(--text)' }}>{value}</div>
-      {sub && <div className="text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{sub}</div>}
-    </div>
-  );
-}

@@ -14,7 +14,7 @@ const t = (x: Record<string, unknown> = {}) => {
     htf_bias: 'With bias', sweep_tier: 'major', trigger_fired: true, target_type: 'PDH/PDL', r_to_nearest_bucket: '2+',
     r_to_nearest: null, chk_killzone: true, chk_no_news: true, management: 'BE at 1R', mgmt_plan: null, mfe_r: 2,
     exit_time: null, undated: false, confidence_at_entry: 4, followed_rules: true, target_check_passed: true,
-    grade_letter: 'A', mistake_tags: [], worked_tags: [], explanation: '', lesson: '', deleted_at: null, ...x,
+    grade_letter: 'A', checklist_score: 85, rubric_version: 3, singular_gap: true, mistake_tags: [], worked_tags: [], explanation: '', lesson: '', deleted_at: null, ...x,
   } as never;
 };
 const ids = (rs: Array<{ id: string }>) => rs.map((r) => r.id);
@@ -36,6 +36,8 @@ test('each trade rule, broken on its own', () => {
     ['killzone', { chk_killzone: false }],
     ['management', { management: null, mgmt_plan: null }],
     ['max-r', { mfe_r: null }],
+    ['threshold', { checklist_score: 65 }],
+    ['min-confidence', { below_min_confidence: true }],
   ];
   for (const [id, x] of cases) assert.deepEqual(ids(checkTrade(t(x))), [id], `${id} ${JSON.stringify(x)}`);
   // Your answers: a horizontal pool is a named pool, equilibrium is fine, 1.5R is enough.
@@ -43,7 +45,13 @@ test('each trade rule, broken on its own', () => {
   assert.deepEqual(checkTrade(t({ premium_discount: 'Equilibrium' })), []);
   assert.deepEqual(checkTrade(t({ direction: 'Short', premium_discount: 'Equilibrium' })), []);
   assert.deepEqual(checkTrade(t({ r_to_nearest_bucket: '1.5-2' })), []);
-  assert.equal(TRADE_RULES.length, 8);
+  assert.equal(TRADE_RULES.length, 11);
+  // The model gate's other half: a rubric 2+ trade with overlapping gaps; unanswered says nothing.
+  assert.deepEqual(ids(checkTrade(t({ singular_gap: false }))), ['one-gap']);
+  assert.deepEqual(checkTrade(t({ singular_gap: null })), []);
+  assert.deepEqual(checkTrade(t({ singular_gap: false, rubric_version: 1 })), []);
+  // Logging rules are tagged, so they never count as breaking the plan.
+  assert.deepEqual(TRADE_RULES.filter((r) => r.kind === 'logging').map((r) => r.id), ['management', 'max-r']);
 });
 
 test('silence is not a break: unanswered fields are not counted', () => {
