@@ -28,6 +28,10 @@ import { FocusCard } from '@/components/stats/FocusCard';
 import { EquityRisk } from '@/components/stats/EquityRisk';
 import { AnatomyExplorer } from '@/components/stats/AnatomyExplorer';
 import { LedgerView } from '@/components/stats/LedgerView';
+import { EvalPanel, LabProvider, RuleLabPanel, type EvalPreset } from '@/components/stats/Lab';
+import { LAB_FILTERS, labResult, labRows } from '@/lib/edge/ruleLab';
+import { listPropAccounts } from '@/db/prop';
+import { PRESETS, type PropRules } from '@/lib/prop';
 import { WordsTable } from '@/components/stats/SuccessView';
 import { HypotheticalNote } from '@/components/money/MissedCard';
 import { StatsFilters } from '@/components/stats/StatsFilters';
@@ -146,6 +150,17 @@ export default async function StatsPage(
   const thumbs: Record<string, Thumb> = Object.fromEntries(settled.map((t) => [t.id, {
     id: t.id, shot: t.screenshot_path || null, r: t.r_multiple, day: isBacktest(t.account) ? (t.session_index ? `Session ${t.session_index}` : 'Backtest') : t.date.slice(0, 10),
   }]));
+  // Rule Lab rows (lib/edge/ruleLab), and the best single filter as this week's experiment when it is at least a hint.
+  const lab = labRows(stateful, breaksOf);
+  const bestLab = LAB_FILTERS.map((f) => ({ f, r: labResult(lab, [f.id], { resamples: 500 }) }))
+    .filter((x) => x.r.pImprove != null && x.r.pImprove >= 0.75 && x.r.kept >= lab.length / 2).sort((a, b) => (b.r.pImprove ?? 0) - (a.r.pImprove ?? 0))[0];
+  if (bestLab) focus.experiment = { text: `Rule Lab: ${bestLab.f.label.toLowerCase()}.`, from: `the Rule Lab (P(better) ${Math.round((bestLab.r.pImprove ?? 0) * 100)}%)`, n: bestLab.r.testN ?? 30 };
+  // Eval presets: your prop accounts first, then the common evaluations.
+  const evalRules = (r: PropRules) => ({ start: r.start_balance, target: r.profit_target ?? 0, maxDrawdown: r.max_drawdown, drawdown: r.drawdown_type, trailLock: r.trail_lock, dailyLoss: r.daily_loss, minDays: r.min_days });
+  const evalPresets: EvalPreset[] = [
+    ...listPropAccounts().filter((a) => a.status === 'active' && a.profit_target).map((a) => ({ key: `acct:${a.id}`, label: `${a.firm} — ${a.label || a.plan}`, rules: evalRules(a) })),
+    ...PRESETS.filter((p) => p.phase === 'eval' && p.rules.profit_target).map((p) => ({ key: `preset:${p.firm}:${p.plan}`, label: `${p.firm} ${p.plan}`, rules: evalRules(p.rules) })),
+  ];
   const visibleRows = engine.explorer.rows.filter((r) => !r.hidden);
   const strongest = visibleRows.filter((r) => r.verdict.level !== 'too-early').sort((a, b) => b.verdict.p - a.verdict.p)[0];
   const winHref = (w: string) => `/stats?${new URLSearchParams({ account, ...filterParams, win: w }).toString()}`;
@@ -212,11 +227,17 @@ export default async function StatsPage(
           {trades.length === 0 ? (
             <div className="glass rounded-[calc(24px*var(--rk))] p-8 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>Nothing to measure yet.</div>
           ) : (
+            <LabProvider rows={lab}>
             <div className="space-y-5">
               <IntegrityBanner issues={issues} />
               <EdgeHero m={metrics} scopeLabel={scopeLabel} maturity={<MaturityRing m={mat} />} />
               <FocusCard f={focus} thumbs={thumbs} />
               <EquityRisk curves={curves} rs={rs} m={metrics} split={split} adherence={adh} cone={cone} />
+
+              <Collapsible id="eval" title="Eval odds" help="Monte Carlo of a prop evaluation from your own results: P(pass), P(bust) and the median days to pass. Recomputes under any Rule Lab filters you tick."
+                summary="Will you pass? — 10,000 futures from your own trades">
+                <EvalPanel presets={evalPresets} />
+              </Collapsible>
 
               <Collapsible id="anatomy" title="Setup anatomy" locked={lockNote('explorer', 'The anatomy explorer')}
                 help="Every level of every pre-trade field against the rest of your trades: shrunk toward your mean, an interval on each, Benjamini–Hochberg across the table. Only fields known before the entry are allowed in (the leakage firewall)."
@@ -233,6 +254,12 @@ export default async function StatsPage(
 
               <Collapsible id="behaviour" title="Behaviour & state" help={BEHAVIOUR_HELP} summary={behaviourSummary(tilt, hesitation)}>
                 <BehaviourCard tilt={tilt} hesitation={hesitation} />
+              </Collapsible>
+
+              <Collapsible id="rule-lab" title="Rule Lab" locked={lockNote('ruleLab', 'The Rule Lab')}
+                help="What would have happened under a stricter rule. Expectancy with its interval, Δ against what you took, P(better) from a paired bootstrap, and the later half on its own from 60 trades."
+                summary={bestLab ? `${bestLab.f.label}: P(better) ${Math.round((bestLab.r.pImprove ?? 0) * 100)}% — experiment only` : 'No filter clearly improves on what you took'}>
+                <RuleLabPanel />
               </Collapsible>
 
               <Collapsible id="ledger" title="Mistake ledger" locked={lockNote('themeCosts', 'Mistake-theme costs')}
@@ -252,6 +279,7 @@ export default async function StatsPage(
                 {trial ? `Rubric ${TRIAL_RUBRIC} trial: ${trial.n}/${TRIAL_SAMPLE} setups${trial.avgR != null ? `, ${signed(trial.avgR, 2)} avg` : ''}${trial.ready ? (trial.positive ? ' — verdict: promote.' : ' — verdict: drop.') : '.'}` : ''}
               </p>
             </div>
+            </LabProvider>
           )}
         </div>
       </div>

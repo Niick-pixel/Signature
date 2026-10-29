@@ -377,3 +377,63 @@ All of this is written after the outcome, so it **diagnoses; it never predicts**
 - **Every loss:** its tags, rule breaks and lesson.
 
 Tests: `tests/edge-page.test.mts`.
+
+---
+
+# Milestone 7: Monte Carlo, eval odds, Rule Lab
+
+## 30. E — Eval odds
+
+**Will you pass?** 10,000 simulated futures, each stitched from blocks of 4 of your own trades (section 27). Each simulated day takes as many trades as one of your real days, drawn at random from them.
+
+**R → $:** each R is multiplied by the risk per trade. That starts at a tenth of the account's drawdown (10R of room) and you can type your own.
+
+**Rules applied each trade:**
+
+| Rule | How it's simulated |
+|---|---|
+| Static drawdown | floor = start − max drawdown |
+| End-of-day trailing | the floor rises with the day's closing high |
+| Intraday trailing | the floor rises with every new high |
+| Trail lock | a trailing floor stops at start + the lock (for example Topstep at start, Apex at start + $100) |
+| Daily loss | a day down by the limit is a bust (most evals fail you for it) |
+| Profit target + minimum days | pass once both are met |
+
+**Output:**
+- P(pass), P(bust), P(neither within 60 days)
+- median days and trades to pass
+
+Consistency rules are not simulated. Accounts come from your Prop page first, then the common evaluations. **Tick a Rule Lab filter and the odds recompute** using only the trades that filter keeps.
+
+## 31. K — Rule Lab
+
+A counterfactual on your trades: **what if this rule had been in force?** Never a recommendation.
+
+**Filters:**
+- inside every rule
+- with the HTF bias
+- with a liquidity event
+- no anticipation entries
+- no trendline targets
+- closure score 8+
+- inside the killzone
+- A and A+ only
+- at most 2 trades a day
+- stop after the first loss
+- at most 1 trade after a loss
+
+A trade a filter **can't judge** (the field was never recorded) **is kept** and counted. So a filter can never win by dropping the trades you didn't describe.
+
+**For any combination of filters:**
+- trades kept and removed
+- expectancy with its interval, net R, max drawdown
+- trades per week (dated trades) or per replay session
+- **Δ** = kept expectancy − expectancy as taken
+- **P(better)**, from a paired bootstrap: draw your trades with replacement 2,000 times (seeded). In each draw, compare the mean of the kept trades with the mean of all of them. P(better) is the share of draws where the kept trades did better.
+- **Later half** (from 60 trades): the same Δ and P using only the second half of your trades, a walk-forward check on trades the idea wasn't found on
+- the curve of the kept trades beside the curve as taken, flat wherever a trade was removed
+- **Experiment — test it on the next N trades**, with N from the power formula (section 15). Past 100, it says to test for 50 and look again.
+
+**Section C takes the Rule Lab's best single filter as its experiment** when that filter keeps at least half your trades and its P(better) is at least 75%.
+
+Tests: `tests/edge-lab.test.mts`. It covers the day-order filters, kept unknowns, deterministic P, the aligned curve, the walk-forward half, and the eval rules: sure win, sure loss, daily loss, minimum days, trailing busting sooner than static.
