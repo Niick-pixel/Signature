@@ -43,7 +43,48 @@ export interface Preferences {
    * describe how I want to look at the journal rather than what happened in it.
    */
   savedViews: SavedView[];
+
+  /* --------------------------------------------- Dashboard and Today (Phase 1) */
+  /** The screen the app opens on. */
+  startScreen: 'board' | 'dashboard';
+  /** Blur every money figure (the dashboard, the Today panel, Stats) — for screen shares. */
+  hidePnl: boolean;
+  /** Which trades the Dashboard counts. */
+  dashWorld: 'real' | 'backtest' | 'all';
+  /** Lead with dollars or with R. */
+  dashUnit: 'money' | 'r';
+  /** Each Dashboard block, on or off. */
+  dashBlocks: Record<DashBlock, boolean>;
+  /** The discipline score's axes, on or off (off axes leave the average). */
+  scoreAxes: Record<ScoreAxis, boolean>;
+  /** The Today panel on the right: off, on the Dashboard, or on every screen. */
+  sidebar: 'off' | 'dashboard' | 'everywhere';
+  /** Its sections, on or off. */
+  sidebarSections: Record<SidebarSection, boolean>;
+  /** The pre-entry checklist in the Today panel, ticked fresh each day. */
+  checklistItems: string[];
 }
+
+export const DASH_BLOCKS = ['hero', 'tiles', 'chart', 'week', 'score', 'recent'] as const;
+export type DashBlock = (typeof DASH_BLOCKS)[number];
+export const DASH_BLOCK_LABEL: Record<DashBlock, string> = {
+  hero: 'Total and the last 7 days', tiles: 'Win rate, average win, win / loss tiles', chart: 'Cumulative chart',
+  week: 'This week by day', score: 'Discipline score', recent: 'Recent trades',
+};
+export const SCORE_AXIS_KEYS = ['rules', 'honesty', 'consistency', 'profitFactor', 'avgR', 'winRate'] as const;
+export type ScoreAxis = (typeof SCORE_AXIS_KEYS)[number];
+export const SIDEBAR_SECTIONS = ['plan', 'checklist', 'focus', 'rules', 'recent'] as const;
+export type SidebarSection = (typeof SIDEBAR_SECTIONS)[number];
+export const SIDEBAR_SECTION_LABEL: Record<SidebarSection, string> = {
+  plan: "Today's plan (from the chart prep)", checklist: 'Pre-entry checklist', focus: "This week's focus rule",
+  rules: 'Rules kept today', recent: 'Recent trades',
+};
+export const DEFAULT_CHECKLIST = [
+  'HTF bias marked and clear?',
+  'A named level swept?',
+  'One clean FVG — and it inverted with a close?',
+  'Did I think about this entry before entering?',
+];
 
 export interface SavedView {
   id: string;
@@ -64,6 +105,15 @@ export const DEFAULT_PREFERENCES: Preferences = {
   askCheckIn: true,
   heatmapUrl: 'https://openmarket.xyz/chart/JUSJIzyA',
   savedViews: [],
+  startScreen: 'board',
+  hidePnl: false,
+  dashWorld: 'real',
+  dashUnit: 'money',
+  dashBlocks: { hero: true, tiles: true, chart: true, week: true, score: true, recent: true },
+  scoreAxes: { rules: true, honesty: true, consistency: true, profitFactor: true, avgR: true, winRate: true },
+  sidebar: 'dashboard',
+  sidebarSections: { plan: true, checklist: true, focus: true, rules: true, recent: true },
+  checklistItems: DEFAULT_CHECKLIST,
 };
 
 export const TEXT_SIZES = ['Small', 'Normal', 'Large', 'Huge'] as const;
@@ -105,7 +155,15 @@ export function readPreferences(): Preferences {
     if (!raw) return DEFAULT_PREFERENCES;
     // Merge rather than replace, so a preference added in a later version has a
     // sane value instead of undefined.
-    return { ...DEFAULT_PREFERENCES, ...(JSON.parse(raw) as Partial<Preferences>) };
+    const saved = JSON.parse(raw) as Partial<Preferences>;
+    return {
+      ...DEFAULT_PREFERENCES, ...saved,
+      // One level deeper for the on/off maps, so a block added later is on, not undefined.
+      dashBlocks: { ...DEFAULT_PREFERENCES.dashBlocks, ...(saved.dashBlocks ?? {}) },
+      scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
+      sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
+      checklistItems: Array.isArray(saved.checklistItems) ? saved.checklistItems.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.checklistItems,
+    };
   } catch {
     return DEFAULT_PREFERENCES;
   }
@@ -135,4 +193,5 @@ export function applyPreferences(prefs: Preferences): void {
   root.style.setProperty('--text-scale', desktop ? '1' : String(prefs.textScale));
   if (desktop) void desktop.set({ fit: prefs.fitScreen, scale: prefs.textScale }).catch(() => {});
   root.dataset.reduceMotion = prefs.reduceMotion ? 'true' : 'false';
+  root.dataset.hidePnl = prefs.hidePnl ? 'true' : 'false';
 }

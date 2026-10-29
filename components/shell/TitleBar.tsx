@@ -13,6 +13,7 @@ import { Suspense } from 'react';
 import { navigate } from '@/lib/nav';
 
 const TABS = [
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/', label: 'Whiteboard' },
   { href: '/stats', label: 'Stats' },
   { href: '/calendar', label: 'Calendar' },

@@ -145,9 +145,11 @@ export function RateBars({ rows }: { rows: BarRow[] }) {
 
 /** A single headline number. The row of these is the first thing you read. */
 export function Stat({
-  label, value, sub, tone, n, range, read,
+  label, value, sub, tone, n, range, read, money,
 }: {
   label: string; value: string; sub?: string; tone?: 'win' | 'loss' | null; n?: number;
+  /** A money figure: blurred when Hide P&L is on. */
+  money?: boolean;
   /** The 95% range around `value`, already formatted ("likely 33–79%"). */
   range?: string | null;
   /** What the range says, in a word or three, and how to colour it. */
@@ -164,11 +166,11 @@ export function Stat({
         </div>
         {n != null && <Sample n={n} />}
       </div>
-      <div className="mt-1.5 tabular-nums text-[19px] font-semibold leading-none" style={{ color }}>
+      <div className="mt-1.5 tabular-nums text-[19px] font-semibold leading-none" style={{ color }} data-money={money ? '' : undefined}>
         <CountUp text={value} />
       </div>
       {sub && (
-        <div className="mt-1.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>{sub}</div>
+        <div className="mt-1.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }} data-money={money ? '' : undefined}>{sub}</div>
       )}
       {range && (
         <div

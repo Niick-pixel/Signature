@@ -274,6 +274,7 @@ export default async function StatsPage(
                     <Stat
                       n={m.priced}
                       label="Net P&L"
+                      money
                       value={usd(m.net)}
                       sub={`${usd(m.won)} won · ${usd(m.lost)} lost`}
                       tone={m.net > 0 ? 'win' : m.net < 0 ? 'loss' : null}

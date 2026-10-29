@@ -910,3 +910,18 @@ html[data-nav] [data-sheet] { view-transition-name: sheet; }
   .signature-glow::after { animation: none; opacity: 0.7; }
 }
 html[data-reduce-motion='true'] .signature-glow::after { animation: none; opacity: 0.7; }
+
+/*
+  Hide P&L: every money figure marked data-money is blurred (the Dashboard,
+  the Today panel, Stats). Hover one to peek; R values stay readable.
+*/
+html[data-hide-pnl='true'] [data-money] {
+  filter: blur(7px);
+  transition: filter 160ms ease;
+}
+html[data-hide-pnl='true'] [data-money]:hover { filter: none; }
+
+/* The Today panel docks on the right; the New trade button moves left of it. */
+html[data-today-open='true'] [data-new-trade-fab] { right: calc(19rem + 2rem); }
+/* …and every screen's content makes room for it, at any window width. */
+html[data-today-open='true'] .signature-enter { padding-right: calc(19rem + 1rem); }

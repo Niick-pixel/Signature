@@ -13,7 +13,7 @@ export interface FocusData { focus: FocusStatus | null; options: Array<{ id: str
  * One rule for the week. Shows the streak of trades that kept it and the
  * week so far; click to choose another. Defaults to the rule behind the #1 leak.
  */
-export function FocusPill({ data, onChanged, onHide }: { data: FocusData | null; onChanged: () => void; onHide: () => void }) {
+export function FocusPill({ data, onChanged, onHide }: { data: FocusData | null; onChanged: () => void; onHide?: () => void }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   // The menu closes on its ✕, on Escape, and on any click outside it.
@@ -43,7 +43,7 @@ export function FocusPill({ data, onChanged, onHide }: { data: FocusData | null;
           · {f.streak} in a row{f.week.kept + f.week.broken > 0 ? ` · ${f.week.kept}/${f.week.kept + f.week.broken} this week` : ''}
         </span>
       </button>
-      <CloseX onClick={onHide} label="Hide for today" className="border bg-[var(--bg-raised)]" />
+      {onHide && <CloseX onClick={onHide} label="Hide for today" className="border bg-[var(--bg-raised)]" />}
       <AnimatePresence>
         {open && (
           <motion.ul initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={springSoft}

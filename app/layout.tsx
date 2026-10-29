@@ -14,6 +14,8 @@ import { BoardLayer } from '@/components/whiteboard/BoardLayer';
 import { WeekendReview } from '@/components/path/WeekendReview';
 import { RedDayPrompt } from '@/components/path/RedDayPrompt';
 import { HomeReview } from '@/components/review/HomeReview';
+import { TodayPanel } from '@/components/today/TodayPanel';
+import { StartScreen } from '@/components/dashboard/StartScreen';
 import { SavedNotice } from '@/components/review/SavedNotice';
 
 export const metadata: Metadata = {
@@ -54,6 +56,9 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <RedDayPrompt />
           {/* The review engine: before the session, and once it is closed (lib/review). */}
           <HomeReview />
+          {/* The Today panel on the right (Settings → Today panel). */}
+          <TodayPanel />
+          <StartScreen />
           <SavedNotice />
           <Shortcuts />
           {/* Every move between screens, animated — see lib/nav.ts. */}

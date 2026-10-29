@@ -27,7 +27,8 @@ export function NewTradeButton() {
           transition={spring}
           whileTap={press}
           whileHover={{ y: -2 }}
-          className="fixed bottom-[62px] right-4 z-30"
+          className="fixed bottom-[62px] right-4 z-30 transition-[right] duration-300"
+          data-new-trade-fab
         >
           <Link
             href="/new"

@@ -43,6 +43,7 @@ export function Shortcuts() {
         case 's': e.preventDefault(); window.dispatchEvent(new Event(SETTINGS_TOGGLE)); return;
         case 't': e.preventDefault(); window.dispatchEvent(new Event(THEME_TOGGLE)); return;
         case '1': case '2': case '3': case '4': case '5': return go(TABS[Number(k) - 1]);
+        case '0': return go('/dashboard');
       }
     };
     // Listening on document, like every screen-level handler, so a dialog's own
