@@ -5,6 +5,8 @@ import { getTrade, listTrades } from '@/db/trades';
 import { getBars, listExecutions } from '@/db/executions';
 import { getPrep } from '@/db/prep';
 import { notesForTrade } from '@/db/study';
+import { shotsFor } from '@/db/shots';
+import { drawingsFor } from '@/db/drawings';
 import { reviewInputs } from '@/db/review';
 import { brokenFor, dayBreaksByTrade, fieldEras } from '@/lib/review';
 import { planDay, planMatch } from '@/lib/planMatch';
@@ -48,7 +50,8 @@ export default async function TradePage({ params }: { params: Promise<{ id: stri
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
         <TradeView trade={trade} exec={exec} bars={bars} plan={plan} broken={broken} prev={prev} next={next}
-          metrics={metrics} excursion={ex} entryAt={entryAt} studyNotes={notesForTrade(id)} />
+          metrics={metrics} excursion={ex} entryAt={entryAt} studyNotes={notesForTrade(id)}
+          drawnR={Object.values(drawingsFor(shotsFor(id).map((x) => x.path))).find((d) => d.r != null)?.r ?? null} />
       </div>
     </div>
   );

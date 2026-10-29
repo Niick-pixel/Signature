@@ -52,7 +52,10 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
               : 'Every step is done. Trade it the way you got here.'}
           </p>
         </div>
-        <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
+        <div className="flex gap-2">
+          <Button onClick={() => router.push('/goals')} data-path-goals title="Goals (G)">Goals</Button>
+          <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
+        </div>
       </header>
 
       <ol className="space-y-3">

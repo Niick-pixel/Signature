@@ -13,6 +13,8 @@ import { restoreExecutions } from '@/db/executions';
 import { restoreProp } from '@/db/prop';
 import { restoreNews } from '@/db/news';
 import { restoreStudy } from '@/db/study';
+import { restoreGoals } from '@/db/goals';
+import { restoreDrawings } from '@/db/drawings';
 
 /**
  * Restores trades from an export.
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
       executions?: unknown; execution_unlinks?: unknown; trade_bars?: unknown;
       prop_accounts?: unknown; prop_payouts?: unknown; news_events?: unknown;
       study_notes?: unknown; study_note_trades?: unknown; video_marks?: unknown; study_sessions?: unknown;
+      goals?: unknown; goal_checkins?: unknown; shot_drawings?: unknown;
     } | null;
 
   if (!body || !Array.isArray(body.trades)) {
@@ -215,8 +218,10 @@ export async function POST(request: Request) {
   const executions = restoreExecutions(body);
   const news = restoreNews(body);
   const study = restoreStudy(body);
+  const goals = restoreGoals(body);
+  const drawings = restoreDrawings(body);
 
   return NextResponse.json({
-    executions, prop, news, study, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
+    executions, prop, news, study, goals, drawings, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
   });
 }

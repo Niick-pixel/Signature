@@ -33,8 +33,8 @@ test('the final schema has every table', () => {
   const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>).map((r) => r.name);
   assert.deepEqual(tables, [
     'app_settings', 'board_edges', 'board_notes', 'cash_events', 'daily_reviews', 'eval_purchases', 'execution_unlinks', 'executions',
-    'flag_dismissals', 'journal_pages', 'news_events', 'path_events', 'path_steps', 'playbooks', 'prop_accounts', 'prop_payouts', 'red_day_pages', 'red_day_skips', 'schema_migrations',
-    'session_prep', 'study_note_trades', 'study_notes', 'study_sessions', 'trade_bars', 'trade_edits', 'trade_partials', 'trade_screenshots', 'trades',
+    'flag_dismissals', 'goal_checkins', 'goals', 'journal_pages', 'news_events', 'path_events', 'path_steps', 'playbooks', 'prop_accounts', 'prop_payouts', 'red_day_pages', 'red_day_skips', 'schema_migrations',
+    'session_prep', 'shot_drawings', 'study_note_trades', 'study_notes', 'study_sessions', 'trade_bars', 'trade_edits', 'trade_partials', 'trade_screenshots', 'trades',
     'video_marks', 'weekly_reviews',
   ]);
 });

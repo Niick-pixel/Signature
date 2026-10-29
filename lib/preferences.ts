@@ -171,10 +171,10 @@ export const DASH_BLOCK_LABEL: Record<DashBlock, string> = {
 };
 export const SCORE_AXIS_KEYS = ['rules', 'honesty', 'consistency', 'profitFactor', 'avgR', 'winRate'] as const;
 export type ScoreAxis = (typeof SCORE_AXIS_KEYS)[number];
-export const SIDEBAR_SECTIONS = ['plan', 'checklist', 'focus', 'rules', 'prop', 'recent'] as const;
+export const SIDEBAR_SECTIONS = ['plan', 'grade', 'checklist', 'goals', 'focus', 'rules', 'prop', 'recent'] as const;
 export type SidebarSection = (typeof SIDEBAR_SECTIONS)[number];
 export const SIDEBAR_SECTION_LABEL: Record<SidebarSection, string> = {
-  plan: "Today's plan (from the chart prep)", checklist: 'Pre-entry checklist', focus: "This week's focus rule",
+  plan: "Today's plan (from the chart prep)", grade: 'Plan grade (the plan against the day)', goals: 'Goals', checklist: 'Pre-entry checklist', focus: "This week's focus rule",
   rules: 'Rules kept today', prop: 'Prop accounts: room left', recent: 'Recent trades',
 };
 export const DEFAULT_CHECKLIST = [
@@ -211,7 +211,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dashBlocks: { hero: true, tiles: true, chart: true, week: true, score: true, recent: true, prop: true },
   scoreAxes: { rules: true, honesty: true, consistency: true, profitFactor: true, avgR: true, winRate: true },
   sidebar: 'dashboard',
-  sidebarSections: { plan: true, checklist: true, focus: true, rules: true, prop: true, recent: true },
+  sidebarSections: { plan: true, grade: true, checklist: true, goals: true, focus: true, rules: true, prop: true, recent: true },
   checklistItems: DEFAULT_CHECKLIST,
   openTradeIn: 'page',
   tradeSections: { metrics: true, chips: true, chart: true, executions: true, shots: true, rules: true, notes: true },

@@ -7,6 +7,7 @@ import { SHOT_SLOTS, type ShotSlot } from '@/lib/domain';
 import type { TradeShot } from '@/lib/types';
 import { Lightbox } from './Lightbox';
 import { useConfirm } from '@/components/ui/Confirm';
+import { ShotDrawingEditor, type DrawItem } from '@/components/drawing/ShotDrawing';
 
 const url = (path: string) => `/api/screenshots/${path}`;
 
@@ -24,8 +25,14 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
   const [open, setOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drawings, setDrawings] = useState<Record<string, { items: DrawItem[]; r: number | null }>>({});
+  const [drawing, setDrawing] = useState<TradeShot | null>(null);
 
-  const load = () => fetch(`/api/trades/${tradeId}/shots`).then((r) => r.json()).then(setShots);
+  const load = () => fetch(`/api/trades/${tradeId}/shots`).then((r) => r.json()).then((list: TradeShot[]) => {
+    setShots(list);
+    if (!Array.isArray(list) || !list.length) return;
+    fetch(`/api/drawings?${list.map((x) => `path=${encodeURIComponent(x.path)}`).join('&')}`).then((r) => r.json()).then((d) => setDrawings(d.drawings ?? {})).catch(() => {});
+  });
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tradeId]);
 
   async function add(file: File, slot: ShotSlot) {
@@ -82,6 +89,12 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
             >
               {shot.slot}
             </span>
+            {drawings[shot.path] && (
+              <span className="pointer-events-none absolute left-1 top-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold tabular-nums"
+                style={{ background: 'rgba(245,158,11,0.9)', color: '#111' }} data-drawn-badge>
+                ✎{drawings[shot.path].r != null ? ` ${drawings[shot.path].r!.toFixed(1)}R` : ''}
+              </span>
+            )}
 
             {editable && (
               <div className="absolute inset-x-0 -top-2 flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
@@ -93,6 +106,17 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
                 >
                   {SHOT_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
+                <button
+                  type="button"
+                  aria-label={`Draw on the ${shot.slot} chart`}
+                  title="Draw entry, stop, target, arrows, notes"
+                  onClick={() => setDrawing(shot)}
+                  className="mr-1 grid h-5 place-items-center rounded-full px-1.5 text-[9px] font-semibold"
+                  style={{ background: 'rgba(245,158,11,0.95)', color: '#111' }}
+                  data-draw-shot
+                >
+                  ✎ Draw
+                </button>
                 {shots.length > 1 && (
                   <button
                     type="button"
@@ -142,6 +166,20 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
 
       {error && (
         <p className="mt-2 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{error}</p>
+      )}
+
+      {drawing && (
+        <ShotDrawingEditor
+          path={drawing.path}
+          src={url(drawing.path)}
+          initial={drawings[drawing.path]?.items ?? []}
+          onClose={() => setDrawing(null)}
+          onSaved={(items, r) => setDrawings((d) => {
+            const next = { ...d };
+            if (items.length) next[drawing.path] = { items, r }; else delete next[drawing.path];
+            return next;
+          })}
+        />
       )}
 
       <Lightbox

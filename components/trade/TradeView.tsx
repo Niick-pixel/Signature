@@ -38,6 +38,8 @@ export interface TradeViewProps {
   entryAt: string | null;
   /** Study notes this trade is an example in. */
   studyNotes: Array<{ id: string; title: string; kind: string; role: string }>;
+  /** R from entry/stop/target lines drawn on a screenshot, when there is one. */
+  drawnR?: number | null;
 }
 
 /** The trade page (app/trade/[id]). Which sections show is in Settings → Trade page. */
@@ -113,7 +115,9 @@ export function TradeView(p: TradeViewProps) {
           {on.metrics && (
             <Card title="The numbers">
               <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4" data-trade-metrics>
-                <Metric label="Planned" value={m.plannedR == null ? '—' : `${m.plannedR.toFixed(2)}R`} hint="Target distance over stop distance, from the prices on the trade." />
+                <Metric label="Planned" value={m.plannedR != null ? `${m.plannedR.toFixed(2)}R` : p.drawnR != null ? `${p.drawnR.toFixed(2)}R` : '—'}
+                  sub={m.plannedR == null && p.drawnR != null ? 'from your drawing' : undefined}
+                  hint="Target distance over stop distance, from the prices on the trade — or from the lines drawn on its chart." />
                 <Metric label="Actual" value={rr(m.actualR)} color={tone(m.actualR)} />
                 <Metric label="Max run-up" value={rr(mfeR)} sub={p.excursion ? `${p.excursion.mfePoints} pts` : undefined} />
                 <Metric label="Max drawdown" value={maeR == null ? '—' : rr(maeR)} sub={p.excursion ? `${p.excursion.maePoints} pts` : undefined} />

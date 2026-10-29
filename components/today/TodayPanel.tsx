@@ -11,9 +11,13 @@ import { PropMini } from '@/components/prop/PropMini';
 import { BOARD_SHOWN } from '@/lib/keys';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import { localDay } from '@/lib/day';
+import { navigate } from '@/lib/nav';
+import type { Goal, GoalProgress } from '@/lib/goals';
 import { springSoft, exitQuick } from '@/lib/motion';
 
 interface TodayData {
+  grade?: { score: number | null; letter: string | null; trades: number; parts: Array<{ id: string; label: string; kept: boolean | null; detail: string }> };
+  pastGrades?: Array<{ day: string; score: number | null; letter: string | null }>;
   plan: Array<{ label: string; value: string }>;
   prep: { done: number; total: number; started: boolean };
   rules: { trades: number; kept: number; broken: Array<{ short: string; count: number }> };
@@ -38,11 +42,13 @@ export function TodayPanel() {
   const [focus, setFocus] = useState<FocusData | null>(null);
   const [folded, setFolded] = useState(false);
   const [ticks, setTicks] = useState<number[]>([]);
+  const [goals, setGoals] = useState<Array<{ goal: Goal; progress: GoalProgress }>>([]);
 
   const load = useCallback(() => {
     const today = localDay();
     fetch(`/api/today?today=${today}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
     fetch(`/api/review/focus?today=${today}`).then((r) => (r.ok ? r.json() : null)).then(setFocus).catch(() => {});
+    fetch(`/api/goals?today=${today}`).then((r) => (r.ok ? r.json() : null)).then((d) => setGoals((d?.goals ?? []).filter((g: { goal: Goal }) => !g.goal.archived))).catch(() => {});
   }, []);
   useEffect(() => {
     try {
@@ -111,6 +117,27 @@ export function TodayPanel() {
                 )}
               </Section>
             )}
+            {s.grade && data?.grade && (
+              <Section title="Plan grade" right={data.grade.letter ? `${data.grade.letter} · ${data.grade.score}` : undefined}>
+                <ul className="space-y-1" data-today-grade={data.grade.score ?? ''}>
+                  {data.grade.parts.map((p) => (
+                    <li key={p.id} className="flex items-start gap-2" title={p.detail}>
+                      <span className="mt-[1px] text-[11px]" style={{ color: p.kept == null ? 'var(--text-faint)' : p.kept ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>{p.kept == null ? '·' : p.kept ? '✓' : '✗'}</span>
+                      <span className="min-w-0"><span>{p.label}</span> <span style={{ color: 'var(--text-faint)' }}>· {p.detail}</span></span>
+                    </li>
+                  ))}
+                </ul>
+                {(data.pastGrades?.length ?? 0) > 0 && (
+                  <div className="mt-2 flex gap-1" title="The last trading days">
+                    {data.pastGrades!.map((g) => (
+                      <span key={g.day} className="rounded-md border px-1.5 py-0.5 text-[10px] tabular-nums" style={{ borderColor: 'var(--glass-stroke)', color: (g.score ?? 0) >= 75 ? 'rgb(var(--outcome-win))' : (g.score ?? 0) >= 50 ? 'var(--text-dim)' : 'rgb(var(--outcome-loss))' }}>
+                        {new Date(`${g.day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })} {g.letter}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </Section>
+            )}
             {s.checklist && items.length > 0 && (
               <Section title="Checklist" right={`${ticks.filter((i) => i < items.length).length}/${items.length}`}>
                 <ul className="space-y-1.5" data-today-checklist>
@@ -120,6 +147,24 @@ export function TodayPanel() {
                         <input type="checkbox" checked={ticks.includes(i)} onChange={() => tick(i)} className="mt-0.5" />
                         <span style={{ color: ticks.includes(i) ? 'var(--text-faint)' : 'var(--text)', textDecoration: ticks.includes(i) ? 'line-through' : undefined }}>{it}</span>
                       </label>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+            {s.goals && goals.length > 0 && (
+              <Section title="Goals" right={`${goals.filter((g) => g.progress.todayOk).length}/${goals.filter((g) => g.progress.todayOk != null).length} today`}>
+                <ul className="space-y-1" data-today-goals>
+                  {goals.slice(0, 5).map(({ goal, progress: p }) => (
+                    <li key={goal.id}>
+                      <button type="button" onClick={() => navigate('/goals')} className="flex w-full items-start gap-2 text-left hover:opacity-80"
+                        title={p.lastBroken ? `Last broken ${p.lastBroken.day}: ${p.lastBroken.why}` : 'Not broken yet'}>
+                        <span className="mt-[1px] text-[11px]" style={{ color: p.todayOk == null ? 'var(--text-faint)' : p.todayOk ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>
+                          {p.todayOk == null ? '·' : p.todayOk ? '✓' : '✗'}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{goal.title}</span>
+                        <span className="shrink-0 tabular-nums" style={{ color: 'var(--text-faint)' }}>{p.streak}{p.unit === 'week' ? 'w' : 'd'}</span>
+                      </button>
                     </li>
                   ))}
                 </ul>

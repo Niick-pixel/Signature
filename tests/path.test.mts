@@ -157,11 +157,11 @@ test('a step completes itself when every criterion is met, and the next one star
   assert.equal(CURRENT_RUBRIC, listSteps()[0].criteria[0].filter?.rubric === 'current' ? CURRENT_RUBRIC : -1);
 });
 
-test('the export carries the Path, at version 12, and overrides in every format', async () => {
+test('the export carries the Path, at version 13, and overrides in every format', async () => {
   const res = await exportRoute.GET();
   const buf = Buffer.from(await res.arrayBuffer());
   const json = JSON.parse(unzip(buf, 'trades.json').toString('utf8'));
-  assert.equal(json.version, 12);
+  assert.equal(json.version, 13);
   assert.ok(Array.isArray(json.red_day_skips));
   assert.equal(json.path_steps.length, 6);
   assert.ok(json.path_events.length > 0);
