@@ -437,3 +437,76 @@ A trade a filter **can't judge** (the field was never recorded) **is kept** and 
 **Section C takes the Rule Lab's best single filter as its experiment** when that filter keeps at least half your trades and its P(better) is at least 75%.
 
 Tests: `tests/edge-lab.test.mts`. It covers the day-order filters, kept unknowns, deterministic P, the aligned curve, the walk-forward half, and the eval rules: sure win, sure loss, daily loss, minimum days, trailing busting sooner than static.
+
+---
+
+# Milestone 8: the score that learns, setup quality, similar setups, execution
+
+## 32. F — Setup quality
+
+**Grades, shrunk, in two separate tables:**
+- grades locked **before** the outcome: the only real test of your grading
+- grades given **after** it (hindsight-exposed): read with care
+
+**Grade drift:** the honest re-grade and the blind grade, against the grade at entry, on one scale: A+ 10, A 9, A− 8, B+ 7, B 6, B− 5, C 3.5, F 1. You get the average step and how many went lower, stayed the same or went higher.
+
+## 33. The adaptive setup score (`lib/edge/scoreModel.ts`)
+
+**Inputs**, all known before the entry (checked by a test):
+- the checklist items (HTF bias, killzone, no news, strong FVG, clear targets, clean path, return to FVG, inversion close, sweep tier, one clean FVG), each with your points
+- closure score, a liquidity event, a named target, with the bias, right side of the range, inside the killzone, each with 0 points
+
+**Model:** Bayesian linear regression centred on your rubric.
+1. Features are standardised: z = (x − mean) ÷ sd. A blank is filled with that feature's mean, which is a fact about the inputs, never about R.
+2. **Your points in R:** one scale s, fitted by least squares of R on your points-weighted checklist sum. s is floored at 0, because the prior is your rubric, never its reverse. The prior weight of each item is s × points × sd.
+3. **Posterior:** β = (XᵀWX + λI)⁻¹ (XᵀW(y − ȳ) + λβ₀), with λ = 40 pseudo-trades and W = recency weights in the recent window. Intervals come from σ²(XᵀWX + λI)⁻¹.
+
+**What that means in practice:**
+- **At 34 trades** the learned weights barely leave yours.
+- **Past 150** your data dominates.
+- That's the learning curve, and it's honest.
+
+**Weights table:** R when each item is present vs absent, yours against learned with an 80% range.
+- **earning its points:** the learned weight is clearly above zero and at least half of yours
+- **overweighted?:** the learned range sits below your weight
+- otherwise **too early** (always under 30 trades)
+- If s is 0, the page says your points don't line up with R yet and the prior is flat.
+
+## 34. Is your scoring predictive? (walk-forward)
+
+Only out-of-sample numbers count:
+1. For each trade from the 21st on, fit on the trades before it, then score that trade.
+2. **Only trades graded before the outcome are scored.** A checklist ticked in hindsight can carry the result. Those trades still train the model, which can only make it worse, but they never count as a test.
+3. Report:
+   - **Spearman ρ** between the prediction and R, with an 80% bootstrap interval and P(ρ > 0)
+   - **MSE skill** = 1 − MSE(model) ÷ MSE(the average R so far): above 0 means it beats guessing your average
+   - the same for **your raw checklist score**, mapped to R by a line fitted on past trades only
+4. **Under 30 predictions, the verdict is Too early whatever ρ says.**
+
+The fit is incremental (running sums), so each step is a tiny solve. 2,000 trades take about 0.7 s and are cached by a fingerprint of the data.
+
+**Calibration:** the out-of-sample predictions in 5 buckets (3 under 50). Each bucket's average prediction is plotted against the R that really followed, with an 80% range. Points on the dashed line mean the score says what really happens.
+
+## 35. H — Similar setups
+
+Pick any trade to see its nearest **earlier** setups by Gower distance over pre-trade fields (section 10). You get the shrunk mean, the win chance and the screenshots.
+
+## 36. I — Execution
+
+From the max-in-favour and max-heat taps (outcome fields, so diagnosis only):
+- **Management leak:** losers that were 1R or more in favour first
+- **Never went positive:** losers with no move in favour, a selection or entry problem
+- **Stop barely held:** winners that took ¾R or more of heat
+- **Early breakeven:** moved to BE, stopped, and the target was hit later. Cost = Σ(planned R:R − realised R).
+- **Exit efficiency:** realised R ÷ max R in favour, for winners
+- **Planned R:R:** how often each plan was reached, and the average R
+
+Tests: `tests/edge-score.test.mts`. It covers:
+- Cholesky
+- the hand-computed regression (λ = n halves the effect)
+- the prior holding at 20 trades and letting go at 2,000
+- s never reversing your rubric
+- an injected effect found out of sample at 300 trades
+- hindsight-graded trades never scored
+- each walk-forward step equal to a full refit
+- quality, execution, the firewall and speed

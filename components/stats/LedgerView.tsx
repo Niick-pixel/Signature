@@ -68,7 +68,7 @@ export function LedgerView({ l, thumbs }: { l: LedgerV2; thumbs: Record<string, 
                     <td className="py-1.5 pr-2" title={`Try: ${t.rule}`}>{t.title}</td>
                     <td className="text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>{t.n}</td>
                     <td className="px-3" title={t.cmp ? `${sR(t.cmp.diff)} (80%: ${sR(t.cmp.lo80)} to ${sR(t.cmp.hi80)})` : ''}>
-                      {t.cmp && <ForestBar lo95={t.cmp.diff - 1.96 * t.cmp.diffSd} lo80={t.cmp.lo80} mid={t.cmp.diff} hi80={t.cmp.hi80} hi95={t.cmp.diff + 1.96 * t.cmp.diffSd} lo={lo} hi={hi} ref={0} />}
+                      {t.cmp && <ForestBar lo95={t.cmp.diff - 1.96 * t.cmp.diffSd} lo80={t.cmp.lo80} mid={t.cmp.diff} hi80={t.cmp.hi80} hi95={t.cmp.diff + 1.96 * t.cmp.diffSd} lo={lo} hi={hi} at={0} />}
                     </td>
                     <td className="whitespace-nowrap text-right tabular-nums" style={{ color: t.totalR < 0 ? 'rgb(var(--outcome-loss))' : 'var(--text-dim)' }}>{sR(t.totalR, 1)}</td>
                     <td className="hidden pl-3 sm:table-cell"><Spark xs={t.trend} /></td>

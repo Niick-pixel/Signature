@@ -31,6 +31,13 @@ import { LedgerView } from '@/components/stats/LedgerView';
 import { EvalPanel, LabProvider, RuleLabPanel, type EvalPreset } from '@/components/stats/Lab';
 import { LAB_FILTERS, labResult, labRows } from '@/lib/edge/ruleLab';
 import { listPropAccounts } from '@/db/prop';
+import { scoreModel } from '@/lib/edge/scoreModel';
+import { setupQuality } from '@/lib/edge/quality';
+import { execution } from '@/lib/edge/execution';
+import { similarSetups } from '@/lib/edge/similar';
+import { QualityPanel, skillVerdict } from '@/components/stats/QualityPanel';
+import { SimilarLookup } from '@/components/stats/SimilarLookup';
+import { ExecutionPanel } from '@/components/stats/ExecutionPanel';
 import { PRESETS, type PropRules } from '@/lib/prop';
 import { WordsTable } from '@/components/stats/SuccessView';
 import { HypotheticalNote } from '@/components/money/MissedCard';
@@ -161,6 +168,15 @@ export default async function StatsPage(
     ...listPropAccounts().filter((a) => a.status === 'active' && a.profit_target).map((a) => ({ key: `acct:${a.id}`, label: `${a.firm} — ${a.label || a.plan}`, rules: evalRules(a) })),
     ...PRESETS.filter((p) => p.phase === 'eval' && p.rules.profit_target).map((p) => ({ key: `preset:${p.firm}:${p.plan}`, label: `${p.firm} ${p.plan}`, rules: evalRules(p.rules) })),
   ];
+  // Setup quality, the learned score (lib/edge/scoreModel), similar setups, execution.
+  const quality = setupQuality(settled);
+  const model = scoreModel(settled, { halfLife: window === 'recent' ? 60 : null });
+  const mv = model?.wf ? skillVerdict(model.wf.model, model.wf.n) : null;
+  const simId = one(params.similar) ?? settled[settled.length - 1]?.id ?? null;
+  const simTarget = settled.find((t) => t.id === simId) ?? null;
+  const similar = simTarget ? similarSetups(simTarget, settled.filter((t) => t.id !== simTarget.id && t.date <= simTarget.date)) : null;
+  const simOptions = [...settled].reverse().slice(0, 80).map((t) => ({ id: t.id, label: `${thumbs[t.id].day} · ${t.setup_type} ${t.direction === 'Long' ? '↗' : '↘'} · ${t.grade_letter ?? ''}` }));
+  const exec = execution(settled);
   const visibleRows = engine.explorer.rows.filter((r) => !r.hidden);
   const strongest = visibleRows.filter((r) => r.verdict.level !== 'too-early').sort((a, b) => b.verdict.p - a.verdict.p)[0];
   const winHref = (w: string) => `/stats?${new URLSearchParams({ account, ...filterParams, win: w }).toString()}`;
@@ -239,6 +255,12 @@ export default async function StatsPage(
                 <EvalPanel presets={evalPresets} />
               </Collapsible>
 
+              <Collapsible id="quality" title="Setup quality" locked={lockNote('gradeCalibration', 'Grade calibration')}
+                help="Do your grades mean anything? Grades locked before the outcome against those given after it, grade drift, and whether a score predicts R out of sample."
+                summary={model?.wf ? `Learned score: ${mv ? VERDICT_LABEL[mv.level] : 'Too early'} (ρ ${model.wf.model.rho?.toFixed(2) ?? '—'} out of sample) · ${quality.exposedN} of ${settled.length} grades hindsight-exposed` : `${quality.exposedN} of ${settled.length} grades hindsight-exposed`}>
+                <QualityPanel q={quality} model={model} thumbs={thumbs} weightsLocked={unlocked(mat, 'scoreModel') ? null : `Under 100 trades the learned weights barely leave yours (40 pseudo-trades of prior) — ${100 - settled.length} to go before they can visibly diverge.`} />
+              </Collapsible>
+
               <Collapsible id="anatomy" title="Setup anatomy" locked={lockNote('explorer', 'The anatomy explorer')}
                 help="Every level of every pre-trade field against the rest of your trades: shrunk toward your mean, an interval on each, Benjamini–Hochberg across the table. Only fields known before the entry are allowed in (the leakage firewall)."
                 summary={strongest ? `${VERDICT_LABEL[strongest.verdict.level]}: ${strongest.label} = ${strongest.level} (${strongest.diff > 0 ? '+' : '−'}${Math.abs(strongest.diff).toFixed(2)}R vs the rest)` : `${visibleRows.length} rows, all Too early — about ${engine.nFor05R ?? '—'} trades per group to tell 0.5R apart`}>
@@ -250,6 +272,18 @@ export default async function StatsPage(
                   <span style={{ color: 'var(--text-faint)' }}>· {engine.n} trades{window === 'recent' ? ' · half-life 60 trades' : ''}</span>
                 </div>
                 <AnatomyExplorer rows={visibleRows} mu={engine.explorer.mu} tests={engine.explorer.tests} hidden={engine.explorer.rows.length - visibleRows.length} thumbs={thumbs} />
+              </Collapsible>
+
+              <div id="similar" />
+              <Collapsible id="similar-setups" title="Similar setups" open={params.similar != null} locked={lockNote('similar', 'Similar setups')}
+                help="The nearest past trades to a setup, by Gower distance over the fields known before the entry. Shrunk mean and a win chance from a Beta posterior."
+                summary={similar && similar.n ? `${simTarget ? thumbs[simTarget.id].day : ''}: ${similar.n} nearest, shrunk ${similar.shrunkR != null ? `${similar.shrunkR < 0 ? '−' : '+'}${Math.abs(similar.shrunkR).toFixed(2)}R` : '—'}` : 'Pick a trade to see its nearest past setups'}>
+                <SimilarLookup options={simOptions} picked={simTarget?.id ?? null} result={similar} thumbs={thumbs} />
+              </Collapsible>
+
+              <Collapsible id="execution" title="Execution" help="From the max-in-favour and max-heat taps: management leaks, entry leaks, stops that barely held, the cost of early breakeven, exit efficiency, planned vs achieved R:R. Outcome fields — diagnosis only."
+                summary={exec.losersWithMfe ? `${exec.mgmtLeak.length} of ${exec.losersWithMfe} losers were 1R in favour first` : 'Fills in as you log max in favour and max heat'}>
+                <ExecutionPanel e={exec} thumbs={thumbs} />
               </Collapsible>
 
               <Collapsible id="behaviour" title="Behaviour & state" help={BEHAVIOUR_HELP} summary={behaviourSummary(tilt, hesitation)}>

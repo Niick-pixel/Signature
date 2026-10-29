@@ -82,11 +82,11 @@ export function Thumbs({ ids, thumbs, max = 8 }: { ids: readonly string[]; thumb
 }
 
 /** One forest-plot row's interval: faint 95%, strong 80%, the dot, a line at the reference. */
-export function ForestBar({ lo95, lo80, mid, hi80, hi95, lo, hi, ref }: { lo95: number; lo80: number; mid: number; hi80: number; hi95: number; lo: number; hi: number; ref: number }) {
+export function ForestBar({ lo95, lo80, mid, hi80, hi95, lo, hi, at }: { lo95: number; lo80: number; mid: number; hi80: number; hi95: number; lo: number; hi: number; at: number }) {
   const x = (v: number) => `${Math.min(100, Math.max(0, ((v - lo) / (hi - lo || 1)) * 100))}%`;
   return (
     <div className="relative h-4 w-full" aria-hidden data-forest-bar>
-      <div className="absolute top-0 h-full w-px" style={{ left: x(ref), background: 'var(--text-faint)', opacity: 0.6 }} />
+      <div className="absolute top-0 h-full w-px" style={{ left: x(at), background: 'var(--text-faint)', opacity: 0.6 }} />
       <div className="absolute top-1/2 h-[3px] -translate-y-1/2 rounded-full" style={{ left: x(lo95), width: `calc(${x(hi95)} - ${x(lo95)})`, background: 'rgb(var(--accent) / 0.2)' }} />
       <div className="absolute top-1/2 h-[6px] -translate-y-1/2 rounded-full" style={{ left: x(lo80), width: `calc(${x(hi80)} - ${x(lo80)})`, background: 'rgb(var(--accent) / 0.55)' }} />
       <div className="absolute top-1/2 size-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: x(mid), background: 'rgb(var(--accent))', boxShadow: '0 0 0 2px var(--bg-raised)' }} />

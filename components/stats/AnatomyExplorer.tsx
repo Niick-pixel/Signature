@@ -41,7 +41,7 @@ export function AnatomyExplorer({ rows, mu, tests, hidden, thumbs }: { rows: Row
                       <td className="py-1.5 pr-2">{r.level}</td>
                       <td className="text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>{r.n}</td>
                       <td className="px-3" title={`Shrunk ${sR(r.shrunk)} · 80%: ${sR(r.lo80)} to ${sR(r.hi80)} · 95%: ${sR(r.lo95)} to ${sR(r.hi95)} · raw ${sR(r.rawMean)}`}>
-                        <ForestBar lo95={r.lo95} lo80={r.lo80} mid={r.shrunk} hi80={r.hi80} hi95={r.hi95} lo={lo} hi={hi} ref={mu} />
+                        <ForestBar lo95={r.lo95} lo80={r.lo80} mid={r.shrunk} hi80={r.hi80} hi95={r.hi95} lo={lo} hi={hi} at={mu} />
                       </td>
                       <td className="whitespace-nowrap text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>{sR(r.diff)}</td>
                       <td className="pl-3"><VerdictChip v={r.verdict} title={r.reason ?? undefined} /></td>
