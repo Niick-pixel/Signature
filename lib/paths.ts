@@ -23,6 +23,8 @@ export const SCREENSHOTS_DIR = path.join(DATA_DIR, 'screenshots');
 /** Small copies of the screenshots for the board's cards — derived, safe to delete. */
 export const THUMBS_DIR = path.join(DATA_DIR, 'thumbs');
 export const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
+/** Your own backgrounds (Settings → Personalization): furniture, like the preferences — not in the backup. */
+export const BACKGROUNDS_DIR = path.join(DATA_DIR, 'backgrounds');
 
 /**
  * Migration files ship as .sql on disk, so their location has the same problem.

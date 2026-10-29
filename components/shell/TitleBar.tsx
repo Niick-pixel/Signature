@@ -21,6 +21,7 @@ const TABS = [
   { href: '/journal', label: 'Journal' },
   { href: '/path', label: 'Path' },
   { href: '/prop', label: 'Prop' },
+  { href: '/study', label: 'Study' },
 ] as const;
 
 /**
@@ -90,7 +91,7 @@ export function TitleBar() {
           put regardless of what sits either side of them. */}
       <nav className="pointer-events-none absolute inset-x-0 flex justify-center">
         <div className="pointer-events-auto flex items-center gap-1">
-          {TABS.filter((tab) => tab.href !== '/prop' || prefs.propTab).map((tab) => {
+          {TABS.filter((tab) => (tab.href !== '/prop' || prefs.propTab) && (tab.href !== '/study' || prefs.studyTab)).map((tab) => {
             // A tab stays lit on its own sub-pages (/prop/<id>).
             const active = pathname === tab.href || (tab.href === '/prop' && pathname.startsWith('/prop/'));
             return (

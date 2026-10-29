@@ -105,7 +105,43 @@ export interface Preferences {
   newsWindow: number;
   /** How many of your own sentences Ask quotes back. */
   askQuotes: number;
+  /** Phase 5. The Study tab in the title bar. */
+  studyTab: boolean;
+  /** Minutes a day that keep the study streak going. */
+  studyGoal: number;
+  /** The timer's length (0: it just counts up), and a soft chime when it is reached. */
+  studyTimerLength: number;
+  studyChime: boolean;
+  /** Personalization: your own background, how much the theme veils it, and where it shows. */
+  background: { name: string; kind: 'image' | 'video' } | null;
+  bgDim: number;
+  bgWhere: 'pages' | 'dashboard';
+  /** An accent of your own (hex), over the theme's. Null: the theme's. */
+  accent: string | null;
+  /** The type: the theme's own, or one of a few faces already on the computer. */
+  font: FontChoice;
+  /** Whole looks, saved and brought back in one click. */
+  looks: Look[];
+  /** The quote of the day: from the classics, your own lessons, both, or none — and where it shows. */
+  quoteSource: 'classic' | 'mine' | 'both' | 'off';
+  quoteOnDashboard: boolean;
+  quoteInStudy: boolean;
+  customQuotes: string[];
 }
+
+export const FONT_CHOICES = ['theme', 'system', 'humanist', 'serif', 'rounded', 'mono'] as const;
+export type FontChoice = (typeof FONT_CHOICES)[number];
+export const FONT_LABEL: Record<FontChoice, string> = { theme: "The theme's", system: 'System', humanist: 'Humanist', serif: 'Serif', rounded: 'Rounded', mono: 'Mono' };
+/** Faces already on the machine — nothing downloaded, so the app works offline as ever. */
+export const FONT_STACK: Record<Exclude<FontChoice, 'theme'>, string> = {
+  system: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  humanist: "Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif",
+  serif: "'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, Georgia, serif",
+  rounded: "ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Quicksand, Comfortaa, Manjari, 'Arial Rounded MT', 'Arial Rounded MT Bold', Calibri, source-sans-pro, sans-serif",
+  mono: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace",
+};
+export interface Look { id: string; name: string; theme: string; accent: string | null; font: FontChoice; background: Preferences['background']; bgDim: number; textScale: number }
+export const ACCENT_PRESETS = ['#8a5205', '#9e3e1e', '#802222', '#425e34', '#2f5d7c', '#5b4a8a', '#b07d2b', '#3b3b3b'];
 
 export const ANALYTICS_TABS = ['time', 'confluences', 'psychology', 'news', 'ask'] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
@@ -190,6 +226,20 @@ export const DEFAULT_PREFERENCES: Preferences = {
   analyticsWords: DEFAULT_WORDS,
   newsWindow: 30,
   askQuotes: 3,
+  studyTab: true,
+  studyGoal: 20,
+  studyTimerLength: 25,
+  studyChime: true,
+  background: null,
+  bgDim: 70,
+  bgWhere: 'pages',
+  accent: null,
+  font: 'theme',
+  looks: [],
+  quoteSource: 'both',
+  quoteOnDashboard: true,
+  quoteInStudy: true,
+  customQuotes: [],
 };
 
 export const TEXT_SIZES = ['Small', 'Normal', 'Large', 'Huge'] as const;
@@ -239,6 +289,8 @@ export function readPreferences(): Preferences {
       scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
       sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
+      looks: Array.isArray(saved.looks) ? saved.looks.filter((l) => l && typeof l.id === 'string') : [],
+      customQuotes: Array.isArray(saved.customQuotes) ? saved.customQuotes.filter((x) => typeof x === 'string') : [],
       analyticsWords: Array.isArray(saved.analyticsWords) ? saved.analyticsWords.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.analyticsWords,
       checklistItems: Array.isArray(saved.checklistItems) ? saved.checklistItems.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.checklistItems,
     };
@@ -272,4 +324,17 @@ export function applyPreferences(prefs: Preferences): void {
   if (desktop) void desktop.set({ fit: prefs.fitScreen, scale: prefs.textScale }).catch(() => {});
   root.dataset.reduceMotion = prefs.reduceMotion ? 'true' : 'false';
   root.dataset.hidePnl = prefs.hidePnl ? 'true' : 'false';
+  // Your own accent over the theme's (the variable is "r g b").
+  const rgb = hexToRgb(prefs.accent);
+  if (rgb) root.style.setProperty('--accent', rgb); else root.style.removeProperty('--accent');
+  if (prefs.font !== 'theme') {
+    root.style.setProperty('--font-sans', FONT_STACK[prefs.font]);
+    root.style.setProperty('--font-display', FONT_STACK[prefs.font]);
+  } else { root.style.removeProperty('--font-sans'); root.style.removeProperty('--font-display'); }
+}
+
+/** "#8a5205" → "138 82 5"; null for anything else. */
+export function hexToRgb(hex: string | null | undefined): string | null {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex ?? '');
+  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : null;
 }

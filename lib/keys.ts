@@ -19,7 +19,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ['P'], label: 'Chart prep (in the check-in)' },
       { keys: ['D'], label: "Today's daily review" },
       { keys: ['W'], label: 'Weekly review' },
-      { keys: ['1', '2', '3', '4', '5', '6'], label: 'Whiteboard, Stats, Calendar, Journal, Path, Prop' },
+      { keys: ['1', '2', '3', '4', '5', '6', '7'], label: 'Whiteboard, Stats, Calendar, Journal, Path, Prop, Study' },
       { keys: ['0'], label: 'Dashboard' },
       { keys: ['A'], label: 'Analytics (and Ask your journal)' },
       { keys: ['T'], label: 'Choose a theme' },

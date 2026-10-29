@@ -15,6 +15,9 @@ import { WeekendReview } from '@/components/path/WeekendReview';
 import { RedDayPrompt } from '@/components/path/RedDayPrompt';
 import { HomeReview } from '@/components/review/HomeReview';
 import { TodayPanel } from '@/components/today/TodayPanel';
+import { Backdrop } from '@/components/personal/Backdrop';
+import { StudyTimerWidget } from '@/components/study/StudyTimerWidget';
+import { FocusMode } from '@/components/study/FocusMode';
 import { StartScreen } from '@/components/dashboard/StartScreen';
 import { SavedNotice } from '@/components/review/SavedNotice';
 
@@ -58,6 +61,10 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <HomeReview />
           {/* The Today panel on the right (Settings → Today panel). */}
           <TodayPanel />
+          {/* Phase 5: your background, the study timer, and focus mode. */}
+          <Backdrop />
+          <StudyTimerWidget />
+          <FocusMode />
           <StartScreen />
           <SavedNotice />
           <Shortcuts />

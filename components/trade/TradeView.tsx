@@ -36,6 +36,8 @@ export interface TradeViewProps {
   metrics: TradeMetrics;
   excursion: { mfePoints: number; maePoints: number } | null;
   entryAt: string | null;
+  /** Study notes this trade is an example in. */
+  studyNotes: Array<{ id: string; title: string; kind: string; role: string }>;
 }
 
 /** The trade page (app/trade/[id]). Which sections show is in Settings → Trade page. */
@@ -179,6 +181,16 @@ export function TradeView(p: TradeViewProps) {
               <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed">{t.explanation || <Faint>No explanation written.</Faint>}</p>
               {t.lesson && (
                 <blockquote className="mt-3 border-l-2 pl-3 text-[12.5px] italic" style={{ borderColor: 'rgb(var(--accent) / 0.6)', color: 'var(--text-dim)' }}>{t.lesson}</blockquote>
+              )}
+              {p.studyNotes.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-1.5" data-trade-study>
+                  <span className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>In the study room:</span>
+                  {p.studyNotes.map((n) => (
+                    <Link key={n.id} href="/study" title={n.role === 'counter' ? 'Where it failed' : 'An example'}>
+                      <Chip color={n.role === 'counter' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--accent))'}>{n.title || 'Untitled'}</Chip>
+                    </Link>
+                  ))}
+                </div>
               )}
             </Card>
           )}

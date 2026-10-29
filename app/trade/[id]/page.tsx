@@ -4,6 +4,7 @@ import { TradeView } from '@/components/trade/TradeView';
 import { getTrade, listTrades } from '@/db/trades';
 import { getBars, listExecutions } from '@/db/executions';
 import { getPrep } from '@/db/prep';
+import { notesForTrade } from '@/db/study';
 import { reviewInputs } from '@/db/review';
 import { brokenFor, dayBreaksByTrade, fieldEras } from '@/lib/review';
 import { planDay, planMatch } from '@/lib/planMatch';
@@ -47,7 +48,7 @@ export default async function TradePage({ params }: { params: Promise<{ id: stri
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
         <TradeView trade={trade} exec={exec} bars={bars} plan={plan} broken={broken} prev={prev} next={next}
-          metrics={metrics} excursion={ex} entryAt={entryAt} />
+          metrics={metrics} excursion={ex} entryAt={entryAt} studyNotes={notesForTrade(id)} />
       </div>
     </div>
   );

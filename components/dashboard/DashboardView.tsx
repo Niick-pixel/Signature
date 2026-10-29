@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
 import { PropMini } from '@/components/prop/PropMini';
 import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
@@ -62,6 +63,7 @@ export function DashboardView({ data, today }: { data: Record<DashWorld, Dashboa
             {b.recent && <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>}
             {b.prop && <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} />}
           </div>
+          {prefs.quoteOnDashboard && <QuoteOfDay className="mt-10" />}
         </div>
       )}
     </div>
