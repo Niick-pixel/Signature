@@ -12,16 +12,17 @@ const sR = (v: number | null | undefined, dp = 2) => (v == null ? '—' : `${v <
  * and hesitation on real-time missed setups. Cells are neutral: a good number
  * on a 3rd trade is not a reason to take more trades.
  */
+export function behaviourSummary(tilt: TiltIndex, hesitation: { breaks: Hesitation[] }): string {
+  const caught = tilt.sequences.length;
+  return `${caught ? `${caught} day${caught === 1 ? '' : 's'} or session${caught === 1 ? '' : 's'} broke a tilt rule` : 'No tilt rule broken'}${hesitation.breaks.length ? ` · ${hesitation.breaks.length} hesitation${hesitation.breaks.length === 1 ? '' : 's'}` : ''}`;
+}
+
 export function BehaviourCard({ tilt, hesitation }: { tilt: TiltIndex; hesitation: { breaks: Hesitation[]; hindsightLeftOut: number } }) {
   const max = Math.max(0.25, ...tilt.cells.filter((c) => c.n).map((c) => Math.abs(c.shrunk - tilt.mu)));
   const cell = (l: string, n: string) => tilt.cells.find((c) => c.losses === l && c.tradeNo === n)!;
   const hesR = hesitation.breaks.reduce((a, h) => a + (h.wouldBeR ?? 0), 0);
   return (
-    <section className="glass rounded-[calc(20px*var(--rk))] px-5 py-4" data-behaviour>
-      <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
-        Behaviour & state
-        <Help>Computed from the order of your trades, never asked. Day rules run per day for real accounts and per replay session for backtests: at most 2 trades, nothing after 2 losses in a row, 10 minutes after a loss (real days only), no red-folder day.</Help>
-      </h2>
+    <div data-behaviour>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_1fr]">
         <div>
           <div className="mb-1.5 flex items-center gap-1 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
@@ -85,6 +86,8 @@ export function BehaviourCard({ tilt, hesitation }: { tilt: TiltIndex; hesitatio
           )}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
+
+export const BEHAVIOUR_HELP = 'Computed from the order of your trades, never asked. Day rules run per day for real accounts and per replay session for backtests: at most 2 trades, nothing after 2 losses in a row, 10 minutes after a loss (real days only), no red-folder day.';

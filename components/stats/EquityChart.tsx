@@ -21,7 +21,10 @@ interface Series { key: string; label: string; points: CurvePoint[]; color: stri
  * end of each line — because the colours alone are never enough for everyone,
  * and the end label is where the eye already is.
  */
-export function EquityChart({ followed, broken, all }: { followed: CurvePoint[]; broken: CurvePoint[]; all?: CurvePoint[] }) {
+/** Percentile bands of simulated equity after each trade (lib/edge/montecarlo), drawn behind the real curve. */
+export interface EquityCone { p05: number[]; p25: number[]; p50: number[]; p75: number[]; p95: number[] }
+
+export function EquityChart({ followed, broken, all, cone }: { followed: CurvePoint[]; broken: CurvePoint[]; all?: CurvePoint[]; cone?: EquityCone }) {
   const [hover, setHover] = useState<{ x: number; i: number } | null>(null);
 
   const series: Series[] = [
@@ -40,7 +43,7 @@ export function EquityChart({ followed, broken, all }: { followed: CurvePoint[];
   }
 
   const maxLen = Math.max(...series.map((s) => s.points.length), 2);
-  const values = series.flatMap((s) => s.points.map((p) => p.cumulative));
+  const values = [...series.flatMap((s) => s.points.map((p) => p.cumulative)), ...(cone ? [...cone.p05, ...cone.p95] : [])];
   const lo = Math.min(0, ...values);
   const hi = Math.max(0, ...values);
   const span = hi - lo || 1;
@@ -50,6 +53,8 @@ export function EquityChart({ followed, broken, all }: { followed: CurvePoint[];
 
   const pathFor = (pts: CurvePoint[]) =>
     pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.cumulative).toFixed(1)}`).join(' ');
+
+  const band = (a: number[], b: number[]) => (a.length < 2 ? '' : `M ${a.map((v, i) => `${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' L ')} L ${[...b].map((v, i) => [i, v] as const).reverse().map(([i, v]) => `${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' L ')} Z`);
 
   // Round numbers on the axis, not the exact extremes.
   const ticks = [lo, lo + span / 2, hi].map((v) => Math.round(v * 10) / 10);
@@ -89,6 +94,14 @@ export function EquityChart({ followed, broken, all }: { followed: CurvePoint[];
             </text>
           </g>
         ))}
+
+        {cone && (
+          <g data-cone aria-hidden>
+            <path d={band(cone.p05, cone.p95)} fill="rgb(var(--accent) / 0.07)" />
+            <path d={band(cone.p25, cone.p75)} fill="rgb(var(--accent) / 0.12)" />
+            <path d={cone.p50.map((v, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')} fill="none" stroke="rgb(var(--accent) / 0.35)" strokeWidth={1} strokeDasharray="2 3" />
+          </g>
+        )}
 
         {/* Breakeven is the line that matters, so it is drawn darker. */}
         <line
@@ -177,6 +190,11 @@ export function EquityChart({ followed, broken, all }: { followed: CurvePoint[];
             {s.label} · n {s.points.length}
           </span>
         ))}
+        {cone && (
+          <span className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-dim)' }}>
+            <span className="inline-block h-2 w-4 rounded-[3px]" style={{ background: 'rgb(var(--accent) / 0.16)' }} /> Normal range (50% / 90%)
+          </span>
+        )}
         {hover && (
           <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>
             trade {hover.i + 1}

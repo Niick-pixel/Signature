@@ -1,6 +1,6 @@
 # The Edge Engine, in plain language
 
-This guide explains every number the Stats page shows and how it's worked out. It grows with each milestone; this version covers Milestones 2 to 5.
+This guide explains every number the Stats page shows and how it's worked out. It grows with each milestone; this version covers Milestones 2 to 10.
 
 Everything runs on your computer, with no internet, no AI and no cloud. The same data always gives the same numbers.
 
@@ -280,3 +280,100 @@ Missed setups logged in hindsight are left out, because they are cherry-picked. 
 - sequences only where a tilt rule broke, non-tilt rules left out
 - replay session labels
 - hesitation's real-time filter and hindsight count
+
+---
+
+# Milestone 6: the new page
+
+## 22. Layout
+
+Sections A–D are always open. Everything below them is folded, with a one-line summary in its header, so the page reads top to bottom without opening anything.
+
+| | Section | What it answers |
+|---|---|---|
+| A | Integrity | shown only when something could make the numbers wrong |
+| B | Your edge | expectancy, its interval, P(edge > 0), the maturity tier |
+| C | This week's focus | one leak, one strength, one experiment |
+| D | Equity & risk | the curve, the cone, the drawdown, rules followed vs broken, streaks |
+| G | Setup anatomy | which pre-trade facts go with better or worse R |
+| J | Behaviour & state | tilt grid and the tilt rules the computer caught (section 19) |
+| L | Mistake ledger | what went wrong, what it cost, lessons repeated |
+
+## 23. A — Integrity
+
+Checks run on every load:
+- **Reconciliation:** net R = ΣR = expectancy × n = the equity curve's last point, and W + L + BE = n. A failure is a bug and is labelled as one.
+- settled trades with no R (left out of every number)
+- trades with no rubric version
+- the share of grades given after the outcome (**hindsight-exposed**)
+- how many trades carry the new setup-anatomy fields
+
+## 24. B — Maturity tier
+
+A small ring in the hero shows the tier and the trades to the next one:
+
+| Tier | Trades | Unlocks |
+|---|---|---|
+| 0 | under 30 | everything is Too early unless extreme |
+| 1 | 30+ | anatomy, grade calibration, theme costs, Rule Lab, similar setups |
+| 2 | 100+ | learned score weights, walk-forward skill; recency weighting becomes the default |
+| 3 | 200+ | two-way interactions, regime split |
+
+A section above your tier still shows, as a preview with a note that it reads Too early.
+
+## 25. One comparison, everywhere (`lib/edge/compare.ts`)
+
+"Trades with X" against "trades without X":
+1. Both sides are shrunk toward the overall mean (k = 20).
+2. The gap comes with its spread and an 80% range.
+3. **P(with X is better)** = Φ(gap ÷ spread).
+4. The verdict follows section 4. Under 30 trades, only an extreme gap (P ≥ 99% and at least 0.5R) can say more than Too early.
+
+The focus card, the ledger and the rules-followed split all use this.
+
+## 26. C — This week's focus
+
+Only things you control are ranked: mistake themes, rule breaks, trading state (after a loss, 2nd trade or later, day already down) and entry method.
+
+  **priority = P(the cost is real) × |shrunk cost per occurrence| × share of your last 20 trades**
+
+- **The leak:** the highest priority with a negative cost. If it isn't at least Hint, the card says "No leak is statistically clear yet — keep logging; your top candidate is X."
+- **Protect:** the strongest positive item that keeps the plan: inside every rule, a worked tag, an entry method, the first trade. Never a broken rule or a mistake. Never the leak's mirror image (1st trade vs 2nd trade or later is one finding, not two).
+- **Experiment:** the leak's rule. It's tested for the trades the power formula (section 15) says are needed. Past 100, the card says to test for 50 and look again.
+
+Each item shows the trades behind it as thumbnails.
+
+## 27. D — Equity & risk, and Monte Carlo
+
+**Block bootstrap.** Each simulated future is stitched from runs of **4 consecutive trades** drawn from your history, wrapping round the end. Runs keep losing streaks together, the way they really happened. There are 10,000 futures, seeded from your R values.
+
+- **Cone:** the 5/25/50/75/95th percentile of cumulative R after each trade, behind your real curve. Inside the cone means normal for your results.
+- **Underwater:** cumulative R minus its running peak, trade by trade.
+- **Streaks and drawdown:** your longest losing run and worst drawdown against the median and 90% range of the futures. If fewer than 10% of futures were as deep as yours, the page says the drawdown is worse than your results explain.
+- **Followed vs broken:** the comparison from section 25.
+
+## 28. G — Setup anatomy (forest plot)
+
+Every row of the explorer (section 14) is drawn as:
+- the dot: the shrunk mean
+- the strong bar: the 80% interval
+- the faint bar: the 95% interval
+- the vertical line: your mean
+
+The window switch picks **All history**, **Recent-weighted** (half-life 60 trades) or **This rubric only**. Clicking a row opens its numbers (raw mean, p-value, whether it survives the correction, win chance) and its screenshots.
+
+## 29. L — Mistake ledger v2
+
+All of this is written after the outcome, so it **diagnoses; it never predicts**.
+- **Theme costs:** each mistake theme (your tags plus your words, with negation handled) gets:
+  - how often it happened
+  - the shrunk cost per occurrence with its 80% range
+  - the total cost
+  - a trend over 6 slices of your trades, oldest to newest
+  - the last time it appeared
+- **Lesson not yet learned:** the same theme written in at least 3 lessons within your last 30 trades. The quotes are shown with their dates.
+- **Contradicting lessons:** "too early" and "too late" both written within the last 30 trades means the entry trigger isn't defined objectively. A sentence that says both is not counted against itself.
+- **Rule breaks:** auto and self counts, and the gap against trades that kept the rule. If breaking a rule did better so far, it shows neutral with "experiment only", never green.
+- **Every loss:** its tags, rule breaks and lesson.
+
+Tests: `tests/edge-page.test.mts`.

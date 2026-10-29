@@ -9,14 +9,26 @@ import { reviewInputs } from '@/db/review';
 import { dayBreaksByTrade, fieldEras, planBreaks } from '@/lib/review';
 import { edgeMetrics } from '@/lib/edge/metrics';
 import { EdgeHero } from '@/components/stats/EdgeHero';
-import { BehaviourCard } from '@/components/stats/BehaviourCard';
-import { hesitations, tradeStates } from '@/lib/edge/state';
+import { BEHAVIOUR_HELP, BehaviourCard, behaviourSummary } from '@/components/stats/BehaviourCard';
+import { hesitations, tradeStates, withState } from '@/lib/edge/state';
 import { tiltIndex } from '@/lib/edge/tilt';
-import { getPrep } from '@/db/prep';
-import { planDay, planMatch } from '@/lib/planMatch';
-import { successSystem } from '@/lib/successSystem';
-import { Ledger, SuccessCard, WordsTable } from '@/components/stats/SuccessView';
-import { EquityChart } from '@/components/stats/EquityChart';
+import { runEngine } from '@/lib/edge/engine';
+import { maturity, unlocked } from '@/lib/edge/maturity';
+import { integrity } from '@/lib/edge/integrity';
+import { weeklyFocus } from '@/lib/edge/focus';
+import { ledgerV2 } from '@/lib/edge/ledger';
+import { compare } from '@/lib/edge/compare';
+import { adherence } from '@/lib/edge/metrics';
+import { equityCone } from '@/lib/edge/montecarlo';
+import { VERDICT_LABEL } from '@/lib/edge/verdict';
+import { Collapsible, type Thumb } from '@/components/stats/EdgeUI';
+import { IntegrityBanner } from '@/components/stats/IntegrityBanner';
+import { MaturityRing } from '@/components/stats/MaturityRing';
+import { FocusCard } from '@/components/stats/FocusCard';
+import { EquityRisk } from '@/components/stats/EquityRisk';
+import { AnatomyExplorer } from '@/components/stats/AnatomyExplorer';
+import { LedgerView } from '@/components/stats/LedgerView';
+import { WordsTable } from '@/components/stats/SuccessView';
 import { HypotheticalNote } from '@/components/money/MissedCard';
 import { StatsFilters } from '@/components/stats/StatsFilters';
 import { accountParam, applyStatsScope, mixesWorlds, parseStatsScope } from '@/lib/statsScope';
@@ -30,6 +42,7 @@ import { BacktestNote } from '@/components/money/BacktestCard';
 
 export const dynamic = 'force-dynamic';
 
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 // A typographic minus, not a hyphen — it matches the digit width, so a column
 // of R values lines up instead of stepping in and out by a pixel.
@@ -107,18 +120,38 @@ export default async function StatsPage(
   // The canonical metrics (lib/edge/metrics), over settled trades in the order they happened.
   const settled = trades.filter((t) => t.outcome !== 'Not taken' && t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date));
   const metrics = edgeMetrics(settled.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) })));
+  const breaksOf = (t: (typeof settled)[number]) => planBreaks(t, breaks, cfg, eras);
   // Behaviour and state: computed from the order of the trades (lib/edge/state, tilt).
   const states = tradeStates(settled, ctxFor);
-  const tilt = tiltIndex(settled, states, (t) => planBreaks(t, breaks, cfg, eras));
+  const stateful = withState(settled, states);
+  const tilt = tiltIndex(settled, states, breaksOf);
   const hesitation = hesitations(all.filter((t) => scope.accounts.includes(t.account) || isHypothetical(t.account)));
   const scopeLabel = scope.all ? 'all accounts' : scope.accounts.map((a) => (isBacktest(a) ? 'Backtest' : a)).join(' + ');
-  const preps = new Map<string, ReturnType<typeof getPrep>>();
-  const prepOf = (day: string) => { if (!preps.has(day)) preps.set(day, getPrep(day)); return preps.get(day) ?? null; };
-  const success = successSystem(analysable(trades), {
-    plan: (t) => { if (t.undated || isBacktest(t.account)) return null; const st = planMatch(t, prepOf(planDay(t))?.data ?? null).status; return st === 'in' || st === 'off' ? st : null; },
-    broken: (t) => planBreaks(t, breaks, cfg, eras).map((b) => b.short),
-  });
-  // Your words (lib/wordPatterns): the writing goes along only for the trades behind the words shown.
+
+  // The Edge Engine (lib/edge): window, maturity, integrity, focus, the explorer, the ledger.
+  const mat = maturity(settled.length);
+  const winParam = one(params.win);
+  // Tier 2 and up: recency weighting on by default.
+  const window = winParam === 'recent' || winParam === 'rubric' || winParam === 'all' ? winParam : unlocked(mat, 'recencyDefault') ? 'recent' : 'all';
+  const latestRubric = settled.length ? Math.max(...settled.map((t) => t.rubric_version ?? 0)) : undefined;
+  const engine = runEngine(settled, { window, rubric: latestRubric });
+  const issues = integrity(settled, metrics, { noR: trades.filter((t) => t.outcome !== 'Not taken' && t.status === 'Settled' && t.r_multiple == null).length });
+  const focus = weeklyFocus(stateful, breaksOf, { sd: metrics.sd });
+  const ledger = ledgerV2(settled, breaksOf);
+  const rs = settled.map((t) => t.r_multiple as number);
+  const cone = equityCone(rs);
+  const kept = settled.filter((t) => breaksOf(t).length === 0);
+  const split = compare(kept.map((t) => t.r_multiple as number), settled.filter((t) => breaksOf(t).length > 0).map((t) => t.r_multiple as number));
+  const adh = adherence(settled, breaksOf);
+  const thumbs: Record<string, Thumb> = Object.fromEntries(settled.map((t) => [t.id, {
+    id: t.id, shot: t.screenshot_path || null, r: t.r_multiple, day: isBacktest(t.account) ? (t.session_index ? `Session ${t.session_index}` : 'Backtest') : t.date.slice(0, 10),
+  }]));
+  const visibleRows = engine.explorer.rows.filter((r) => !r.hidden);
+  const strongest = visibleRows.filter((r) => r.verdict.level !== 'too-early').sort((a, b) => b.verdict.p - a.verdict.p)[0];
+  const winHref = (w: string) => `/stats?${new URLSearchParams({ account, ...filterParams, win: w }).toString()}`;
+  const lockNote = (f: Parameters<typeof unlocked>[1], what: string) => (unlocked(mat, f) ? null
+    : `${what} unlocks at 30 trades (${30 - settled.length} to go). Shown as a preview — every row reads Too early until then.`);
+  // Your words (lib/wordPatterns): diagnostic only, until the language rebuild (milestone 9).
   const words = wordMap(analysable(trades), { minN: 3 });
   const shownIds = new Set(words.words.flatMap((w) => w.tradeIds.slice(0, 8)));
   const wordTrades = trades.filter((t) => shownIds.has(t.id)).map((t) => ({ id: t.id, date: t.date, r: t.r_multiple, setup: t.setup_type, text: `${t.lesson ?? ''}\n${t.explanation ?? ''}` }));
@@ -180,17 +213,38 @@ export default async function StatsPage(
             <div className="glass rounded-[calc(24px*var(--rk))] p-8 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>Nothing to measure yet.</div>
           ) : (
             <div className="space-y-5">
-              <EdgeHero m={metrics} scopeLabel={scopeLabel} />
+              <IntegrityBanner issues={issues} />
+              <EdgeHero m={metrics} scopeLabel={scopeLabel} maturity={<MaturityRing m={mat} />} />
+              <FocusCard f={focus} thumbs={thumbs} />
+              <EquityRisk curves={curves} rs={rs} m={metrics} split={split} adherence={adh} cone={cone} />
 
-              <section className="glass rounded-[calc(20px*var(--rk))] px-5 py-4" data-card>
-                <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Equity, trade by trade</h2>
-                <EquityChart all={curves.all} followed={curves.followed} broken={curves.broken} />
-              </section>
+              <Collapsible id="anatomy" title="Setup anatomy" locked={lockNote('explorer', 'The anatomy explorer')}
+                help="Every level of every pre-trade field against the rest of your trades: shrunk toward your mean, an interval on each, Benjamini–Hochberg across the table. Only fields known before the entry are allowed in (the leakage firewall)."
+                summary={strongest ? `${VERDICT_LABEL[strongest.verdict.level]}: ${strongest.label} = ${strongest.level} (${strongest.diff > 0 ? '+' : '−'}${Math.abs(strongest.diff).toFixed(2)}R vs the rest)` : `${visibleRows.length} rows, all Too early — about ${engine.nFor05R ?? '—'} trades per group to tell 0.5R apart`}>
+                <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11.5px]" data-window>
+                  <span style={{ color: 'var(--text-faint)' }}>Window:</span>
+                  {([['all', 'All history'], ['recent', 'Recent-weighted'], ['rubric', `Rubric ${latestRubric ?? ''} only`]] as const).map(([w, label]) => (
+                    <a key={w} href={winHref(w)} className="rounded-full border px-2.5 py-0.5" style={pill(window === w)} data-window-option={w}>{label}</a>
+                  ))}
+                  <span style={{ color: 'var(--text-faint)' }}>· {engine.n} trades{window === 'recent' ? ' · half-life 60 trades' : ''}</span>
+                </div>
+                <AnatomyExplorer rows={visibleRows} mu={engine.explorer.mu} tests={engine.explorer.tests} hidden={engine.explorer.rows.length - visibleRows.length} thumbs={thumbs} />
+              </Collapsible>
 
-              <BehaviourCard tilt={tilt} hesitation={hesitation} />
-              <SuccessCard s={success} />
-              <WordsTable map={words} trades={wordTrades} />
-              <Ledger s={success} query={pageQuery} />
+              <Collapsible id="behaviour" title="Behaviour & state" help={BEHAVIOUR_HELP} summary={behaviourSummary(tilt, hesitation)}>
+                <BehaviourCard tilt={tilt} hesitation={hesitation} />
+              </Collapsible>
+
+              <Collapsible id="ledger" title="Mistake ledger" locked={lockNote('themeCosts', 'Mistake-theme costs')}
+                help="Written after the outcome, so it diagnoses what went wrong — it never predicts what wins. Costs are shrunk toward zero with their 80% range."
+                summary={ledger.themes[0] ? `${ledger.themes[0].title}: ${ledger.themes[0].n}× · ${ledger.themes[0].totalR < 0 ? '−' : '+'}${Math.abs(ledger.themes[0].totalR).toFixed(1)}R${ledger.repeated.length ? ` · ${ledger.repeated.length} lesson${ledger.repeated.length === 1 ? '' : 's'} not yet learned` : ''}` : `${ledger.losses.length} losses`}>
+                <LedgerView l={ledger} thumbs={thumbs} />
+              </Collapsible>
+
+              <Collapsible id="language" title="Journal language" summary="Diagnostic, not predictive — written after the result"
+                help="Words from text written after the outcome. They describe how you talk about trades; they can never say what wins.">
+                <WordsTable map={words} trades={wordTrades} />
+              </Collapsible>
 
               <p className="pt-1 text-center text-[11px]" style={{ color: 'var(--text-faint)' }}>
                 {preOnly ? `Only trades graded before the outcome — ${trades.length} of ${scoped.length}. ` : ''}

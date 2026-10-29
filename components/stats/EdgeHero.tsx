@@ -44,7 +44,7 @@ function Cell({ label, help, value, sub, tone }: { label: string; help: string; 
  * zero, the evidence level, and the numbers that make it up — every one with
  * its n and formula (lib/edge/metrics).
  */
-export function EdgeHero({ m, scopeLabel }: { m: EdgeMetrics; scopeLabel: string }) {
+export function EdgeHero({ m, scopeLabel, maturity }: { m: EdgeMetrics; scopeLabel: string; maturity?: React.ReactNode }) {
   const ci = m.expectancyCI;
   const v = ci ? verdict({ n: m.n, pPositive: ci.pPositive, lo80: ci.lo80, hi80: ci.hi80 }) : null;
   const more = m.tradesFor95 != null ? Math.max(0, m.tradesFor95 - m.n) : null;
@@ -87,6 +87,7 @@ export function EdgeHero({ m, scopeLabel }: { m: EdgeMetrics; scopeLabel: string
             </div>
           )}
           {needLine && <p className="text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }} data-edge-need>{needLine}</p>}
+          {maturity && <div className="flex justify-end">{maturity}</div>}
         </div>
       </div>
 
