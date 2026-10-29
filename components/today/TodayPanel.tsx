@@ -7,6 +7,7 @@ import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { CloseX } from '@/components/review/CloseX';
 import { FocusPill, type FocusData } from '@/components/review/FocusPill';
 import { openTrade } from '@/components/trade/openTrade';
+import { PropMini } from '@/components/prop/PropMini';
 import { BOARD_SHOWN } from '@/lib/keys';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import { localDay } from '@/lib/day';
@@ -137,6 +138,7 @@ export function TodayPanel() {
                       </span>))}</div>}
               </Section>
             )}
+            {s.prop && <PropSection />}
             {s.recent && (
               <Section title="Recent trades">
                 {!data?.recent.length ? <Faint>Nothing logged yet.</Faint> : (
@@ -178,6 +180,11 @@ function Section({ title, right, children }: { title: string; right?: string; ch
       {children}
     </section>
   );
+}
+
+/** Prop accounts: shown only when there are active ones. */
+function PropSection() {
+  return <PropMini frame={(list) => <Section title="Prop accounts">{list}</Section>} />;
 }
 
 const Faint = ({ children }: { children: React.ReactNode }) => <p style={{ color: 'var(--text-faint)' }}>{children}</p>;

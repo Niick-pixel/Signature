@@ -8,6 +8,7 @@ import {
   type ManualState, type PathEvent, type PathStep, type StepView,
 } from '../lib/path';
 import { MIN_REASON, sanitizeOverrides } from '../lib/overrides';
+import { PURCHASE_KINDS, type PurchaseKind } from '../lib/path';
 import type { Trade, TradeInput, TradeOverride } from '../lib/types';
 import { isTaken, marketDay } from '../lib/domain';
 import { dayLimit } from './rules';
@@ -178,18 +179,21 @@ export function deletePurchase(id: string): void {
  * MIN_REASON characters is required, and each broken promise is recorded with it.
  */
 export function addPurchase(
-  input: { date: string; provider: string; size: string; cost: number; note: string | null },
+  input: { date: string; provider: string; size: string; cost: number; note: string | null; kind?: PurchaseKind; prop_account_id?: string | null },
   reason: string | null,
 ): { ok: true; purchase: EvalPurchase } | { ok: false; broken: HeldCommitment[] } {
   const views = syncPath();
-  const broken = brokenBy({ purchase: { cost: input.cost } }, views, listPurchases());
+  // Only attempts (evals, resets) can break an eval-count promise; any cost can break a dollar one.
+  const attempt = (input.kind ?? 'eval') === 'eval' || input.kind === 'reset';
+  const broken = brokenBy({ purchase: { cost: input.cost, attempt } }, views, listPurchases());
   if (broken.length && (reason?.trim().length ?? 0) < MIN_REASON) return { ok: false, broken };
   const purchase: EvalPurchase = {
     id: crypto.randomUUID(), date: input.date, provider: input.provider, size: input.size,
     cost: Math.max(0, input.cost), note: input.note, created_at: new Date().toISOString(),
+    kind: input.kind ?? 'eval', prop_account_id: input.prop_account_id ?? null,
   };
-  getDb().prepare(`INSERT INTO eval_purchases (id, date, provider, size, cost, note, created_at)
-                   VALUES (@id, @date, @provider, @size, @cost, @note, @created_at)`).run({ ...purchase });
+  getDb().prepare(`INSERT INTO eval_purchases (id, date, provider, size, cost, note, created_at, kind, prop_account_id)
+                   VALUES (@id, @date, @provider, @size, @cost, @note, @created_at, @kind, @prop_account_id)`).run({ ...purchase });
   for (const b of broken) {
     addEvent({
       kind: 'commitment_break', step_id: b.step.id, step_title: b.step.title,
@@ -285,10 +289,13 @@ export function restorePath(data: { steps?: unknown; events?: unknown; purchases
   if (Array.isArray(data.purchases)) {
     for (const p of data.purchases as EvalPurchase[]) {
       if (!p?.id) continue;
-      db.prepare(`INSERT OR IGNORE INTO eval_purchases (id, date, provider, size, cost, note, created_at)
-                  VALUES (@id, @date, @provider, @size, @cost, @note, @created_at)`).run({
+      const kind = (PURCHASE_KINDS as readonly string[]).includes(String(p.kind)) ? p.kind : 'eval';
+      // The account must exist (prop accounts restore first); a dangling link is dropped, not the purchase.
+      const acct = typeof p.prop_account_id === 'string' && db.prepare('SELECT 1 FROM prop_accounts WHERE id = ?').get(p.prop_account_id) ? p.prop_account_id : null;
+      db.prepare(`INSERT OR IGNORE INTO eval_purchases (id, date, provider, size, cost, note, created_at, kind, prop_account_id)
+                  VALUES (@id, @date, @provider, @size, @cost, @note, @created_at, @kind, @prop_account_id)`).run({
         id: p.id, date: p.date, provider: p.provider ?? '', size: p.size ?? '', cost: Number(p.cost) || 0,
-        note: p.note ?? null, created_at: p.created_at ?? new Date().toISOString(),
+        note: p.note ?? null, created_at: p.created_at ?? new Date().toISOString(), kind: kind!, prop_account_id: acct,
       });
     }
   }

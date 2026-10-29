@@ -94,7 +94,15 @@ export interface EvalPurchase {
   cost: number;
   note: string | null;
   created_at: string;
+  /** What was bought (031). Older purchases are evals. */
+  kind?: PurchaseKind;
+  /** The prop account it was for, if any (031). */
+  prop_account_id?: string | null;
 }
+
+export const PURCHASE_KINDS = ['eval', 'reset', 'activation', 'data', 'other'] as const;
+export type PurchaseKind = (typeof PURCHASE_KINDS)[number];
+export const PURCHASE_KIND_LABEL: Record<PurchaseKind, string> = { eval: 'Evaluation', reset: 'Reset', activation: 'Activation', data: 'Data fee', other: 'Other' };
 
 export interface PathEvent {
   id: string;
@@ -246,8 +254,9 @@ export function heldCommitments(views: readonly StepView[]): HeldCommitment[] {
 
 export interface BudgetUse { evals: number; dollars: number }
 
+/** Evals and resets are attempts; activations, data and the rest count only as dollars. */
 export const budgetUse = (purchases: readonly EvalPurchase[]): BudgetUse =>
-  ({ evals: purchases.length, dollars: purchases.reduce((s, p) => s + p.cost, 0) });
+  ({ evals: purchases.filter((p) => (p.kind ?? 'eval') === 'eval' || p.kind === 'reset').length, dollars: purchases.reduce((s, p) => s + p.cost, 0) });
 
 /**
  * Which promises an action would break.
@@ -256,18 +265,20 @@ export const budgetUse = (purchases: readonly EvalPurchase[]): BudgetUse =>
  * measured against the budget of the step holding the promise.
  */
 export function brokenBy(
-  action: { account?: string; purchase?: { cost: number } },
+  action: { account?: string; purchase?: { cost: number; attempt?: boolean } },
   views: readonly StepView[],
   purchases: readonly EvalPurchase[] = [],
 ): HeldCommitment[] {
   const used = budgetUse(purchases);
   return heldCommitments(views).filter(({ commitment: { guard }, step }) => {
     if (action.account && guard.accounts?.includes(action.account)) return true;
-    if (action.purchase && guard.evalPurchase) return true;
+    // An activation or a data fee is not a new attempt: only evals and resets break "no evals" or the eval count.
+    const attempt = action.purchase?.attempt !== false;
+    if (action.purchase && guard.evalPurchase && attempt) return true;
     if (action.purchase && guard.overBudget) {
       const budget = views.find((v) => v.id === step.id)?.budget;
       if (!budget) return false;
-      return used.evals + 1 > budget.max_evals || used.dollars + action.purchase.cost > budget.max_dollars;
+      return (attempt && used.evals + 1 > budget.max_evals) || used.dollars + action.purchase.cost > budget.max_dollars;
     }
     return false;
   });

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { exportExecutions } from '@/db/executions';
+import { exportProp } from '@/db/prop';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
@@ -143,7 +144,7 @@ export async function GET() {
     // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 9,
+    version: 10,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -160,6 +161,8 @@ export async function GET() {
     red_day_skips: (getDb().prepare('SELECT * FROM red_day_skips ORDER BY day').all() as Record<string, unknown>[]).map((r) => ({ ...r })),
     // Version 9: platform executions, hand unlinks and chart bars.
     ...exportExecutions(),
+    // Version 10: prop accounts and payouts (costs ride in eval_purchases).
+    ...exportProp(),
   };
 
   const zip = makeZip([

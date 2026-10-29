@@ -11,6 +11,7 @@ import { AccountPicker } from './AccountPicker';
 import { UpdateChip } from './UpdateChip';
 import { Suspense } from 'react';
 import { navigate } from '@/lib/nav';
+import { usePreferences } from './PreferencesProvider';
 
 const TABS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -19,6 +20,7 @@ const TABS = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/journal', label: 'Journal' },
   { href: '/path', label: 'Path' },
+  { href: '/prop', label: 'Prop' },
 ] as const;
 
 /**
@@ -35,6 +37,7 @@ let lastPill: { left: number; width: number } | null = null;
 
 export function TitleBar() {
   const pathname = usePathname();
+  const { prefs } = usePreferences();
   const pill = useRef<HTMLSpanElement>(null);
 
   /*
@@ -87,8 +90,9 @@ export function TitleBar() {
           put regardless of what sits either side of them. */}
       <nav className="pointer-events-none absolute inset-x-0 flex justify-center">
         <div className="pointer-events-auto flex items-center gap-1">
-          {TABS.map((tab) => {
-            const active = pathname === tab.href;
+          {TABS.filter((tab) => tab.href !== '/prop' || prefs.propTab).map((tab) => {
+            // A tab stays lit on its own sub-pages (/prop/<id>).
+            const active = pathname === tab.href || (tab.href === '/prop' && pathname.startsWith('/prop/'));
             return (
               <motion.div key={tab.href} whileTap={press} transition={spring}>
                 <Link

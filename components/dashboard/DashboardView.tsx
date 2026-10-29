@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PropMini } from '@/components/prop/PropMini';
 import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
@@ -59,6 +60,7 @@ export function DashboardView({ data, today }: { data: Record<DashWorld, Dashboa
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
             {b.score && <Card title="Discipline score" note="How you trade, not what you made. Hover an axis for what it measures; choose the axes in Customize."><Score d={d} enabled={prefs.scoreAxes} /></Card>}
             {b.recent && <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>}
+            {b.prop && <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} />}
           </div>
         </div>
       )}

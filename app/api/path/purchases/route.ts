@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { addPurchase, deletePurchase, listPurchases } from '@/db/path';
+import { getPropAccount } from '@/db/prop';
+import { PURCHASE_KINDS, type PurchaseKind } from '@/lib/path';
 
 /**
  * Log an eval bought. A purchase that breaks a promise comes back 409 with
@@ -12,6 +14,8 @@ export async function POST(request: Request) {
   const res = addPurchase({
     date, provider: String(b?.provider ?? '').trim(), size: String(b?.size ?? '').trim(),
     cost: Math.max(0, Number(b?.cost) || 0), note: String(b?.note ?? '').trim() || null,
+    kind: (PURCHASE_KINDS as readonly string[]).includes(String(b?.kind)) ? b!.kind as PurchaseKind : 'eval',
+    prop_account_id: typeof b?.prop_account_id === 'string' && getPropAccount(b.prop_account_id) ? b.prop_account_id : null,
   }, typeof b?.reason === 'string' ? b.reason : null);
   if (!res.ok) return NextResponse.json({ error: 'This breaks a commitment.', broken: res.broken }, { status: 409 });
   return NextResponse.json({ purchase: res.purchase, purchases: listPurchases() }, { status: 201 });

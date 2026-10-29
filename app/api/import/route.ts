@@ -10,6 +10,7 @@ import { getDailyReview, getWeeklyReview, restoreCheckIn, restoreReviewCreated, 
 import { BIAS_DIRECTIONS, NEWS_LEVELS } from '@/lib/domain';
 import { parseTradeInput } from '@/lib/validate';
 import { restoreExecutions } from '@/db/executions';
+import { restoreProp } from '@/db/prop';
 
 /**
  * Restores trades from an export.
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
       daily_reviews?: unknown; weekly_reviews?: unknown; session_prep?: unknown;
       path_steps?: unknown; path_events?: unknown; eval_purchases?: unknown; red_day_pages?: unknown; red_day_skips?: unknown;
       executions?: unknown; execution_unlinks?: unknown; trade_bars?: unknown;
+      prop_accounts?: unknown; prop_payouts?: unknown;
     } | null;
 
   if (!body || !Array.isArray(body.trades)) {
@@ -183,6 +185,8 @@ export async function POST(request: Request) {
     Older files have none of it, which leaves the path as it is.
   */
   const hadPath = Array.isArray(body.path_steps) && body.path_steps.length > 0;
+  // Prop accounts first: the Path's purchases may point at them.
+  const prop = restoreProp(body);
   restorePath({ steps: body.path_steps, events: body.path_events, purchases: body.eval_purchases });
   // Red-day pages (version 7), matched on the day and world.
   if (Array.isArray(body.red_day_pages)) {
@@ -208,6 +212,6 @@ export async function POST(request: Request) {
   const executions = restoreExecutions(body);
 
   return NextResponse.json({
-    executions, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
+    executions, prop, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
   });
 }

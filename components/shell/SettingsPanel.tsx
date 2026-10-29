@@ -11,6 +11,7 @@ import { TEXT_SCALE, TEXT_SIZES, textSizeOf, type Preferences } from '@/lib/pref
 import { ThemeGrid } from './ThemeGrid';
 import { DashboardSettings } from '@/components/settings/DashboardSettings';
 import { TradeSettings } from '@/components/settings/TradeSettings';
+import { PropSettings } from '@/components/settings/PropSettings';
 import { navigate } from '@/lib/nav';
 import { SETTINGS_TOGGLE, SHEET_OPEN } from './Shortcuts';
 
@@ -223,6 +224,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
             <DashboardSettings Section={Section} />
             <TradeSettings Section={Section} />
+            <PropSettings Section={Section} />
 
             <Section
               title="Whiteboard"
@@ -300,7 +302,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
             <Section
               title="Keyboard"
-              hint="Single keys move you around: N new trade, M the morning, 0 the Dashboard, 1–5 the tabs, J and K through the board's trades."
+              hint="Single keys move you around: N new trade, M the morning, 0 the Dashboard, 1–6 the tabs, J and K through the board's trades."
             >
               <Button title="Lists every keyboard shortcut in the app — or press ? anywhere" onClick={() => { onClose(); window.dispatchEvent(new Event(SHEET_OPEN)); }}>
                 Show every shortcut <span className="ml-1.5 opacity-60">?</span>

@@ -82,6 +82,14 @@ export interface Preferences {
   importFeePerContract: number;
   /** Link stored, unlinked executions to trades logged later (the "Log it" path), on its own. */
   importAutoLink: boolean;
+  /** Phase 3. The Prop tab in the title bar. */
+  propTab: boolean;
+  /** Which day a trade counts on for firm rules: its calendar date, or the futures session (6pm New York). */
+  propDayBoundary: 'calendar' | 'cme';
+  /** Warn when this share (%) of the drawdown or daily limit is all that is left. */
+  propWarnPct: number;
+  /** Show passed, failed and archived accounts in the hub. */
+  propShowEnded: boolean;
 }
 
 export const TRADE_SECTIONS = ['metrics', 'chips', 'chart', 'executions', 'shots', 'rules', 'notes'] as const;
@@ -91,19 +99,19 @@ export const TRADE_SECTION_LABEL: Record<TradeSection, string> = {
   executions: 'Executions (fills)', shots: 'Screenshots', rules: 'Rules kept / broken', notes: 'Explanation and lesson',
 };
 
-export const DASH_BLOCKS = ['hero', 'tiles', 'chart', 'week', 'score', 'recent'] as const;
+export const DASH_BLOCKS = ['hero', 'tiles', 'chart', 'week', 'score', 'recent', 'prop'] as const;
 export type DashBlock = (typeof DASH_BLOCKS)[number];
 export const DASH_BLOCK_LABEL: Record<DashBlock, string> = {
   hero: 'Total and the last 7 days', tiles: 'Win rate, average win, win / loss tiles', chart: 'Cumulative chart',
-  week: 'This week by day', score: 'Discipline score', recent: 'Recent trades',
+  week: 'This week by day', score: 'Discipline score', recent: 'Recent trades', prop: 'Prop accounts',
 };
 export const SCORE_AXIS_KEYS = ['rules', 'honesty', 'consistency', 'profitFactor', 'avgR', 'winRate'] as const;
 export type ScoreAxis = (typeof SCORE_AXIS_KEYS)[number];
-export const SIDEBAR_SECTIONS = ['plan', 'checklist', 'focus', 'rules', 'recent'] as const;
+export const SIDEBAR_SECTIONS = ['plan', 'checklist', 'focus', 'rules', 'prop', 'recent'] as const;
 export type SidebarSection = (typeof SIDEBAR_SECTIONS)[number];
 export const SIDEBAR_SECTION_LABEL: Record<SidebarSection, string> = {
   plan: "Today's plan (from the chart prep)", checklist: 'Pre-entry checklist', focus: "This week's focus rule",
-  rules: 'Rules kept today', recent: 'Recent trades',
+  rules: 'Rules kept today', prop: 'Prop accounts: room left', recent: 'Recent trades',
 };
 export const DEFAULT_CHECKLIST = [
   'HTF bias marked and clear?',
@@ -135,10 +143,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   hidePnl: false,
   dashWorld: 'real',
   dashUnit: 'money',
-  dashBlocks: { hero: true, tiles: true, chart: true, week: true, score: true, recent: true },
+  dashBlocks: { hero: true, tiles: true, chart: true, week: true, score: true, recent: true, prop: true },
   scoreAxes: { rules: true, honesty: true, consistency: true, profitFactor: true, avgR: true, winRate: true },
   sidebar: 'dashboard',
-  sidebarSections: { plan: true, checklist: true, focus: true, rules: true, recent: true },
+  sidebarSections: { plan: true, checklist: true, focus: true, rules: true, prop: true, recent: true },
   checklistItems: DEFAULT_CHECKLIST,
   openTradeIn: 'page',
   tradeSections: { metrics: true, chips: true, chart: true, executions: true, shots: true, rules: true, notes: true },
@@ -150,6 +158,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   importPnlAfterFees: true,
   importFeePerContract: 0,
   importAutoLink: true,
+  propTab: true,
+  propDayBoundary: 'cme',
+  propWarnPct: 25,
+  propShowEnded: false,
 };
 
 export const TEXT_SIZES = ['Small', 'Normal', 'Large', 'Huge'] as const;
