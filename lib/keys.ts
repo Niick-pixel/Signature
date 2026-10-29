@@ -23,6 +23,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ['0'], label: 'Dashboard' },
       { keys: ['A'], label: 'Analytics (and Ask your journal)' },
       { keys: ['G'], label: 'Goals' },
+      { keys: ['R'], label: 'Reports' },
       { keys: ['T'], label: 'Choose a theme' },
       { keys: ['S'], label: 'Settings' },
       { keys: ['?'], label: 'This list' },

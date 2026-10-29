@@ -1,5 +1,6 @@
 'use client';
 
+import { Labeled as L } from '@/components/ui/Help';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Segmented } from '@/components/ui/Segmented';
@@ -46,7 +47,7 @@ export function AnalyticsSettings({ Section }: { Section: SectionComp }) {
         <L label="Ask quotes back this many of your sentences">
           <Segmented<string> value={String(prefs.askQuotes)} onChange={(v) => update({ askQuotes: Number(v) })} options={['0', '2', '3', '5']} labelFor={(v) => v} />
         </L>
-        <L label="Words looked for in your writing (Psychology) — the start of a word is enough: “hesitat” finds hesitated and hesitation">
+        <L label="Words looked for in your writing — on the Psychology tab. The start of a word is enough: “hesitat” finds hesitated and hesitation">
           <div className="flex flex-wrap gap-1.5" data-settings-words>
             {prefs.analyticsWords.map((w) => (
               <span key={w} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11.5px]" style={{ borderColor: 'var(--glass-stroke)' }}>
@@ -61,12 +62,9 @@ export function AnalyticsSettings({ Section }: { Section: SectionComp }) {
             <Button onClick={() => update({ analyticsWords: DEFAULT_WORDS })}>Back to the default</Button>
           </div>
         </L>
-        <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Which currencies count and whether news marks red-folder days: on the <Link href="/analytics?tab=news" className="underline">News tab</Link>.</p>
+        <Link href="/analytics?tab=news" className="text-[11px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>News currencies and red-folder days →</Link>
       </div>
     </Section>
   );
 }
 
-function L({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>{label}</span>{children}</div>;
-}

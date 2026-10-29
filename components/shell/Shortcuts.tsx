@@ -46,6 +46,7 @@ export function Shortcuts() {
         case '0': return go('/dashboard');
         case 'a': return go('/analytics');
         case 'g': return go('/goals');
+        case 'r': return go('/reports');
       }
     };
     // Listening on document, like every screen-level handler, so a dialog's own

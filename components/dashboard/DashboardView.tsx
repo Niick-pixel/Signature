@@ -205,7 +205,9 @@ function Curve({ d, money }: { d: DashboardData; money: boolean }) {
         <span style={{ color: 'var(--text-faint)' }}>{d.curve[shown].day}</span>
         <b style={{ color: tone(pts[shown]) }} data-money={money ? '' : undefined}>{money ? usd(pts[shown]) : rr(pts[shown], 1)}</b>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="min-h-0 w-full flex-1" preserveAspectRatio="none"
+      {/* The line stretches to the card; the dot is drawn outside the SVG so it stays round. */}
+      <div className="relative min-h-0 flex-1">
+      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 size-full" preserveAspectRatio="none"
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => { const r = (e.currentTarget as SVGElement).getBoundingClientRect(); setHover(Math.max(0, Math.min(pts.length - 1, Math.round(((e.clientX - r.left) / r.width) * (pts.length - 1))))); }}>
         <defs>
@@ -217,8 +219,11 @@ function Curve({ d, money }: { d: DashboardData; money: boolean }) {
         <line x1={pad} x2={W - pad} y1={y(0)} y2={y(0)} stroke="var(--glass-stroke)" strokeDasharray="4 4" />
         <path d={`${line} L${x(pts.length - 1)},${y(lo)} L${x(0)},${y(lo)} Z`} fill="url(#dash-fill)" />
         <path d={line} fill="none" stroke={`rgb(var(${hue}))`} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-        <circle cx={x(shown)} cy={y(pts[shown])} r="4" fill={`rgb(var(${hue}))`} stroke="var(--bg-raised)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        {hover != null && <line x1={x(shown)} x2={x(shown)} y1={pad} y2={H - pad} stroke="var(--text-faint)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="3 3" />}
       </svg>
+      <span className="pointer-events-none absolute size-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full" data-dash-dot
+        style={{ left: `${(x(shown) / W) * 100}%`, top: `${(y(pts[shown]) / H) * 100}%`, background: `rgb(var(${hue}))`, boxShadow: '0 0 0 2px var(--bg-raised)' }} />
+      </div>
     </div>
   );
 }

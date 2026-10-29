@@ -5,6 +5,7 @@ import { exportNews } from '@/db/news';
 import { exportStudy } from '@/db/study';
 import { exportGoals } from '@/db/goals';
 import { exportDrawings } from '@/db/drawings';
+import { exportTags } from '@/db/tags';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
@@ -148,7 +149,7 @@ export async function GET() {
     // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 13,
+    version: 14,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -174,6 +175,7 @@ export async function GET() {
     // Version 13: goals and their check-ins, drawings on screenshots.
     ...exportGoals(),
     ...exportDrawings(),
+    ...exportTags(),
   };
 
   const zip = makeZip([

@@ -1,5 +1,6 @@
 'use client';
 
+import { Labeled } from '@/components/ui/Help';
 import Link from 'next/link';
 import { Segmented } from '@/components/ui/Segmented';
 import { TogglePill } from '@/components/ui/TogglePill';
@@ -73,11 +74,3 @@ export function TradeSettings({ Section }: { Section: SectionComp }) {
   );
 }
 
-function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>{label}</span>
-      {children}
-    </div>
-  );
-}

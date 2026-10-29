@@ -228,7 +228,7 @@
   --cluster-glow: 0.35;
   --mark-ground: #1d1811;
   --mark-ink: #e9a63f;
-  --mark-gap: color-mix(in srgb, #e9a63f 30%, transparent);
+  --mark-gap: color-mix(in srgb, #8a5205 80%, transparent);
   --letterbox: rgba(0, 0, 0, 0.35);
   --scrollbar: rgba(255, 226, 178, 0.18);
   --scrollbar-hover: rgba(255, 226, 178, 0.3);
@@ -361,7 +361,7 @@
   --board-dots: rgba(226, 204, 160, 0.14);
   --mark-ground: #161b2b;
   --mark-ink: #daae60;
-  --mark-gap: color-mix(in srgb, #daae60 30%, transparent);
+  --mark-gap: color-mix(in srgb, #8a5205 85%, transparent);
   --scrollbar: rgba(226, 204, 160, 0.18);
   --scrollbar-hover: rgba(226, 204, 160, 0.3);
 }

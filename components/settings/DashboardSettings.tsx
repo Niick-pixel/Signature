@@ -1,5 +1,6 @@
 'use client';
 
+import { Labeled } from '@/components/ui/Help';
 import { Segmented } from '@/components/ui/Segmented';
 import { TogglePill } from '@/components/ui/TogglePill';
 import { Button } from '@/components/ui/Button';
@@ -36,7 +37,7 @@ export function DashboardSettings({ Section }: { Section: (p: { title: string; h
                 onChange={(on) => update({ dashBlocks: { ...prefs.dashBlocks, [b]: on } })} />
             ))}
           </div>
-          <Labeled label="Discipline score — axes">
+          <Labeled label="Discipline score axes — the parts the score is built from; hover each for what it measures">
             <div className="flex flex-wrap gap-2">
               {SCORE_AXES.map((a) => (
                 <TogglePill key={a.key} checked={prefs.scoreAxes[a.key]} label={a.label} hint={a.hint}
@@ -85,11 +86,3 @@ export function DashboardSettings({ Section }: { Section: (p: { title: string; h
   );
 }
 
-function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>{label}</span>
-      {children}
-    </div>
-  );
-}

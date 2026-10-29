@@ -15,6 +15,7 @@ import { restoreNews } from '@/db/news';
 import { restoreStudy } from '@/db/study';
 import { restoreGoals } from '@/db/goals';
 import { restoreDrawings } from '@/db/drawings';
+import { restoreTags } from '@/db/tags';
 
 /**
  * Restores trades from an export.
@@ -220,8 +221,9 @@ export async function POST(request: Request) {
   const study = restoreStudy(body);
   const goals = restoreGoals(body);
   const drawings = restoreDrawings(body);
+  const tags = restoreTags(body as Parameters<typeof restoreTags>[0]);
 
   return NextResponse.json({
-    executions, prop, news, study, goals, drawings, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
+    executions, prop, news, study, goals, drawings, tags, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
   });
 }

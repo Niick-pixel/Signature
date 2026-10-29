@@ -18,6 +18,7 @@ import { AnalyticsSettings } from '@/components/settings/AnalyticsSettings';
 import { StudySettings } from '@/components/settings/StudySettings';
 import { PersonalSettings } from '@/components/settings/PersonalSettings';
 import { navigate } from '@/lib/nav';
+import { Help } from '@/components/ui/Help';
 import { SETTINGS_TOGGLE, SHEET_OPEN } from './Shortcuts';
 
 interface Info {
@@ -27,28 +28,15 @@ interface Info {
 
 const DENSITIES = ['compact', 'normal', 'roomy'] as const;
 
-/**
- * A group of settings, with a line saying what the group is for.
- *
- * Every control in here used to be a bare label — "Reason lines", "Compact",
- * "Reset" — which is fine if you wrote them and opaque if you did not. The
- * hint is the sentence you would otherwise have to guess at, and the buttons
- * below carry the same explanation as a hover title.
- */
+/** A group of settings: its name, and what it does behind a "?" — the controls carry the rest as hover titles. */
 function Section({ title, hint, children }: {
   title: string; hint?: string; children: React.ReactNode;
 }) {
   return (
-    <div className="mt-5">
-      <div className="mb-1 text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
-        {title}
+    <div className="mt-6">
+      <div className="mb-2.5 flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+        {title}{hint && <Help>{hint}</Help>}
       </div>
-      {hint && (
-        <p className="mb-2.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-          {hint}
-        </p>
-      )}
-      {!hint && <div className="mb-2.5" />}
       {children}
     </div>
   );
@@ -205,7 +193,6 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                   className="rounded-[10px] px-2.5 py-1.5 text-left text-[12.5px] font-medium"
                   style={cat === c.id ? { background: 'rgb(var(--accent) / 0.13)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
                   {c.label}
-                  <span className="block text-[10.5px] font-normal" style={{ color: 'var(--text-faint)' }}>{c.hint}</span>
                 </button>
               ))}
             </nav>
@@ -213,7 +200,6 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             <div className="flex items-center justify-between border-b px-6 py-3" style={{ borderColor: 'var(--glass-stroke)' }}>
               <h3 className="text-[15px] font-semibold">{CATEGORIES.find((c) => c.id === cat)?.label}</h3>
               <div className="flex items-center gap-2">
-                <span className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>Saved as you change them</span>
                 <Button onClick={onClose} title="Every setting saved the moment you changed it (Esc)">Done</Button>
               </div>
             </div>
@@ -395,15 +381,12 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
             </>)}
             {cat === 'data' && (<>
-            <Section title="Your journal lives here">
+            <Section title="Journal folder" hint={`Back up this one folder and you have everything: the database and every screenshot.${desk?.mode === 'portable' ? ' Portable version: it sits beside Signature.exe.' : ''}`}>
               <p className="break-all rounded-[calc(12px*var(--rk))] p-2.5 text-[11px] leading-relaxed"
                 style={{ background: 'var(--glass-fill)', border: '1px solid var(--glass-stroke)' }}>
                 {info?.dataDir ?? 'Loading…'}
               </p>
-              <p className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-                Back up that one folder and you have backed up everything — the database and
-                every chart screenshot. {info ? `${info.trades} trade${info.trades === 1 ? '' : 's'} recorded.` : ''}
-              </p>
+              {info && <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>{info.trades} trade{info.trades === 1 ? '' : 's'}</p>}
               {desk?.canMove && (
                 <div className="mt-2.5">
                   <Button onClick={moveJournal}
@@ -412,11 +395,6 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                   </Button>
                   {moveError && <p className="mt-2 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{moveError}</p>}
                 </div>
-              )}
-              {desk?.mode === 'portable' && (
-                <p className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-                  This is the portable version: the journal lives in the data folder beside Signature.exe.
-                </p>
               )}
             </Section>
 

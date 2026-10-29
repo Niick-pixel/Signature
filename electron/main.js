@@ -299,6 +299,8 @@ function createWindow(port) {
     ...state.options,
     minWidth: 960,
     minHeight: 640,
+    // The installed .exe already carries the icon; this covers running from the source folder.
+    icon: [path.join(__dirname, '..', 'assets', 'icon.ico'), path.join(__dirname, '..', '.next', 'standalone', 'assets', 'icon.ico')].find((p) => fs.existsSync(p)),
     backgroundColor: state.ground ?? SHELL_BG,
     // Let the glass surfaces run to the edge; the traffic lights float over them.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',

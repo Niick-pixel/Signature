@@ -18,6 +18,7 @@ import type { Bar, ExecutionRow, TradeMetrics } from '@/lib/executions';
 import type { Trade } from '@/lib/types';
 import { TradeChart } from './TradeChart';
 import { ExecutionsCard } from './ExecutionsCard';
+import { TradeTags } from './TradeTags';
 
 const usd = (v: number | null, sign = true) => (v == null ? '—'
   : `${sign ? (v < 0 ? '−' : v > 0 ? '+' : '') : ''}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
@@ -187,6 +188,8 @@ export function TradeView(p: TradeViewProps) {
               )}
             </Card>
           )}
+
+          <Card title="Your tags"><TradeTags tradeId={t.id} /></Card>
 
           {on.notes && (
             <Card title="Notes">
