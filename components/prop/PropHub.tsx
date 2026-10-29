@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
 import { CloseX } from '@/components/review/CloseX';
-import { PRESETS, type Preset } from '@/lib/prop';
+import { PRESETS, sizeLabel, type Preset } from '@/lib/prop';
 import { localDay } from '@/lib/day';
 import { navigate } from '@/lib/nav';
 import { springSoft, exitQuick } from '@/lib/motion';
@@ -161,25 +161,30 @@ function AddAccount({ onClose, onAdded }: { onClose: () => void; onAdded: (id: s
         </div>
         {!preset ? (
           <>
-            <p className="mb-4 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Typical 50K plans. Firms change their rules often — check the firm&apos;s rules page; every number is editable after this.</p>
-            <div className="space-y-4">
-              {firms.map((f) => (
-                <div key={f}>
-                  <div className="mb-1.5 text-[11px] font-semibold" style={{ color: 'var(--text-dim)' }}>{f}</div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {PRESETS.map((p, i) => p.firm !== f ? null : (
-                      <button key={i} type="button" onClick={() => choose(i, p)} data-preset={i}
-                        className="rounded-[calc(14px*var(--rk))] border px-4 py-3 text-left transition-colors hover:border-[rgb(var(--accent)/0.5)]"
-                        style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
-                        <div className="flex items-center justify-between gap-2"><span className="text-[12.5px] font-medium">{p.plan}</span><Chip>{p.phase === 'funded' ? 'Funded' : 'Eval'}</Chip></div>
-                        <div className="mt-1 text-[11px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
-                          {p.rules.profit_target ? `Target ${usd(p.rules.profit_target)} · ` : ''}Drawdown {usd(p.rules.max_drawdown)}{p.rules.daily_loss ? ` · Daily ${usd(p.rules.daily_loss)}` : ''}{p.rules.consistency ? ` · ${Math.round(p.rules.consistency * 100)}% consistency` : ''}
-                        </div>
-                      </button>
+            <p className="mb-4 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Pick the firm and the size. Typical values — firms change their rules often, so check the firm&apos;s rules page; every number is editable after this.</p>
+            <div className="space-y-3">
+              {firms.map((f) => {
+                const mine = PRESETS.map((p, i) => ({ p, i })).filter((x) => x.p.firm === f);
+                const row = (phase: 'eval' | 'funded') => mine.filter((x) => x.p.phase === phase);
+                return (
+                  <div key={f} className="rounded-[calc(14px*var(--rk))] border px-4 py-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-firm={f}>
+                    <div className="text-[13px] font-semibold">{f}</div>
+                    {(['eval', 'funded'] as const).map((phase) => row(phase).length > 0 && (
+                      <div key={phase} className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="w-14 text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{phase === 'eval' ? 'Evaluation' : 'Funded'}</span>
+                        {row(phase).map(({ p, i }) => (
+                          <button key={i} type="button" onClick={() => choose(i, p)} data-preset={i}
+                            title={`${p.plan}: ${p.rules.profit_target ? `target ${usd(p.rules.profit_target)}, ` : ''}drawdown ${usd(p.rules.max_drawdown)}${p.rules.daily_loss ? `, daily ${usd(p.rules.daily_loss)}` : ''}`}
+                            className="rounded-full border px-3 py-1 text-[12px] font-medium tabular-nums transition-colors hover:border-[rgb(var(--accent)/0.6)]"
+                            style={{ borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)' }}>
+                            {f === 'Custom' ? 'Start blank' : sizeLabel(p.rules.start_balance)}
+                          </button>
+                        ))}
+                      </div>
                     ))}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         ) : (

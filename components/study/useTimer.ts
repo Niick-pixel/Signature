@@ -40,3 +40,10 @@ export async function saveAndStop(): Promise<number> {
   window.dispatchEvent(new Event(JOURNAL_CHANGED));
   return minutes;
 }
+
+/** Your own timer rang: log the block it was set to. */
+export async function logBlock(minutes: number, noteId: string | null, topic: string | null): Promise<void> {
+  await fetch('/api/study/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ day: localDay(), minutes, note_id: noteId, topic }) }).catch(() => {});
+  window.dispatchEvent(new Event(JOURNAL_CHANGED));
+}

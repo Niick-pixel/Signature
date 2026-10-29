@@ -13,6 +13,7 @@ const { createTrade } = await import('../db/trades');
 const { listPurchases } = await import('../db/path');
 const { budgetUse } = await import('../lib/path');
 const D = await import('../db/prop');
+const { PRESETS } = await import('../lib/prop');
 const { parseTradeInput } = await import('../lib/validate');
 const hub = await import('../app/api/prop/route');
 const one = await import('../app/api/prop/[id]/route');
@@ -37,7 +38,8 @@ const q = '?today=2026-10-22&boundary=calendar&warn=25';
 let evalId = '';
 
 test('an account from a preset, with its own label and start; its trades counted', async () => {
-  const r = await hub.POST(json({ preset: 2, label: 'Apex-1', started_on: '2026-10-19', consistency: '50' }));
+  const preset = PRESETS.findIndex((p) => p.firm === 'Topstep' && p.phase === 'eval' && p.rules.start_balance === 50000);
+  const r = await hub.POST(json({ preset, label: 'Apex-1', started_on: '2026-10-19', consistency: '50' }));
   assert.equal(r.status, 201);
   evalId = (await r.json()).account.id;
   trade({ pnl_dollars: 1600 });

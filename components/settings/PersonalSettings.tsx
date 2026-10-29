@@ -129,8 +129,8 @@ export function PersonalSettings({ Section }: { Section: SectionComp }) {
         </L>
 
         <L label="Quote of the day">
-          <Segmented<Preferences['quoteSource']> value={prefs.quoteSource} onChange={(quoteSource) => update({ quoteSource })} options={['both', 'classic', 'mine', 'off']}
-            labelFor={(v) => ({ both: 'Both', classic: 'The classics', mine: 'My own lessons', off: 'Off' }[v])} />
+          <Segmented<Preferences['quoteSource']> value={prefs.quoteSource} onChange={(quoteSource) => update({ quoteSource })} options={['traders', 'quotes', 'tips', 'mine', 'all', 'off']}
+            labelFor={(v) => ({ traders: 'Quotes and tips', quotes: 'Trader quotes', tips: 'Tips', mine: 'My lessons', all: 'Everything', off: 'Off' }[v])} />
           <div className="mt-2 flex flex-wrap gap-2">
             <TogglePill checked={prefs.quoteOnDashboard} onChange={(quoteOnDashboard) => update({ quoteOnDashboard })} label="On the Dashboard" />
             <TogglePill checked={prefs.quoteInStudy} onChange={(quoteInStudy) => update({ quoteInStudy })} label="In the study room" />

@@ -112,6 +112,10 @@ export interface Preferences {
   /** The timer's length (0: it just counts up), and a soft chime when it is reached. */
   studyTimerLength: number;
   studyChime: boolean;
+  /** Time study on the app's clock, or on your own timer (the cube): the app then reminds you to set it and logs each block. */
+  studyClock: 'app' | 'cube';
+  /** The block your own timer is set to. */
+  cubeMinutes: number;
   /** Personalization: your own background, how much the theme veils it, and where it shows. */
   background: { name: string; kind: 'image' | 'video' } | null;
   bgDim: number;
@@ -123,12 +127,14 @@ export interface Preferences {
   /** Whole looks, saved and brought back in one click. */
   looks: Look[];
   /** The quote of the day: from the classics, your own lessons, both, or none — and where it shows. */
-  quoteSource: 'classic' | 'mine' | 'both' | 'off';
+  quoteSource: QuoteSource;
   quoteOnDashboard: boolean;
   quoteInStudy: boolean;
   customQuotes: string[];
 }
 
+/** Where the daily line comes from: traders' quotes and tips (default), only one of them, your own lessons, all, or none. */
+export type QuoteSource = 'traders' | 'quotes' | 'tips' | 'mine' | 'all' | 'off';
 export const FONT_CHOICES = ['theme', 'system', 'humanist', 'serif', 'rounded', 'mono'] as const;
 export type FontChoice = (typeof FONT_CHOICES)[number];
 export const FONT_LABEL: Record<FontChoice, string> = { theme: "The theme's", system: 'System', humanist: 'Humanist', serif: 'Serif', rounded: 'Rounded', mono: 'Mono' };
@@ -230,13 +236,15 @@ export const DEFAULT_PREFERENCES: Preferences = {
   studyGoal: 20,
   studyTimerLength: 25,
   studyChime: true,
+  studyClock: 'cube',
+  cubeMinutes: 25,
   background: null,
   bgDim: 70,
   bgWhere: 'pages',
   accent: null,
   font: 'theme',
   looks: [],
-  quoteSource: 'both',
+  quoteSource: 'traders',
   quoteOnDashboard: true,
   quoteInStudy: true,
   customQuotes: [],
@@ -289,6 +297,8 @@ export function readPreferences(): Preferences {
       scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
       sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
+      // The first version's sources: classic → quotes, both → traders and tips.
+      quoteSource: (({ classic: 'quotes', both: 'traders' } as Record<string, QuoteSource>)[saved.quoteSource as string] ?? saved.quoteSource ?? DEFAULT_PREFERENCES.quoteSource) as QuoteSource,
       looks: Array.isArray(saved.looks) ? saved.looks.filter((l) => l && typeof l.id === 'string') : [],
       customQuotes: Array.isArray(saved.customQuotes) ? saved.customQuotes.filter((x) => typeof x === 'string') : [],
       analyticsWords: Array.isArray(saved.analyticsWords) ? saved.analyticsWords.filter((x) => typeof x === 'string') : DEFAULT_PREFERENCES.analyticsWords,

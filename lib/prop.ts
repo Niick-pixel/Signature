@@ -55,18 +55,56 @@ const R = (x: Partial<PropRules> & Pick<PropRules, 'start_balance' | 'max_drawdo
   max_contracts: null, qualify_amount: null, payout_days: null, payout_min: null, payout_max: null, payout_split: null, price: null, ...x,
 });
 
-/** Typical 50K plans. Firms revise these often: every number is a starting point, edited per account. */
+/**
+ * Typical plans in every common size. Firms revise these often — every
+ * number is a starting point, edited per account on its Rules tab.
+ * Per firm: size → [target, max drawdown, daily loss | null, max contracts (minis), eval price].
+ */
+type SizeRow = [number, number, number | null, number, number | null];
+interface FirmSpec {
+  firm: string; evalName: string; fundedName: string; sizes: Record<number, SizeRow>;
+  eval: Partial<PropRules>; funded: Partial<PropRules>; activation?: number | null; note?: string;
+}
+const FIRMS: FirmSpec[] = [
+  { firm: 'Apex Trader Funding', evalName: 'evaluation', fundedName: 'performance account',
+    sizes: { 25000: [1500, 1500, null, 4, 147], 50000: [3000, 2500, null, 10, 167], 100000: [6000, 3000, null, 14, 207], 150000: [9000, 5000, null, 17, 297] },
+    eval: { drawdown_type: 'intraday_trailing', trail_lock: 100 },
+    funded: { drawdown_type: 'intraday_trailing', trail_lock: 100, consistency: 0.3, qualify_amount: 50, payout_days: 8, payout_min: 500, payout_split: 0.9 }, activation: 85 },
+  { firm: 'Topstep', evalName: 'Trading Combine', fundedName: 'Express Funded',
+    sizes: { 50000: [3000, 2000, 1000, 5, 49], 100000: [6000, 3000, 2000, 10, 99], 150000: [9000, 4500, 3000, 15, 149] },
+    eval: { trail_lock: 0, consistency: 0.5, min_days: 2 },
+    funded: { trail_lock: 0, qualify_amount: 150, payout_days: 5, payout_split: 0.9 }, activation: 149 },
+  { firm: 'Lucid Trading', evalName: 'LucidFlex evaluation', fundedName: 'LucidFlex funded',
+    sizes: { 25000: [1250, 1000, null, 2, 100], 50000: [3000, 2000, null, 4, 130], 100000: [6000, 3000, null, 6, 225], 150000: [9000, 4500, null, 10, 340] },
+    eval: { trail_lock: 100, consistency: 0.5, min_days: 2 },
+    funded: { trail_lock: 100, qualify_amount: 150, payout_days: 5, payout_min: 500, payout_split: 0.9 } },
+  { firm: 'Take Profit Trader', evalName: 'test', fundedName: 'PRO account',
+    sizes: { 25000: [1500, 1500, null, 3, 150], 50000: [3000, 2000, null, 6, 170], 75000: [4500, 2500, null, 9, 245], 100000: [6000, 3000, null, 12, 330], 150000: [9000, 4500, null, 15, 360] },
+    eval: { consistency: 0.5, min_days: 5 }, funded: { payout_split: 0.8 }, activation: 130 },
+  { firm: 'Tradeify', evalName: 'Growth evaluation', fundedName: 'funded',
+    sizes: { 50000: [3000, 2000, 1250, 4, 99], 100000: [6000, 3500, 2500, 8, 179], 150000: [9000, 5000, 3750, 12, 249] },
+    eval: { trail_lock: 100, min_days: 1 }, funded: { trail_lock: 100, payout_split: 0.9 } },
+  { firm: 'My Funded Futures', evalName: 'Core evaluation', fundedName: 'funded',
+    sizes: { 50000: [3000, 2000, null, 3, 77], 100000: [6000, 3000, null, 6, 150], 150000: [9000, 4500, null, 9, 220] },
+    eval: { trail_lock: 100, consistency: 0.5, min_days: 2 }, funded: { trail_lock: 100, payout_split: 0.9 } },
+  { firm: 'Upcomers', evalName: 'evaluation (fill in from the firm)', fundedName: 'funded (fill in)',
+    sizes: { 25000: [1500, 1500, null, 3, null], 50000: [3000, 2000, null, 5, null], 100000: [6000, 3000, null, 10, null], 150000: [9000, 4500, null, 15, null] },
+    eval: {}, funded: {}, note: 'No rules built in for this firm — check its rules page and edit every field.' },
+];
+
+export const sizeLabel = (n: number) => `${Math.round(n / 1000)}K`;
+
 export const PRESETS: Preset[] = [
-  { firm: 'Apex Trader Funding', plan: '50K evaluation', phase: 'eval', rules: R({ start_balance: 50000, profit_target: 3000, drawdown_type: 'intraday_trailing', max_drawdown: 2500, trail_lock: 100, max_contracts: 10, price: 167 }) },
-  { firm: 'Apex Trader Funding', plan: '50K performance account', phase: 'funded', rules: R({ start_balance: 50000, drawdown_type: 'intraday_trailing', max_drawdown: 2500, trail_lock: 100, consistency: 0.3, max_contracts: 10, qualify_amount: 50, payout_days: 8, payout_min: 500, payout_max: 2000, payout_split: 0.9, price: 85 }) },
-  { firm: 'Topstep', plan: '50K Trading Combine', phase: 'eval', rules: R({ start_balance: 50000, profit_target: 3000, max_drawdown: 2000, trail_lock: 0, daily_loss: 1000, consistency: 0.5, min_days: 2, max_contracts: 5, price: 49 }) },
-  { firm: 'Topstep', plan: '50K Express Funded', phase: 'funded', rules: R({ start_balance: 50000, max_drawdown: 2000, trail_lock: 0, daily_loss: 1000, max_contracts: 5, qualify_amount: 150, payout_days: 5, payout_max: 5000, payout_split: 0.9, price: 149 }) },
-  { firm: 'Lucid Trading', plan: '50K LucidFlex evaluation', phase: 'eval', rules: R({ start_balance: 50000, profit_target: 3000, max_drawdown: 2000, trail_lock: 100, consistency: 0.5, min_days: 2, max_contracts: 4, price: 130 }) },
-  { firm: 'Lucid Trading', plan: '50K LucidFlex funded', phase: 'funded', rules: R({ start_balance: 50000, max_drawdown: 2000, trail_lock: 100, max_contracts: 4, qualify_amount: 150, payout_days: 5, payout_min: 500, payout_max: 2000, payout_split: 0.9 }) },
-  { firm: 'Take Profit Trader', plan: '50K test', phase: 'eval', rules: R({ start_balance: 50000, profit_target: 3000, max_drawdown: 2000, consistency: 0.5, min_days: 5, max_contracts: 6, price: 170 }) },
-  { firm: 'Tradeify', plan: '50K Growth evaluation', phase: 'eval', rules: R({ start_balance: 50000, profit_target: 3000, max_drawdown: 2000, trail_lock: 100, daily_loss: 1250, min_days: 1, max_contracts: 4, price: 99 }) },
-  { firm: 'My Funded Futures', plan: '50K Core evaluation', phase: 'eval', rules: R({ start_balance: 50000, profit_target: 3000, max_drawdown: 2000, trail_lock: 100, consistency: 0.5, min_days: 2, max_contracts: 3, price: 77 }) },
-  { firm: 'Upcomers', plan: '50K (fill in from the firm)', phase: 'eval', rules: R({ start_balance: 50000, profit_target: 3000, max_drawdown: 2000 }), note: 'No rules built in for this firm — check its rules page and edit every field.' },
+  ...FIRMS.flatMap((f) => Object.entries(f.sizes).flatMap(([size, [target, dd, daily, contracts, price]]) => {
+    const start = Number(size);
+    return [
+      { firm: f.firm, plan: `${sizeLabel(start)} ${f.evalName}`, phase: 'eval' as const, note: f.note,
+        rules: R({ start_balance: start, profit_target: target, max_drawdown: dd, daily_loss: daily, max_contracts: contracts, price, ...f.eval }) },
+      { firm: f.firm, plan: `${sizeLabel(start)} ${f.fundedName}`, phase: 'funded' as const, note: f.note,
+        rules: R({ start_balance: start, max_drawdown: dd, daily_loss: daily, max_contracts: contracts, price: f.activation ?? null,
+          payout_max: Math.round(Math.min(start * 0.05, 5000) / 100) * 100 || null, ...f.funded }) },
+    ];
+  })),
   { firm: 'Custom', plan: 'My own rules', phase: 'eval', rules: R({ start_balance: 50000, max_drawdown: 2000 }) },
 ];
 

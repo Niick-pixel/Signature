@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
-import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
 import { useConfirm } from '@/components/ui/Confirm';
 import { openTrade } from '@/components/trade/openTrade';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
+import { logBlock } from './useTimer';
 import { STUDY_KINDS, STUDY_KIND_LABEL, formatTimestamp, videoAt, type StudyKind, type StudyNote, type StudyTotals, type VideoMark } from '@/lib/study';
 import { openFocus, startTimer } from '@/lib/studyTimer';
 import { localDay } from '@/lib/day';
@@ -70,11 +70,22 @@ export function StudyRoom() {
               </div>
             </div>
           )}
-          <button type="button" onClick={() => startTimer(null, 'Studying')} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>Start timer</button>
-          <button type="button" onClick={() => openFocus(null)} className="rounded-full border px-3 py-1.5 text-[12px] font-medium" style={ST}>Close the door</button>
-          <button type="button" onClick={() => window.dispatchEvent(new Event(SETTINGS_TOGGLE))} className="rounded-full border px-3 py-1.5 text-[12px] font-medium" style={ST}>Customize</button>
+          {prefs.studyClock === 'cube' ? (
+            <button type="button" onClick={() => void logBlock(prefs.cubeMinutes, selected, (notes ?? []).find((x) => x.id === selected)?.title || null)}
+              title={`Your timer rang: log ${prefs.cubeMinutes} minutes`} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-log-block>
+              Log a {prefs.cubeMinutes}-min block
+            </button>
+          ) : (
+            <button type="button" onClick={() => startTimer(null, 'Studying')} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>Start timer</button>
+          )}
+          <button type="button" onClick={() => openFocus(selected)} className="rounded-full border px-3 py-1.5 text-[12px] font-medium" style={ST}>Close the door</button>
         </div>
       </div>
+      {prefs.studyClock === 'cube' && (
+        <p className="mt-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-cube-reminder>
+          ⏱ Using your own timer: set it to <b style={{ color: 'var(--text)' }}>{prefs.cubeMinutes} minutes</b>, study, and log the block when it rings.
+        </p>
+      )}
       {prefs.quoteInStudy && <QuoteOfDay className="mt-6" />}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[18rem_1fr]">
@@ -104,7 +115,11 @@ export function StudyRoom() {
             {STUDY_KINDS.map((k) => <button key={k} type="button" onClick={() => create(k)} className="rounded-full border px-2 py-1 text-[11px] font-medium" style={ST}>+ {k === 'video' ? 'Video' : STUDY_KIND_LABEL[k]}</button>)}
           </div>
         </aside>
-        {selected ? <Editor key={selected} id={selected} onChanged={loadNotes} onDeleted={() => { setSelected(null); void loadNotes(); }} /> : (
+        {selected ? <Editor key={selected} id={selected} onChanged={loadNotes} onDeleted={() => {
+          // Out of the list at once, so the editor never reopens a note that is gone.
+          const rest = (notes ?? []).filter((x) => x.id !== selected);
+          setNotes(rest); setSelected(rest[0]?.id ?? null); void loadNotes();
+        }} /> : (
           <div className="glass grid min-h-[24rem] place-items-center rounded-[calc(20px*var(--rk))] text-[12.5px]" style={{ color: 'var(--text-faint)' }} data-card>Pick a note, or start one.</div>
         )}
       </div>
@@ -128,10 +143,16 @@ function Editor({ id, onChanged, onDeleted }: { id: string; onChanged: () => voi
   const [draft, setDraft] = useState<{ title: string; body: string; url: string; tags: string }>({ title: '', body: '', url: '', tags: '' });
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved'>('idle');
   const timer = useRef<number | null>(null);
-  const load = useCallback(() => fetch(`/api/study/notes/${id}`).then((r) => r.json()).then((j: Detail) => {
-    setD(j); setDraft({ title: j.note.title, body: j.note.body, url: j.note.url ?? '', tags: j.note.tags.join(', ') });
-  }).catch(() => {}), [id]);
+  const load = useCallback(() => fetch(`/api/study/notes/${id}`).then(async (r) => {
+    if (!r.ok) { onDeleted(); return; }
+    const j = await r.json() as Detail;
+    if (!j?.note) { onDeleted(); return; }
+    const safe = { note: j.note, trades: j.trades ?? [], marks: j.marks ?? [] };
+    setD(safe); setDraft({ title: safe.note.title, body: safe.note.body, url: safe.note.url ?? '', tags: (safe.note.tags ?? []).join(', ') });
+  }).catch(() => {}), [id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { void load(); }, [load]);
+  // A save still waiting when the note goes (deleted, or another picked) is dropped, not sent to a note that is gone.
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
   const patch = useCallback(async (body: Record<string, unknown>) => {
     setSaved('saving');
@@ -149,6 +170,7 @@ function Editor({ id, onChanged, onDeleted }: { id: string; onChanged: () => voi
   const n = d.note;
   const remove = async () => {
     if (!(await confirm({ title: 'Delete this note?', body: 'Its text and video marks go. The trades it links to stay as they are.', action: 'Delete note' }))) return;
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
     await fetch(`/api/study/notes/${id}`, { method: 'DELETE' }); onDeleted();
   };
   const examples = d.trades.filter((t) => t.role === 'example'); const counters = d.trades.filter((t) => t.role === 'counter');
@@ -170,8 +192,8 @@ function Editor({ id, onChanged, onDeleted }: { id: string; onChanged: () => voi
         <div className="flex items-center gap-2 text-[11px]">
           <span style={{ color: 'var(--text-faint)' }}>{saved === 'saving' ? 'Saving…' : saved === 'saved' ? 'Saved' : ''}</span>
           <button type="button" onClick={() => void patch({ pinned: !n.pinned }).then(load)} className="rounded-full border px-2.5 py-0.5" style={ST}>{n.pinned ? 'Unpin' : 'Pin'}</button>
-          <button type="button" onClick={() => startTimer(n.id, n.title || 'Studying')} className="rounded-full border px-2.5 py-0.5" style={ST} data-study-this>Study this</button>
-          <button type="button" onClick={() => { startTimer(n.id, n.title || 'Studying'); openFocus(n.id); }} className="rounded-full border px-2.5 py-0.5" style={ST}>Close the door</button>
+          {prefs.studyClock === 'app' && <button type="button" onClick={() => startTimer(n.id, n.title || 'Studying')} className="rounded-full border px-2.5 py-0.5" style={ST} data-study-this>Study this</button>}
+          <button type="button" onClick={() => { if (prefs.studyClock === 'app') startTimer(n.id, n.title || 'Studying'); openFocus(n.id); }} className="rounded-full border px-2.5 py-0.5" style={ST}>Close the door</button>
           <button type="button" onClick={remove} style={{ color: 'rgb(var(--outcome-loss))' }}>Delete</button>
         </div>
       </div>

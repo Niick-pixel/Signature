@@ -1,4 +1,7 @@
 import { cookies } from 'next/headers';
+import { WordMapCard } from '@/components/stats/WordMap';
+import { wordMap } from '@/lib/wordPatterns';
+import { analysable } from '@/lib/analytics';
 import { listTrades } from '@/db/trades';
 import { accountCookie } from '@/lib/account-pref';
 import { ACCOUNT_VALUES, MIN_SAMPLE, REASON_HUE, countsInStats, isBacktest, isDated, isHypothetical, isReal, isSeparate, type Account } from '@/lib/domain';
@@ -132,6 +135,10 @@ export default async function StatsPage(
   const pageQuery = new URLSearchParams({ account, ...filterParams }).toString();
   // What my own writing says keeps going wrong (lib/insights).
   const insights = analyse(trades);
+  // Your words, measured (lib/wordPatterns): the taken trades with an R; the writing goes along only for the words shown.
+  const words = wordMap(analysable(trades), { minN: 3 });
+  const shownIds = new Set(words.words.flatMap((w) => w.tradeIds.slice(0, 6)));
+  const wordTrades = trades.filter((t) => shownIds.has(t.id)).map((t) => ({ id: t.id, date: t.date, r: t.r_multiple, setup: t.setup_type, text: `${t.lesson ?? ''}\n${t.explanation ?? ''}` }));
   const reasonRows: BarRow[] = rByReason(trades).map((g) => ({
     label: g.key, value: g.stats.totalR, display: r(g.stats.totalR),
     meta: `· ${g.stats.count}`, swatch: reasonAccent(g.key),
@@ -308,6 +315,7 @@ export default async function StatsPage(
                 </Panel>
               </div>
 
+              <WordMapCard map={words} trades={wordTrades} />
               <Learn data={insights} review={review} query={pageQuery} />
 
               <Lab targets={targetScorecard(trades)} lab={managementLab(trades)} grades={gradePredictors(trades)} query={pageQuery} />

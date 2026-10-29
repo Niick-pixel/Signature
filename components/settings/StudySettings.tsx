@@ -18,9 +18,20 @@ export function StudySettings({ Section }: { Section: SectionComp }) {
           <Segmented<string> value={String(prefs.studyGoal)} onChange={(v) => update({ studyGoal: Number(v) })} options={['10', '20', '30', '45', '60', '90']} labelFor={(v) => `${v} min`} />
         </div>
         <div>
+          <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Time study with</span>
+          <Segmented<'app' | 'cube'> value={prefs.studyClock} onChange={(studyClock) => update({ studyClock })} options={['cube', 'app']}
+            labelFor={(v) => (v === 'cube' ? 'My own timer (the cube)' : "The app's timer")} />
+        </div>
+        {prefs.studyClock === 'cube' && (
+          <div>
+            <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>My timer is set to — each block logged is this long</span>
+            <Segmented<string> value={String(prefs.cubeMinutes)} onChange={(v) => update({ cubeMinutes: Number(v) })} options={['5', '10', '25', '50']} labelFor={(v) => `${v} min`} />
+          </div>
+        )}
+        {prefs.studyClock === 'app' && <div>
           <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Timer length (a soft chime when it is reached; it keeps counting)</span>
           <Segmented<string> value={String(prefs.studyTimerLength)} onChange={(v) => update({ studyTimerLength: Number(v) })} options={['0', '25', '45', '60', '90']} labelFor={(v) => (v === '0' ? 'Just count up' : `${v} min`)} />
-        </div>
+        </div>}
         <div className="flex flex-wrap gap-2">
           <TogglePill checked={prefs.studyChime} onChange={(studyChime) => update({ studyChime })} label="Chime" />
           <TogglePill checked={prefs.studyTab} onChange={(studyTab) => update({ studyTab })} label="Study tab in the title bar" hint="Off: still at key 7 and from here." />

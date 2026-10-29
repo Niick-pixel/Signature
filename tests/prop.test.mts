@@ -12,7 +12,7 @@ const t = (date: string, pnl: number, x: Record<string, unknown> = {}) => {
 const acct = (x: Partial<Record<string, unknown>> = {}) => ({
   id: 'a', firm: 'Apex', plan: '50K', label: 'Apex-1', phase: 'eval', journal_account: 'Eval', status: 'active',
   started_on: '2026-10-01', ended_on: null, from_account_id: null, notes: null, created_at: '',
-  ...P.PRESETS[0].rules, drawdown_type: 'eod_trailing', ...x,
+  ...P.PRESETS.find((p) => p.firm === 'Apex Trader Funding' && p.phase === 'eval' && p.rules.start_balance === 50000)!.rules, drawdown_type: 'eod_trailing', ...x,
 }) as never;
 
 test('which trades: label, journal account, dates; an unlabelled account takes labels nobody claims', () => {
@@ -106,9 +106,18 @@ test('session day: 6pm New York starts the next futures day', () => {
 });
 
 test('rules from a form: percentages as whole numbers, typos dropped, never a refusal', () => {
-  const base = P.PRESETS[2].rules;
+  const base = P.PRESETS.find((p) => p.firm === 'Topstep' && p.phase === 'eval' && p.rules.start_balance === 50000)!.rules;
   const r = P.readRules({ consistency: '40', payout_split: 90, daily_loss: 'abc', start_balance: '-5', max_drawdown: '2500', drawdown_type: 'nope' }, base);
   assert.equal(r.consistency, 0.4); assert.equal(r.payout_split, 0.9); assert.equal(r.daily_loss, null);
   assert.equal(r.start_balance, base.start_balance); assert.equal(r.max_drawdown, 2500); assert.equal(r.drawdown_type, base.drawdown_type);
   assert.equal(P.readRules({}, base).profit_target, base.profit_target);
+});
+
+test('presets: every firm in its sizes, eval and funded, scaled', () => {
+  const top = P.PRESETS.filter((p) => p.firm === 'Topstep');
+  assert.deepEqual([...new Set(top.map((p) => p.rules.start_balance))], [50000, 100000, 150000]);
+  const big = top.find((p) => p.phase === 'eval' && p.rules.start_balance === 150000)!;
+  assert.equal(big.rules.profit_target, 9000); assert.equal(big.rules.max_drawdown, 4500); assert.equal(big.plan, '150K Trading Combine');
+  assert.ok(P.PRESETS.filter((p) => p.firm === 'Apex Trader Funding').some((p) => p.rules.start_balance === 25000));
+  assert.ok(P.PRESETS.every((p) => p.rules.start_balance > 0 && p.rules.max_drawdown > 0));
 });
