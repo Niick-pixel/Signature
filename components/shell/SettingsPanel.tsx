@@ -1,5 +1,7 @@
 'use client';
 
+import { createPortal } from 'react-dom';
+
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, spring, springSoft, exitQuick } from '@/lib/motion';
@@ -52,8 +54,31 @@ function Section({ title, hint, children }: {
   );
 }
 
+const CATEGORIES = [
+  { id: 'general', label: 'General', hint: 'Path, rules, the morning, keys' },
+  { id: 'appearance', label: 'Appearance', hint: 'Themes, size, background, type' },
+  { id: 'dashboard', label: 'Dashboard & Today', hint: 'Blocks, accounts, the panel' },
+  { id: 'trades', label: 'Trades & import', hint: 'Trade page, executions' },
+  { id: 'board', label: 'Whiteboard', hint: 'Density, lines, grid' },
+  { id: 'prop', label: 'Prop firms', hint: 'Trading day, warnings' },
+  { id: 'analytics', label: 'Analytics', hint: 'Reading, words, news' },
+  { id: 'study', label: 'Study room', hint: 'Your timer, the streak' },
+  { id: 'data', label: 'Journal & data', hint: 'Folder, backups, updates' },
+] as const;
+type Category = (typeof CATEGORIES)[number]['id'];
+
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { prefs, update, reset } = usePreferences();
+  const [cat, setCat] = useState<Category>(() => {
+    try { const v = window.sessionStorage.getItem('signature:settings-cat'); return (CATEGORIES.some((c) => c.id === v) ? v : 'general') as Category; } catch { return 'general'; }
+  });
+  useEffect(() => { try { window.sessionStorage.setItem('signature:settings-cat', cat); } catch { /* fine */ } }, [cat]);
+  // A page's Customize opens its own category.
+  useEffect(() => {
+    const on = (e: Event) => { const c = (e as CustomEvent<{ cat?: string }>).detail?.cat; if (c && CATEGORIES.some((x) => x.id === c)) setCat(c as Category); };
+    window.addEventListener(SETTINGS_TOGGLE, on);
+    return () => window.removeEventListener(SETTINGS_TOGGLE, on);
+  }, []);
   const [info, setInfo] = useState<Info | null>(null);
   const [copied, setCopied] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -150,30 +175,51 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   }, [onClose]);
 
   const currentSize = textSizeOf(prefs.textScale);
+  // Drawn into <body>: the bottom-left cluster is its own layer, and the window must sit above the Today panel.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: exitQuick }}
             transition={spring} onClick={onClose}
-            className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.4)' }}
+            className="fixed inset-0 z-[69]" style={{ background: 'rgba(0,0,0,0.35)' }}
           />
           <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.97 }}
+            initial={{ opacity: 0, y: 14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98, transition: exitQuick }}
             transition={springSoft}
-            style={{
-              transformOrigin: 'bottom left',
-              background: 'color-mix(in srgb, var(--bg-raised) 92%, transparent)',
-            }}
-            className="glass absolute bottom-full left-0 z-50 mb-3 max-h-[78vh] w-[24rem]
-              overflow-y-auto rounded-[calc(22px*var(--rk))] p-5"
+            role="dialog" aria-label="Settings" data-settings-window
+            style={{ background: 'var(--bg-raised)', borderColor: 'var(--glass-stroke)', boxShadow: 'var(--shadow-panel)' }}
+            className="fixed inset-0 z-[70] m-auto flex h-[min(46rem,90vh)] w-[min(64rem,94vw)] overflow-hidden rounded-[calc(24px*var(--rk))] border"
           >
-            <h2 className="text-[14px] font-semibold tracking-tight">Settings</h2>
+            <nav className="flex w-[13.5rem] shrink-0 flex-col gap-0.5 border-r p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} aria-label="Settings categories">
+              <h2 className="px-2.5 pb-2 pt-1 text-[15px] font-semibold tracking-tight">Settings</h2>
+              {CATEGORIES.map((c) => (
+                <button key={c.id} type="button" onClick={() => setCat(c.id)} data-settings-cat={c.id} aria-current={cat === c.id}
+                  className="rounded-[10px] px-2.5 py-1.5 text-left text-[12.5px] font-medium"
+                  style={cat === c.id ? { background: 'rgb(var(--accent) / 0.13)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
+                  {c.label}
+                  <span className="block text-[10.5px] font-normal" style={{ color: 'var(--text-faint)' }}>{c.hint}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center justify-between border-b px-6 py-3" style={{ borderColor: 'var(--glass-stroke)' }}>
+              <h3 className="text-[15px] font-semibold">{CATEGORIES.find((c) => c.id === cat)?.label}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>Saved as you change them</span>
+                <Button onClick={onClose} title="Every setting saved the moment you changed it (Esc)">Done</Button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-1" data-settings-body>
 
+            {cat === 'general' && (<>
             <Section title="Path" hint="The steps toward a funded account, their criteria, your commitments and the eval budget.">
               <Button data-settings-path onClick={() => { onClose(); navigate('/path?edit=1'); }}>Edit the path</Button>
             </Section>
@@ -182,9 +228,11 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               <RulesSettings />
             </Section>
 
+            </>)}
+            {cat === 'appearance' && (<>
             <Section
               title="Theme"
-              hint="Six, all in warm creams. Each changes the surfaces, corners and headings, not only the colours."
+              hint="Warm creams, cool grays and two darks. Each changes the surfaces, corners and headings, not only the colours."
             >
               <ThemeGrid />
             </Section>
@@ -225,13 +273,27 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               />
             </Section>
 
+            </>)}
+            {cat === 'dashboard' && (<>
             <DashboardSettings Section={Section} />
+            </>)}
+            {cat === 'trades' && (<>
             <TradeSettings Section={Section} />
+            </>)}
+            {cat === 'prop' && (<>
             <PropSettings Section={Section} />
+            </>)}
+            {cat === 'analytics' && (<>
             <AnalyticsSettings Section={Section} />
+            </>)}
+            {cat === 'study' && (<>
             <StudySettings Section={Section} />
+            </>)}
+            {cat === 'appearance' && (<>
             <PersonalSettings Section={Section} />
 
+            </>)}
+            {cat === 'board' && (<>
             <Section
               title="Whiteboard"
               hint="How tightly the board packs its cards. Compact fits more on screen; roomy is easier to read."
@@ -276,6 +338,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </div>
             </Section>
 
+            </>)}
+            {cat === 'general' && (<>
             <Section
               title="Morning check-in"
               hint="Four questions before the session: sleep, state of mind, bias and news. Asked once on the first screen of a trading day, never while a trade is being written, and never again once the day has trades in it."
@@ -315,6 +379,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </Button>
             </Section>
 
+            </>)}
+            {cat === 'appearance' && (<>
             <Section
               title="Motion"
               hint="Turn this on if the animations are distracting or the app feels heavy on your machine."
@@ -327,6 +393,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               />
             </Section>
 
+            </>)}
+            {cat === 'data' && (<>
             <Section title="Your journal lives here">
               <p className="break-all rounded-[calc(12px*var(--rk))] p-2.5 text-[11px] leading-relaxed"
                 style={{ background: 'var(--glass-fill)', border: '1px solid var(--glass-stroke)' }}>
@@ -472,12 +540,15 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               >
                 Reset
               </Button>
-              <Button onClick={onClose} className="ml-auto" title="Closes this panel. Every setting here saved the moment you changed it">Done</Button>
+            </div>
+            </>)}
+            </div>
             </div>
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

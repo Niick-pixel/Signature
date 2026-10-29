@@ -54,7 +54,7 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
         <div className="flex items-center gap-2">
           <Seg<Preferences['analyticsWorld']> value={prefs.analyticsWorld} onChange={(analyticsWorld) => update({ analyticsWorld })}
             options={['real', 'backtest', 'all']} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />
-          <Pill onClick={() => window.dispatchEvent(new Event(SETTINGS_TOGGLE))}>Customize</Pill>
+          <Pill onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'analytics' } }))}>Customize</Pill>
         </div>
       </div>
 

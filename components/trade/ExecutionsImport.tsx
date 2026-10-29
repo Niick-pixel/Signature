@@ -110,7 +110,7 @@ export function ExecutionsImport({ stored }: { stored: ExecutionRow[] }) {
             Import the trade file your platform exports. Each round trip is matched to the trade you logged and fills in exact entry, exit, times, size and fees — only what the trade is missing, unless you say otherwise in Settings.
           </p>
         </div>
-        <button type="button" onClick={() => window.dispatchEvent(new Event(SETTINGS_TOGGLE))}
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}
           className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>Customize</button>
       </div>
 

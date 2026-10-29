@@ -103,7 +103,7 @@ export function TradeView(p: TradeViewProps) {
           <div className="mt-3 flex justify-end gap-2">
             <HeadButton onClick={() => navigate(`/new?edit=${t.id}`)} title="Edit (E)">Edit</HeadButton>
             <HeadButton onClick={openOnBoard}>On the board</HeadButton>
-            <HeadButton onClick={() => window.dispatchEvent(new Event(SETTINGS_TOGGLE))}>Customize</HeadButton>
+            <HeadButton onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}>Customize</HeadButton>
           </div>
         </div>
       </div>

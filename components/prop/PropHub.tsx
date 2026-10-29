@@ -35,7 +35,7 @@ export function PropHub() {
           <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>Where each account stands against its rules, worked out from the trades you log on it. A reading, never a gate.</p>
         </div>
         <div className="flex gap-2">
-          <PillButton onClick={() => window.dispatchEvent(new Event(SETTINGS_TOGGLE))}>Customize</PillButton>
+          <PillButton onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'prop' } }))}>Customize</PillButton>
           <PillButton accent onClick={() => setAdding(true)}>Add account</PillButton>
         </div>
       </div>

@@ -59,7 +59,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           <Chip on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data="hide-pnl">
             {prefs.hidePnl ? 'Show P&L' : 'Hide P&L'}
           </Chip>
-          <Chip onClick={() => window.dispatchEvent(new Event(SETTINGS_TOGGLE))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data="customize">
+          <Chip onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data="customize">
             Customize
           </Chip>
         </div>
