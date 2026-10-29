@@ -16,6 +16,7 @@ import type { Goal, GoalProgress } from '@/lib/goals';
 import { springSoft, exitQuick } from '@/lib/motion';
 
 interface TodayData {
+  tilt?: { lossAt: string; lossR: number; minutesSince: number | null; fastUnder: number; usualWait: number | null; tiltedAvg: number | null; patientAvg: number | null; flaggedToday: number } | null;
   grade?: { score: number | null; letter: string | null; trades: number; parts: Array<{ id: string; label: string; kept: boolean | null; detail: string }> };
   pastGrades?: Array<{ day: string; score: number | null; letter: string | null }>;
   plan: Array<{ label: string; value: string }>;
@@ -67,6 +68,13 @@ export function TodayPanel() {
     return () => { for (const e of events) window.removeEventListener(e, load); };
   }, [shown, load]);
 
+  // The tilt line counts minutes since the loss: keep it current while it shows.
+  useEffect(() => {
+    if (!shown || !data?.tilt) return;
+    const id = window.setInterval(load, 60_000);
+    return () => window.clearInterval(id);
+  }, [shown, data?.tilt, load]);
+
   const open = shown && path !== '/new' && !folded;
   // Tells docked bottom-right controls (New trade) to sit left of the panel.
   useEffect(() => {
@@ -104,6 +112,7 @@ export function TodayPanel() {
             <CloseX kind="minimize" onClick={() => fold(true)} label="Fold to the edge" />
           </div>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4 pt-2 text-[12px]">
+            {prefs.tiltWatch && data?.tilt && <TiltLine t={data.tilt} />}
             {s.plan && (
               <Section title="The plan" right={data?.prep.started ? `${data.prep.done}/${data.prep.total} prep` : undefined}>
                 {!data?.plan.length ? <Faint>No chart prep yet today — press P or open the morning check-in.</Faint> : (
@@ -230,6 +239,26 @@ function Section({ title, right, children }: { title: string; right?: string; ch
 /** Prop accounts: shown only when there are active ones. */
 function PropSection() {
   return <PropMini frame={(list) => <Section title="Prop accounts">{list}</Section>} />;
+}
+
+/** After a loss: how long ago, and what waiting has been worth. A line to read, never a lock. */
+function TiltLine({ t }: { t: NonNullable<TodayData['tilt']> }) {
+  const wait = t.usualWait ?? t.fastUnder;
+  const left = t.minutesSince != null ? Math.max(0, t.fastUnder - t.minutesSince) : null;
+  return (
+    <div className="rounded-[calc(14px*var(--rk))] border px-3 py-2.5" data-today-tilt
+      style={{ borderColor: 'rgb(var(--outcome-loss) / 0.3)', background: 'rgb(var(--outcome-loss) / 0.06)' }}>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--outcome-loss))' }}>Tilt watch</div>
+      <p className="mt-1 leading-snug">
+        Last trade a {rr(t.lossR)} loss at {t.lossAt}{t.minutesSince != null ? `, ${t.minutesSince} min ago` : ''}.
+        {left ? ` Your usual wait is ${wait} min — ${left} more before it is not a fast re-entry.` : ` Your usual wait (${wait} min) has passed.`}
+      </p>
+      {t.tiltedAvg != null && t.patientAvg != null && (
+        <p className="mt-1 text-[11px]" style={{ color: 'var(--text-dim)' }}>Fast or sized-up re-entries: {rr(t.tiltedAvg)} each. Patient ones: {rr(t.patientAvg)}.</p>
+      )}
+      {t.flaggedToday > 0 && <p className="mt-1 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{t.flaggedToday} tilted re-entr{t.flaggedToday === 1 ? 'y' : 'ies'} already today.</p>}
+    </div>
+  );
 }
 
 const Faint = ({ children }: { children: React.ReactNode }) => <p style={{ color: 'var(--text-faint)' }}>{children}</p>;

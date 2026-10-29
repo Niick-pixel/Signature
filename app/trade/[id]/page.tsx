@@ -11,6 +11,9 @@ import { reviewInputs } from '@/db/review';
 import { brokenFor, dayBreaksByTrade, fieldEras } from '@/lib/review';
 import { planDay, planMatch } from '@/lib/planMatch';
 import { excursion, tradeMetrics } from '@/lib/executions';
+import { analysable } from '@/lib/analytics';
+import { TILT_LABEL, tilt } from '@/lib/behaviour';
+import { isBacktest } from '@/lib/domain';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +43,11 @@ export default async function TradePage({ params }: { params: Promise<{ id: stri
   const prev = at > 0 ? order[at - 1].id : null;
   const next = at >= 0 && at < order.length - 1 ? order[at + 1].id : null;
 
+  // Tilt is read within one world: a replay's losses say nothing about a live re-entry.
+  const sameWorld = analysable(trades).filter((t) => isBacktest(t.account) === isBacktest(trade.account));
+  const tiltEvent = tilt(sameWorld).events.find((e) => e.tradeId === id);
+  const tiltNotes = tiltEvent ? tiltEvent.kinds.map((k) => (k === 'fast' && tiltEvent.gap != null ? `${TILT_LABEL[k]} (${tiltEvent.gap} min)` : TILT_LABEL[k])) : [];
+
   const metrics = tradeMetrics(trade, exec ? { entryAt: exec.entry_at, exitAt: exec.exit_at } : null);
   const entryAt = exec?.entry_at ?? null;
   const ex = bars && exec && trade.entry_price != null
@@ -50,7 +58,7 @@ export default async function TradePage({ params }: { params: Promise<{ id: stri
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
         <TradeView trade={trade} exec={exec} bars={bars} plan={plan} broken={broken} prev={prev} next={next}
-          metrics={metrics} excursion={ex} entryAt={entryAt} studyNotes={notesForTrade(id)}
+          metrics={metrics} excursion={ex} entryAt={entryAt} studyNotes={notesForTrade(id)} tilt={tiltNotes}
           drawnR={Object.values(drawingsFor(shotsFor(id).map((x) => x.path))).find((d) => d.r != null)?.r ?? null} />
       </div>
     </div>

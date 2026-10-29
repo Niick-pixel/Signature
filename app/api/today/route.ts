@@ -9,6 +9,8 @@ import { getDailyReview } from '@/db/reviews';
 import { getRuleSettings } from '@/db/rules';
 import { stopAfterFor } from '@/lib/rules';
 import { isHypothetical, isTaken } from '@/lib/domain';
+import { analysable } from '@/lib/analytics';
+import { tiltNow } from '@/lib/behaviour';
 
 /**
  * GET ?today= — the Today panel: the morning's plan (from the chart prep),
@@ -40,7 +42,10 @@ export async function GET(request: Request) {
   const settings = getRuleSettings();
   const gradeOf = (day: string) => { const p = getPrep(day)?.data ?? null; return dayGrade(day, trades, p, getDailyReview(day), stopAfterFor(p, settings), day === today); };
   const days = [...new Set(trades.filter((t) => !t.undated && !t.deleted_at).map((t) => t.date.slice(0, 10)))].filter((d) => d < today).sort().slice(-5);
+  const now = new Date();
+  const real = analysable(trades).filter((t) => !t.account.startsWith('Backtest'));
   return NextResponse.json({
+    tilt: tiltNow(real, today, now.getHours() * 60 + now.getMinutes()),
     grade: gradeOf(today), pastGrades: days.map((d) => { const g = gradeOf(d); return { day: d, score: g.score, letter: g.letter }; }).filter((g) => g.score != null),
     plan, prep: { done, total: PREP_STEPS.length, started: Boolean(prep) },
     rules: { trades: session.length, kept, broken: [...counts].sort((a, b) => b[1] - a[1]).map(([short, count]) => ({ short, count })) },

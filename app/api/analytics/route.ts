@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getNewsSettings, listNews } from '@/db/news';
 import { confluences, newsView, psychology, timeView } from '@/lib/analytics';
-import { analyticsInputs, num } from './shared';
+import { mistakeCost, tilt } from '@/lib/behaviour';
+import { localDay } from '@/lib/day';
+import { analyticsInputs, num, sinceOf } from './shared';
 
 /**
- * GET ?world&clock&minN&late&words&window&monday — every analytics tab in
+ * GET ?world&clock&minN&late&words&window&monday&since — every analytics tab in
  * one read: the time dial and heatmap, confluences, psychology, the news week.
  */
 export async function GET(request: Request) {
@@ -21,6 +23,8 @@ export async function GET(request: Request) {
     time: timeView(trades, q.get('clock') === 'local' ? 'local' : 'ny', minN),
     confluences: confluences(trades, minN),
     psychology: psychology(trades, { lateHour: num(q.get('late'), 13, 0, 23), words }),
+    mistakes: mistakeCost(trades, sinceOf(q.get('since'), localDay()), localDay()),
+    tilt: tilt(trades),
     news: { ...newsView(trades, listNews(), { monday, currencies: settings.currencies, window: num(q.get('window'), 30, 1, 240), red }), monday, settings, total: listNews().length },
   });
 }

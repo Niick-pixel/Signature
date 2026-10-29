@@ -19,3 +19,10 @@ export const num = (v: string | null, dflt: number, min: number, max: number) =>
   const n = Number(v);
   return Number.isFinite(n) && v !== null && v !== '' ? Math.max(min, Math.min(max, n)) : dflt;
 };
+
+/** The start of a stretch: 'quarter' (this calendar quarter), '30' / '90' days back, anything else all time. */
+export function sinceOf(v: string | null, today: string): string | null {
+  if (v === 'quarter') return `${today.slice(0, 5)}${String(Math.floor((Number(today.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, '0')}-01`;
+  if (v === '30' || v === '90') { const d = new Date(`${today}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - Number(v)); return d.toISOString().slice(0, 10); }
+  return null;
+}

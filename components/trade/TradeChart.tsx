@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useConfirm } from '@/components/ui/Confirm';
 import { SOURCE_ZONES, SOURCE_ZONE_LABEL, barsAround, tradeEntryAt, type Bar, type ExecutionRow, type SourceZone } from '@/lib/executions';
@@ -12,7 +12,8 @@ const W = 760; const H = 300; const PAD_L = 8; const PAD_R = 96; const PAD_T = 1
  * Candles around the trade, drawn from a price file kept on this computer
  * (TradingView, NinjaTrader or Sierra export — no feeds). Entry, exit,
  * target and stop as lines; each fill as a marker. Plain SVG: nothing to
- * load, nothing to slow the board.
+ * load, nothing to slow the board. Replay steps through it bar by bar,
+ * showing only what was known at each bar: fills, the open R, best and worst.
  */
 export function TradeChart({ tradeId, bars, trade, exec, pad, zone: defaultZone }: {
   tradeId: string; bars: Bar[] | null; trade: Trade; exec: ExecutionRow | null; pad: number; zone: SourceZone;
@@ -24,10 +25,38 @@ export function TradeChart({ tradeId, bars, trade, exec, pad, zone: defaultZone 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [hover, setHover] = useState<number | null>(null);
+  // Replay: the last bar shown, or null for the whole chart.
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
 
   const entryAt = exec?.entry_at ?? tradeEntryAt(trade);
   const exitAt = exec?.exit_at ?? (trade.exit_time ? `${trade.date.slice(0, 10)}T${trade.exit_time.slice(0, 5)}:00` : null);
   const shown = useMemo(() => (bars ? barsAround(bars, entryAt, exitAt, pad, pad) : []), [bars, entryAt, exitAt, pad]);
+
+  const replaying = cursor != null;
+  useEffect(() => {
+    if (!playing || cursor == null) return;
+    if (cursor >= shown.length - 1) { setPlaying(false); return; }
+    const id = window.setTimeout(() => setCursor((c) => (c == null ? c : Math.min(shown.length - 1, c + 1))), 450 / speed);
+    return () => window.clearTimeout(id);
+  }, [playing, cursor, speed, shown.length]);
+  useEffect(() => {
+    if (!replaying) return;
+    // While replaying, the arrows step bars instead of moving to the next trade.
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) return;
+      const k = e.key;
+      if (k === ' ' || k === 'ArrowLeft' || k === 'ArrowRight' || k === 'Escape') { e.preventDefault(); e.stopPropagation(); }
+      if (k === ' ') setPlaying((v) => !v);
+      else if (k === 'ArrowLeft') { setPlaying(false); setCursor((c) => Math.max(0, (c ?? 0) - 1)); }
+      else if (k === 'ArrowRight') { setPlaying(false); setCursor((c) => Math.min(shown.length - 1, (c ?? 0) + 1)); }
+      else if (k === 'Escape') { setPlaying(false); setCursor(null); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [replaying, shown.length]);
 
   const upload = async (f: File) => {
     setBusy(true); setMsg(null);
@@ -100,7 +129,33 @@ export function TradeChart({ tradeId, bars, trade, exec, pad, zone: defaultZone 
       <text x={W - PAD_R + 4} y={y(v) + 3.5} fontSize={10} fill={color}>{label} {v}</text>
     </g>
   ));
-  const hb = hover != null ? shown[hover] : null;
+  const last = cursor ?? shown.length - 1;
+  const entryIdx = idxAt(entryAt);
+  const exitIdx = exitAt ? idxAt(exitAt) : null;
+  const hb = hover != null && hover <= last ? shown[hover] : null;
+  const entryPx = exec?.entry_price ?? trade.entry_price;
+  const exitPx = exec?.exit_price ?? trade.exit_price;
+  const dir = trade.direction === 'Short' ? -1 : 1;
+  const riskPts = entryPx != null && trade.stop_loss != null ? Math.abs(entryPx - trade.stop_loss) : null;
+  const toR = (px: number) => (entryPx == null ? null : riskPts ? (dir * (px - entryPx)) / riskPts : null);
+  const fmtR = (v: number | null) => (v == null ? '—' : `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(2)}R`);
+  // What the replay knows at the cursor, and nothing after it.
+  const status = (() => {
+    if (!replaying) return null;
+    const b = shown[last];
+    if (last < entryIdx) return { text: `${b.t.slice(11, 16)} · waiting — the entry comes in ${entryIdx - last} bar${entryIdx - last === 1 ? '' : 's'}`, r: null as number | null };
+    if (exitIdx != null && last >= exitIdx) return { text: `${b.t.slice(11, 16)} · closed at ${shown[exitIdx].t.slice(11, 16)}`, r: (exitPx != null ? toR(exitPx) : null) ?? trade.r_multiple };
+    const seen = shown.slice(entryIdx, last + 1);
+    const best = seen.length ? Math.max(...seen.map((x) => toR(dir > 0 ? x.h : x.l) ?? -Infinity)) : null;
+    const worst = seen.length ? Math.min(...seen.map((x) => toR(dir > 0 ? x.l : x.h) ?? Infinity)) : null;
+    const open = toR(b.c);
+    // No stop on the trade: the open result in points instead of R.
+    const pts = open == null && entryPx != null ? Math.round(dir * (b.c - entryPx) * 100) / 100 : null;
+    return { text: `${b.t.slice(11, 16)} · in the trade${open != null ? ` · open ${fmtR(open)}` : pts != null ? ` · open ${pts > 0 ? '+' : ''}${pts} pts` : ''}${best != null && Number.isFinite(best) ? ` · best ${fmtR(best)}` : ''}${worst != null && Number.isFinite(worst) ? ` · worst ${fmtR(worst)}` : ''}`, r: open };
+  })();
+  const startReplay = () => { setCursor(Math.max(0, entryIdx - 20)); setPlaying(true); setHover(null); };
+  const ctl = 'rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium';
+  const ctlStyle = { borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' };
 
   return (
     <div data-trade-chart={shown.length}>
@@ -109,13 +164,13 @@ export function TradeChart({ tradeId, bars, trade, exec, pad, zone: defaultZone 
         onMouseMove={(e) => {
           const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
           const i = Math.floor((((e.clientX - r.left) / r.width) * W - PAD_L) / step);
-          setHover(i >= 0 && i < shown.length ? i : null);
+          setHover(i >= 0 && i <= last ? i : null);
         }}>
-        {exitAt && (
-          <rect x={x(idxAt(entryAt)) - step / 2} width={Math.max(step, x(idxAt(exitAt)) - x(idxAt(entryAt)) + step)} y={PAD_T} height={H - PAD_T - PAD_B}
+        {exitIdx != null && last >= entryIdx && (
+          <rect x={x(entryIdx) - step / 2} width={Math.max(step, x(Math.min(exitIdx, last)) - x(entryIdx) + step)} y={PAD_T} height={H - PAD_T - PAD_B}
             fill="rgb(var(--accent) / 0.07)" />
         )}
-        {shown.map((b, i) => {
+        {shown.map((b, i) => i > last ? null : (() => {
           const up = b.c >= b.o;
           const color = up ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))';
           return (
@@ -125,12 +180,14 @@ export function TradeChart({ tradeId, bars, trade, exec, pad, zone: defaultZone 
                 height={Math.max(1, Math.abs(y(b.o) - y(b.c)))} fill={color} rx={0.5} />
             </g>
           );
-        })}
+        })())}
         {line(trade.take_profit, 'rgb(var(--outcome-win))', 'TP', '4 3')}
         {line(trade.stop_loss, 'rgb(var(--outcome-loss))', 'SL', '4 3')}
-        {line(exec?.entry_price ?? trade.entry_price, 'rgb(var(--accent))', 'In')}
-        {line(exec?.exit_price ?? trade.exit_price, 'var(--text-dim)', 'Out')}
+        {last >= entryIdx && line(entryPx, 'rgb(var(--accent))', 'In')}
+        {(exitIdx == null ? !replaying : last >= exitIdx) && line(exitPx, 'var(--text-dim)', 'Out')}
+        {replaying && last < shown.length - 1 && <line x1={x(last) + step / 2} x2={x(last) + step / 2} y1={PAD_T} y2={H - PAD_B} stroke="rgb(var(--accent))" strokeWidth={1} strokeDasharray="2 3" />}
         {exec?.fills.map((f, i) => {
+          if (idxAt(f.at) > last) return null;
           const cx = x(idxAt(f.at)); const cy = y(f.price);
           const buy = f.side === 'Buy';
           return <path key={i} d={buy ? `M${cx} ${cy + 3} l-5 8 h10 z` : `M${cx} ${cy - 3} l-5 -8 h10 z`}
@@ -144,8 +201,33 @@ export function TradeChart({ tradeId, bars, trade, exec, pad, zone: defaultZone 
         ))}
       </svg>
       <div className="mt-1 flex min-h-[18px] flex-wrap items-center justify-between gap-2 text-[11px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
-        <span>{hb ? `${hb.t.slice(11, 16)}  O ${hb.o}  H ${hb.h}  L ${hb.l}  C ${hb.c}` : `${shown.length} bars · ${pad} min either side`}</span>
+        <span data-replay-status={status ? (status.r ?? '') : undefined}>
+          {hb ? `${hb.t.slice(11, 16)}  O ${hb.o}  H ${hb.h}  L ${hb.l}  C ${hb.c}` : status ? status.text : `${shown.length} bars · ${pad} min either side`}
+        </span>
+        <span className="flex flex-wrap items-center gap-1.5" data-replay-controls>
+          {!replaying ? (
+            <button type="button" onClick={startReplay} className={ctl} style={ctlStyle} title="Replay the trade bar by bar" data-replay-start>▶ Replay</button>
+          ) : (
+            <>
+              <button type="button" onClick={() => { setPlaying(false); setCursor((c) => Math.max(0, (c ?? 0) - 1)); }} className={ctl} style={ctlStyle} title="Back a bar (←)">‹</button>
+              <button type="button" onClick={() => { if (last >= shown.length - 1) setCursor(0); setPlaying((v) => !v); }} className={ctl} style={ctlStyle} title="Play / pause (Space)" data-replay-play>{playing ? '❚❚' : '▶'}</button>
+              <button type="button" onClick={() => { setPlaying(false); setCursor((c) => Math.min(shown.length - 1, (c ?? 0) + 1)); }} className={ctl} style={ctlStyle} title="Forward a bar (→)" data-replay-step>›</button>
+              {[1, 2, 5].map((v) => (
+                <button key={v} type="button" onClick={() => setSpeed(v)} className={ctl}
+                  style={speed === v ? { ...ctlStyle, color: 'rgb(var(--accent))', borderColor: 'rgb(var(--accent) / 0.5)' } : { ...ctlStyle, color: 'var(--text-faint)' }}>{v}×</button>
+              ))}
+              <button type="button" onClick={() => { setPlaying(false); setCursor(entryIdx); }} className={ctl} style={ctlStyle}>Entry</button>
+              {exitIdx != null && <button type="button" onClick={() => { setPlaying(false); setCursor(exitIdx); }} className={ctl} style={ctlStyle}>Exit</button>}
+              <button type="button" onClick={() => { setPlaying(false); setCursor(null); }} className={ctl} style={ctlStyle} title="Show the whole chart (Esc)" data-replay-stop>Done</button>
+            </>
+          )}
+        </span>
       </div>
+      {replaying && status?.r != null && (
+        <div className="mt-1 text-[12px] font-semibold tabular-nums" style={{ color: status.r > 0 ? 'rgb(var(--outcome-win))' : status.r < 0 ? 'rgb(var(--outcome-loss))' : 'var(--text-dim)' }}>
+          {fmtR(status.r)}
+        </div>
+      )}
       <div className="mt-2">{picker}</div>
     </div>
   );

@@ -3,7 +3,7 @@ import { AnalyticsView } from '@/components/analytics/AnalyticsView';
 import type { AnalyticsTab } from '@/lib/preferences';
 
 // lib/preferences is a client module: a server page gets a reference, not the array, so the tabs are listed here.
-const TABS: readonly AnalyticsTab[] = ['time', 'confluences', 'psychology', 'news', 'ask'];
+const TABS: readonly AnalyticsTab[] = ['time', 'confluences', 'psychology', 'mistakes', 'whatif', 'tilt', 'news', 'ask'];
 
 export const dynamic = 'force-dynamic';
 

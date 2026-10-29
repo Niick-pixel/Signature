@@ -40,6 +40,8 @@ export interface TradeViewProps {
   studyNotes: Array<{ id: string; title: string; kind: string; role: string }>;
   /** R from entry/stop/target lines drawn on a screenshot, when there is one. */
   drawnR?: number | null;
+  /** Tilt flags on this trade (Analytics → Tilt): fast, sized up, after two losses. */
+  tilt?: string[];
 }
 
 /** The trade page (app/trade/[id]). Which sections show is in Settings → Trade page. */
@@ -177,6 +179,12 @@ export function TradeView(p: TradeViewProps) {
               {p.broken.length === 0
                 ? <p className="text-[12px]" style={{ color: 'rgb(var(--outcome-win))' }}>Every rule the record can check was kept.</p>
                 : <div className="flex flex-wrap gap-1.5" data-trade-broken>{p.broken.map((b) => <Chip key={b} color="rgb(var(--outcome-loss))">{b}</Chip>)}</div>}
+              {(p.tilt?.length ?? 0) > 0 && (
+                <div className="mt-3" data-trade-tilt>
+                  <div className="mb-1 text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Tilt</div>
+                  <div className="flex flex-wrap gap-1.5">{p.tilt!.map((b) => <Chip key={b} color="rgb(var(--outcome-loss))">{b}</Chip>)}</div>
+                </div>
+              )}
             </Card>
           )}
 

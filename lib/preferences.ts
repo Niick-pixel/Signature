@@ -107,6 +107,12 @@ export interface Preferences {
   newsWindow: number;
   /** How many of your own sentences Ask quotes back. */
   askQuotes: number;
+  /** Mistake cost and What if: which stretch they read. */
+  behaviourSince: 'quarter' | '90' | 'all';
+  /** What if: the rules switched on. */
+  whatIfRules: string[];
+  /** Tilt: a quiet line in the Today panel after a loss. */
+  tiltWatch: boolean;
   /** Phase 5. The Study tab in the title bar. */
   studyTab: boolean;
   /** Minutes a day that keep the study streak going. */
@@ -151,9 +157,9 @@ export const FONT_STACK: Record<Exclude<FontChoice, 'theme'>, string> = {
 export interface Look { id: string; name: string; theme: string; accent: string | null; font: FontChoice; background: Preferences['background']; bgDim: number; textScale: number }
 export const ACCENT_PRESETS = ['#8a5205', '#9e3e1e', '#802222', '#425e34', '#2f5d7c', '#5b4a8a', '#b07d2b', '#3b3b3b'];
 
-export const ANALYTICS_TABS = ['time', 'confluences', 'psychology', 'news', 'ask'] as const;
+export const ANALYTICS_TABS = ['time', 'confluences', 'psychology', 'mistakes', 'whatif', 'tilt', 'news', 'ask'] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
-export const ANALYTICS_TAB_LABEL: Record<AnalyticsTab, string> = { time: 'Time', confluences: 'Confluences', psychology: 'Psychology', news: 'News', ask: 'Ask your journal' };
+export const ANALYTICS_TAB_LABEL: Record<AnalyticsTab, string> = { time: 'Time', confluences: 'Confluences', psychology: 'Psychology', mistakes: 'Mistake cost', whatif: 'What if', tilt: 'Tilt', news: 'News', ask: 'Ask your journal' };
 export const DEFAULT_WORDS = ['fear', 'fomo', 'revenge', 'rushed', 'impatient', 'hesitat', 'bored', 'tired', 'confident', 'calm', 'greedy', 'frustrat'];
 
 export const TRADE_SECTIONS = ['metrics', 'chips', 'chart', 'executions', 'shots', 'rules', 'notes'] as const;
@@ -235,6 +241,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   analyticsWords: DEFAULT_WORDS,
   newsWindow: 30,
   askQuotes: 3,
+  behaviourSince: 'quarter',
+  whatIfRules: ['stop1'],
+  tiltWatch: true,
   studyTab: true,
   studyGoal: 20,
   studyTimerLength: 25,

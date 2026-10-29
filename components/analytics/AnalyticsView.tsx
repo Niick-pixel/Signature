@@ -12,10 +12,12 @@ import { SOURCE_ZONES, SOURCE_ZONE_LABEL, type SourceZone } from '@/lib/executio
 import type { StoredNews } from '@/lib/news';
 import { localDay } from '@/lib/day';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
+import type { MistakeCost, Tilt } from '@/lib/behaviour';
+import { MistakesTab, TiltTab, WhatIfTab } from './Behaviour';
 
 interface Data {
   world: string; count: number; minN: number;
-  time: TimeView; confluences: ConfluenceRow[]; psychology: Psychology;
+  time: TimeView; confluences: ConfluenceRow[]; psychology: Psychology; mistakes: MistakeCost; tilt: Tilt;
   news: NewsView & { monday: string; settings: { currencies: string[]; marksRed: boolean; ffAuto: boolean; window: { from: string; to: string }; syncedAt: string | null }; total: number };
 }
 
@@ -25,7 +27,7 @@ const tone = (v: number | null | undefined) => (v == null || v === 0 ? 'var(--te
 const heat = (avg: number | null, n: number, max: number) => (!n || avg == null ? 'transparent'
   : `${avg >= 0 ? 'rgb(var(--outcome-win)' : 'rgb(var(--outcome-loss)'} / ${0.12 + 0.6 * Math.min(1, Math.abs(avg) / max)})`);
 
-/** Analytics: Time, Confluences, Psychology, News, Ask your journal. Everything here is customizable in Settings → Analytics. */
+/** Analytics: Time, Confluences, Psychology, Mistake cost, What if, Tilt, News, Ask your journal. Everything here is customizable in Settings → Analytics. */
 export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null }) {
   const { prefs, update } = usePreferences();
   const [tab, setTab] = useState<AnalyticsTab>(initialTab ?? prefs.analyticsTab);
@@ -35,10 +37,10 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
   const load = useCallback(() => {
     const q = new URLSearchParams({
       world: prefs.analyticsWorld, clock: prefs.analyticsClock, minN: String(prefs.analyticsMinN), late: String(prefs.analyticsLateHour),
-      words: prefs.analyticsWords.join(','), window: String(prefs.newsWindow), monday,
+      words: prefs.analyticsWords.join(','), window: String(prefs.newsWindow), monday, since: prefs.behaviourSince,
     });
     void fetch(`/api/analytics?${q}`).then((r) => r.json()).then(setData).catch(() => {});
-  }, [prefs.analyticsWorld, prefs.analyticsClock, prefs.analyticsMinN, prefs.analyticsLateHour, prefs.analyticsWords, prefs.newsWindow, monday]);
+  }, [prefs.analyticsWorld, prefs.analyticsClock, prefs.analyticsMinN, prefs.analyticsLateHour, prefs.analyticsWords, prefs.newsWindow, monday, prefs.behaviourSince]);
   useEffect(() => { load(); window.addEventListener(JOURNAL_CHANGED, load); return () => window.removeEventListener(JOURNAL_CHANGED, load); }, [load]);
   const go = (t: AnalyticsTab) => { setTab(t); window.history.replaceState(null, '', `/analytics?tab=${t}`); };
 
@@ -69,11 +71,13 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
       </div>
 
       <div className="mt-5">
-        {tab === 'ask' ? <Ask /> : !data ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading your trades…</p> : (
+        {tab === 'ask' ? <Ask /> : tab === 'whatif' ? <WhatIfTab /> : !data ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading your trades…</p> : (
           <>
             {tab === 'time' && <Time v={data.time} minN={data.minN} clock={prefs.analyticsClock} onClock={(analyticsClock) => update({ analyticsClock })} />}
             {tab === 'confluences' && <Confluences rows={data.confluences} />}
             {tab === 'psychology' && <Psych p={data.psychology} lateHour={prefs.analyticsLateHour} />}
+            {tab === 'mistakes' && <MistakesTab m={data.mistakes} />}
+            {tab === 'tilt' && <TiltTab t={data.tilt} />}
             {tab === 'news' && <News v={data.news} monday={monday} setMonday={setMonday} reload={load} />}
           </>
         )}
