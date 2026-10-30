@@ -17,7 +17,6 @@ const UTC_TODAY = /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/;
 
 // Known offenders not yet fixed — remove an entry when its file is fixed.
 const PENDING = new Set<string>([
-  'components/whiteboard/RiskBanner.tsx',
   'app/calendar/page.tsx',
   'components/money/BalanceCard.tsx',
 ]);

@@ -6,6 +6,7 @@ import { spring, exitQuick } from '@/lib/motion';
 import { isTaken } from '@/lib/domain';
 import type { RiskLimits, Trade } from '@/lib/types';
 import { isReal } from '@/lib/domain';
+import { localDay } from '@/lib/day';
 
 const AMBER = 'var(--amber)';
 
@@ -28,7 +29,9 @@ export function RiskBanner({ trades }: { trades: Trade[] }) {
 
   if (!limits) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Trade dates are local wall-clock times, so today must be local too — the UTC
+  // date dropped every trade from the banner after 6 pm.
+  const today = localDay();
   // Real trades only: a replayed loss logged today is not today's loss.
   const todays = trades.filter((t) => isReal(t.account) && t.date.slice(0, 10) === today && isTaken(t.outcome));
   if (todays.length === 0) return null;
