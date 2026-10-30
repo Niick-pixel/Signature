@@ -180,6 +180,27 @@ function CheckInForm({ day, existing, onDone, onSaved, onChart }: {
   const [why, setWhy] = useState(existing?.bias ?? '');
   const [news, setNews] = useState<NewsLevel | null>(existing?.news ?? null);
   const [newsNote, setNewsNote] = useState(existing?.news_note ?? '');
+  /*
+    News from the calendar, as chart prep does: the red and orange releases in
+    your session (ForexFactory) set the answer and the note — still yours to
+    change. A day already answered is left as you answered it.
+  */
+  const [newsFrom, setNewsFrom] = useState<string | null>(null);
+  useEffect(() => {
+    if (existing?.news != null) return;
+    let live = true;
+    fetch(`/api/news/session?day=${day}`).then((r) => (r.ok ? r.json() : null)).then((j: { events?: Array<{ impact: string; title: string; at: string; currency: string }>; syncedAt?: string | null; auto?: boolean; error?: string } | null) => {
+      if (!live || !j) return;
+      // The pull failed and nothing is stored for today: say so rather than guess.
+      if (!j.events?.length && (j.error || !j.syncedAt)) { if (j.auto) setNewsFrom('Couldn’t reach ForexFactory just now — pick it by hand.'); return; }
+      const ev = j.events ?? [];
+      const level: NewsLevel = ev.some((e) => e.impact === 'High') ? 'High' : ev.length ? 'Medium' : 'None';
+      setNews((cur) => cur ?? level);
+      if (ev.length) setNewsNote((cur) => cur || ev.map((e) => `${e.currency} ${e.title} ${e.at.slice(11, 16)}`).join(', '));
+      setNewsFrom(ev.length ? `From ForexFactory: ${ev.length} release${ev.length === 1 ? '' : 's'} in your session.` : 'From ForexFactory: nothing red or orange in your session.');
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [day, existing?.news]);
   const [max, setMax] = useState(existing?.trades_planned?.toString() ?? '');
   const [workingOn, setWorkingOn] = useState(existing?.working_on ?? '');
   const path = usePathSummary();
@@ -285,6 +306,7 @@ function CheckInForm({ day, existing, onDone, onSaved, onChart }: {
             <Field label="News today" group>
               <Choice name="News today" value={news} onChange={setNews} options={NEWS_LEVELS}
                 accentFor={(n) => NEWS_ACCENT[n]} labelFor={(n) => NEWS_LABEL[n]} />
+              {newsFrom && <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }} data-news-auto>{newsFrom}</p>}
               <AnimatePresence initial={false}>
                 {(news === 'Medium' || news === 'High') && (
                   <Collapse key="news-note">

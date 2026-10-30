@@ -1,7 +1,9 @@
 import { TitleBar } from '@/components/shell/TitleBar';
 import { DashboardView } from '@/components/dashboard/DashboardView';
 import { reviewInputs } from '@/db/review';
+import { listTrades } from '@/db/trades';
 import { brokenFor, dayBreaksByTrade, fieldEras } from '@/lib/review';
+import { countsInStats, isHypothetical } from '@/lib/domain';
 import { accountKey, accountKeyLabel, dashboardData, inWorld, type DashWorld } from '@/lib/dashboard';
 
 export const dynamic = 'force-dynamic';
@@ -11,9 +13,11 @@ export const dynamic = 'force-dynamic';
  * here, so switching between real, backtest and all in Settings is instant.
  */
 export default async function DashboardPage() {
-  const { trades, ctxFor, cfg } = reviewInputs();
-  const breaks = dayBreaksByTrade(trades, ctxFor, cfg);
-  const eras = fieldEras(trades);
+  const { trades: counted, ctxFor, cfg } = reviewInputs();
+  // Missed setups stay out of Stats, but the Dashboard can show them on their own.
+  const trades = [...counted, ...listTrades().filter((t) => isHypothetical(t.account) && !countsInStats(t))];
+  const breaks = dayBreaksByTrade(counted, ctxFor, cfg);
+  const eras = fieldEras(counted);
   const today = new Date().toLocaleDateString('en-CA');
   // Rules kept: of the last 20 trades in the world, the share that broke none.
   const kept = (world: DashWorld) => {
@@ -23,7 +27,8 @@ export default async function DashboardPage() {
   const data = Object.fromEntries((['real', 'backtest', 'all'] as const).map((w) => [w, dashboardData(trades, w, today, kept(w))]));
   // The accounts to filter by: each account, and each label under it, with how many trades.
   const counts = new Map<string, number>();
-  for (const t of trades.filter((x) => inWorld(x, 'all'))) {
+  // Missed setups are a filter of their own (counted by their would-be R), never inside All.
+  for (const t of trades.filter((x) => inWorld(x, 'all') || (isHypothetical(x.account) && !x.deleted_at && (x.would_be_r ?? x.r_multiple) != null))) {
     counts.set(t.account, (counts.get(t.account) ?? 0) + 1);
     if (t.account_label?.trim()) counts.set(accountKey(t), (counts.get(accountKey(t)) ?? 0) + 1);
   }

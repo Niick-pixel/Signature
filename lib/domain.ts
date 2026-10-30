@@ -656,6 +656,8 @@ export const REASON_HUE: Record<Reason, number> = {
  */
 export const SHOT_SLOTS = ['HTF context', 'Entry', 'Result', 'Other'] as const;
 export type ShotSlot = (typeof SHOT_SLOTS)[number];
+/** The two a new trade asks for: what you acted on and what the market did. The others stay for older trades and the gallery. */
+export const FORM_SHOT_SLOTS = ['Entry', 'Result'] as const satisfies readonly ShotSlot[];
 
 /** Score bands for the question "is my grading predictive?". */
 export const GRADE_BANDS = [

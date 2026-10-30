@@ -22,7 +22,19 @@ export const accountKeyLabel = (key: string) => { const [a, l] = key.split('|');
 
 /** In the chosen accounts: an account key matches itself; a bare account matches every label on it. */
 export function inAccounts(t: Trade, keys: ReadonlySet<string>): boolean {
+  // Missed setups only when Missed is chosen by name: they count by what they would have made.
+  if (isHypothetical(t.account)) return !t.deleted_at && keys.has(t.account) && (t.would_be_r ?? t.r_multiple) != null;
   return inWorld(t, 'all') && (keys.has(accountKey(t)) || keys.has(t.account));
+}
+
+/** The Dashboard's filters beyond accounts: a period ending today, sessions, directions. */
+export interface DashFilters { period: 'all' | 'week' | 'month' | '30' | '90' | 'year'; sessions: string[]; dirs: string[] }
+export const DASH_PERIODS: Array<[DashFilters['period'], string]> = [['all', 'All time'], ['week', 'This week'], ['month', 'This month'], ['30', '30 days'], ['90', '90 days'], ['year', 'This year']];
+export function dashFilter(f: Partial<DashFilters>, today: string): (t: Trade) => boolean {
+  const monday = (() => { const d = new Date(`${today}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
+  const from = f.period === 'week' ? monday : f.period === 'month' ? `${today.slice(0, 7)}-01` : f.period === 'year' ? `${today.slice(0, 4)}-01-01`
+    : f.period === '30' ? addDays(today, -29) : f.period === '90' ? addDays(today, -89) : null;
+  return (t) => (!from || dayOf(t) >= from) && (!f.sessions?.length || f.sessions.includes(t.session ?? '')) && (!f.dirs?.length || f.dirs.includes(t.direction));
 }
 
 /** The day a trade counts on: its date, or for an undated backtest the day it was logged. */
@@ -117,8 +129,11 @@ export interface DashboardData {
   recent: Array<{ id: string; day: string; account: string; setup: string; direction: string; outcome: string; r: number | null; money: number | null }>;
 }
 
-export function dashboardData(trades: readonly Trade[], world: DashWorld, today: string, rulesKeptShare: number | null, accounts?: ReadonlySet<string>): DashboardData {
-  const ts = trades.filter((t) => (accounts?.size ? inAccounts(t, accounts) : inWorld(t, world))).sort((a, b) => a.date.localeCompare(b.date));
+export function dashboardData(trades: readonly Trade[], world: DashWorld, today: string, rulesKeptShare: number | null, accounts?: ReadonlySet<string>, filter?: (t: Trade) => boolean): DashboardData {
+  const ts = trades.filter((t) => (accounts?.size ? inAccounts(t, accounts) : inWorld(t, world)) && (!filter || filter(t)))
+    // A missed setup counts as what it would have made.
+    .map((t) => (isHypothetical(t.account) ? { ...t, r_multiple: t.would_be_r ?? t.r_multiple } : t))
+    .sort((a, b) => a.date.localeCompare(b.date));
   const since = (n: number) => addDays(today, -n + 1);
   const between = (from: string, to: string) => ts.filter((t) => { const d = dayOf(t); return d >= from && d <= to; });
   let cr = 0; let cm = 0; let priced = false;

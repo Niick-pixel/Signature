@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { freshPush } from '@/lib/freshness';
@@ -18,6 +18,7 @@ import { pageShortcutAllowed } from '@/lib/keys';
  * rubrics 1 and 3, NY AM + London). "All accounts" and "Every rubric" reset
  * to everything. Period narrows whatever is in view. All of it lives
  * in the URL, so a view can be linked and the back button undoes a click.
+ * Folded away by default behind one line that says what is in view.
  */
 export function StatsFilters({ available, scope, rubrics = [], prefix = '', overridden = false }: {
   /** Rubric versions with trades in them, for the rubric chips. */
@@ -102,8 +103,43 @@ export function StatsFilters({ available, scope, rubrics = [], prefix = '', over
 
   const filtered = scope.period !== 'all' || scope.sessions.length > 0 || scope.directions.length > 0
     || scope.rubrics.length > 0 || scope.from != null || scope.to != null;
+  // Open or folded is remembered per filter set, in this browser only.
+  const memKey = `stats-filters-open${prefix ? `:${prefix}` : ''}`;
+  const [open, setOpenState] = useState(false);
+  useEffect(() => { try { setOpenState(localStorage.getItem(memKey) === '1'); } catch { /* storage off */ } }, [memKey]);
+  const setOpen = (v: boolean) => { setOpenState(v); try { localStorage.setItem(memKey, v ? '1' : '0'); } catch { /* storage off */ } };
+  const summary = [
+    scope.all ? 'All accounts' : scope.accounts.map(accountLabel).join(', '),
+    scope.from || scope.to ? `${scope.from ?? '…'} → ${scope.to ?? '…'}` : PERIODS.find((p) => p.key === scope.period)?.label,
+    scope.rubrics.length ? `Rubric ${scope.rubrics.join(', ')}` : null,
+    scope.sessions.length ? scope.sessions.join(', ') : null,
+    scope.directions.length ? scope.directions.join(', ') : null,
+  ].filter(Boolean).join(' · ');
   return (
     <div data-stats-filters className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <motion.button type="button" data-no-press data-filters-toggle whileTap={press} transition={spring} aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium"
+          style={{ borderColor: open || filtered || !scope.all ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: 'var(--glass-fill)', color: open || filtered || !scope.all ? 'rgb(var(--accent))' : 'var(--text-dim)' }}>
+          Filters
+          <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
+        </motion.button>
+        {!open && <span className="min-w-0 truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>{summary}</span>}
+        {!open && filtered && (
+          <button type="button" onClick={() => push({ period: null, session: null, dir: null, rubric: null, from: null, to: null })}
+            className="text-[11.5px] underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-dim)' }}>
+            Clear
+          </button>
+        )}
+        {!open && prefix && overridden && (
+          <button type="button" onClick={followPage}
+            className="text-[11.5px] underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-dim)' }}>
+            Same as the page
+          </button>
+        )}
+      </div>
+      {open && <>
       <Row label="Accounts">
         {available.map((a) => (
           <Chip key={a.account} on={!scope.all && scope.accounts.includes(a.account)}
@@ -163,6 +199,7 @@ export function StatsFilters({ available, scope, rubrics = [], prefix = '', over
           </button>
         )}
       </Row>
+      </>}
     </div>
   );
 }

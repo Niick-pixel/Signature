@@ -7,8 +7,9 @@ import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
 import { press, spring, springSoft } from '@/lib/motion';
+import { DIRECTIONS, SESSIONS } from '@/lib/domain';
 import { openTrade } from '@/components/trade/openTrade';
-import { overallScore, SCORE_AXES, type DashboardData, type DashWorld, type TileValues } from '@/lib/dashboard';
+import { DASH_PERIODS, overallScore, SCORE_AXES, type DashboardData, type DashWorld, type TileValues } from '@/lib/dashboard';
 
 /*
   The Dashboard (Phase 1). Every block, the world it counts, dollars or R,
@@ -27,20 +28,28 @@ export interface AccountOption { key: string; label: string; n: number }
 export function DashboardView({ data, today, accounts = [] }: { data: Record<DashWorld, DashboardData>; today: string; accounts?: AccountOption[] }) {
   const { prefs, update } = usePreferences();
   const chosen = prefs.dashAccounts.filter((k) => accounts.some((a) => a.key === k));
+  const f = prefs.dashFilters;
+  const filtered = chosen.length > 0 || f.period !== 'all' || f.sessions.length > 0 || f.dirs.length > 0;
+  const nFilters = (chosen.length ? 1 : 0) + (f.period !== 'all' ? 1 : 0) + (f.sessions.length ? 1 : 0) + (f.dirs.length ? 1 : 0);
+  const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<DashboardData | null>(null);
-  // Chosen accounts are worked out on the server (app/api/dashboard); the three worlds come with the page.
+  // Filtered views are worked out on the server (app/api/dashboard); the three unfiltered worlds come with the page.
+  const query = `accounts=${encodeURIComponent(chosen.join(','))}&world=${prefs.dashWorld}&period=${f.period}&session=${encodeURIComponent(f.sessions.join(','))}&dir=${encodeURIComponent(f.dirs.join(','))}&today=${today}`;
   useEffect(() => {
-    if (!chosen.length) { setPicked(null); return; }
+    if (!filtered) { setPicked(null); return; }
     let live = true;
-    void fetch(`/api/dashboard?accounts=${encodeURIComponent(chosen.join(','))}&today=${today}`).then((r) => r.json()).then((j) => { if (live) setPicked(j); }).catch(() => {});
+    void fetch(`/api/dashboard?${query}`).then((r) => r.json()).then((j) => { if (live) setPicked(j); }).catch(() => {});
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chosen.join(','), today]);
-  const d = (chosen.length && picked) ? picked : data[prefs.dashWorld] ?? data.real;
+  }, [query]);
+  const d = (filtered && picked) ? picked : data[prefs.dashWorld] ?? data.real;
+  const setF = (patch: Partial<typeof f>) => update({ dashFilters: { ...f, ...patch } });
+  const flip = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const money = prefs.dashUnit === 'money' && d.total.money != null;
   const b = prefs.dashBlocks;
   const toggle = (k: string) => update({ dashAccounts: chosen.includes(k) ? chosen.filter((x) => x !== k) : [...chosen, k] });
-  const scope = chosen.length ? chosen.map((k) => accounts.find((a) => a.key === k)?.label ?? k).join(', ') : WORLD_LABEL[d.world];
+  const scope = [chosen.length ? chosen.map((k) => accounts.find((a) => a.key === k)?.label ?? k).join(', ') : WORLD_LABEL[prefs.dashWorld],
+    f.period !== 'all' ? DASH_PERIODS.find(([k]) => k === f.period)?.[1] : null, f.sessions.length ? f.sessions.join(', ') : null, f.dirs.length ? f.dirs.join(', ') : null].filter(Boolean).join(' · ');
   return (
     <div className="mx-auto flex w-full max-w-[80rem] flex-col px-6 pb-6 pt-3 xl:h-full" data-dashboard>
       <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -51,11 +60,9 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5" data-dash-accounts>
-          <Pill on={!chosen.length} onClick={() => update({ dashAccounts: [] })} title={`Everything in ${WORLD_LABEL[prefs.dashWorld].toLowerCase()} (Settings → Dashboard)`}>All</Pill>
-          {accounts.filter((a) => !a.key.includes('|') || chosen.includes(a.key) || accounts.filter((x) => x.key.startsWith(`${a.key.split('|')[0]}|`)).length > 1).map((a) => (
-            <Pill key={a.key} on={chosen.includes(a.key)} onClick={() => toggle(a.key)} title={`${a.n} trade${a.n === 1 ? '' : 's'}`}>{a.label}</Pill>
-          ))}
-          <span className="mx-1 h-4 w-px" style={{ background: 'var(--glass-stroke)' }} />
+          <Chip on={open || nFilters > 0} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" data="filters">
+            Filters{nFilters ? ` · ${nFilters}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
+          </Chip>
           <Chip on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data="hide-pnl">
             {prefs.hidePnl ? 'Show P&L' : 'Hide P&L'}
           </Chip>
@@ -64,6 +71,34 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           </Chip>
         </div>
       </header>
+
+      {open && (
+        <div className="glass mb-3 grid gap-x-6 gap-y-2.5 rounded-[calc(18px*var(--rk))] px-4 py-3 sm:grid-cols-[auto_1fr]" data-dash-filters>
+          <Row label="Accounts">
+            <Pill on={!chosen.length} onClick={() => update({ dashAccounts: [] })} title={`Everything in ${WORLD_LABEL[prefs.dashWorld].toLowerCase()} (Settings → Dashboard). Missed setups are never in All.`}>All</Pill>
+            {accounts.filter((a) => !a.key.includes('|') || chosen.includes(a.key) || accounts.filter((x) => x.key.startsWith(`${a.key.split('|')[0]}|`)).length > 1).map((a) => (
+              <Pill key={a.key} on={chosen.includes(a.key)} onClick={() => toggle(a.key)} title={a.key === 'Missed' ? `${a.n} missed setup${a.n === 1 ? '' : 's'}, counted by what they would have made` : `${a.n} trade${a.n === 1 ? '' : 's'}`}>{a.label}</Pill>
+            ))}
+          </Row>
+          <Row label="Period">
+            {DASH_PERIODS.map(([k, l]) => <Pill key={k} on={f.period === k} onClick={() => setF({ period: k })}>{l}</Pill>)}
+          </Row>
+          <Row label="Session">
+            <Pill on={!f.sessions.length} onClick={() => setF({ sessions: [] })}>Any</Pill>
+            {SESSIONS.map((x) => <Pill key={x} on={f.sessions.includes(x)} onClick={() => setF({ sessions: flip(f.sessions, x) })}>{x}</Pill>)}
+          </Row>
+          <Row label="Direction">
+            <Pill on={!f.dirs.length} onClick={() => setF({ dirs: [] })}>Both</Pill>
+            {DIRECTIONS.map((x) => <Pill key={x} on={f.dirs.includes(x)} onClick={() => setF({ dirs: flip(f.dirs, x) })}>{x}</Pill>)}
+          </Row>
+          {nFilters > 0 && (
+            <div className="sm:col-span-2">
+              <button type="button" className="text-[11px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}
+                onClick={() => update({ dashAccounts: [], dashFilters: { period: 'all', sessions: [], dirs: [] } })}>Clear filters</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {d.total.trades === 0 ? (
         <div className="glass rounded-[calc(24px*var(--rk))] p-10 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>
@@ -95,6 +130,15 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
         </div>
       )}
     </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <>
+      <span className="pt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{label}</span>
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
+    </>
   );
 }
 

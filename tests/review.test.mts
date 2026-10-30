@@ -100,13 +100,11 @@ test('day rules: the third trade after two losses, the 10-minute cooldown, the n
   assert.deepEqual(checkDay([d('09:50')], DEFAULT_RULE_CONFIG, { nfpGuess: true })[0].id, 'news-day');
 });
 
-test('backtests are checked per replay session: max trades and the loss stop, never the clock or the news', () => {
+test('backtests skip the day rules, session or not: a replay evening is not a trading day', () => {
   const bt = (time: string, s: number | null, x: Record<string, unknown> = {}) => t({ account: 'Backtest (FX Replay)', date: `2026-10-17T${time}`, session_index: s, outcome: 'Loss', r_multiple: -1, ...x });
-  const a = bt('16:11', 10); const b = bt('16:12', 10); const c = bt('18:16', 10); const other = bt('18:20', 11);
-  const breaks = dayBreaksByTrade([a, b, c, other] as never[], () => ({ redFolder: true }));
-  assert.deepEqual((breaks.get(c.id) ?? []).map((r) => r.id).sort(), ['max-trades', 'stop-after-losses'], 'the Oct 17 sequence: the third replay loss');
-  assert.equal(breaks.get(b.id), undefined, 'no cooldown in a replay (its times are when it was logged)');
-  assert.equal(breaks.get(other.id), undefined, 'another session starts clean; no news in a replay');
+  const a = bt('16:11', 10); const b = bt('16:12', 10); const c = bt('18:16', 10);
+  const breaks = dayBreaksByTrade([a, b, c] as never[], () => ({ redFolder: true }));
+  for (const x of [a, b, c]) assert.equal(breaks.get(x.id), undefined);
 });
 
 test('backtests without a session (and undated trades) skip the day rules', () => {

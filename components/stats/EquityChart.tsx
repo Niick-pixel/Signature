@@ -32,7 +32,9 @@ export function EquityChart({ followed, broken, all, cone }: { followed: CurvePo
     ...(all ? [{ key: 'all', label: 'All trades', points: all, color: 'var(--accent)', dashed: false }] : []),
     { key: 'followed', label: 'Rules followed', points: followed, color: 'var(--series-a)', dashed: false },
     { key: 'broken', label: 'Rule broken', points: broken, color: 'var(--series-b)', dashed: true },
-  ].filter((s) => s.points.length > 0);
+  ].filter((s) => s.points.length > 0 && (s.key === 'all' || s.points.some((p) => p.own !== false)));
+  // A split curve's own trades (it also has a point, flat, at every other trade).
+  const ownN = (s: Series) => s.points.filter((p) => p.own !== false).length;
 
   if (series.length === 0) {
     return (
@@ -63,6 +65,14 @@ export function EquityChart({ followed, broken, all, cone }: { followed: CurvePo
   // own hyphen is narrower than a digit and breaks the tabular alignment.
   const fmt = (v: number) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(1)}R`;
 
+  // End labels pushed apart when two lines finish close together (each label is two lines, ~28 high).
+  const labelY = (() => {
+    const order = series.map((sr, k) => ({ k, v: y(sr.points[sr.points.length - 1].cumulative) })).sort((a, b) => a.v - b.v);
+    const out: number[] = new Array(series.length);
+    let prev = -Infinity;
+    for (const o of order) { const v = Math.max(o.v, prev + 30); out[o.k] = v; prev = v; }
+    return out;
+  })();
   return (
     <div>
       <svg
@@ -116,8 +126,9 @@ export function EquityChart({ followed, broken, all, cone }: { followed: CurvePo
           />
         )}
 
-        {series.map((s) => {
+        {series.map((s, si) => {
           const last = s.points[s.points.length - 1];
+          const ly = labelY[si];
           return (
             <g key={s.key}>
               <path
@@ -137,7 +148,7 @@ export function EquityChart({ followed, broken, all, cone }: { followed: CurvePo
               {/* Direct label, so identity never depends on colour alone. */}
               <text
                 x={x(s.points.length - 1) + 10}
-                y={y(last.cumulative) + 3.5}
+                y={ly + 3.5}
                 fontSize={11}
                 fill="var(--text-dim)"
               >
@@ -145,7 +156,7 @@ export function EquityChart({ followed, broken, all, cone }: { followed: CurvePo
               </text>
               <text
                 x={x(s.points.length - 1) + 10}
-                y={y(last.cumulative) + 16}
+                y={ly + 16}
                 fontSize={11}
                 fontWeight={600}
                 fill="var(--text)"
@@ -187,7 +198,7 @@ export function EquityChart({ followed, broken, all, cone }: { followed: CurvePo
                 strokeDasharray={s.dashed ? '5 3' : undefined}
               />
             </svg>
-            {s.label} · n {s.points.length}
+            {s.label} · n {ownN(s)}
           </span>
         ))}
         {cone && (

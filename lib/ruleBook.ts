@@ -257,8 +257,15 @@ export const checkable = (t: Trade) => !t.deleted_at && !isHypothetical(t.accoun
  * backtest with a replay session (backtests have no market date; the session
  * stands in for the day).
  */
+/*
+  Real trading days only. Backtests used to be grouped by replay session, but
+  a replay evening is not a trading day: three replayed setups in one sitting
+  read as "more than 2 trades" and "a 2nd trade of the day". Backtests keep
+  every per-trade check; the per-day rules and the state a trade was taken in
+  (trade of the day, losses in a row before) leave them out.
+*/
 export const dayCheckable = (t: Trade) => checkable(t) && isTaken(t.outcome) && t.status !== 'Planned'
-  && (isBacktest(t.account) ? t.session_index != null : !t.undated);
+  && !isBacktest(t.account) && !t.undated;
 
 /** The key day rules group by: the date for a real trade, the replay session for a backtest. */
 export const dayKey = (t: Trade): string | null => (!dayCheckable(t) ? null : isBacktest(t.account) ? `session:${t.session_index}` : t.date.slice(0, 10));

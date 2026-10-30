@@ -144,7 +144,8 @@ export function TargetCheckBlock({ s, set, ctx }: {
         <Select value={s.nearestType as typeof TARGET_TYPES[number] | null} onChange={(v) => set({ nearestType: v })} options={TARGET_TYPES} placeholder="Which…" />
       </Field>
       <div className="grid gap-3">
-        <Field quiet label="Opposing swings in between" group>
+        <Field quiet label="Opposing swings in between" group
+          hint="Swing points standing between your entry and the target that price must break first: swing highs on a long, swing lows on a short. Each one is resting liquidity that can stop the move early. 0 is a clean path; 2+ means the target sits behind obstacles.">
           <Segmented value={s.swings} onChange={(v) => set({ swings: v })} options={SWING_COUNTS} />
         </Field>
         <Field quiet label="R to nearest liquidity" hint={`Under ${MIN_R_TO_NEAREST}R is no trade by your rules.`} group>

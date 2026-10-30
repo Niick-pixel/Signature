@@ -232,7 +232,7 @@ Both count toward *broke the plan* (section 5), and the same rule found both way
 - **Risk at most 1%** (setting `maxRiskPct`).
 - **News day:** a red-folder event, the box "no news" left unticked, or the first Friday of the month with no news saved (probably NFP).
 
-**Backtests have no dates.** Day rules run per **replay session** instead of per day: at most 2 trades and nothing after 2 losses in a row. The 10-minute cooldown and the news rule are skipped, because a replay's clock is when you logged it, not market time. A backtest without a session number is never checked by day rules; nothing is guessed.
+**Backtests are left out of the day rules** and of the state below. A replay evening is not a trading day: three replayed setups in one sitting are not "more than 2 trades". Backtests keep every check on the trade itself. *(Earlier versions grouped them by replay session; that was dropped.)*
 
 The day strip on Review counts real trades only and shows "X/2 trades · Y/2 losses in a row".
 

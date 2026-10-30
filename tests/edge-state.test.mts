@@ -38,20 +38,14 @@ test('state: a win resets the run', () => {
   assert.deepEqual(xs.map((x: { id: string }) => s.get(x.id)!.lossesInRowBefore), [0, 1, 0, 1]);
 });
 
-test('state: backtests group by replay session, never by date; no minutes, no news', () => {
+test('state: backtests carry no day state (a replay evening is not a trading day)', () => {
   const xs = [
     t({ account: BACKTEST, session_index: 4, date: '2026-10-17T20:10', r_multiple: -1 }),
     t({ account: BACKTEST, session_index: 4, date: '2026-10-17T20:20', r_multiple: -1 }),
-    t({ account: BACKTEST, session_index: 5, date: '2026-10-17T20:30', r_multiple: 1 }),
-    t({ account: BACKTEST, session_index: null, date: '2026-10-17T20:40', r_multiple: 1 }),
   ];
   const s = tradeStates(xs, () => ({ redFolder: true }));
-  const [a, b, c, d] = xs.map((x: { id: string }) => s.get(x.id)!);
-  assert.equal(a.key, 'session:4'); assert.equal(b.tradeNo, 2); assert.equal(b.lossesInRowBefore, 1);
-  assert.equal(b.minutesSinceLastLoss, null); assert.equal(b.newsConflict, null);
-  assert.equal(c.tradeNo, 1);
-  assert.equal(d.tradeNo, null);                                                      // no session: not checkable, never guessed
-  assert.equal(withState(xs, s)[1].__state?.tradeNo, 2);
+  for (const x of xs) { const st = s.get((x as { id: string }).id)!; assert.equal(st.tradeNo, null); assert.equal(st.key, null); assert.equal(st.lossesInRowBefore, null); }
+  assert.equal(withState(xs, s)[1].__state?.tradeNo, null);
 });
 
 test('state: news from the day context', () => {
@@ -81,11 +75,11 @@ test('tilt: cells by losses × trade number, shrunk toward the mean; sequences o
   assert.equal(seq.trades[2].rules[0].source, 'auto');
 });
 
-test('tilt: a replay session is labelled as one', () => {
+test('tilt: backtests never make a tilt sequence', () => {
   const xs = [t({ account: BACKTEST, session_index: 10, date: '2026-10-17T20:00', r_multiple: -1 }), t({ account: BACKTEST, session_index: 10, date: '2026-10-17T20:10', r_multiple: -1 })];
   const tilt = tiltIndex(xs, tradeStates(xs), () => [{ id: 'stop-after-losses', short: 'x', source: 'self' }]);
-  assert.equal(tilt.sequences[0].label, 'Replay session 10');
-  assert.equal(tilt.sequences[0].trades[0].rules[0].source, 'self');
+  assert.equal(tilt.sequences.length, 0);
+  assert.equal(tilt.cells.reduce((a, c) => a + c.n, 0), 0);
 });
 
 test('hesitation: real-time missed setups at the threshold with the trigger; hindsight left out and counted', () => {

@@ -203,17 +203,6 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   const [revealed, setRevealed] = useState(Boolean(trade));
   const [similar, setSimilar] = useState<SimilarResult | null>(null);
   const [simLoading, setSimLoading] = useState(false);
-  const [lastSession, setLastSession] = useState<number | null>(null);
-  useEffect(() => {
-    if (!isBacktest(account)) return;
-    let live = true;
-    void fetch('/api/backtest-session').then((r) => r.json()).then((d: { last: number | null; suggested: number }) => {
-      if (!live) return;
-      setLastSession(d.last);
-      setAnat((prev) => (prev.session_index == null ? { ...prev, session_index: d.suggested } : prev));
-    }).catch(() => {});
-    return () => { live = false; };
-  }, [account]);
   // Guardrails (026, 029): the BE trigger comes from the management plan.
   const beTrigger = management ? BE_FROM_MANAGEMENT[management] : trade?.be_trigger ?? null;
   const [tc, setTc] = useState<TargetCheckState>(() => ({
@@ -1203,19 +1192,28 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           </Field>
         </div>
 
-        <SetupAnatomy a={anat} set={setA} backtest={isBacktest(account)} lastSession={lastSession} />
+        <SetupAnatomy a={anat} set={setA} />
 
         {!revealed ? (
           <motion.button type="button" onClick={() => void reveal()} whileTap={press} transition={spring} data-reveal-outcome
-            className="w-full rounded-[calc(16px*var(--rk))] border px-4 py-3.5 text-left"
-            style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.06)', boxShadow: '0 0 18px rgb(var(--accent) / 0.12)' }}>
-            <span className="block text-[13px] font-semibold" style={{ color: 'rgb(var(--accent))' }}>Reveal outcome fields →</span>
-            <span className="mt-0.5 block text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
-              The setup first, so the result cannot colour it. Opening shows what similar past setups did — stage, outcome and lesson are all there.
+            className="group flex w-full items-center gap-3 rounded-[calc(16px*var(--rk))] border border-dashed px-4 py-3 text-left"
+            style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.05)' }}>
+            <span className="grid size-8 shrink-0 place-items-center rounded-full" style={{ background: 'rgb(var(--accent) / 0.14)', color: 'rgb(var(--accent))' }}>
+              <LockIcon />
             </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] font-semibold" style={{ color: 'rgb(var(--accent))' }}>Outcome</span>
+              <span className="block text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+                Setup first, so the result cannot colour it. Opening shows what similar setups did.
+              </span>
+            </span>
+            <span className="shrink-0 rounded-full px-3 py-1 text-[11.5px] font-medium transition-transform group-hover:translate-x-0.5"
+              style={{ background: 'rgb(var(--accent))', color: 'var(--bg)' }}>Open →</span>
           </motion.button>
         ) : (<>
         {!editing && <SimilarCard s={similar} loading={simLoading} />}
+        {/* The result, in one card: stage, how it ended, what it paid, how it ran, how it was closed. */}
+        <div data-outcome-card className="space-y-4 rounded-[calc(16px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }}>
         <Field quiet
           label="Stage"
           pending={pending('status')}
@@ -1250,7 +1248,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
               </Field>
 
               {/* What it paid. */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-3">
                 <Field quiet label="R" hint="R multiple — e.g. 2.4, or 1 for a one-R loss (saved negative). Leave blank to settle later.">
                   <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
                     value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
@@ -1261,6 +1259,10 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
                 </Field>
                 <Field quiet label="Contracts">
                   <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
+                </Field>
+                <Field quiet label="Max R" hint="How far it went your way before it turned. Check the chart.">
+                  <Input type="number" step="0.1" min="0" inputMode="decimal" placeholder="—"
+                    value={mfeR} onChange={(e) => setMfeR(e.target.value)} />
                 </Field>
               </div>
               {/* A loss typed positive is saved negative (domain.ts signForOutcome);
@@ -1278,18 +1280,11 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
                 )}
               </AnimatePresence>
 
-              {/* How far it ran, and whether +1R came first — the fastest way to
-                  tell a management problem from a selection problem. */}
-              {/* Stacked: side by side, the yes / no ran into the next column. */}
-              <div className="grid gap-3">
-                <Field quiet label="Max R reached" hint="How far it went your way before it turned. Check the chart.">
-                  <Input type="number" step="0.1" min="0" inputMode="decimal" placeholder="—"
-                    value={mfeR} onChange={(e) => setMfeR(e.target.value)} />
-                </Field>
-                <TriState value={reached1R} onChange={setReached1R}
-                  label="Reached +1R before the stop?"
-                  hint="If most of your losers did, the problem is management rather than selection." />
-              </div>
+              {/* Whether +1R came first — the fastest way to tell a management
+                  problem from a selection problem. One line. */}
+              <TriState inline value={reached1R} onChange={setReached1R}
+                label="Reached +1R before the stop?"
+                hint="If most of your losers did, the problem is management rather than selection." />
               {movedStopSuggested(pending('outcome') ? null : outcome, beTrigger, num(mfeR)) && !mistakeTags.includes('Moved stop') && (
                 <Notice id="moved-stop">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1337,6 +1332,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
             </Collapse>
           )}
         </AnimatePresence>
+        </div>
         </>)}
         </div>
 

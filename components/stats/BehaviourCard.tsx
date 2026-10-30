@@ -90,4 +90,4 @@ export function BehaviourCard({ tilt, hesitation }: { tilt: TiltIndex; hesitatio
   );
 }
 
-export const BEHAVIOUR_HELP = 'Computed from the order of your trades, never asked. Day rules run per day for real accounts and per replay session for backtests: at most 2 trades, nothing after 2 losses in a row, 10 minutes after a loss (real days only), no red-folder day.';
+export const BEHAVIOUR_HELP = 'Computed from the order of your trades, never asked. Day rules run on real trading days: at most 2 trades, nothing after 2 losses in a row, 10 minutes after a loss, no red-folder day. Backtests are left out — a replay evening is not a trading day.';

@@ -61,7 +61,8 @@ const fromYn = (v: 'Yes' | 'No' | null) => (v == null ? null : v === 'Yes');
 function Row({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <span className="flex items-center gap-1 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>{label}{help && <Help>{help}</Help>}</span>
+      {/* The same caption as every other field on the form. */}
+      <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.07em]" style={{ color: 'var(--text-faint)' }}>{label}{help && <span className="normal-case tracking-normal"><Help>{help}</Help></span>}</span>
       {children}
     </div>
   );
@@ -80,18 +81,13 @@ function Sub({ label, children }: { label: string; children: React.ReactNode }) 
 /** How many of the setup's anatomy fields are recorded — shown on the closed disclosure. */
 const PRE: AnatomyKey[] = ['htf_bias_tf', 'liquidity_event', 'sweep_tf', 'fvg_tf', 'entry_tf', 'fvg_quality', 'candle_strength', 'inversion_speed', 'rr_score', 'cisd', 'smt_state', 'into_eq_pool', 'planned_rr', 'entry_method', 'stop_method', 'pre_state'];
 
-export function SetupAnatomy({ a, set, backtest, lastSession }: { a: Anatomy; set: Set; backtest: boolean; lastSession: number | null }) {
+// The replay-session picker is gone: backtests are left out of the day rules
+// (lib/ruleBook dayCheckable), which was the only thing it fed.
+export function SetupAnatomy({ a, set }: { a: Anatomy; set: Set }) {
   const filled = PRE.filter((k) => a[k] != null).length;
   const score = closureScore(a);
-  const sessions = Array.from({ length: Math.max(1, (lastSession ?? 0) + 1) }, (_, i) => i + 1).slice(-6);
   return (
     <div className="space-y-3" data-setup-anatomy>
-      {backtest && (
-        <Row label="Replay session" help="Backtests have no market date. The session number lets per-session rules (2 trades, stop after 2 losses) be checked. Same evening, same replay: same number.">
-          <Chips options={sessions} value={a.session_index} onChange={(v) => set('session_index', v)}
-            label={(n) => (n === (lastSession ?? 0) + 1 ? `${n} · new` : `Session ${n}`)} testid="session" />
-        </Row>
-      )}
       {/* Three questions the engine leans on (the Rule Lab, the setup score, planned vs achieved);
           everything else is optional and folded — several restate the checklist. */}
       <Disclosure label={`Setup detail · optional${filled ? ` · ${filled} recorded` : ''}`}>

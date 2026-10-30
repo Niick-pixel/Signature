@@ -437,7 +437,9 @@ export function arrange(kind: Arrangement, grids: Array<{ width: number; height:
     const rest = n - sideN;
     const bottomN = rest >= 2 ? Math.max(1, Math.floor(rest / 3)) : rest;
     const sides = ranked.slice(0, sideN);
-    const left = sides.filter((_, i) => i % 2 === 0); const right = sides.filter((_, i) => i % 2 === 1);
+    // Each side group goes to the shorter side, so left and right stand the same height.
+    const left: number[] = []; const right: number[] = []; let hl = 0; let hr = 0;
+    for (const i of sides) { if (hl <= hr) { left.push(i); hl += grids[i].height + G; } else { right.push(i); hr += grids[i].height + G; } }
     const column = (ids: number[], side: -1 | 1) => {
       const h = ids.reduce((a, i) => a + grids[i].height, 0) + G * Math.max(0, ids.length - 1);
       let y = -h / 2;
@@ -467,19 +469,29 @@ export function arrange(kind: Arrangement, grids: Array<{ width: number; height:
     return { at, hub: { x: 0, y: -135 }, box: boxOf(at, grids) };
   }
 
-  // columns: the biggest third stacked on the left, the rest packed on the right.
-  const bigN = Math.max(1, Math.ceil(n / 3));
-  const big = inOrder(ranked.slice(0, bigN)); const small = inOrder(ranked.slice(bigN));
-  const bigW = Math.max(...big.map((i) => grids[i].width));
-  let y = 0;
-  for (const i of big) { at[i] = { x: bigW - grids[i].width, y }; y += grids[i].height + G; }
-  if (small.length) {
-    const rightW = Math.max(900, BOARD_ROOM - bigW - G * 2);
-    const p = pack(small.map((i) => grids[i]), rightW);
-    small.forEach((i, k) => { at[i] = { x: bigW + G * 2 + p.at[k].x, y: p.at[k].y }; });
+  /*
+    columns: three columns mirrored on the hub. Biggest first, each group goes
+    to the shortest column (the middle one wins ties, then left, then right),
+    so the heights stay even. The middle column is centred under the hub, the
+    left one hugs it from the left, the right one from the right — the same
+    gap either side.
+  */
+  const cols: number[][] = [[], [], []]; const colH = [0, 0, 0];
+  for (const i of ranked) {
+    const c = [1, 0, 2].reduce((best, k) => (colH[k] < colH[best] ? k : best), 1);
+    cols[c].push(i); colH[c] += grids[i].height + G;
   }
-  const box = boxOf(at, grids);
-  return { at, hub: { x: (box.minX + box.maxX) / 2, y: -135 }, box };
+  const colW = cols.map((c) => (c.length ? Math.max(...c.map((i) => grids[i].width)) : 0));
+  const half = colW[1] ? colW[1] / 2 + G : G / 2;
+  cols.forEach((c, k) => {
+    let y = 0;
+    for (const i of c) {
+      const w = grids[i].width;
+      const x = k === 1 ? -w / 2 : k === 0 ? -half - w : half;
+      at[i] = { x, y }; y += grids[i].height + G;
+    }
+  });
+  return { at, hub: { x: 0, y: -135 }, box: boxOf(at, grids) };
 }
 
 /** The offset slot of a group under an arrangement: hand nudges are kept per arrangement. */

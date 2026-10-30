@@ -545,7 +545,7 @@ export function preGradedOnly(trades: Trade[]): Trade[] {
  * Stats that are supposed to change what I do next.
  * ------------------------------------------------------------------ */
 
-export interface CurvePoint { i: number; date: string; r: number; cumulative: number }
+export interface CurvePoint { i: number; date: string; r: number; cumulative: number; /** On a split curve: whether this trade is one of its own (flat otherwise). */ own?: boolean }
 
 /**
  * Two equity curves from the same trades: the ones where the checklist says
@@ -577,10 +577,22 @@ function curve(trades: Trade[]): CurvePoint[] {
 
 /** `followed` decides the split; pages that know the day rules pass lib/review planBreaks through it. */
 export function equityCurves(trades: Trade[], followed: (t: Trade) => boolean = derivedAdherence): EquityCurves {
+  /*
+    The split curves share the all-trades axis: each moves on its own trades
+    and stays flat on the others, so all three end at the last trade and line
+    up under the cursor. Drawn on their own trade counts (24 and 11 of 35)
+    they were squeezed onto the same width and looked lagged.
+  */
+  const all = curve(trades);
+  const split = (mine: (t: Trade) => boolean): CurvePoint[] => {
+    let c = 0;
+    const byDate = trades.filter((t) => isTaken(t.outcome) && t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date));
+    return byDate.map((t, i) => { const own = mine(t); if (own) c += t.r_multiple as number; return { i, date: t.date, r: own ? (t.r_multiple as number) : 0, cumulative: c, own }; });
+  };
   return {
-    followed: curve(trades.filter((t) => followed(t))),
-    broken: curve(trades.filter((t) => !followed(t))),
-    all: curve(trades),
+    followed: split((t) => followed(t)),
+    broken: split((t) => !followed(t)),
+    all,
   };
 }
 

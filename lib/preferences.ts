@@ -53,6 +53,8 @@ export interface Preferences {
   dashWorld: 'real' | 'backtest' | 'all';
   /** Chosen accounts (account, or account|label). Empty: the world above decides. */
   dashAccounts: string[];
+  /** The Dashboard's other filters: a period ending today, sessions, directions (empty: all). */
+  dashFilters: { period: 'all' | 'week' | 'month' | '30' | '90' | 'year'; sessions: string[]; dirs: string[] };
   /** Lead with dollars or with R. */
   dashUnit: 'money' | 'r';
   /** Each Dashboard block, on or off. */
@@ -216,6 +218,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dashWorld: 'real',
   dashUnit: 'money',
   dashAccounts: [],
+  dashFilters: { period: 'all', sessions: [], dirs: [] },
   dashBlocks: { hero: true, tiles: true, chart: true, week: true, score: true, recent: true, prop: true },
   scoreAxes: { rules: true, honesty: true, consistency: true, profitFactor: true, avgR: true, winRate: true },
   sidebar: 'dashboard',
@@ -314,6 +317,7 @@ export function readPreferences(): Preferences {
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
       // The first version's sources: classic → quotes, both → traders and tips.
       quoteSource: (({ classic: 'quotes', both: 'traders' } as Record<string, QuoteSource>)[saved.quoteSource as string] ?? saved.quoteSource ?? DEFAULT_PREFERENCES.quoteSource) as QuoteSource,
+      dashFilters: { ...DEFAULT_PREFERENCES.dashFilters, ...(saved.dashFilters ?? {}) },
       dashAccounts: Array.isArray(saved.dashAccounts) ? saved.dashAccounts.filter((x) => typeof x === 'string') : [],
       looks: Array.isArray(saved.looks) ? saved.looks.filter((l) => l && typeof l.id === 'string') : [],
       customQuotes: Array.isArray(saved.customQuotes) ? saved.customQuotes.filter((x) => typeof x === 'string') : [],

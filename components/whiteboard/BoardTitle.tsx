@@ -21,6 +21,10 @@ function BoardTitleInner({ data }: NodeProps) {
   const { label, sub } = data as unknown as BoardTitleData;
 
   return (
+    // A fixed 300 × 130 frame with the card centred in it: the layout places
+    // the node by that size (hub.x − 150), so a short label like "Reason" no
+    // longer sat left of the centre line.
+    <div className="flex h-[130px] w-[300px] items-center justify-center">
     <motion.div
       // Arrives with the board's own fade, not a second spring on top of it.
       initial={false}
@@ -51,6 +55,7 @@ function BoardTitleInner({ data }: NodeProps) {
       <Handle type="source" position={Position.Bottom}
         style={{ opacity: 0, pointerEvents: 'none', top: '50%', bottom: 'auto', left: '50%', transform: 'translate(-50%, -50%)' }} />
     </motion.div>
+    </div>
   );
 }
 

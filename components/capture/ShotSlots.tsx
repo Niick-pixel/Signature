@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, spring, springBouncy, exitQuick } from '@/lib/motion';
-import { SHOT_SLOTS, type ShotSlot } from '@/lib/domain';
+import { FORM_SHOT_SLOTS as SHOT_SLOTS, type ShotSlot } from '@/lib/domain';
 
 const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'];
 
@@ -15,12 +15,12 @@ export function nextSlot(files: SlotFiles): ShotSlot {
 }
 
 /**
- * Charts for a new trade, in labelled slots: HTF context, Entry, Result, Other.
+ * Charts for a new trade, in two labelled slots: Entry and Result.
  *
- * The HTF frame is why you were looking, the entry is what you acted on, the
- * result is what the market did. One image is enough to save; the rest are
- * there when you have them. Each paste fills the next empty slot, so copying
- * three charts out of TradingView is paste, paste, paste — no labelling.
+ * The entry is what you acted on, the result is what the market did. One
+ * image is enough to save. Each paste fills the next empty slot, so copying
+ * two charts out of TradingView is paste, paste — no labelling. (More can be
+ * added on the trade itself afterwards.)
  */
 export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (next: SlotFiles) => void }) {
   const [selected, setSelected] = useState<ShotSlot | null>(null);
@@ -123,14 +123,14 @@ export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (ne
                 Paste your chart <kbd className="rounded-md px-1.5 py-0.5 text-[11px]" style={{ background: 'var(--glass-fill-strong)' }}>⌘V</kbd>
               </p>
               <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                anywhere on this page — each paste fills the next slot below
+                anywhere here · Entry, then Result
               </p>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
 
-      <div className="mt-2 grid grid-cols-4 gap-1.5">
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
         {SHOT_SLOTS.map((slot) => {
           const url = urls[slot];
           const on = shownSlot === slot;
