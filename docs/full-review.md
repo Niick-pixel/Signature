@@ -2,7 +2,7 @@
 
 Branch: `review/full-pass` · Reviewed at commit `df70ba4` · 2026-10-30
 
-Status: **Phase A only (audit). Nothing has been fixed yet.** Phase B/C wait for approval.
+Status: Phase A done · **Phase B (10 fixes) done** · Phase C (features 1, 7, 10, 11) in progress.
 
 ---
 
@@ -169,4 +169,24 @@ Skipped for now, with reasons: Q3 (splitting big files — a pure refactor, best
 
 ## 5. Fixed / skipped log
 
-_Filled in during Phase B and C._
+### Phase B — fixes (all on `review/full-pass`)
+
+| Fix | Commit | Test | Before → after |
+|---|---|---|---|
+| E1+E2 local-server guard (`proxy.ts`) | f93d9ec | `request-guard.test.mts` | cross-site POST 201 → **403**; rebinding `Host` export 200 → **421**; the app unaffected |
+| D1 complete export/import, v17, import takes the .zip | 4c1c1a2 | `roundtrip-full.test.mts` (every table from `sqlite_master`) | 8 tables lost rows on restore → **0**; gallery charts restored |
+| C1 Journal today (local) | 7ca494b | `local-day.test.mts` (scans for the UTC idiom) | evening page on tomorrow → today |
+| C2 Risk banner today (local) | a33b36a | same | banner empty after 6 pm → counts today |
+| A4 new backtests undated | d86aaa4 | `startsUndated` test | 1 click ("No date") every backtest → 0 |
+| D2 purge cleans children, never a shared file | 629aeeb | `purge.test.mts` | 8 kinds of orphan rows + files → 0 |
+| E3 openExternal web/mail only | 8e04192 | `safe-external.test.mts` | any scheme → https/http/mailto |
+| Q1 lint restored | 27af87f | `npm run lint` | broken → **0 errors**, 98 warnings (React Compiler advice, unused vars) |
+| P1 no whole-project tracing | 8cad2de | standalone server started on an empty journal | build warnings 3 → **0**; server bundle 75.6 MB / 2,906 files → **71.7 MB / 2,439** |
+| C3+C4 calendar / cash dates | ebd6706 | UTC scan: 0 offenders | — |
+| C5+C6+D4 screenshot names, atomic writes | 43c301c | screenshot test | — |
+| D3a+D5 hourly backup check, busy timeout | 655061e | `db-open.test.mts` | one backup per launch → one per day |
+
+Checks after the batch: typecheck ✅ · tests 355 → **369** ✅ · build ✅ (only Node's "SQLite is experimental" notice) · lint 0 errors.
+Installer size can only be measured by the Windows CI build; it runs when this branch is merged.
+
+Skipped in Phase B (see section 4): Q3 file splits, E5 CSP, E6 signing, P2/P3, C7 (machine time zone — folded into feature 10).
