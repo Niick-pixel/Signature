@@ -291,6 +291,34 @@ function openingSize(state) {
   return state.fullscreen ? where.bounds : where.workArea;
 }
 
+/*
+  The loading window. The server takes a few seconds to start (longer on the
+  first launch after an update), and the main window stays hidden until its
+  first frame is ready — so for that whole time nothing was on screen. A
+  small window with the mark says the app is opening, in the theme last used,
+  and closes the moment the main window shows.
+*/
+let splash = null;
+function showSplash() {
+  const ground = restoreWindowState(DATA_DIR).ground ?? SHELL_BG;
+  const hex = /^#?([0-9a-f]{6})$/i.exec(ground)?.[1] ?? 'e9e2d4';
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const dark = 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+  splash = new BrowserWindow({
+    width: 340, height: 260, frame: false, resizable: false, movable: true, minimizable: false, maximizable: false,
+    fullscreenable: false, center: true, show: false, backgroundColor: ground, title: 'Signature',
+    icon: [path.join(__dirname, '..', 'assets', 'icon.ico'), path.join(__dirname, '..', '.next', 'standalone', 'assets', 'icon.ico')].find((p) => fs.existsSync(p)),
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  splash.once('ready-to-show', () => splash?.show());
+  splash.on('closed', () => { splash = null; });
+  splash.loadFile(path.join(__dirname, 'splash.html'), { query: { dark: dark ? '1' : '0' } }).catch(() => {});
+}
+function closeSplash() {
+  if (splash && !splash.isDestroyed()) splash.close();
+  splash = null;
+}
+
 function createWindow(port) {
   const state = restoreWindowState(DATA_DIR);
   display = state.display;
@@ -326,6 +354,7 @@ function createWindow(port) {
     if (state.fullscreen) mainWindow.setFullScreen(true);
     else if (state.maximize) mainWindow.maximize();
     mainWindow.show();
+    closeSplash();
   });
   // The interface follows the window: re-fitted whenever its size changes
   // (in steps — see display.js), and on every load, since Chromium keeps zoom
@@ -553,6 +582,7 @@ if (!app.requestSingleInstanceLock()) {
     // No folder chosen (the saved one is gone and you chose Quit): nothing is
     // created anywhere, and the app closes.
     if (!DATA_DIR) { app.quit(); return; }
+    showSplash();
     const port = await stablePort();
     startNext(port);
     try {
@@ -562,7 +592,8 @@ if (!app.requestSingleInstanceLock()) {
       // an error you can read and copy is worth more than one you dismiss.
       buildMenu();
       createWindow(port);
-      if (mainWindow) showFailurePage(mainWindow, String(err.message));
+      closeSplash();
+      if (mainWindow) { showFailurePage(mainWindow, String(err.message)); mainWindow.show(); }
       return;
     }
     buildMenu();
