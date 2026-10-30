@@ -12,6 +12,7 @@ const { restoreWindowState, trackWindowState, rememberGround, rememberDisplay } 
 const { zoomFor, normalise } = require('./display');
 const { resolveInstalled, readLocation, writeLocation, copyJournal, journalFolderIn, isJournal } = require('./data-location');
 const { setupUpdates } = require('./updater');
+const { isSafeExternal } = require('./safe-external');
 
 const isDev = !app.isPackaged;
 const ROOT = path.join(__dirname, '..');
@@ -336,14 +337,15 @@ function createWindow(port) {
   windowState = trackWindowState(mainWindow, state.file, display);
 
   // Any real link opens in the user's browser, not inside the app frame.
+  // Web and email only (safe-external.js) — anything else is dropped.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isSafeExternal(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(`http://127.0.0.1:${port}`)) {
+    if (!url.startsWith(`http://127.0.0.1:${port}/`) && url !== `http://127.0.0.1:${port}`) {
       event.preventDefault();
-      shell.openExternal(url);
+      if (isSafeExternal(url)) shell.openExternal(url);
     }
   });
 
