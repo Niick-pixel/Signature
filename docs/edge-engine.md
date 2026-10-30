@@ -657,3 +657,24 @@ Tests: `tests/edge-ledger.test.mts`. It covers:
 - Brier: perfect, coin flip
 - ISO weeks, kappa, the deterministic weekly session with a retest, the counter
 - tier-3 fields pre-trade and only from 200 trades
+
+---
+
+# The top of Stats: key points
+
+## 47. In one line, and six cards
+
+Before any detail, Stats says what it all means. These cards add no new statistics; each one reads numbers computed further down the page:
+
+| Card | Answers | From |
+|---|---|---|
+| **Your edge** | Is it real? How much per trade, the chance it's above zero, your win rate against the one you need | sections 2–3 |
+| **Fix first** | The one leak to work on, what it costs each time, the rule to try. "Not proven yet" when it isn't | section 26 |
+| **Keep doing** | The habit that pays most, never a broken rule | section 26 |
+| **Following your rules** | Share of trades inside every rule, and what each side made | section 25 |
+| **Risk** | Is your drawdown normal for your results? Your longest losing run against the expected one | section 27 |
+| **Next** | Trades to the next unlock, and which setup fields to start logging | sections 24, 33 |
+
+Colours are only for the plain-language cards: green for good, amber for watch, red for bad, grey for not enough yet. The detail sections keep evidence-only colours (section 4).
+
+**Speed.** A folded section is built only when you open it, so the eval simulator's 20,000 futures don't run until you look. Every engine result is cached by a fingerprint of the data, so a reload with nothing changed reads them back.
