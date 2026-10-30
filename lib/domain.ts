@@ -306,7 +306,7 @@ export const CHECKLIST_PHASES = [
     note: 'Before anything else is worth looking at.',
     items: [
       { kind: 'box', key: 'chk_htf_bias', points: 10, label: 'Higher timeframe bias is clear', hint: '1H and 4H agree on direction.' },
-      { kind: 'box', key: 'chk_killzone', points: 10, label: 'Inside a killzone', hint: 'London 00:00–03:00 or NY AM 07:30–10:00 (CR).' },
+      { kind: 'box', key: 'chk_killzone', points: 10, label: 'Inside a killzone', hint: 'London 02:00–05:00 or NY AM 09:30–12:00, New York time. The rule book checks it from the entry time; your tick counts when there is no clock (backtests).' },
       { kind: 'box', key: 'chk_no_news', points: 5, label: 'No NFP / FOMC / CPI conflict', hint: 'Nothing high-impact due while this trade is live.' },
     ],
   },

@@ -33,7 +33,8 @@ test('each trade rule, broken on its own', () => {
     ['min-r', { r_to_nearest_bucket: null, r_to_nearest: 1.4 }],
     ['pd', { premium_discount: 'Premium' }],
     ['pd', { direction: 'Short', premium_discount: 'Discount' }],
-    ['killzone', { chk_killzone: false }],
+    // 06:00 Costa Rica = 08:00 New York in October: before the NY AM killzone.
+    ['killzone', { date: '2026-10-05T06:00' }],
     ['management', { management: null, mgmt_plan: null }],
     ['max-r', { mfe_r: null }],
     ['threshold', { checklist_score: 65 }],
@@ -55,6 +56,20 @@ test('each trade rule, broken on its own', () => {
   assert.deepEqual(checkTrade(t({ singular_gap: false, rubric_version: 1 })), []);
   // Logging rules are tagged, so they never count as breaking the plan.
   assert.deepEqual(TRADE_RULES.filter((r) => r.kind === 'logging').map((r) => r.id), ['management', 'max-r']);
+});
+
+test('killzone: read from the entry time; the tick only when there is no clock', () => {
+  // 09:45 CR = 11:45 NY (inside), whatever the tick says.
+  assert.deepEqual(checkTrade(t({ date: '2026-10-05T09:45', chk_killzone: false })), []);
+  // 10:30 CR = 12:30 NY: after NY AM. 01:00 CR = 03:00 NY: London.
+  assert.deepEqual(ids(checkTrade(t({ date: '2026-10-05T10:30', chk_killzone: true }))), ['killzone']);
+  assert.deepEqual(checkTrade(t({ date: '2026-10-05T01:00' })), []);
+  // Winter: New York is one hour closer. 07:45 CR = 08:45 NY — before the open.
+  assert.deepEqual(ids(checkTrade(t({ date: '2026-01-15T07:45' }))), ['killzone']);
+  // No clock: a backtest, an undated trade, a bare 00:00 — the tick decides.
+  assert.deepEqual(ids(checkTrade(t({ account: 'Backtest (FX Replay)', date: '2026-10-05T23:00', chk_killzone: false }))), ['killzone']);
+  assert.deepEqual(checkTrade(t({ account: 'Backtest (FX Replay)', date: '2026-10-05T23:00', chk_killzone: true })), []);
+  assert.deepEqual(checkTrade(t({ date: '2026-10-05T00:00', chk_killzone: true })), []);
 });
 
 test('silence is not a break: unanswered fields are not counted', () => {
@@ -147,7 +162,8 @@ test('the #1 rule needs 20 trades in view and 5 breaks', () => {
 test('session close: at most three lines, ranked by |R impact| × recency', () => {
   const session = [
     t({ date: '2026-10-16T09:35', outcome: 'Loss', r_multiple: -1, trigger_fired: false, lesson: 'There was no clean target, unsure of it.' }),
-    t({ date: '2026-10-16T10:05', outcome: 'Win', r_multiple: 3, worked_tags: ['Waited for the close'] }),
+    // 09:55 CR = 11:55 NY, still inside NY AM (the killzone is now read from the clock).
+    t({ date: '2026-10-16T09:55', outcome: 'Win', r_multiple: 3, worked_tags: ['Waited for the close'] }),
   ];
   const history = [
     ...Array.from({ length: 6 }, (_, i) => t({ date: `2026-09-0${i + 1}T09:45`, outcome: 'Loss', r_multiple: -1, lesson: 'No clean target again.' })),
@@ -161,8 +177,8 @@ test('session close: at most three lines, ranked by |R impact| × recency', () =
   const brokenScore = (ts: unknown[]) => sessionClose(ts as never, []).find((l) => l.kind === 'broken')!.score;
   const at = (h: string, x: Record<string, unknown> = {}) => t({ date: `2026-10-17T${h}`, ...x });
   const bad = { trigger_fired: false, outcome: 'Loss', r_multiple: -1 };
-  const first = brokenScore([at('09:35', bad), at('10:00'), at('10:30')]);
-  const last = brokenScore([at('09:35'), at('10:00'), at('10:30', bad)]);
+  const first = brokenScore([at('09:35', bad), at('09:45'), at('09:55')]);
+  const last = brokenScore([at('09:35'), at('09:45'), at('09:55', bad)]);
   assert.equal(last, 1);
   assert.ok(Math.abs(first - 0.85 ** 2) < 1e-9 && first < last);
   assert.equal(allSettled([t(), t({ status: 'Live' })]), false);

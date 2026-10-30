@@ -16,6 +16,7 @@
  */
 import { RETIRED_TARGET_TYPES, TAKE_IT_THRESHOLD, isBacktest, isHypothetical, isScored, isTaken } from './domain';
 import { GATES_SINCE } from './rubric';
+import { nyMinutes } from './planMatch';
 import type { Trade } from './types';
 
 /** Target types that are not a named pool: "Other" and the retired ones — except the horizontal pool, which still is. */
@@ -93,6 +94,25 @@ export function plannedR(t: Trade): { lo: number; hi: number } | null {
   }
 }
 
+/** The killzones, in New York minutes past midnight: London 02:00–05:00, NY AM 09:30–12:00. */
+export const KILLZONES: ReadonlyArray<{ name: string; from: number; to: number }> = [
+  { name: 'London', from: 2 * 60, to: 5 * 60 },
+  { name: 'NY AM', from: 9 * 60 + 30, to: 12 * 60 },
+];
+
+/**
+ * Whether the entry time falls in a killzone — the computer's own check, so it
+ * no longer rests on a tick. Null when the trade has no real clock: a backtest
+ * (its time is when it was logged), an undated trade, or an entry at exactly
+ * 00:00 (an import with a date and no time).
+ */
+export function killzoneByClock(t: Pick<Trade, 'account' | 'undated' | 'date'>): boolean | null {
+  if (isBacktest(t.account) || t.undated || !/T\d{2}:\d{2}/.test(t.date) || /T00:00(?::00)?$/.test(t.date)) return null;
+  const mins = nyMinutes(t.date);
+  if (mins == null) return null;
+  return KILLZONES.some((k) => mins >= k.from && mins < k.to);
+}
+
 export const TRADE_RULES: TradeRule[] = [
   {
     id: 'sweep', scope: 'trade', short: 'Named sweep first',
@@ -132,8 +152,8 @@ export const TRADE_RULES: TradeRule[] = [
   },
   {
     id: 'killzone', scope: 'trade', short: 'Inside the killzone',
-    text: 'Entered inside the killzone.',
-    test: (t) => (t.chk_killzone == null ? null : t.chk_killzone),
+    text: 'Entered inside the killzone — London 02:00–05:00 or NY AM 09:30–12:00, New York time. Read from the entry time; your checklist tick only when there is no clock (backtests, undated).',
+    test: (t) => killzoneByClock(t) ?? (t.chk_killzone == null ? null : t.chk_killzone),
   },
   {
     id: 'threshold', scope: 'trade', short: 'Checklist at the threshold',
