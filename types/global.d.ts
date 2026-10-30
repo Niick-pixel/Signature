@@ -33,6 +33,8 @@ declare global {
       /** The window-button strip's colours; a bare 'light' | 'dark' still works. */
       setTitleBarTheme: (theme: 'light' | 'dark' | { color: string; symbolColor: string }) => void;
       openDataFolder: () => Promise<string>;
+      /** A folder picker (the backup folder). Null when cancelled. */
+      pickFolder?: (title: string) => Promise<string | null>;
       getDataInfo: () => Promise<{ dataDir: string; mode: 'dev' | 'portable' | 'installed'; canMove: boolean; version: string }>;
       moveJournal: () => Promise<{ ok: boolean; cancelled?: boolean; error?: string; dataDir?: string }>;
       updates: {

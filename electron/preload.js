@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('signature', {
   setTitleBarTheme: (theme) => ipcRenderer.send('signature:titlebar-theme', theme),
   /** Opens the journal folder in the OS file browser. */
   openDataFolder: () => ipcRenderer.invoke('signature:open-data-folder'),
+  /** A folder picker, for the backup folder. */
+  pickFolder: (title) => ipcRenderer.invoke('signature:pick-folder', title),
   /** Where the journal is, and whether it can be moved from here. */
   getDataInfo: () => ipcRenderer.invoke('signature:data-info'),
   moveJournal: () => ipcRenderer.invoke('signature:move-journal'),

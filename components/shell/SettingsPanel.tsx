@@ -21,6 +21,7 @@ import { navigate } from '@/lib/nav';
 import { Help } from '@/components/ui/Help';
 import { SETTINGS_TOGGLE, SHEET_OPEN } from './Shortcuts';
 import Link from 'next/link';
+import { useConfirm } from '@/components/ui/Confirm';
 
 interface Info {
   dataDir: string;
@@ -30,6 +31,12 @@ interface Info {
 const DENSITIES = ['compact', 'normal', 'roomy'] as const;
 
 /** A group of settings: its name, and what it does behind a "?" — the controls carry the rest as hover titles. */
+interface RestorePoint { source: 'local' | 'folder'; name: string; bytes: number; taken: string }
+interface BackupState {
+  latest: { name: string; taken: string } | null; count: number;
+  folder: string | null; folderLastOk: string | null; folderError: string | null; points: RestorePoint[];
+}
+
 function Section({ title, hint, children }: {
   title: string; hint?: string; children: React.ReactNode;
 }) {
@@ -73,7 +80,10 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
-  const [backup, setBackup] = useState<{ latest: { name: string; taken: string } | null; count: number } | null>(null);
+  const [backup, setBackup] = useState<BackupState | null>(null);
+  const confirm = useConfirm();
+  const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showPoints, setShowPoints] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [desktop, setDesktop] = useState(false);
   const [zoom, setZoom] = useState<DisplayWire | null>(null);
@@ -118,11 +128,43 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     setBackingUp(true);
     try {
       const res = await fetch('/api/backup', { method: 'POST' });
-      if (res.ok) setBackup(await res.json());
+      const j = await res.json();
+      if (res.ok) { setBackup(j); setBackupMsg(null); } else setBackupMsg({ ok: false, text: j.error ?? 'Backup failed.' });
     } finally {
       setBackingUp(false);
     }
   }
+  /** The second backup folder: the system picker in the desktop app, a typed path in a browser. */
+  async function chooseBackupFolder() {
+    const picked = window.signature?.pickFolder
+      ? await window.signature.pickFolder('Where should Signature keep a second copy of your journal?')
+      : window.prompt('Full path of a folder for the second copy (another drive is best):', backup?.folder ?? '');
+    if (!picked) return;
+    setBackingUp(true);
+    try {
+      const res = await fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'folder', folder: picked }) });
+      const j = await res.json();
+      if (res.ok) { setBackup(j); setBackupMsg({ ok: true, text: 'Saved — a full copy is there now, and one a day from here on.' }); }
+      else setBackupMsg({ ok: false, text: j.error ?? 'That folder cannot be used.' });
+    } finally { setBackingUp(false); }
+  }
+
+  async function restorePoint(p: RestorePoint) {
+    const when = new Date(p.taken).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    if (!(await confirm({
+      title: `Restore the backup from ${when}?`,
+      body: 'Your journal goes back to how it was then. A copy of it as it is right now is kept first, so this can be undone by restoring that copy.',
+      action: 'Restore', danger: true,
+    }))) return;
+    setBackingUp(true);
+    try {
+      const res = await fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'restore', source: p.source, name: p.name }) });
+      const j = await res.json();
+      if (!res.ok) { setBackupMsg({ ok: false, text: j.error ?? 'Restore failed.' }); return; }
+      window.location.reload();
+    } finally { setBackingUp(false); }
+  }
+
 
   /**
    * Restores from an export. Idempotent on id, so importing the same file
@@ -402,7 +444,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
             <Section
               title="Backups"
-              hint="A copy of the journal is taken the first time the app opens each day, and the newest 30 are kept in the backups folder beside it. To restore one: close Signature, then copy that file over journal.db."
+              hint="A copy is taken every day, and the newest 30 are kept in the backups folder beside the journal. For a copy that survives a dead disk, add a second folder — another drive or a synced folder: it gets a full zip a day, charts included, newest 14 kept."
             >
               <div className="flex items-center justify-between gap-3">
                 <p data-last-backup className="text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
@@ -412,9 +454,54 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                     : 'No backup yet.'}
                 </p>
                 <Button onClick={backUpNow} disabled={backingUp}
-                  title="Takes a copy of the journal right now, alongside the daily ones">
-                  {backingUp ? 'Backing up…' : 'Back up now'}
+                  title="Takes a copy of the journal right now (and a zip to the second folder, if set)">
+                  {backingUp ? 'Working…' : 'Back up now'}
                 </Button>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-3" data-backup-folder>
+                <p className="min-w-0 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
+                  <span className="font-medium" style={{ color: 'var(--text)' }}>Second copy</span>{' · '}
+                  {backup?.folder
+                    ? <><span className="break-all">{backup.folder}</span>
+                      <span style={{ color: 'var(--text-faint)' }}>{backup.folderLastOk ? ` · last zip ${new Date(backup.folderLastOk).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}` : ''}</span></>
+                    : <span style={{ color: 'rgb(var(--amber))' }}>not set — your only copies are on the same disk</span>}
+                </p>
+                <Button onClick={chooseBackupFolder} disabled={backingUp} title="Pick a folder on another drive, or one your cloud app syncs">
+                  {backup?.folder ? 'Change…' : 'Choose folder…'}
+                </Button>
+              </div>
+              {backup?.folderError && (
+                <p className="mt-1.5 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }} data-backup-error>Last zip failed: {backup.folderError}</p>
+              )}
+              {backupMsg && (
+                <p className="mt-1.5 text-[11px]" style={{ color: backupMsg.ok ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>{backupMsg.text}</p>
+              )}
+
+              <div className="mt-3">
+                <button type="button" onClick={() => setShowPoints((v) => !v)} data-restore-toggle aria-expanded={showPoints}
+                  className="text-[11.5px] font-medium underline-offset-2 hover:underline" style={{ color: 'var(--text-dim)' }}>
+                  Restore a backup… {showPoints ? '▴' : '▾'}
+                </button>
+                {showPoints && (
+                  <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto pr-1" data-restore-points>
+                    {(backup?.points ?? []).length === 0 && <li className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>No backups yet.</li>}
+                    {(backup?.points ?? []).map((p) => (
+                      <li key={`${p.source}:${p.name}`} className="flex items-center justify-between gap-2 rounded-[calc(10px*var(--rk))] px-2 py-1 text-[11.5px]"
+                        style={{ background: 'var(--glass-fill)' }}>
+                        <span className="min-w-0 truncate" style={{ color: 'var(--text-dim)' }}>
+                          {new Date(p.taken).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                          <span style={{ color: 'var(--text-faint)' }}> · {p.source === 'folder' ? 'second copy, with charts' : 'journal only'} · {(p.bytes / 1024 / 1024).toFixed(1)} MB</span>
+                        </span>
+                        <button type="button" onClick={() => void restorePoint(p)} disabled={backingUp} data-restore={p.name}
+                          className="shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium"
+                          style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
+                          Restore
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </Section>
 
@@ -478,9 +565,9 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               <Button
                 onClick={() => importRef.current?.click()}
                 disabled={importing}
-                title="Restores from a trades.json out of an export. Matched on id, so importing the same file twice changes nothing the second time"
+                title="Restores from an export: the .zip (charts included) or its trades.json. Matched on id, so importing the same file twice changes nothing the second time"
               >
-                {importing ? 'Importing…' : 'Import JSON'}
+                {importing ? 'Importing…' : 'Import…'}
               </Button>
               <Link href="/trash" className="outline-none">
                 <Button

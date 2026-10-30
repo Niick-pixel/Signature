@@ -456,6 +456,14 @@ ipcMain.handle('signature:move-journal', async () => {
   return { ok: true, dataDir: target };
 });
 
+ipcMain.handle('signature:pick-folder', async (_event, title) => {
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: typeof title === 'string' ? title : 'Choose a folder',
+    properties: ['openDirectory', 'createDirectory', 'promptToCreate'],
+  });
+  return r.canceled ? null : r.filePaths[0] ?? null;
+});
+
 ipcMain.handle('signature:open-data-folder', async () => {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   await shell.openPath(DATA_DIR);
