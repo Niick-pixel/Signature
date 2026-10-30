@@ -962,10 +962,13 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field quiet label="Instrument" pending={pending('instrument')}><Select value={instrument} onChange={(v) => { setInstrument(v); confirm('instrument'); }} options={INSTRUMENTS} /></Field>
-          <Field quiet label="Direction" pending={pending('direction')}><Select value={pending('direction') ? null : direction} placeholder="Choose…" onChange={(v) => { setDirection(v); confirm('direction'); }} options={DIRECTIONS} /></Field>
+          {/* Tap-chips, not dropdowns: one tap each instead of two (product rule 2). Still empty until tapped. */}
+          <Field quiet label="Direction" pending={pending('direction')} group><Segmented value={pending('direction') ? null : direction} onChange={(v) => { setDirection(v); confirm('direction'); }} options={DIRECTIONS} compact /></Field>
           <Field quiet label="Setup type" pending={pending('setupType')}><Select value={pending('setupType') ? null : setupType} placeholder="Choose…" onChange={(v) => { setSetupType(v); confirm('setupType'); }} options={SETUP_TYPES} /></Field>
-          <Field quiet label="HTF bias" pending={pending('htfBias')}><Select value={pending('htfBias') ? null : htfBias} placeholder="Choose…" onChange={(v) => { setHtfBias(v); confirm('htfBias'); }} options={HTF_BIASES} /></Field>
-          <Field quiet label="Premium / discount" pending={pending('premiumDiscount')}><Select value={pending('premiumDiscount') ? null : premiumDiscount} placeholder="Choose…" onChange={(v) => { setPremiumDiscount(v); confirm('premiumDiscount'); }} options={PREMIUM_DISCOUNTS} /></Field>
+          <Field quiet label="HTF bias" pending={pending('htfBias')} group><Segmented value={pending('htfBias') ? null : htfBias} onChange={(v) => { setHtfBias(v); confirm('htfBias'); }} options={HTF_BIASES}
+            labelFor={(b) => ({ 'With bias': 'With', 'Against bias': 'Against', 'No bias defined': 'None' } as Record<string, string>)[b] ?? b} titleFor={(b) => b} compact /></Field>
+          <Field quiet label="Premium / discount" pending={pending('premiumDiscount')} group><Segmented value={pending('premiumDiscount') ? null : premiumDiscount} onChange={(v) => { setPremiumDiscount(v); confirm('premiumDiscount'); }} options={PREMIUM_DISCOUNTS}
+            labelFor={(z) => (z === 'Equilibrium' ? 'EQ' : z)} titleFor={(z) => z} compact /></Field>
           <Field quiet label="Why did you take it" hint="Answer honestly. Nothing else in this app works if this is wrong.">
             <Select value={reason} onChange={setReason} options={reasonOptions} placeholder="Name your motive…"
               accentFor={(r) => reasonAccent(r as Reason)} />

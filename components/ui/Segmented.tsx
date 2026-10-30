@@ -14,6 +14,8 @@ interface SegmentedProps<T extends string> {
   labelFor?: (option: T) => string;
   /** Hover text per option, for the places where the label alone is cryptic. */
   titleFor?: (option: T) => string;
+  /** One row whatever the width, smaller type — for a narrow column of short answers. */
+  compact?: boolean;
 }
 
 /**
@@ -22,13 +24,13 @@ interface SegmentedProps<T extends string> {
  * of all, which you know before you start writing anything down.
  */
 export function Segmented<T extends string>({
-  value, onChange, options, accentFor, labelFor, titleFor,
+  value, onChange, options, accentFor, labelFor, titleFor, compact = false,
 }: SegmentedProps<T>) {
   // One highlight per control, gliding to whichever option is picked rather
   // than one fading out while another fades in.
   const pill = useId();
   return (
-    <div className="glass flex flex-wrap gap-1 rounded-[calc(16px*var(--rk))] p-1">
+    <div className={`glass flex rounded-[calc(16px*var(--rk))] p-1 ${compact ? 'gap-0.5' : 'flex-wrap gap-1'}`}>
       {options.map((option) => {
         const active = option === value;
         const accent = accentFor?.(option) ?? 'var(--accent)';
@@ -43,7 +45,7 @@ export function Segmented<T extends string>({
             whileTap={press}
             animate={{ color: active ? `rgb(${accent})` : 'var(--text-dim)' }}
             transition={spring}
-            className="relative flex-1 rounded-[calc(12px*var(--rk))] px-3 py-2 text-[12px] font-medium whitespace-nowrap"
+            className={`relative min-w-0 flex-1 rounded-[calc(12px*var(--rk))] font-medium whitespace-nowrap ${compact ? 'px-1 py-[7px] text-[11.5px]' : 'px-3 py-2 text-[12px]'}`}
           >
             {active && (
               <motion.span
