@@ -16,10 +16,7 @@ import { localDay } from '../lib/day.ts';
 const UTC_TODAY = /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/;
 
 // Known offenders not yet fixed — remove an entry when its file is fixed.
-const PENDING = new Set<string>([
-  'app/calendar/page.tsx',
-  'components/money/BalanceCard.tsx',
-]);
+const PENDING = new Set<string>([]);
 
 function walk(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

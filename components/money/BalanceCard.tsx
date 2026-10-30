@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { Overlay } from '@/components/ui/Overlay';
 import { CountUp } from '@/components/ui/CountUp';
 import { useConfirm } from '@/components/ui/Confirm';
+import { localDay } from '@/lib/day';
 
 const usd = (v: number) =>
   `${v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString(undefined, {
@@ -51,7 +52,7 @@ export function BalanceCard({ balance, account, events }: BalanceCardProps) {
   const [target, setTarget] = useState<Account>(
     account === 'All' ? 'Live' : account,
   );
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => localDay());
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -21,6 +21,7 @@ import { Calendar } from '@/components/money/Calendar';
 import { Mornings } from '@/components/money/Mornings';
 import { conditions } from '@/lib/conditions';
 import { BacktestCard, BacktestNote } from '@/components/money/BacktestCard';
+import { localDay } from '@/lib/day';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,7 +125,7 @@ export default async function CalendarPage(
   };
   const href = (m: string) =>
     `/calendar?${new URLSearchParams({ ...(account === 'All' ? {} : { account }), month: m })}`;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDay();
 
   // A day counts as written on if it has a journal page or a daily review.
   const reviews = listDailyReviews();
