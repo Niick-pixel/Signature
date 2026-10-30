@@ -775,6 +775,9 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
 .titlebar-drag {
   -webkit-app-region: drag;
 }
+/* The tab strip scrolls sideways on narrow windows, without a scrollbar. */
+header nav[data-tabs]::-webkit-scrollbar { display: none; }
+
 .titlebar-drag button,
 .titlebar-drag a,
 .titlebar-drag input,

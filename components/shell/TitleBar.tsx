@@ -40,6 +40,7 @@ export function TitleBar() {
   const pathname = usePathname();
   const { prefs } = usePreferences();
   const pill = useRef<HTMLSpanElement>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   /*
     The pill slides between tabs on the compositor (FLIP: measure the old
@@ -51,6 +52,12 @@ export function TitleBar() {
   useLayoutEffect(() => {
     const el = pill.current;
     if (!el) { lastPill = null; return; }
+    // On a narrow window the tabs scroll sideways: bring the current one into view first.
+    const strip = navRef.current;
+    if (strip && strip.scrollWidth > strip.clientWidth + 1) {
+      const tab = el.parentElement!.getBoundingClientRect(); const box = strip.getBoundingClientRect();
+      strip.scrollLeft += tab.left - box.left - (box.width - tab.width) / 2;
+    }
     const r = el.getBoundingClientRect();
     const from = lastPill;
     lastPill = { left: r.left, width: r.width };
@@ -75,7 +82,7 @@ export function TitleBar() {
 
   return (
     <header
-      className="titlebar-drag relative flex h-11 shrink-0 items-center"
+      className="titlebar-drag relative flex min-h-11 shrink-0 flex-wrap items-center xl:h-11 xl:flex-nowrap"
       style={{
         // macOS draws its traffic lights on the left; Windows and Linux draw
         // minimise/maximise/close on the right. Either way the buttons sit on
@@ -87,10 +94,14 @@ export function TitleBar() {
     >
       <Wordmark />
 
-      {/* Centred on the window, not on the space left over — so the tabs stay
-          put regardless of what sits either side of them. */}
-      <nav className="pointer-events-none absolute inset-x-0 flex justify-center">
-        <div className="pointer-events-auto flex items-center gap-1">
+      {/* Wide windows: centred on the window, not on the space left over — so the
+          tabs stay put regardless of what sits either side of them. Narrower: in
+          the flow between the wordmark and the chips, scrolling sideways if they
+          don't fit; on a phone, a full-width row of their own under the wordmark. */}
+      <nav ref={navRef} data-tabs
+        className="order-last -mx-4 w-[calc(100%+2rem)] overflow-x-auto pb-1.5 sm:order-none sm:mx-2 sm:w-auto sm:min-w-0 sm:flex-1 sm:pb-0 xl:pointer-events-none xl:absolute xl:inset-x-0 xl:mx-0 xl:flex xl:justify-center xl:overflow-visible [mask-image:linear-gradient(to_right,transparent,#000_var(--fade),#000_calc(100%-var(--fade)),transparent)] xl:[mask-image:none]"
+        style={{ scrollbarWidth: 'none', ['--fade' as string]: '18px' }}>
+        <div className="mx-auto flex w-max items-center gap-1 px-3 sm:px-0 xl:pointer-events-auto">
           {TABS.filter((tab) => (tab.href !== '/prop' || prefs.propTab) && (tab.href !== '/study' || prefs.studyTab)).map((tab) => {
             // A tab stays lit on its own sub-pages (/prop/<id>).
             const active = pathname === tab.href || (tab.href === '/prop' && pathname.startsWith('/prop/'));
