@@ -2,7 +2,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { getDb } from './index';
 import { FF_FEED_URL, parseFfFeed, redDays, type NewsEvent, type StoredNews } from '../lib/news';
-import { TRADER_UTC_OFFSET_HOURS } from '../lib/planMatch';
+import { offsetMinutesAt } from '../lib/traderZone';
 
 /** News events and the two settings that decide what they mean for the rules. */
 export function listNews(from?: string, to?: string): StoredNews[] {
@@ -95,7 +95,7 @@ export async function syncForexFactory(force = false, fetcher: typeof fetch = fe
     const r = await fetcher(FF_FEED_URL, { signal: ctl.signal, headers: { 'User-Agent': 'Signature trading journal (personal, local)' } });
     clearTimeout(t);
     if (!r.ok) return { added: 0, already: 0, syncedAt: s.syncedAt, error: `ForexFactory answered ${r.status}.` };
-    const { events } = parseFfFeed(await r.text(), TRADER_UTC_OFFSET_HOURS);
+    const { events } = parseFfFeed(await r.text(), (utc) => offsetMinutesAt(utc) / 60);
     if (!events.length) return { added: 0, already: 0, syncedAt: s.syncedAt, error: 'The feed was empty.' };
     const res = addNews(events, 'forexfactory');
     const now = new Date().toISOString();

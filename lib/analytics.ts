@@ -6,7 +6,8 @@
  */
 import { CHECKLIST_PHASES, CONTEXT_FLAG_LIST, SWEEP_TIER_SPEC, isHypothetical, isTaken } from './domain';
 import { THEMES, sentences, themesOf } from './insights';
-import { nyMinutes, TRADER_UTC_OFFSET_HOURS } from './planMatch';
+import { nyMinutes } from './planMatch';
+import { wallToUtc } from './traderZone';
 import type { Trade } from './types';
 import type { StoredNews } from './news';
 
@@ -43,7 +44,7 @@ export function clockOf(t: Pick<Trade, 'date'>, clock: Clock): { mins: number; w
   }
   const mins = nyMinutes(t.date) ?? 0;
   // New York's date: the local wall clock moved into UTC, then into New York.
-  const utc = Date.parse(`${m[1]}T${m[2]}:${m[3]}:00Z`) - TRADER_UTC_OFFSET_HOURS * 3600_000;
+  const utc = wallToUtc(`${m[1]}T${m[2]}:${m[3]}`);
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(utc));
   return { mins, weekday: (new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7 };
 }

@@ -1,6 +1,7 @@
 import { isBacktest } from './domain';
 import type { PrepData } from './prep';
 import type { Trade } from './types';
+import { wallToUtc } from './traderZone';
 
 /**
  * Did I trade my plan? Each trade set against that morning's chart prep.
@@ -36,8 +37,7 @@ export const PLAN_LABEL: Record<PlanStatus, string> = { in: 'In the plan', off: 
 
 const NONE: PlanMatch = { status: 'none', diffs: [], agreed: [] };
 
-/** Costa Rica: UTC−6, no daylight saving since 1992. Where trades are logged. */
-export const TRADER_UTC_OFFSET_HOURS = -6;
+// The trader's clock is the computer's own (lib/traderZone) — it was a fixed UTC−6.
 
 const NY = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
@@ -45,7 +45,7 @@ const NY = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour
 export function nyMinutes(date: string): number | null {
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(date);
   if (!m) return null;
-  const utc = Date.parse(`${m[1]}T${m[2]}:${m[3]}:00Z`) - TRADER_UTC_OFFSET_HOURS * 3600_000;
+  const utc = wallToUtc(`${m[1]}T${m[2]}:${m[3]}`);
   const [h, min] = NY.format(new Date(utc)).split(':').map(Number);
   return h * 60 + min;
 }

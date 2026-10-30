@@ -10,7 +10,7 @@
  */
 import { isTaken } from './domain';
 import { pnlOf } from './stats';
-import { TRADER_UTC_OFFSET_HOURS } from './planMatch';
+import { wallToUtc } from './traderZone';
 import type { Trade } from './types';
 
 export type DrawdownType = 'eod_trailing' | 'intraday_trailing' | 'static';
@@ -124,7 +124,7 @@ export function sessionDay(date: string, boundary: DayBoundary): string {
   if (boundary === 'calendar') return date.slice(0, 10);
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(date);
   if (!m) return date.slice(0, 10);
-  const utc = Date.parse(`${m[1]}T${m[2]}:${m[3]}:00Z`) - TRADER_UTC_OFFSET_HOURS * 3600_000;
+  const utc = wallToUtc(`${m[1]}T${m[2]}:${m[3]}`);
   const p = Object.fromEntries(NY.formatToParts(new Date(utc)).map((x) => [x.type, x.value]));
   const nyDay = `${p.year}-${p.month}-${p.day}`;
   return Number(p.hour) >= 18 ? addDays(nyDay, 1) : nyDay;

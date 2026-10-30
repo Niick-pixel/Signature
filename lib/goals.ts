@@ -3,7 +3,7 @@
  * day by day — or week by week for study time. Pure. A goal never stops a
  * trade; it only says how often it was kept, the streak, and when it broke.
  */
-import { TRADER_UTC_OFFSET_HOURS } from './planMatch';
+import { utcToWall } from './traderZone';
 import { afterLossStop } from './ruleBook';
 import type { Trade } from './types';
 
@@ -40,7 +40,7 @@ const addDays = (day: string, n: number) => { const d = new Date(`${day}T12:00:0
 const mondayOf = (day: string) => { const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
 const weekday = (day: string) => (new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7;
 const GRADES = ['F', 'D', 'C', 'B', 'A', 'A+'];
-const loggedDay = (t: Trade) => new Date(Date.parse(t.created_at.endsWith('Z') ? t.created_at : `${t.created_at}Z`) + TRADER_UTC_OFFSET_HOURS * 3600_000).toISOString().slice(0, 10);
+const loggedDay = (t: Trade) => utcToWall(Date.parse(t.created_at.endsWith('Z') ? t.created_at : `${t.created_at}Z`)).toISOString().slice(0, 10);
 
 /** One day's verdict for a day-goal, or null when the day says nothing (no trades). */
 function judgeDay(g: Goal, day: string, ts: Trade[], ctx: GoalContext): GoalDay | null {

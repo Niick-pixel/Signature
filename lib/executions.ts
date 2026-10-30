@@ -9,7 +9,7 @@
  * skipped; a round trip with no journal trade is listed so it can be logged.
  */
 import type { Trade } from './types';
-import { TRADER_UTC_OFFSET_HOURS } from './planMatch';
+import { utcToWall } from './traderZone';
 
 export type Platform = 'auto' | 'tradovate' | 'ninjatrader' | 'rithmic' | 'generic';
 export const PLATFORMS: readonly Platform[] = ['auto', 'tradovate', 'ninjatrader', 'rithmic', 'generic'];
@@ -146,7 +146,7 @@ export function toJournalClock(raw: string, zone: SourceZone): string | null {
     utc = wall - zoneOffsetMinutes(wall, zone) * 60000;
     utc = wall - zoneOffsetMinutes(utc, zone) * 60000;
   }
-  const j = new Date(utc + TRADER_UTC_OFFSET_HOURS * 3600_000);
+  const j = utcToWall(utc);
   return `${j.getUTCFullYear()}-${pad(j.getUTCMonth() + 1)}-${pad(j.getUTCDate())}T${pad(j.getUTCHours())}:${pad(j.getUTCMinutes())}:${pad(j.getUTCSeconds())}`;
 }
 

@@ -134,7 +134,8 @@ export const FF_FEED_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.j
  * ForexFactory's JSON: [{ title, country, date: "2026-10-29T08:30:00-04:00", impact, forecast, previous }].
  * The date carries its own offset, so it lands on the journal clock exactly.
  */
-export function parseFfFeed(text: string, journalOffsetHours = -6): { events: NewsEvent[]; skipped: number } {
+/** `journalOffsetHours`: a fixed offset, or a function of the instant (the trader's clock, lib/traderZone). */
+export function parseFfFeed(text: string, journalOffsetHours: number | ((utcMs: number) => number) = -6): { events: NewsEvent[]; skipped: number } {
   let rows: unknown;
   try { rows = JSON.parse(text); } catch { return { events: [], skipped: 0 }; }
   if (!Array.isArray(rows)) return { events: [], skipped: 0 };
@@ -143,7 +144,7 @@ export function parseFfFeed(text: string, journalOffsetHours = -6): { events: Ne
     const title = typeof r?.title === 'string' ? r.title.trim() : '';
     const utc = typeof r?.date === 'string' ? Date.parse(r.date) : NaN;
     if (!title || !Number.isFinite(utc)) { skipped += 1; continue; }
-    const j = new Date(utc + journalOffsetHours * 3600_000);
+    const j = new Date(utc + (typeof journalOffsetHours === 'function' ? journalOffsetHours(utc) : journalOffsetHours) * 3600_000);
     const at = `${j.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2, '0')}-${String(j.getUTCDate()).padStart(2, '0')}T${String(j.getUTCHours()).padStart(2, '0')}:${String(j.getUTCMinutes()).padStart(2, '0')}`;
     const impact = impactOf(String(r.impact ?? '')) ?? 'Low';
     // "All Day" and "Tentative" items come at midnight New York.
