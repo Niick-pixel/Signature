@@ -3,7 +3,7 @@
  * times, and read the spread of the resampled means. Seeded from the data
  * (lib/edge/rng), so the interval never jitters between reloads.
  */
-import { mulberry32, seedOf } from './rng';
+import { seedOf } from './rng';
 
 export interface MeanInterval {
   mean: number;
@@ -23,12 +23,21 @@ export function bootstrapMean(xs: readonly number[], opts: { resamples?: number;
   const n = xs.length;
   if (n < 2) return null;
   const B = opts.resamples ?? 5000;
-  const rand = mulberry32(opts.seed ?? seedOf(xs, 'mean'));
+  // mulberry32 inlined in the hot loop (the same arithmetic as lib/edge/rng, so the same draws):
+  // 5,000 × 2,000 draws without a function call each.
+  let a = (opts.seed ?? seedOf(xs, 'mean')) >>> 0;
+  const arr = Float64Array.from(xs);
   const means = new Float64Array(B);
   let positive = 0;
   for (let b = 0; b < B; b++) {
     let s = 0;
-    for (let i = 0; i < n; i++) s += xs[Math.floor(rand() * n)];
+    for (let i = 0; i < n; i++) {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      s += arr[Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * n)];
+    }
     means[b] = s / n;
     if (means[b] > 0) positive += 1;
   }

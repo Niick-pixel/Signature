@@ -33,7 +33,7 @@ export function tradeStates(trades: readonly Trade[], ctxFor: (day: string) => D
   for (const t of trades) {
     const k = dayKey(t);
     if (k == null) { out.set(t.id, EMPTY); continue; }
-    groups.set(k, [...(groups.get(k) ?? []), t]);
+    const g = groups.get(k); if (g) g.push(t); else groups.set(k, [t]);
   }
   for (const [k, list] of groups) {
     const ts = [...list].sort(order);

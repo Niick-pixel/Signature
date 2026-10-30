@@ -97,7 +97,7 @@ export function explore(trades: readonly Trade[], fields: readonly FieldDef[] = 
       if (new Set(nums).size > 6) median = nums[Math.floor(nums.length / 2)];
     }
     const byLevel = new Map<string, number[]>();
-    vals.forEach((v, i) => { const l = levelOf(f, v, median); if (l != null) byLevel.set(l, [...(byLevel.get(l) ?? []), i]); });
+    vals.forEach((v, i) => { const l = levelOf(f, v, median); if (l == null) return; const a = byLevel.get(l); if (a) a.push(i); else byLevel.set(l, [i]); });
     if (byLevel.size < 2) continue;
     const groups = [...byLevel].map(([key, idx]) => ({
       key, idx, x: idx.map((i) => rs[i]), w: idx.map((i) => w[i]),
@@ -108,7 +108,7 @@ export function explore(trades: readonly Trade[], fields: readonly FieldDef[] = 
     const mu = sh.mu;
     // Replay trades at each level, as discounted pseudo-trades.
     const btAt = new Map<string, number[]>();
-    if (btW > 0) bt.forEach((t, i) => { const l = levelOf(f, f.get(t), median); if (l != null) btAt.set(l, [...(btAt.get(l) ?? []), btRs[i]]); });
+    if (btW > 0) bt.forEach((t, i) => { const l = levelOf(f, f.get(t), median); if (l == null) return; const a = btAt.get(l); if (a) a.push(btRs[i]); else btAt.set(l, [btRs[i]]); });
     const pseudo = (xs: number[]) => ({ a: btW * xs.length, sum: btW * xs.reduce((a, b) => a + b, 0) });
     // Two levels mirror each other: one row says it (Yes, or the first level).
     const levels = groups.length === 2 ? [groups.find((g) => g.key === 'Yes') ?? groups[0]] : groups;
