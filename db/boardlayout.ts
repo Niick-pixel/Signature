@@ -54,9 +54,12 @@ export function clearOffsets(): void {
  */
 export function boardStart(): { notes: BoardNote[]; edges: BoardEdge[]; offsets: ClusterOffsets } {
   const db = getDb();
+  // Plain objects: node:sqlite rows have a null prototype, which React refuses
+  // to hand to a client component — one board note took down every screen.
+  const plain = <T,>(rows: unknown[]) => rows.map((r) => ({ ...(r as object) })) as T[];
   return {
-    notes: db.prepare('SELECT * FROM board_notes ORDER BY created_at').all() as unknown as BoardNote[],
-    edges: db.prepare('SELECT * FROM board_edges ORDER BY created_at').all() as unknown as BoardEdge[],
+    notes: plain<BoardNote>(db.prepare('SELECT * FROM board_notes ORDER BY created_at').all()),
+    edges: plain<BoardEdge>(db.prepare('SELECT * FROM board_edges ORDER BY created_at').all()),
     offsets: readOffsets(),
   };
 }
