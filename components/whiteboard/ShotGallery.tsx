@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { press, spring } from '@/lib/motion';
 import { SHOT_SLOTS, type ShotSlot } from '@/lib/domain';
 import type { TradeShot } from '@/lib/types';
-import { Lightbox } from './Lightbox';
+import { TradeGallery } from './TradeGallery';
 import { useConfirm } from '@/components/ui/Confirm';
 import { ShotDrawingEditor, type DrawItem } from '@/components/drawing/ShotDrawing';
 
@@ -19,7 +19,11 @@ const url = (path: string) => `/api/screenshots/${path}`;
  * is optional and can be added later, which is the point: the HTF frame and
  * the result are usually available at different times from the entry.
  */
-export function ShotGallery({ tradeId, editable = true }: { tradeId: string; editable?: boolean }) {
+export function ShotGallery({ tradeId, editable = true, onOpen, title = 'Trade' }: {
+  tradeId: string; editable?: boolean;
+  /** Open chart i in the caller's gallery (the trade panel's, which can step between trades). */
+  onOpen?: (i: number) => void; title?: string;
+}) {
   const confirm = useConfirm();
   const [shots, setShots] = useState<TradeShot[] | null>(null);
   const [open, setOpen] = useState<number | null>(null);
@@ -27,6 +31,8 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
   const [error, setError] = useState<string | null>(null);
   const [drawings, setDrawings] = useState<Record<string, { items: DrawItem[]; r: number | null }>>({});
   const [drawing, setDrawing] = useState<TradeShot | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
+  useEffect(() => { if (!menu) return; const off = () => setMenu(null); window.addEventListener('click', off); return () => window.removeEventListener('click', off); }, [menu]);
 
   const load = () => fetch(`/api/trades/${tradeId}/shots`).then((r) => r.json()).then((list: TradeShot[]) => {
     setShots(list);
@@ -79,7 +85,7 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
             <img
               src={url(shot.path)}
               alt={shot.slot}
-              onClick={() => setOpen(i)}
+              onClick={() => (onOpen ? onOpen(i) : setOpen(i))}
               className="size-24 cursor-zoom-in rounded-[calc(12px*var(--rk))] object-cover"
               style={{ background: 'var(--letterbox)', border: '1px solid var(--glass-stroke)' }}
             />
@@ -91,43 +97,36 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
             </span>
             {drawings[shot.path] && (
               <span className="pointer-events-none absolute left-1 top-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold tabular-nums"
-                style={{ background: 'rgba(245,158,11,0.9)', color: '#111' }} data-drawn-badge>
+                style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)', border: '1px solid var(--glass-stroke)' }} data-drawn-badge>
                 ✎{drawings[shot.path].r != null ? ` ${drawings[shot.path].r!.toFixed(1)}R` : ''}
               </span>
             )}
 
+            {/* One quiet control per chart: label, draw, remove live in its menu. */}
             {editable && (
-              <div className="absolute inset-x-0 -top-2 flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
-                <select
-                  value={shot.slot}
-                  onChange={(e) => relabel(shot.id, e.target.value as ShotSlot)}
-                  className="mr-1 rounded-[calc(7px*var(--rk))] px-1 py-0.5 text-[9px]"
-                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--glass-stroke)', color: 'var(--text-dim)' }}
-                >
-                  {SHOT_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <button
-                  type="button"
-                  aria-label={`Draw on the ${shot.slot} chart`}
-                  title="Draw entry, stop, target, arrows, notes"
-                  onClick={() => setDrawing(shot)}
-                  className="mr-1 grid h-5 place-items-center rounded-full px-1.5 text-[9px] font-semibold"
-                  style={{ background: 'rgba(245,158,11,0.95)', color: '#111' }}
-                  data-draw-shot
-                >
-                  ✎ Draw
-                </button>
-                {shots.length > 1 && (
-                  <button
-                    type="button"
-                    aria-label={`Remove the ${shot.slot} chart`}
-                    onClick={() => remove(shot.id)}
-                    disabled={busy}
-                    className="grid size-5 place-items-center rounded-full text-[10px]"
-                    style={{ background: 'rgb(var(--outcome-loss) / 0.9)', color: 'white' }}
-                  >
-                    ×
-                  </button>
+              <div className="absolute right-1 top-1">
+                <button type="button" aria-label={`Options for the ${shot.slot} chart`} data-shot-menu
+                  onClick={(e) => { e.stopPropagation(); setMenu(menu === shot.id ? null : shot.id); }}
+                  className="grid size-6 place-items-center rounded-full text-[13px] leading-none opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--glass-stroke)', color: 'var(--text-dim)', opacity: menu === shot.id ? 1 : undefined }}>⋯</button>
+                {menu === shot.id && (
+                  <div onClick={(e) => e.stopPropagation()} data-shot-menu-panel
+                    className="absolute right-0 top-7 z-20 w-40 rounded-[12px] border p-1.5 text-[11.5px] shadow-lg"
+                    style={{ background: 'var(--bg-raised)', borderColor: 'var(--glass-stroke)', boxShadow: 'var(--shadow-panel)' }}>
+                    <label className="flex items-center justify-between gap-2 rounded-[8px] px-2 py-1.5" style={{ color: 'var(--text-dim)' }}>
+                      Label
+                      <select value={shot.slot} onChange={(e) => { relabel(shot.id, e.target.value as ShotSlot); setMenu(null); }}
+                        className="rounded-[6px] px-1 py-0.5 text-[11px]" style={{ background: 'var(--glass-fill)', border: '1px solid var(--glass-stroke)', color: 'var(--text)' }}>
+                        {SHOT_SLOTS.map((sl) => <option key={sl} value={sl}>{sl}</option>)}
+                      </select>
+                    </label>
+                    <button type="button" onClick={() => { setMenu(null); setDrawing(shot); }} data-draw-shot
+                      className="block w-full rounded-[8px] px-2 py-1.5 text-left hover:bg-[var(--glass-fill)]">Draw on it</button>
+                    {shots.length > 1 && (
+                      <button type="button" onClick={() => { setMenu(null); remove(shot.id); }} disabled={busy}
+                        className="block w-full rounded-[8px] px-2 py-1.5 text-left hover:bg-[var(--glass-fill)]" style={{ color: 'rgb(var(--outcome-loss))' }}>Remove</button>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -182,14 +181,10 @@ export function ShotGallery({ tradeId, editable = true }: { tradeId: string; edi
         />
       )}
 
-      <Lightbox
-        src={open != null && shots[open] ? url(shots[open].path) : null}
-        alt={open != null && shots[open] ? shots[open].slot : 'Chart'}
-        caption={open != null && shots[open] ? `${shots[open].slot} · ${open + 1} of ${shots.length}` : undefined}
-        onClose={() => setOpen(null)}
-        onPrev={shots.length > 1 ? () => setOpen((i) => ((i ?? 0) - 1 + shots.length) % shots.length) : undefined}
-        onNext={shots.length > 1 ? () => setOpen((i) => ((i ?? 0) + 1) % shots.length) : undefined}
-      />
+      {!onOpen && (
+        <TradeGallery trade={open != null ? { id: tradeId, title, shots: shots.map((x) => ({ path: x.path, label: x.slot })) } : null}
+          index={open ?? 0} onIndex={setOpen} onClose={() => setOpen(null)} />
+      )}
     </div>
   );
 }

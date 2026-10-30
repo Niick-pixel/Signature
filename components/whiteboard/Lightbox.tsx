@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { spring, scrimExit } from '@/lib/motion';
 
@@ -26,6 +27,9 @@ interface LightboxProps {
 export function Lightbox({ src, alt, onClose, onPrev, onNext, caption }: LightboxProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  // Rendered into <body>: inside a transformed parent, "fixed" is fixed to the parent and the chart gets cropped.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (src) { setZoom(1); setPan({ x: 0, y: 0 }); }
@@ -56,7 +60,8 @@ export function Lightbox({ src, alt, onClose, onPrev, onNext, caption }: Lightbo
     return () => document.removeEventListener('keydown', onKey);
   }, [src, onClose, onPrev, onNext]);
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <AnimatePresence>
       {src && (
         <motion.div
@@ -119,6 +124,7 @@ export function Lightbox({ src, alt, onClose, onPrev, onNext, caption }: Lightbo
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

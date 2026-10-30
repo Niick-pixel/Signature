@@ -21,7 +21,7 @@ import { OUTCOME_COLOR } from './TradeNode';
 import { FlagList } from './FlagList';
 import { TradeRules } from '@/components/review/TradeRules';
 import { History } from './History';
-import { Lightbox } from './Lightbox';
+import { TradeGallery, type GalleryShot } from './TradeGallery';
 import { ShotGallery } from './ShotGallery';
 import { tradeWhen } from '@/lib/when';
 import { accountLabel } from '@/lib/domain';
@@ -90,6 +90,10 @@ interface DetailPanelProps {
   trade: Trade | null;
   onClose: () => void;
   onChanged: () => void;
+  /** Step to the previous / next trade on the board (the gallery's side arrows). */
+  onStep?: (dir: -1 | 1) => void;
+  prevLabel?: string | null;
+  nextLabel?: string | null;
 }
 
 /**
@@ -97,13 +101,26 @@ interface DetailPanelProps {
  * clicked visibly becomes the panel. Escape or a click on the scrim collapses
  * it back into the node.
  */
-export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
+export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, nextLabel }: DetailPanelProps) {
   const [settling, setSettling] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>('Win');
   const [rMultiple, setRMultiple] = useState('');
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [zoomed, setZoomed] = useState<string | null>(null);
+  // The full-screen gallery: which chart is open (null: closed). It stays open while the
+  // side arrows step to other trades — the panel follows underneath.
+  const [galleryAt, setGalleryAt] = useState<number | null>(null);
+  const [shots, setShots] = useState<GalleryShot[]>([]);
+  useEffect(() => {
+    if (!trade) { setShots([]); return; }
+    let live = true;
+    const fallback = trade.screenshot_path ? [{ path: trade.screenshot_path, label: 'Chart' }] : [];
+    setShots(fallback);
+    void fetch(`/api/trades/${trade.id}/shots`).then((r) => (r.ok ? r.json() : [])).then((list: Array<{ path: string; slot: string }>) => {
+      if (live && Array.isArray(list) && list.length) setShots(list.map((x) => ({ path: x.path, label: x.slot })));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [trade?.id, trade?.screenshot_path]); // eslint-disable-line react-hooks/exhaustive-deps
   // That morning's plan, set against this trade (lib/planMatch).
   const [plan, setPlan] = useState<PlanMatch | null>(null);
   useEffect(() => {
@@ -122,7 +139,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
     setRMultiple(trade.r_multiple == null ? '' : String(trade.r_multiple));
     setSettling(false);
     setDeleting(false);
-    setZoomed(null);
+    if (!trade) setGalleryAt(null);
   }, [trade]);
 
   useEffect(() => {
@@ -222,7 +239,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
               {trade.screenshot_path ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <ChartImage key={trade.screenshot_path} path={trade.screenshot_path}
-                  onZoom={() => setZoomed(`/api/screenshots/${trade.screenshot_path}`)} />
+                  onZoom={() => setGalleryAt(0)} />
               ) : (
                 <div data-no-chart className="grid h-40 place-items-center text-[12.5px]"
                   style={{ background: 'var(--letterbox)', color: 'var(--text-faint)' }}>
@@ -502,7 +519,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                   <div className="mb-2.5 text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
                     Charts
                   </div>
-                  <ShotGallery tradeId={trade.id} />
+                  <ShotGallery tradeId={trade.id} onOpen={(i) => setGalleryAt(i)} />
                 </div>
 
                 <TradeRules tradeId={trade.id} version={trade.updated_at} />
@@ -553,7 +570,8 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
             </motion.div>
           </div>
 
-          <Lightbox src={zoomed} alt="Chart" onClose={() => setZoomed(null)} />
+          <TradeGallery trade={galleryAt != null ? { id: trade.id, title: `${trade.date.slice(0, 10)} · ${trade.setup_type} ${trade.direction === 'Long' ? '↗' : '↘'}${trade.r_multiple != null ? ` · ${trade.r_multiple > 0 ? '+' : ''}${trade.r_multiple.toFixed(1)}R` : ''}`, shots } : null}
+            index={galleryAt ?? 0} onIndex={setGalleryAt} onClose={() => setGalleryAt(null)} onTrade={onStep} prevLabel={prevLabel} nextLabel={nextLabel} />
           <DeleteTradeDialog trade={trade} open={deleting} onClose={() => setDeleting(false)} onDone={deleted} />
         </>
       )}

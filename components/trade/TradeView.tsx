@@ -149,7 +149,7 @@ export function TradeView(p: TradeViewProps) {
           )}
 
           {on.shots && (
-            <Card title="Screenshots"><ShotGallery tradeId={t.id} /></Card>
+            <Card title="Screenshots"><ShotGallery tradeId={t.id} title={`${t.date.slice(0, 10)} · ${t.setup_type} ${t.direction === 'Long' ? '↗' : '↘'}`} /></Card>
           )}
 
           {t.screenshot_path && (

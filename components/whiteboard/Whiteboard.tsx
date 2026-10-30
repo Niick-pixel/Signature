@@ -76,6 +76,8 @@ export interface BoardStart {
   offsets: Record<string, { dx: number; dy: number }>;
 }
 
+const tradeLabel = (t: Trade) => `${t.date.slice(5, 10)} · ${t.setup_type}`;
+
 function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades: Trade[]; readOnly?: boolean; start?: BoardStart }) {
   const flow = useReactFlow();
   const [trades, setTrades] = useState(initial);
@@ -524,7 +526,9 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
     const take = () => {
       try {
         const id = window.sessionStorage.getItem(OPEN_TRADE_KEY);
-        if (id) { window.sessionStorage.removeItem(OPEN_TRADE_KEY); setOpenId(id); }
+        // Two frames later: the panel springs out of the card, which needs to be on screen first
+        // (the board fetches its trades on a cold load, so the cards may only just have mounted).
+        if (id) { window.sessionStorage.removeItem(OPEN_TRADE_KEY); requestAnimationFrame(() => requestAnimationFrame(() => setOpenId(id))); }
       } catch { /* storage unavailable */ }
     };
     take();
@@ -1031,6 +1035,13 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
   }, [refresh, confirm]);
 
   const open = openId ? trades.find((t) => t.id === openId) ?? null : null;
+  // The trades either side of the open one, in date order among those the board shows (the gallery's arrows).
+  const neighbours = useMemo(() => {
+    if (!openId) return { prev: null, next: null };
+    const ordered = [...visible].sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
+    const i = ordered.findIndex((t) => t.id === openId);
+    return { prev: i > 0 ? ordered[i - 1] : null, next: i >= 0 && i < ordered.length - 1 ? ordered[i + 1] : null };
+  }, [visible, openId]);
 
   if (trades.length === 0) {
     return (
@@ -1292,7 +1303,9 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
         onOpenTrade={(id) => setOpenId(id)}
       />
 
-      {!readOnly && <DetailPanel trade={open} onClose={() => setOpenId(null)} onChanged={refresh} />}
+      {!readOnly && <DetailPanel trade={open} onClose={() => setOpenId(null)} onChanged={refresh}
+        onStep={(dir) => { const n = neighbours[dir < 0 ? 'prev' : 'next']; if (n) setOpenId(n.id); }}
+        prevLabel={neighbours.prev ? tradeLabel(neighbours.prev) : null} nextLabel={neighbours.next ? tradeLabel(neighbours.next) : null} />}
       {!readOnly && (
         <DeleteTradeDialog
           trade={deletingId ? trades.find((t) => t.id === deletingId) ?? null : null}
