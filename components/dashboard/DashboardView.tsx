@@ -75,7 +75,10 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
       {open && (
         <div className="glass mb-3 grid gap-x-6 gap-y-2.5 rounded-[calc(18px*var(--rk))] px-4 py-3 sm:grid-cols-[auto_1fr]" data-dash-filters>
           <Row label="Accounts">
-            <Pill on={!chosen.length} onClick={() => update({ dashAccounts: [] })} title={`Everything in ${WORLD_LABEL[prefs.dashWorld].toLowerCase()} (Settings → Dashboard). Missed setups are never in All.`}>All</Pill>
+            {/* "All" used to mean the world picked in Settings (Real accounts by default), so a
+                backtest vanished under it. Now it is every account; "Real" is the old default. */}
+            <Pill on={!chosen.length && prefs.dashWorld === 'all'} onClick={() => update({ dashAccounts: [], dashWorld: 'all' })} title="Every account, real and backtest. Missed setups are picked on their own.">All</Pill>
+            <Pill on={!chosen.length && prefs.dashWorld === 'real'} onClick={() => update({ dashAccounts: [], dashWorld: 'real' })} title="Live, Demo, Eval and Funded — no backtests">Real only</Pill>
             {accounts.filter((a) => !a.key.includes('|') || chosen.includes(a.key) || accounts.filter((x) => x.key.startsWith(`${a.key.split('|')[0]}|`)).length > 1).map((a) => (
               <Pill key={a.key} on={chosen.includes(a.key)} onClick={() => toggle(a.key)} title={a.key === 'Missed' ? `${a.n} missed setup${a.n === 1 ? '' : 's'}, counted by what they would have made` : `${a.n} trade${a.n === 1 ? '' : 's'}`}>{a.label}</Pill>
             ))}

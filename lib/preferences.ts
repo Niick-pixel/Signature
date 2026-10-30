@@ -215,7 +215,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   savedViews: [],
   startScreen: 'board',
   hidePnl: false,
-  dashWorld: 'real',
+  dashWorld: 'all',
   dashUnit: 'money',
   dashAccounts: [],
   dashFilters: { period: 'all', sessions: [], dirs: [] },
