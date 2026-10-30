@@ -19,7 +19,8 @@
  * Every result is labelled an experiment — test it on the next N trades.
  */
 import { edgeMetrics, type EdgeMetrics } from './metrics';
-import { mulberry32, seedOf } from './rng';
+import { hashString, seedOf } from './rng';
+import { memo } from './memo';
 import { nPerGroup } from './power';
 import type { TradeState } from './state';
 import { closureScore } from '../anatomy';
@@ -81,18 +82,30 @@ const B = 2000;
 const meanOf = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
 
 function pairedP(rs: number[], keep: boolean[], salt: string): number {
-  const n = rs.length; const rand = mulberry32(seedOf(rs, `lab|${salt}`));
+  const n = rs.length; const R = Float64Array.from(rs); const K = Uint8Array.from(keep, (k) => (k ? 1 : 0));
+  // mulberry32 inlined (the same draws as lib/edge/rng): 2,000 × n of them per filter.
+  let a = seedOf(rs, `lab|${salt}`) >>> 0;
   let wins = 0; let valid = 0;
   for (let b = 0; b < B; b++) {
     let sa = 0; let sk = 0; let nk = 0;
-    for (let i = 0; i < n; i++) { const j = Math.floor(rand() * n); sa += rs[j]; if (keep[j]) { sk += rs[j]; nk += 1; } }
+    for (let i = 0; i < n; i++) {
+      a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      const j = Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * n);
+      sa += R[j]; if (K[j]) { sk += R[j]; nk += 1; }
+    }
     if (!nk) continue; valid += 1;
     if (sk / nk > sa / n) wins += 1;
   }
   return valid ? wins / valid : 0.5;
 }
 
+const rowsKey = (rows: readonly LabRow[]) => hashString(rows.map((r) => `${r.id}:${r.r}:${r.day ?? r.session ?? ''}:${LAB_FILTERS.map((f) => (r.keep[f.id] ? 1 : 0) + (r.unknown[f.id] ? 2 : 0)).join('')}`).join('|')).toString(36);
+
 export function labResult(rows: readonly LabRow[], filters: readonly string[], opts: { resamples?: number } = {}): LabResult {
+  return memo('lab', `${rowsKey(rows)}|${filters.join(',')}|${opts.resamples ?? ''}`, () => labUncached(rows, filters, opts), 64);
+}
+
+function labUncached(rows: readonly LabRow[], filters: readonly string[], opts: { resamples?: number }): LabResult {
   const keep = rows.map((r) => filters.every((f) => r.keep[f] !== false));
   const rs = rows.map((r) => r.r);
   const keptRs = rs.filter((_, i) => keep[i]);
@@ -130,3 +143,13 @@ export function tradesPerDay(rows: readonly LabRow[], keep?: readonly boolean[])
   rows.forEach((r, i) => { if ((keep ? keep[i] : true) && (r.day || r.session)) { const k = (r.day ?? r.session)!; m.set(k, (m.get(k) ?? 0) + 1); } });
   return [...m.values()];
 }
+
+/** Rows as they travel to the browser: each filter's keep / unknown as one character, in LAB_FILTERS order. */
+export interface PackedRow { id: string; r: number; d: string | null; s: string | null; k: string; u: string }
+export const packRows = (rows: readonly LabRow[]): PackedRow[] => rows.map((r) => ({
+  id: r.id, r: r.r, d: r.day, s: r.session, k: LAB_FILTERS.map((f) => (r.keep[f.id] ? '1' : '0')).join(''), u: LAB_FILTERS.map((f) => (r.unknown[f.id] ? '1' : '0')).join(''),
+}));
+export const unpackRows = (rows: readonly PackedRow[]): LabRow[] => rows.map((r) => ({
+  id: r.id, r: r.r, day: r.d, session: r.s,
+  keep: Object.fromEntries(LAB_FILTERS.map((f, i) => [f.id, r.k[i] === '1'])), unknown: Object.fromEntries(LAB_FILTERS.map((f, i) => [f.id, r.u[i] === '1'])),
+}));

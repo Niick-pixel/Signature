@@ -18,6 +18,8 @@ export interface TiltCell { losses: '0' | '1' | '2+'; tradeNo: '1st' | '2nd' | '
 export interface TiltSequence { key: string; label: string; trades: Array<{ id: string; date: string; r: number | null; rules: Array<{ id: string; short: string; source: 'auto' | 'self' }> }>; netR: number }
 export interface TiltIndex { cells: TiltCell[]; mu: number; k: number; sequences: TiltSequence[] }
 
+// One formatter, built once: toLocaleDateString builds a new one on every call.
+const DAY_LABEL = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 const L = (n: number): TiltCell['losses'] => (n >= 2 ? '2+' : n === 1 ? '1' : '0');
 const N = (n: number): TiltCell['tradeNo'] => (n >= 3 ? '3rd+' : n === 2 ? '2nd' : '1st');
 
@@ -46,7 +48,7 @@ export function tiltIndex(trades: readonly Trade[], states: Map<string, TradeSta
     if (!flagged.some((x) => x.rules.length)) continue;
     const sorted = [...flagged].sort((a, b) => (states.get(a.t.id)!.tradeNo ?? 0) - (states.get(b.t.id)!.tradeNo ?? 0));
     sequences.push({
-      key, label: key.startsWith('session:') ? `Replay session ${key.slice(8)}` : new Date(`${key}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }),
+      key, label: key.startsWith('session:') ? `Replay session ${key.slice(8)}` : DAY_LABEL.format(new Date(`${key}T12:00:00Z`)),
       trades: sorted.map(({ t, rules }) => ({ id: t.id, date: t.date, r: t.r_multiple, rules: rules.map((b) => ({ id: b.id, short: b.short, source: b.source ?? 'auto' })) })),
       netR: Math.round(ts.reduce((a, t) => a + (t.r_multiple ?? 0), 0) * 100) / 100,
     });

@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useMemo, useState } from 'react';
-import { LAB_FILTERS, labResult, tradesPerDay, type LabRow, type LabResult } from '@/lib/edge/ruleLab';
+import { LAB_FILTERS, labResult, tradesPerDay, unpackRows, type LabRow, type LabResult, type PackedRow } from '@/lib/edge/ruleLab';
 import { evalSim, type EvalRules } from '@/lib/edge/montecarlo';
 import { sR, pct } from './EdgeUI';
 import { Help } from '@/components/ui/Help';
@@ -11,8 +11,9 @@ import { Help } from '@/components/ui/Help';
   in the lab and the odds of passing an eval recompute under it (§5.9, §5.10).
 */
 const Ctx = createContext<{ rows: LabRow[]; on: string[]; setOn: (f: string[]) => void } | null>(null);
-export function LabProvider({ rows, children }: { rows: LabRow[]; children: React.ReactNode }) {
+export function LabProvider({ rows: packed, children }: { rows: PackedRow[]; children: React.ReactNode }) {
   const [on, setOn] = useState<string[]>([]);
+  const rows = useMemo(() => unpackRows(packed), [packed]);
   return <Ctx.Provider value={{ rows, on, setOn }}>{children}</Ctx.Provider>;
 }
 const useLab = () => useContext(Ctx)!;
@@ -37,10 +38,9 @@ function Curve({ actual, kept }: { actual: number[]; kept: number[] }) {
   );
 }
 
-/** Section K. */
-export function RuleLabPanel() {
+/** Section K. `each`: every filter on its own, computed on the server (the browser only combines). */
+export function RuleLabPanel({ each }: { each: Record<string, LabResult> }) {
   const { rows, on, setOn } = useLab();
-  const each = useMemo(() => Object.fromEntries(LAB_FILTERS.map((f) => [f.id, labResult(rows, [f.id], { resamples: 1000 })])) as Record<string, LabResult>, [rows]);
   const combo = useMemo(() => (on.length ? labResult(rows, on) : null), [rows, on]);
   const actual = useMemo(() => { let c = 0; return rows.map((r) => (c += r.r)); }, [rows]);
   const toggle = (id: string) => setOn(on.includes(id) ? on.filter((x) => x !== id) : [...on, id]);

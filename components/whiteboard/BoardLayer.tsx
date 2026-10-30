@@ -1,10 +1,13 @@
 import { connection } from 'next/server';
-import { listTrades } from '@/db/trades';
 import { boardStart } from '@/db/boardlayout';
 import { PersistentBoard } from './PersistentBoard';
 
-/** The always-mounted board's data, read fresh on every load and refresh. */
+/**
+ * The always-mounted board. Its trades are not rendered into the page: every
+ * screen used to carry the whole journal for a board it wasn't showing (15 MB
+ * of HTML at 2,000 trades). The board fetches them itself (PersistentBoard).
+ */
 export async function BoardLayer() {
   await connection();
-  return <PersistentBoard trades={listTrades()} start={boardStart()} />;
+  return <PersistentBoard start={boardStart()} />;
 }

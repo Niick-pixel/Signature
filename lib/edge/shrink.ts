@@ -49,11 +49,13 @@ export function shrinkGroups(groups: readonly GroupInput[], opts: { prior?: { mu
   const pBar = opts.prior?.pBar ?? (W + L ? W / (W + L) : 0.5);
   return {
     mu, sigma2: s2, tau2, k, pBar,
-    groups: stats.map(({ g, m }) => ({
-      key: g.key, n: g.x.length, nEff: m.nEff, rawMean: m.mean,
-      shrunk: (m.nEff * m.mean + k * mu) / (m.nEff + k),
-      sd: Math.sqrt(s2 / (m.nEff + k)),
-      winRate: betaPosterior(pBar * BETA_M + g.wins, (1 - pBar) * BETA_M + g.losses),
-    })),
+    groups: stats.map(({ g, m }) => {
+      const out = { key: g.key, n: g.x.length, nEff: m.nEff, rawMean: m.mean, shrunk: (m.nEff * m.mean + k * mu) / (m.nEff + k), sd: Math.sqrt(s2 / (m.nEff + k)) } as ShrunkGroup;
+      // Lazy: four exact Beta quantiles cost more than the rest of the shrinkage, and most callers
+      // (every "with vs without" comparison) never read the win rate.
+      let wr: BetaPosterior | undefined;
+      Object.defineProperty(out, 'winRate', { enumerable: true, get: () => (wr ??= betaPosterior(pBar * BETA_M + g.wins, (1 - pBar) * BETA_M + g.losses)) });
+      return out;
+    }),
   };
 }

@@ -18,6 +18,7 @@ import { sentences } from '../insights';
 import { allThemes, lessonQuotes as quotesFor, themesWith, type ThemeWord } from './text';
 import type { Trade } from '../types';
 import type { Thresholds } from './verdict';
+import { breaksKey, memo, tradesKey } from './memo';
 
 type Break = { id: string; short: string; source?: 'auto' | 'self' };
 export interface ThemeCost { id: string; title: string; rule: string; n: number; cmp: Comparison | null; totalR: number; trend: number[]; last: string | null; tradeIds: string[] }
@@ -34,6 +35,10 @@ export const CONTRADICTIONS: Array<[string, string, string]> = [['early', 'late'
 const dayOf = (t: Trade) => (t.undated || !t.date ? (t.session_index ? `Session ${t.session_index}` : '') : t.date.slice(0, 10));
 
 export function ledgerV2(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds; words?: readonly ThemeWord[] } = {}): LedgerV2 {
+  return memo('ledger', `${tradesKey(trades)}|${breaksKey(trades, breaks)}|${JSON.stringify([opts.thresholds, opts.words])}`, () => ledgerUncached(trades, breaks, opts));
+}
+
+function ledgerUncached(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds; words?: readonly ThemeWord[] }): LedgerV2 {
   const dict = opts.words ?? []; const THEMES = allThemes(dict);
   const n = trades.length;
   const rs = trades.map((t) => t.r_multiple as number);

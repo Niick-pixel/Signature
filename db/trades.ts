@@ -299,7 +299,31 @@ export function getTrade(id: string): Trade | null {
   return hydrate(row, dismissalsFor([id]).get(id) ?? {});
 }
 
+/*
+  The whole journal, read once per change. Every screen reads it (several
+  times per request: the page, the review inputs, the day context…) and
+  building 2,000 trades from their rows costs ~150 ms. The key is SQLite's own
+  change counters: total_changes() moves with any write on this connection,
+  data_version with any commit from another one — so a cached list is never
+  stale. Callers get their own array; the trade objects are shared (read-only).
+*/
+const fullList = new WeakMap<object, { key: string; trades: Trade[] }>();
+const isFullList = (f: TradeFilters) => Object.entries(f).every(([k, v]) => (k === 'bin' ? v == null || v === 'live' : v == null || (Array.isArray(v) && !v.length)));
+
 export function listTrades(filters: TradeFilters = {}): Trade[] {
+  if (isFullList(filters)) {
+    const db = getDb();
+    const key = `${(db.prepare('SELECT total_changes() AS n').get() as { n: number }).n}:${(db.prepare('PRAGMA data_version').get() as { data_version: number }).data_version}`;
+    const hit = fullList.get(db);
+    if (hit && hit.key === key) return [...hit.trades];
+    const trades = readTrades(filters);
+    fullList.set(db, { key, trades });
+    return [...trades];
+  }
+  return readTrades(filters);
+}
+
+function readTrades(filters: TradeFilters): Trade[] {
   const where: string[] = [];
   const params: Record<string, SQLInputValue> = {};
 

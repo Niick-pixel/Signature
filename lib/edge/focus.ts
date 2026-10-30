@@ -16,6 +16,7 @@ import type { TradeState } from './state';
 import { allThemes, themesWith, type ThemeWord } from './text';
 import type { Trade } from '../types';
 import type { Thresholds } from './verdict';
+import { breaksKey, memo, tradesKey } from './memo';
 
 export type FocusKind = 'rule' | 'theme' | 'state' | 'entry' | 'worked' | 'clean';
 export interface FocusItem {
@@ -43,6 +44,14 @@ const STATES: Array<{ key: string; label: string; test: (s: TradeState) => boole
 ];
 
 export function weeklyFocus(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds; sd?: number | null; words?: readonly ThemeWord[] } = {}): Focus {
+  const st0 = (t: Trade) => { const s = st(t); return s ? `${s.tradeNo}${s.after}${s.rBefore}` : ''; };
+  const key = `${tradesKey(trades)}|${breaksKey(trades, breaks)}|${trades.map(st0).join(',')}|${JSON.stringify([opts.thresholds, opts.sd, opts.words])}`;
+  // A copy: the page sets its own experiment on the result.
+  const f = memo('focus', key, () => weeklyFocusUncached(trades, breaks, opts));
+  return { ...f };
+}
+
+function weeklyFocusUncached(trades: readonly Trade[], breaks: (t: Trade) => Break[], opts: { thresholds?: Thresholds; sd?: number | null; words?: readonly ThemeWord[] }): Focus {
   const dict = opts.words ?? []; const THEMES = allThemes(dict);
   const n = trades.length;
   const rs = trades.map((t) => t.r_multiple as number);
@@ -83,7 +92,8 @@ export function weeklyFocus(trades: readonly Trade[], breaks: (t: Trade) => Brea
     .sort((a, b) => b.priority - a.priority);
   const leak = leaks.find((x) => x.priority > 0) ?? leaks[0] ?? null;
   // Not the leak seen from the other side (1st trade vs 2nd-or-later is one split, not two findings).
-  const mirror = (x: FocusItem) => Boolean(leak) && x.n + leak!.n === n && !x.tradeIds.some((id) => leak!.tradeIds.includes(id));
+  const leakIds = new Set(leak?.tradeIds ?? []);
+  const mirror = (x: FocusItem) => Boolean(leak) && x.n + leak!.n === n && !x.tradeIds.some((id) => leakIds.has(id));
   const strength = strengths.find((x) => x.priority > 0 && !mirror(x)) ?? null;
   const sd = opts.sd ?? null;
   const experiment = leak?.experiment

@@ -232,7 +232,20 @@ function matches(def: ThemeDef, t: Trade): Array<{ text: string; from: 'lesson' 
  * The themes on one trade: said in its lesson (part 'lesson'), or anywhere —
  * the explanation, the lesson, or a tag/field that says the same (part 'any').
  */
+// Per trade object (the journal's trades are read once per change and shared), so the
+// focus, the ledger and the language table don't each re-run every theme's patterns.
+const themesMemo = new WeakMap<Trade, { any?: string[]; lesson?: string[] }>();
+
 export function themesOf(t: Trade, part: 'lesson' | 'any' = 'any'): string[] {
+  const m = themesMemo.get(t) ?? {};
+  const hit = m[part];
+  if (hit) return hit;
+  const out = themesOfUncached(t, part);
+  m[part] = out; themesMemo.set(t, m);
+  return out;
+}
+
+function themesOfUncached(t: Trade, part: 'lesson' | 'any'): string[] {
   return THEMES.filter((d) => {
     const said = matches(d, t);
     return part === 'lesson' ? said.some((s) => s.from === 'lesson') : said.length > 0 || Boolean(d.signal?.(t));

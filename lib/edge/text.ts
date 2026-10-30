@@ -19,6 +19,7 @@ import { THEMES, sentences, themeSentences, themesOf } from '../insights';
 import { compare, type Comparison } from './compare';
 import { benjaminiHochberg } from './bh';
 import type { Trade } from '../types';
+import { memo, tradesKey } from './memo';
 
 export interface ThemeWord { theme: string; phrase: string }
 export interface ThemeDef { id: string; title: string; rule: string; custom: boolean }
@@ -63,13 +64,19 @@ export function dictionarySentences(t: Trade, theme: string, dict: readonly Them
 }
 
 /** The themes on a trade: built-in detection, plus your dictionary (lesson and explanation). */
+const withMemo = new WeakMap<Trade, Map<string, string[]>>();
 export function themesWith(t: Trade, dict: readonly ThemeWord[] = []): string[] {
+  if (!dict.length) return themesOf(t);
+  const key = dict.map((w) => `${w.theme}\u0000${w.phrase}`).join('\u0001');
+  const m = withMemo.get(t) ?? new Map<string, string[]>();
+  const hit = m.get(key); if (hit) return hit;
   const out = new Set(themesOf(t));
-  if (dict.length) {
+  {
     const ss = [...sentences(t.lesson ?? '', false), ...sentences(t.explanation ?? '', false)];
     for (const w of dict) if (ss.some((s) => phraseIn(s, w.phrase))) out.add(w.theme);
   }
-  return [...out];
+  const res = [...out]; m.set(key, res); withMemo.set(t, m);
+  return res;
 }
 
 /** Lesson quotes for a theme: built-in sentences and dictionary sentences, once each. */
@@ -114,6 +121,11 @@ export interface Phrase { text: string; n: number; cmp: Comparison | null; p: nu
 export interface Language { phrases: Phrase[]; suggestions: Array<{ token: string; n: number; field: string }>; tested: number; minN: number }
 
 export function language(trades: readonly Trade[], opts: { minN?: number; max?: number } = {}): Language {
+  // The text matters too: a lesson edited changes updated_at, which is in the key.
+  return memo('language', `${tradesKey(trades)}|${opts.minN ?? 5}|${opts.max ?? 30}`, () => languageUncached(trades, opts));
+}
+
+function languageUncached(trades: readonly Trade[], opts: { minN?: number; max?: number }): Language {
   const minN = opts.minN ?? 5; const N = trades.length;
   const rs = trades.map((t) => t.r_multiple as number);
   const by = new Map<string, Set<number>>();

@@ -20,6 +20,8 @@ export default async function NewTradePage({
   if (edit && !trade) notFound();
 
   const trades = listTrades();
+  // The blurred board behind the form is decoration: the most recent cards are enough to read as the board.
+  const backdrop = [...trades].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
 
   return (
     <div className="relative h-dvh overflow-hidden">
@@ -35,7 +37,7 @@ export default async function NewTradePage({
           style={{ filter: 'blur(18px) saturate(0.85)', opacity: 0.5, transform: 'scale(1.04)' }}
         >
           <div className="h-dvh pt-11">
-            <Whiteboard trades={trades} readOnly start={boardStart()} />
+            <Whiteboard trades={backdrop} readOnly start={boardStart()} />
           </div>
         </div>
       )}

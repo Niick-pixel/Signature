@@ -27,6 +27,7 @@ import { EquityRisk } from '@/components/stats/EquityRisk';
 import { AnatomyExplorer } from '@/components/stats/AnatomyExplorer';
 import { LedgerView } from '@/components/stats/LedgerView';
 import { EvalPanel, LabProvider, RuleLabPanel, type EvalPreset } from '@/components/stats/Lab';
+import { packRows } from '@/lib/edge/ruleLab';
 import { LAB_FILTERS, labResult, labRows } from '@/lib/edge/ruleLab';
 import { listPropAccounts } from '@/db/prop';
 import { scoreModel } from '@/lib/edge/scoreModel';
@@ -203,7 +204,8 @@ export default async function StatsPage(
   }]));
   // Rule Lab rows (lib/edge/ruleLab), and the best single filter as this week's experiment when it is at least a hint.
   const lab = labRows(stateful, breaksOf);
-  const bestLab = LAB_FILTERS.map((f) => ({ f, r: labResult(lab, [f.id], { resamples: 500 }) }))
+  const labEach = Object.fromEntries(LAB_FILTERS.map((f) => [f.id, labResult(lab, [f.id], { resamples: 1000 })]));
+  const bestLab = LAB_FILTERS.map((f) => ({ f, r: labEach[f.id] }))
     .filter((x) => x.r.pImprove != null && x.r.pImprove >= 0.75 && x.r.kept >= lab.length / 2).sort((a, b) => (b.r.pImprove ?? 0) - (a.r.pImprove ?? 0))[0];
   if (bestLab) focus.experiment = { text: `Rule Lab: ${bestLab.f.label.toLowerCase()}.`, from: `the Rule Lab (P(better) ${Math.round((bestLab.r.pImprove ?? 0) * 100)}%)`, n: bestLab.r.testN ?? 30 };
   // Eval presets: your prop accounts first, then the common evaluations.
@@ -221,7 +223,12 @@ export default async function StatsPage(
   const similar = simTarget ? similarSetups(simTarget, settled.filter((t) => t.id !== simTarget.id && t.date <= simTarget.date)) : null;
   const simOptions = [...settled].reverse().slice(0, 80).map((t) => ({ id: t.id, label: `${thumbs[t.id].day} · ${t.setup_type} ${t.direction === 'Long' ? '↗' : '↘'} · ${t.grade_letter ?? ''}` }));
   const exec = execution(settled);
-  const visibleRows = explorerRows.filter((r) => !r.hidden);
+  // What goes to the browser: each row shows at most 12 charts, so only those ids travel, with
+  // only their thumbnails — not every trade's id and thumbnail in every row.
+  const SHOWN = 12;
+  const cut = <T extends { tradeIds: string[] }>(xs: readonly T[]) => xs.map((x) => ({ ...x, tradeIds: x.tradeIds.slice(0, SHOWN) }));
+  const thumbsOf = (ids: Iterable<string>) => { const o: Record<string, Thumb> = {}; for (const id of ids) if (thumbs[id]) o[id] = thumbs[id]; return o; };
+  const visibleRows = cut(explorerRows.filter((r) => !r.hidden));
   const strongest = visibleRows.filter((r) => r.verdict.level !== 'too-early').sort((a, b) => b.verdict.p - a.verdict.p)[0];
   const winHref = (w: string) => `/stats?${new URLSearchParams({ account, ...filterParams, win: w }).toString()}`;
   const lockNote = (f: Parameters<typeof unlocked>[1], what: string) => (unlocked(mat, f) ? null
@@ -284,7 +291,7 @@ export default async function StatsPage(
           {trades.length === 0 ? (
             <div className="glass rounded-[calc(24px*var(--rk))] p-8 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>Nothing to measure yet.</div>
           ) : (
-            <LabProvider rows={lab}>
+            <LabProvider rows={packRows(lab)}>
             <div className="space-y-5">
               <IntegrityBanner issues={issues} />
               <EdgeHero m={metrics} scopeLabel={scopeLabel} maturity={<MaturityRing m={mat} />} thresholds={thresholds} />
@@ -324,11 +331,11 @@ export default async function StatsPage(
                     <span style={{ color: 'var(--text-faint)' }}>· {backtests.length} backtests · replay is optimistic (no fear, hindsight), so it is discounted</span>
                   </div>
                 )}
-                <AnatomyExplorer rows={visibleRows} mu={engine.explorer.mu} tests={engine.explorer.tests} hidden={engine.explorer.rows.length - visibleRows.length} thumbs={thumbs} />
+                <AnatomyExplorer rows={visibleRows} mu={engine.explorer.mu} tests={engine.explorer.tests} hidden={engine.explorer.rows.length - visibleRows.length} thumbs={thumbsOf(visibleRows.flatMap((r) => r.tradeIds))} />
                 <div className="mt-4" data-interactions>
                   <div className="mb-1 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>Interactions and the volatility regime (tier 3)</div>
                   {engine.interactions ? (
-                    <AnatomyExplorer rows={engine.interactions.rows.filter((r) => !r.hidden)} mu={engine.interactions.mu} tests={engine.interactions.tests} hidden={engine.interactions.rows.filter((r) => r.hidden).length} thumbs={thumbs} />
+                    <AnatomyExplorer rows={cut(engine.interactions.rows.filter((r) => !r.hidden))} mu={engine.interactions.mu} tests={engine.interactions.tests} hidden={engine.interactions.rows.filter((r) => r.hidden).length} thumbs={thumbsOf(engine.interactions.rows.flatMap((r) => r.tradeIds.slice(0, SHOWN)))} />
                   ) : <p className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Liquidity event × killzone, closure score × target, entry × killzone, and wide vs tight stops — shrunk twice as hard, from 200 trades ({Math.max(0, 200 - settled.length)} to go).</p>}
                 </div>
                 {btGap.length > 0 && (
@@ -352,7 +359,7 @@ export default async function StatsPage(
               <Collapsible id="similar-setups" title="Similar setups" open={params.similar != null} locked={lockNote('similar', 'Similar setups')}
                 help="The nearest past trades to a setup, by Gower distance over the fields known before the entry. Shrunk mean and a win chance from a Beta posterior."
                 summary={similar && similar.n ? `${simTarget ? thumbs[simTarget.id].day : ''}: ${similar.n} nearest, shrunk ${similar.shrunkR != null ? `${similar.shrunkR < 0 ? '−' : '+'}${Math.abs(similar.shrunkR).toFixed(2)}R` : '—'}` : 'Pick a trade to see its nearest past setups'}>
-                <SimilarLookup options={simOptions} picked={simTarget?.id ?? null} result={similar} thumbs={thumbs} />
+                <SimilarLookup options={simOptions} picked={simTarget?.id ?? null} result={similar} thumbs={thumbsOf(similar?.neighbours.map((x) => x.id) ?? [])} />
               </Collapsible>
 
               <Collapsible id="execution" title="Execution" help="From the max-in-favour and max-heat taps: management leaks, entry leaks, stops that barely held, the cost of early breakeven, exit efficiency, planned vs achieved R:R. Outcome fields — diagnosis only."
@@ -367,13 +374,13 @@ export default async function StatsPage(
               <Collapsible id="rule-lab" title="Rule Lab" locked={lockNote('ruleLab', 'The Rule Lab')}
                 help="What would have happened under a stricter rule. Expectancy with its interval, Δ against what you took, P(better) from a paired bootstrap, and the later half on its own from 60 trades."
                 summary={bestLab ? `${bestLab.f.label}: P(better) ${Math.round((bestLab.r.pImprove ?? 0) * 100)}% — experiment only` : 'No filter clearly improves on what you took'}>
-                <RuleLabPanel />
+                <RuleLabPanel each={Object.fromEntries(Object.entries(labEach).map(([k, v]) => [k, { ...v, curve: [] }]))} />
               </Collapsible>
 
               <Collapsible id="ledger" title="Mistake ledger" locked={lockNote('themeCosts', 'Mistake-theme costs')}
                 help="Written after the outcome, so it diagnoses what went wrong — it never predicts what wins. Costs are shrunk toward zero with their 80% range."
                 summary={ledger.themes[0] ? `${ledger.themes[0].title}: ${ledger.themes[0].n}× · ${ledger.themes[0].totalR < 0 ? '−' : '+'}${Math.abs(ledger.themes[0].totalR).toFixed(1)}R${ledger.repeated.length ? ` · ${ledger.repeated.length} lesson${ledger.repeated.length === 1 ? '' : 's'} not yet learned` : ''}` : `${ledger.losses.length} losses`}>
-                <LedgerView l={ledger} thumbs={thumbs} />
+                <LedgerView l={{ ...ledger, themes: cut(ledger.themes) }} thumbs={thumbsOf(ledger.themes.flatMap((t) => t.tradeIds.slice(0, SHOWN)))} />
               </Collapsible>
 
               <Collapsible id="missed" title="Missed trades & hesitation"
@@ -384,7 +391,7 @@ export default async function StatsPage(
 
               <Collapsible id="language" title="Journal language" summary={`Diagnostic, not predictive · ${lang.phrases.length} phrases${lang.suggestions.length ? ` · ${lang.suggestions.length} could be structured fields` : ''}`}
                 help="Phrases from text written after the outcome, outcome words removed, shrunk and corrected. They describe how you talk about trades; they can never say what wins.">
-                <LanguagePanel l={lang} thumbs={thumbs} />
+                <LanguagePanel l={{ ...lang, phrases: cut(lang.phrases) }} thumbs={thumbsOf(lang.phrases.flatMap((p) => p.tradeIds.slice(0, SHOWN)))} />
               </Collapsible>
 
               <Collapsible id="health" title="Engine health"

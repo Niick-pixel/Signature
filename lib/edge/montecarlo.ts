@@ -52,38 +52,64 @@ function maxDrawdown(rs: ArrayLike<number>): number {
   return dd;
 }
 
-/** The cone over the same number of trades as your history (or `horizon`). */
+const coneCache = new Map<string, Cone | null>();
+
+/** The cone over the same number of trades as your history (or `horizon`). Cached by the data. */
 export function equityCone(rs: readonly number[], opts: { paths?: number; block?: number; horizon?: number } = {}): Cone | null {
+  const key = `${seedOf(rs, 'cone')}|${rs.length}|${opts.paths ?? PATHS}|${opts.block ?? BLOCK}|${opts.horizon ?? rs.length}`;
+  if (coneCache.has(key)) return coneCache.get(key)!;
+  const out = coneUncached(rs, opts);
+  coneCache.set(key, out); if (coneCache.size > 12) coneCache.delete(coneCache.keys().next().value as string);
+  return out;
+}
+
+function coneUncached(rs: readonly number[], opts: { paths?: number; block?: number; horizon?: number }): Cone | null {
   const n = rs.length; if (n < MIN_MC) return null;
-  const paths = opts.paths ?? PATHS; const block = opts.block ?? BLOCK; const H = opts.horizon ?? n;
-  // Percentiles at up to 160 steps, interpolated between — the chart is never wider than that.
-  const steps = H <= 160 ? Array.from({ length: H }, (_, i) => i) : Array.from({ length: 160 }, (_, i) => Math.round((i * (H - 1)) / 159));
-  const stepIdx = new Int32Array(H).fill(-1); steps.forEach((s, j) => { stepIdx[s] = j; });
+  const paths = opts.paths ?? PATHS; const block = Math.min(opts.block ?? BLOCK, n); const H = opts.horizon ?? n;
+  // Percentiles at up to 80 steps, interpolated between: the cone is smooth, and each step
+  // costs a sort of 10,000 values.
+  const S = 80;
+  const steps = H <= S ? Array.from({ length: H }, (_, i) => i) : Array.from({ length: S }, (_, i) => Math.round((i * (H - 1)) / (S - 1)));
+  const stepIdx = new Int32Array(H).fill(-1); steps.forEach((st, j) => { stepIdx[st] = j; });
   const cols = steps.map(() => new Float64Array(paths));
   const dds = new Float64Array(paths); const streaks = new Float64Array(paths);
-  const rand = mulberry32(seedOf(rs, 'cone'));
-  const path = new Float64Array(H);
+  const R = Float64Array.from(rs);
+  // Result class per trade, once: 1 loss, 2 win, 0 breakeven.
+  const cls = Uint8Array.from(rs, (r) => { const c = resultClass(r); return c === 'L' ? 1 : c === 'W' ? 2 : 0; });
+  // mulberry32, inlined (the same arithmetic as lib/edge/rng), with the block walk and the
+  // drawdown and losing-streak passes folded into one loop over each path.
+  let a = seedOf(rs, 'cone') >>> 0;
   for (let p = 0; p < paths; p++) {
-    const next = blockStream(rs, rand, block);
-    let c = 0;
-    for (let i = 0; i < H; i++) { const r = next(); path[i] = r; c += r; const j = stepIdx[i]; if (j >= 0) cols[j][p] = c; }
-    dds[p] = maxDrawdown(path); streaks[p] = longestLosing(path);
+    let pos = 0; let left = 0; let c = 0; let peak = 0; let dd = 0; let run = 0; let best = 0;
+    for (let i = 0; i < H; i++) {
+      if (left === 0) {
+        a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        pos = Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * n); left = block;
+      }
+      const k = pos % n; pos += 1; left -= 1;
+      c += R[k];
+      if (c > peak) peak = c; else if (c - peak < dd) dd = c - peak;
+      const cl = cls[k]; if (cl === 1) { run += 1; if (run > best) best = run; } else if (cl === 2) run = 0;
+      const j = stepIdx[i]; if (j >= 0) cols[j][p] = c;
+    }
+    dds[p] = dd; streaks[p] = best;
   }
-  const pct = cols.map((c) => { c.sort(); return [q(c, 0.05), q(c, 0.25), q(c, 0.5), q(c, 0.75), q(c, 0.95)]; });
+  const pct = cols.map((col) => { col.sort(); return [q(col, 0.05), q(col, 0.25), q(col, 0.5), q(col, 0.75), q(col, 0.95)]; });
   const at = (k: number) => {
     if (steps.length === H) return pct.map((x) => x[k]);
     return Array.from({ length: H }, (_, i) => {
-      const j = steps.findIndex((s) => s >= i); if (steps[j] === i) return pct[j][k];
-      const a = steps[j - 1]; const b = steps[j]; const t = (i - a) / (b - a); return pct[j - 1][k] + (pct[j][k] - pct[j - 1][k]) * t;
+      const j = steps.findIndex((st) => st >= i); if (steps[j] === i) return pct[j][k];
+      const lo = steps[j - 1]; const hi = steps[j]; const t = (i - lo) / (hi - lo); return pct[j - 1][k] + (pct[j][k] - pct[j - 1][k]) * t;
     });
   };
   const actualDD = maxDrawdown(rs); const actualStreak = longestLosing(rs);
+  let deeper = 0; let longer = 0;
+  for (let p = 0; p < paths; p++) { if (dds[p] <= actualDD + 1e-9) deeper++; if (streaks[p] >= actualStreak) longer++; }
   return {
     p05: at(0), p25: at(1), p50: at(2), p75: at(3), p95: at(4), paths, block,
     maxDD: dist(dds), streak: dist(streaks),
     // Share of futures with a drawdown as deep as yours or deeper; a losing run as long or longer.
-    ddPercentile: dds.filter((d) => d <= actualDD + 1e-9).length / paths,
-    streakPercentile: streaks.filter((s) => s >= actualStreak).length / paths,
+    ddPercentile: deeper / paths, streakPercentile: longer / paths,
   };
 }
 

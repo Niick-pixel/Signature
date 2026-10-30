@@ -4,6 +4,7 @@
  * (lib/edge/rng), so the interval never jitters between reloads.
  */
 import { seedOf } from './rng';
+import { memo } from './memo';
 
 export interface MeanInterval {
   mean: number;
@@ -20,8 +21,12 @@ const quantile = (sorted: Float64Array, q: number) => {
 };
 
 export function bootstrapMean(xs: readonly number[], opts: { resamples?: number; seed?: number } = {}): MeanInterval | null {
+  if (xs.length < 2) return null;
+  return memo('bootstrap', `${xs.length}|${seedOf(xs, 'key')}|${opts.resamples ?? 5000}|${opts.seed ?? ''}`, () => bootstrapUncached(xs, opts), 64);
+}
+
+function bootstrapUncached(xs: readonly number[], opts: { resamples?: number; seed?: number }): MeanInterval {
   const n = xs.length;
-  if (n < 2) return null;
   const B = opts.resamples ?? 5000;
   // mulberry32 inlined in the hot loop (the same arithmetic as lib/edge/rng, so the same draws):
   // 5,000 × 2,000 draws without a function call each.
