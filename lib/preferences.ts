@@ -30,6 +30,8 @@ export interface Preferences {
   dimPassed: boolean;
   /** Skip entrance and layout animation. */
   reduceMotion: boolean;
+  /** The mark, large and faint, behind every screen. */
+  watermark: boolean;
   /** Offer the morning check-in on the first screen of a trading day. */
   askCheckIn: boolean;
   /**
@@ -210,6 +212,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showGrid: true,
   dimPassed: true,
   reduceMotion: false,
+  watermark: true,
   askCheckIn: true,
   heatmapUrl: 'https://openmarket.xyz/chart/JUSJIzyA',
   savedViews: [],

@@ -443,6 +443,14 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                 hint="Turns off the spring animations."
               />
             </Section>
+            <Section title="Logo" hint="The Signature mark, large and faint, at the centre of every screen — behind all the data.">
+              <TogglePill
+                checked={prefs.watermark}
+                onChange={(watermark) => update({ watermark })}
+                label="Logo behind the screens"
+                hint="Off for a completely plain background."
+              />
+            </Section>
 
             </>)}
             {cat === 'data' && (<>

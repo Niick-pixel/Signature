@@ -502,6 +502,8 @@ html, body {
 */
 :root {
   --text-scale: 1;
+  /* The watermark (components/personal/Watermark): faint enough never to compete with a number. */
+  --watermark-opacity: 0.05;
 }
 body {
   zoom: var(--text-scale);

@@ -15,6 +15,7 @@ import { WeekendReview } from '@/components/path/WeekendReview';
 import { RedDayPrompt } from '@/components/path/RedDayPrompt';
 import { HomeReview } from '@/components/review/HomeReview';
 import { TodayPanel } from '@/components/today/TodayPanel';
+import { Watermark } from '@/components/personal/Watermark';
 import { Backdrop } from '@/components/personal/Backdrop';
 import { StudyTimerWidget } from '@/components/study/StudyTimerWidget';
 import { FocusMode } from '@/components/study/FocusMode';
@@ -63,6 +64,8 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <TodayPanel />
           {/* Phase 5: your background, the study timer, and focus mode. */}
           <Backdrop />
+          {/* The mark, faint, behind every screen (Settings → Appearance). */}
+          <Watermark />
           <StudyTimerWidget />
           <FocusMode />
           <StartScreen />
