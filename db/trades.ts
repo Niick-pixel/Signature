@@ -613,18 +613,33 @@ export function restoreTrade(id: string): boolean {
 }
 
 /**
- * Actually gone — row, screenshot, edit log and dismissals. A separate,
- * deliberate act, never reachable from the same button as a delete.
+ * Actually gone — the row, everything that belongs only to it, and its chart
+ * files. A separate, deliberate act, never reachable from the same button as
+ * a delete.
+ *
+ * It used to remove only the row, its edit log and its dismissals: the
+ * gallery rows and their files, partial exits, drawings, tags, predictions,
+ * blind grades, chart bars and board links stayed behind as orphans.
+ * Executions are platform records, so they are unlinked, not deleted; the
+ * Path's history keeps its events.
  */
 export function purgeTrade(id: string): boolean {
   const trade = getTrade(id);
   if (!trade) return false;
   const db = getDb();
+  const gallery = (db.prepare('SELECT path FROM trade_screenshots WHERE trade_id = ?').all(id) as Array<{ path: string }>).map((r) => r.path);
+  const files = [...new Set([trade.screenshot_path, ...gallery].filter(Boolean))];
   db.exec('BEGIN');
   try {
-    db.prepare('DELETE FROM trade_edits WHERE trade_id = ?').run(id);
-    db.prepare('DELETE FROM flag_dismissals WHERE trade_id = ?').run(id);
+    for (const t of ['trade_edits', 'flag_dismissals', 'trade_screenshots', 'trade_partials', 'trade_custom_tags',
+      'predictions', 'blind_grades', 'trade_bars', 'study_note_trades', 'execution_unlinks']) {
+      db.prepare(`DELETE FROM ${t} WHERE trade_id = ?`).run(id);
+    }
+    db.prepare('UPDATE executions SET trade_id = NULL WHERE trade_id = ?').run(id);
+    db.prepare('DELETE FROM board_edges WHERE from_id = ? OR to_id = ?').run(id, id);
     db.prepare('DELETE FROM trades WHERE id = ?').run(id);
+    // A drawing belongs to a chart file: it goes with the last reference to it.
+    for (const f of files) if (!screenshotStillUsed(f)) db.prepare('DELETE FROM shot_drawings WHERE path = ?').run(f);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
@@ -637,16 +652,15 @@ export function purgeTrade(id: string): boolean {
     an import can restore a row that references an image already on disk. So a
     path is not owned by one trade, and deleting the file with the row left the
     other trade showing a broken image — a purge quietly damaging a record it
-    was not asked to touch.
+    was not asked to touch. Galleries count too.
   */
-  if (!screenshotStillUsed(trade.screenshot_path)) deleteScreenshot(trade.screenshot_path);
+  for (const f of files) if (!screenshotStillUsed(f)) deleteScreenshot(f);
   return true;
 }
 
-/** Whether any surviving trade — live or trashed — still points at this file. */
-function screenshotStillUsed(path: string): boolean {
-  const row = getDb()
-    .prepare('SELECT 1 FROM trades WHERE screenshot_path = ? LIMIT 1')
-    .get(path);
-  return row !== undefined;
+/** Whether any surviving trade — live or trashed — still shows this file, as its main chart or in its gallery. */
+export function screenshotStillUsed(path: string): boolean {
+  const db = getDb();
+  return db.prepare('SELECT 1 FROM trades WHERE screenshot_path = ? LIMIT 1').get(path) !== undefined
+    || db.prepare('SELECT 1 FROM trade_screenshots WHERE path = ? LIMIT 1').get(path) !== undefined;
 }

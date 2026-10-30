@@ -2,6 +2,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { getDb } from './index';
 import { deleteScreenshot } from './screenshots';
+import { screenshotStillUsed } from './trades';
 import type { ShotSlot } from '../lib/domain';
 import type { TradeShot } from '../lib/types';
 
@@ -76,11 +77,8 @@ export function removeShot(id: string): boolean {
       .run(remaining[0].path, shot.trade_id);
   }
 
-  // Only unlink once nothing references it.
-  const stillUsed = db
-    .prepare('SELECT 1 FROM trade_screenshots WHERE path = ? LIMIT 1')
-    .get(shot.path);
-  if (!stillUsed) deleteScreenshot(shot.path);
+  // Only unlink once nothing references it — another gallery or another trade's main chart.
+  if (!screenshotStillUsed(shot.path)) deleteScreenshot(shot.path);
   return true;
 }
 
