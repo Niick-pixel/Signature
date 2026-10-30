@@ -162,6 +162,8 @@ export interface BoardLayout {
    * layout laid out, and it only changes when the groups themselves do.
    */
   nominalWidth: number;
+  /** The title card's centre: above the grid, or the middle of an orbit. */
+  hub?: { x: number; y: number };
 }
 
 /**
@@ -373,6 +375,116 @@ export function settle(moved: Rect, others: Rect[]): { x: number; y: number } {
   return { x: x0, y: clearUpTo(floor + SETTLE_GAP) };
 }
 
+/* ───────────── arrangements ─────────────
+  Where the groups sit. "grid" is the packed rows the board always had; the
+  others are presets that put every group in a zone, symmetrically, and keep
+  the board's own order inside each zone. Groups are ranked by how many trades
+  they hold (ties keep their order), so big groups sit together and small,
+  less-used ones stick together. Hand nudges still apply on top, remembered
+  per arrangement.
+*/
+export const ARRANGEMENTS = ['grid', 'orbit', 'sizes', 'columns'] as const;
+export type Arrangement = (typeof ARRANGEMENTS)[number];
+export const ARRANGEMENT_LABEL: Record<Arrangement, string> = { grid: 'Grid', orbit: 'Orbit', sizes: 'Big → small', columns: 'Columns' };
+export const ARRANGEMENT_HINT: Record<Arrangement, string> = {
+  grid: 'Rows, in the board\'s order.',
+  orbit: 'Around the title: the biggest groups left and right, the next below, the smallest in a row on top.',
+  sizes: 'Centred rows, the biggest groups first.',
+  columns: 'Big groups stacked on the left, the smaller ones packed on the right.',
+};
+/** The title card is 300 × 130; `hub` is its centre. */
+const HUB_W = 300; const HUB_H = 130;
+
+interface Placement { at: Array<{ x: number; y: number }>; hub: { x: number; y: number }; box: { minX: number; minY: number; maxX: number; maxY: number } }
+
+/** Rows of the given groups (indices), each row centred on x = 0, starting at y = top. */
+function centredRows(idx: number[], grids: Array<{ width: number; height: number }>, maxW: number, top: number, at: Array<{ x: number; y: number }>, alignBottom = false): number {
+  let y = top; let row: number[] = []; let w = 0;
+  const flush = () => {
+    if (!row.length) return;
+    const h = Math.max(...row.map((i) => grids[i].height));
+    let x = -w / 2;
+    for (const i of row) { at[i] = { x, y: alignBottom ? y + h - grids[i].height : y }; x += grids[i].width + CLUSTER_GAP; }
+    y += h + CLUSTER_GAP; row = []; w = 0;
+  };
+  for (const i of idx) {
+    const gw = grids[i].width;
+    if (row.length && w + CLUSTER_GAP + gw > maxW) flush();
+    w += (row.length ? CLUSTER_GAP : 0) + gw; row.push(i);
+  }
+  flush();
+  return y - CLUSTER_GAP;
+}
+
+function boxOf(at: Array<{ x: number; y: number }>, grids: Array<{ width: number; height: number }>) {
+  return {
+    minX: Math.min(...at.map((a) => a.x)), minY: Math.min(...at.map((a) => a.y)),
+    maxX: Math.max(...at.map((a, i) => a.x + grids[i].width)), maxY: Math.max(...at.map((a, i) => a.y + grids[i].height)),
+  };
+}
+
+export function arrange(kind: Arrangement, grids: Array<{ width: number; height: number }>, sizes: number[]): Placement | null {
+  const n = grids.length;
+  if (kind === 'grid' || n === 0) return null;
+  // Biggest first; equal sizes keep the board's order.
+  const ranked = sizes.map((v, i) => i).sort((a, b) => sizes[b] - sizes[a] || a - b);
+  const inOrder = (xs: number[]) => [...xs].sort((a, b) => a - b);
+  const at: Array<{ x: number; y: number }> = new Array(n);
+  const G = CLUSTER_GAP;
+
+  if (kind === 'orbit') {
+    const sideN = Math.min(n, n <= 3 ? 2 : 2 * Math.max(1, Math.round(n / 5)));
+    const rest = n - sideN;
+    const bottomN = rest >= 2 ? Math.max(1, Math.floor(rest / 3)) : rest;
+    const sides = ranked.slice(0, sideN);
+    const left = sides.filter((_, i) => i % 2 === 0); const right = sides.filter((_, i) => i % 2 === 1);
+    const column = (ids: number[], side: -1 | 1) => {
+      const h = ids.reduce((a, i) => a + grids[i].height, 0) + G * Math.max(0, ids.length - 1);
+      let y = -h / 2;
+      for (const i of inOrder(ids)) {
+        at[i] = { x: side < 0 ? -HUB_W / 2 - G * 2 - grids[i].width : HUB_W / 2 + G * 2, y };
+        y += grids[i].height + G;
+      }
+    };
+    column(left, -1); column(right, 1);
+    const sideTop = Math.min(-HUB_H / 2, ...sides.map((i) => at[i].y));
+    const sideBottom = Math.max(HUB_H / 2, ...sides.map((i) => at[i].y + grids[i].height));
+    const span = Math.max(1600, ...sides.map((i) => Math.abs(at[i].x) + grids[i].width) .map((v) => v * 2));
+    const bottom = inOrder(ranked.slice(sideN, sideN + bottomN));
+    const top = inOrder(ranked.slice(sideN + bottomN));
+    centredRows(bottom, grids, span, sideBottom + G * 2, at);
+    if (top.length) {
+      // Measure the top rows, then place them so their last row ends just above the hub and the sides.
+      const tmp: Array<{ x: number; y: number }> = [];
+      const h = centredRows(top, grids, span, 0, tmp, true);
+      centredRows(top, grids, span, sideTop - G * 2 - h, at, true);
+    }
+    return { at, hub: { x: 0, y: 0 }, box: boxOf(at, grids) };
+  }
+
+  if (kind === 'sizes') {
+    centredRows(ranked, grids, BOARD_ROOM, 0, at);
+    return { at, hub: { x: 0, y: -135 }, box: boxOf(at, grids) };
+  }
+
+  // columns: the biggest third stacked on the left, the rest packed on the right.
+  const bigN = Math.max(1, Math.ceil(n / 3));
+  const big = inOrder(ranked.slice(0, bigN)); const small = inOrder(ranked.slice(bigN));
+  const bigW = Math.max(...big.map((i) => grids[i].width));
+  let y = 0;
+  for (const i of big) { at[i] = { x: bigW - grids[i].width, y }; y += grids[i].height + G; }
+  if (small.length) {
+    const rightW = Math.max(900, BOARD_ROOM - bigW - G * 2);
+    const p = pack(small.map((i) => grids[i]), rightW);
+    small.forEach((i, k) => { at[i] = { x: bigW + G * 2 + p.at[k].x, y: p.at[k].y }; });
+  }
+  const box = boxOf(at, grids);
+  return { at, hub: { x: (box.minX + box.maxX) / 2, y: -135 }, box };
+}
+
+/** The offset slot of a group under an arrangement: hand nudges are kept per arrangement. */
+export const arrangedKey = (key: string, kind: Arrangement) => (kind === 'grid' ? key : `${key}#${kind}`);
+
 export function computeLayout(
   trades: Trade[],
   scale = 1,
@@ -381,6 +493,8 @@ export function computeLayout(
   offsets: Record<string, { dx: number; dy: number }> = {},
   /** The account the board is showing; see offsetSlot. */
   account: string = 'All',
+  /** Where the groups sit (see arrange). */
+  arrangement: Arrangement = 'grid',
 ): BoardLayout {
   // The timeline is a running total of R: real trades only, unless the
   // board is showing nothing but backtests.
@@ -403,11 +517,16 @@ export function computeLayout(
   const packed = bestPack(counts, scale);
   const grids = packed.grids;
   const nominalWidth = packed.width;
+  // A preset puts each group in its zone; the grid keeps the packed rows.
+  const placed0 = arrange(arrangement, grids, groups.map((g) => g.trades.length));
+  const base = placed0?.at ?? packed.at;
+  const bounds = placed0?.box ?? { minX: 0, minY: 0, maxX: nominalWidth, maxY: packed.height };
+  const hub = placed0 ? placed0.hub : { x: nominalWidth / 2, y: -135 };
 
   groups.forEach((group, index) => {
     const grid = grids[index];
-    const cursorX = packed.at[index].x;
-    const cursorY = packed.at[index].y;
+    const cursorX = base[index].x;
+    const cursorY = base[index].y;
 
     /*
       Newest first, and placed on an exact grid.
@@ -419,12 +538,12 @@ export function computeLayout(
       now entirely the layout's job: same gaps everywhere, nothing to nudge out
       of alignment, nothing to tidy up after.
     */
-    const stored = offsets[offsetSlot(mode, group.key, account)] ?? { dx: 0, dy: 0 };
+    const stored = offsets[offsetSlot(mode, arrangedKey(group.key, arrangement), account)] ?? { dx: 0, dy: 0 };
     const stray = MAX_STRAY * scale;
     const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
-    const originX = clamp(cursorX + stored.dx, -stray, nominalWidth + stray - grid.width);
+    const originX = clamp(cursorX + stored.dx, bounds.minX - stray, bounds.maxX + stray - grid.width);
     // The title sits 200 above the first row; a group may go up there too.
-    const originY = clamp(cursorY + stored.dy, -stray - 200 * scale, packed.height + stray - grid.height);
+    const originY = clamp(cursorY + stored.dy, bounds.minY - stray - 200 * scale, bounds.maxY + stray - grid.height);
     const nudge = { dx: originX - cursorX, dy: originY - cursorY };
 
     const ordered = [...group.trades].sort((a, b) => b.date.localeCompare(a.date));
@@ -487,7 +606,7 @@ export function computeLayout(
     ...leakChains(trades.filter((t) => !isBacktest(t.account) && !isHypothetical(t.account))),
     ...leakChains(trades.filter((t) => isBacktest(t.account))),
   ];
-  return { clusters, nodes, stacks, reasonEdges, leakEdges, nominalWidth };
+  return { clusters, nodes, stacks, reasonEdges, leakEdges, nominalWidth, hub };
 }
 
 /** How far one R moves a card up or down in the timeline. */

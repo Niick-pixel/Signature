@@ -71,6 +71,8 @@ export interface Preferences {
   tradeSections: Record<TradeSection, boolean>;
   /** Minutes of chart shown before entry and after exit. */
   chartPad: 15 | 30 | 60 | 120;
+  /** How the whiteboard arranges its groups (lib/layout ARRANGEMENTS). */
+  boardArrangement: 'grid' | 'orbit' | 'sizes' | 'columns';
   /** Executions import: the platform (or detect), the clock its file is written in, and how to match. */
   importPlatform: 'auto' | 'tradovate' | 'ninjatrader' | 'rithmic' | 'generic';
   importZone: 'journal' | 'America/New_York' | 'America/Chicago' | 'UTC';
@@ -222,6 +224,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   openTradeIn: 'page',
   tradeSections: { metrics: true, chips: true, chart: true, executions: true, shots: true, rules: true, notes: true },
   chartPad: 30,
+  boardArrangement: 'grid',
   importPlatform: 'auto',
   importZone: 'journal',
   importWindow: 10,

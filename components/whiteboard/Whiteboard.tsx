@@ -8,7 +8,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import {
-  computeLayout, offsetSlot, reasonAccent, settle, tradeIdFromKey,
+  computeLayout, offsetSlot, reasonAccent, settle, tradeIdFromKey, arrangedKey, ARRANGEMENTS, type Arrangement,
   GROUP_LABELS, GROUP_MODES, NODE_H, NODE_W, type GroupMode,
 } from '@/lib/layout';
 import { EASE_SOFT, spring, springBouncy, exitQuick } from '@/lib/motion';
@@ -270,7 +270,8 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
     return () => window.removeEventListener(JOURNAL_CHANGED, onChanged);
   }, [readOnly, refresh, loadBoard]);
 
-  const { prefs } = usePreferences();
+  const { prefs, update: updatePrefs } = usePreferences();
+  const arrangement: Arrangement = (ARRANGEMENTS as readonly string[]).includes(prefs.boardArrangement) ? prefs.boardArrangement : 'grid';
   const scale = DENSITY_SCALE[prefs.boardDensity];
 
   const visible = useMemo(() => trades.filter(applyFilters(filters)), [trades, filters]);
@@ -326,8 +327,8 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
 
 
   const layout = useMemo(
-    () => computeLayout(visible, scale, groupMode, offsets, filters.account),
-    [visible, scale, groupMode, offsets, filters.account],
+    () => computeLayout(visible, scale, groupMode, offsets, filters.account, arrangement),
+    [visible, scale, groupMode, offsets, filters.account, arrangement],
   );
 
   // The second half of the regroup glide — see changeGroupMode.
@@ -596,7 +597,7 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
     const titleNode: Node[] = layout.clusters.length === 0 && groupMode !== 'timeline' ? [] : [{
       id: 'board-title',
       type: 'title',
-      position: { x: layout.nominalWidth / 2 - 150, y: -200 },
+      position: layout.hub ? { x: layout.hub.x - 150, y: layout.hub.y - 65 } : { x: layout.nominalWidth / 2 - 150, y: -200 },
       data: {
         label: GROUP_LABELS[groupMode],
         sub: groupMode === 'timeline'
@@ -874,7 +875,7 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
       of unexplained islands.
     */
     // The title's centre (it is 300 wide, about 130 tall, at y −200).
-    const hub = { x: layout.nominalWidth / 2, y: -135 };
+    const hub = layout.hub ?? { x: layout.nominalWidth / 2, y: -135 };
     const face = (c: { x: number; y: number; width: number; height: number }) => {
       if (c.y + c.height <= hub.y) return 't-bottom';
       if (c.y >= hub.y) return 't-top';
@@ -955,7 +956,7 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
         const key = change.id.slice(8);
         const cluster = layout.clusters.find((c) => c.key === key);
         if (!cluster) continue;
-        const slot = offsetSlot(groupMode, key, filters.account);
+        const slot = offsetSlot(groupMode, arrangedKey(key, arrangement), filters.account);
         // The nudge as applied, not as stored: a stored one may have been
         // clamped back toward the board, and a drag starts from where it is.
         const nudge = cluster.nudge;
@@ -976,11 +977,11 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
         void fetch('/api/board/offsets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: groupMode, key, dx, dy, account: filters.account }),
+          body: JSON.stringify({ mode: groupMode, key: arrangedKey(key, arrangement), dx, dy, account: filters.account }),
         });
       }
     }
-  }, [groupMode, moveNote, layout, filters.account]);
+  }, [groupMode, moveNote, layout, filters.account, arrangement]);
 
   /** Every group back where the grid puts it. */
   const tidyUp = useCallback(async () => {
@@ -1289,7 +1290,7 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
           cluster, and out of the way of the board itself. */}
       {!readOnly && (
         <div className="pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end">
-          <BoardControls onRecluster={recluster} />
+          <BoardControls onRecluster={recluster} arrangement={arrangement} onArrange={(a) => { updatePrefs({ boardArrangement: a }); setTimeout(() => flow.fitView({ padding: 0.08, duration: 500 }), 80); }} />
         </div>
       )}
 
