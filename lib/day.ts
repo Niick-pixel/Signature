@@ -22,3 +22,8 @@ export function localDay(d: Date = new Date()): string {
 export function startsUndated(trade: { undated: boolean } | null | undefined): boolean {
   return trade ? trade.undated : true;
 }
+
+/** Local wall-clock time as the form writes it: 2026-10-30T19:30. */
+export function localStamp(d: Date = new Date()): string {
+  return `${localDay(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}

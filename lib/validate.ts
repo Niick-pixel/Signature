@@ -4,6 +4,7 @@ import {
   SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, R_BUCKETS, MANAGEMENTS, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
   type ChecklistKey, type Regrade, type TradeStatus, type WorkedTag, type MarketTag, type ContextFlag, type MistakeTag, type Tri,
 } from './domain';
+import { localStamp } from './day';
 import { REGRADE_HINT, regradeAllowed, type GradeLetter } from './grade';
 import { CURRENT_RUBRIC, HTF_DELIVERIES, SWEEP_LEVELS, gradeUnder } from './rubric';
 import { MIN_EXPLANATION, MIN_LESSON, type TradeInput } from './types';
@@ -178,7 +179,8 @@ export function parseTradeInput(
   const account = oneOf('account', ACCOUNT_VALUES) ?? 'Live';
   const undated = account === BACKTEST && t.undated === true;
   const given = typeof t.date === 'string' && !Number.isNaN(new Date(t.date).getTime()) ? t.date : null;
-  const date = given ?? (undated ? (floor.previous?.date ?? new Date().toISOString()) : null);
+  // An undated backtest still sorts somewhere: by when it was logged, in local time like every other trade.
+  const date = given ?? (undated ? (floor.previous?.date ?? localStamp()) : null);
   if (!date) return { ok: false, error: 'Invalid date.' };
 
   /*

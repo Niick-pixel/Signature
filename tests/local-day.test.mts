@@ -46,3 +46,21 @@ test('a new backtest starts undated; an edit keeps what it had', async () => {
   assert.equal(startsUndated({ undated: false }), false);
   assert.equal(startsUndated({ undated: true }), true);
 });
+
+test('localStamp is the local wall clock the form writes', async () => {
+  const { localStamp } = await import('../lib/day.ts');
+  assert.equal(localStamp(new Date(2026, 9, 30, 19, 5)), '2026-10-30T19:05');
+});
+
+test('screenshots: folder and file name share the local day; writes are atomic', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'signature-shot-'));
+  process.env.SIGNATURE_DATA_DIR = dir;
+  const { saveScreenshot } = await import('../db/screenshots.ts');
+  const rel = await saveScreenshot(new File([new Uint8Array([1, 2, 3])], 'c.png', { type: 'image/png' }));
+  const today = localDay();
+  assert.match(rel, new RegExp(`^${today.slice(0, 7)}/${today}-[0-9a-f]{8}\\.png$`));
+  const folder = path.join(dir, 'screenshots', today.slice(0, 7));
+  assert.deepEqual(fs.readdirSync(folder).filter((f) => f.endsWith('.tmp')), []);
+});
