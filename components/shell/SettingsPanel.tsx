@@ -37,6 +37,26 @@ interface BackupState {
   folder: string | null; folderLastOk: string | null; folderError: string | null; points: RestorePoint[];
 }
 
+/** How new charts are stored (db/shotCompress). Off unless you choose otherwise. */
+function ChartStorage({ Section: S }: { Section: typeof Section }) {
+  const [mode, setMode] = useState<'off' | 'lossless' | 'smaller' | null>(null);
+  useEffect(() => { fetch('/api/screenshot-settings').then((r) => r.json()).then((j) => setMode(j.compress)).catch(() => {}); }, []);
+  const choose = async (compress: 'off' | 'lossless' | 'smaller') => {
+    setMode(compress);
+    await fetch('/api/screenshot-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ compress }) }).catch(() => {});
+  };
+  return (
+    <S title="Chart storage"
+      hint="How new charts are saved. As pasted keeps the file exactly. Lossless stores PNG/JPEG as lossless WebP — the same pixels, usually far smaller. Smaller uses WebP at quality 90 — looks the same, smaller still. A converted file is kept only when it saves space; charts already saved are never touched.">
+      <div data-chart-storage>
+        <Segmented value={mode} onChange={(v) => void choose(v)} options={['off', 'lossless', 'smaller'] as const}
+          labelFor={(v) => ({ off: 'As pasted', lossless: 'Lossless', smaller: 'Smaller' } as Record<string, string>)[v]}
+          titleFor={(v) => ({ off: 'Keep every chart exactly as pasted', lossless: 'Same pixels, smaller file (lossless WebP)', smaller: 'Looks the same, smallest file (WebP quality 90)' } as Record<string, string>)[v]} />
+      </div>
+    </S>
+  );
+}
+
 function Section({ title, hint, children }: {
   title: string; hint?: string; children: React.ReactNode;
 }) {
@@ -309,6 +329,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </>)}
             {cat === 'trades' && (<>
             <TradeSettings Section={Section} />
+            <ChartStorage Section={Section} />
             </>)}
             {cat === 'prop' && (<>
             <PropSettings Section={Section} />
