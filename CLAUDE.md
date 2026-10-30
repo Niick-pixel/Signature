@@ -36,7 +36,7 @@ Also from earlier sessions:
 ## Working in this repo
 
 - Typecheck: `npx tsc --noEmit` · Tests: `npm test` (node:test + tsx) · Build: `npm run build`.
-- `npm run lint` is broken on Next 16 (`next lint` was removed) — see docs/full-review.md.
+- Lint: `npm run lint` (ESLint flat config, `eslint.config.mjs`). 0 errors required; React Compiler rules are warnings.
 - Run against a copy of a journal: `SIGNATURE_DATA_DIR=/path/to/copy npx next start -p 3312`.
 - Today's date is `localDay()` (lib/day.ts), never `toISOString().slice(0, 10)`.
 - The Stats page / `lib/edge/` (Edge Engine, `docs/edge-engine.md`) has its own plan;

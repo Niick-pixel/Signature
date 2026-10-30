@@ -34,7 +34,7 @@ function Chips<T extends string>({ all, picked, onChange, label = (v: T) => v }:
   return (
     <div className="flex flex-wrap gap-1.5">
       {all.map((v) => (
-        <button key={v} type="button" onClick={() => { set.has(v) ? set.delete(v) : set.add(v); onChange([...set]); }}
+        <button key={v} type="button" onClick={() => { if (set.has(v)) set.delete(v); else set.add(v); onChange([...set]); }}
           className="rounded-full border px-2.5 py-0.5 text-[11px]"
           style={set.has(v) ? { borderColor: 'rgb(var(--accent) / 0.55)', color: 'rgb(var(--accent))', background: 'rgb(var(--accent) / 0.1)' }
             : { borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>

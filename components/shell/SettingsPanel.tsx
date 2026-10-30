@@ -20,6 +20,7 @@ import { PersonalSettings } from '@/components/settings/PersonalSettings';
 import { navigate } from '@/lib/nav';
 import { Help } from '@/components/ui/Help';
 import { SETTINGS_TOGGLE, SHEET_OPEN } from './Shortcuts';
+import Link from 'next/link';
 
 interface Info {
   dataDir: string;
@@ -481,14 +482,14 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               >
                 {importing ? 'Importing…' : 'Import JSON'}
               </Button>
-              <a href="/trash" className="outline-none">
+              <Link href="/trash" className="outline-none">
                 <Button
                   tabIndex={-1}
                   title="Trades you deleted. Nothing is destroyed until you purge it there"
                 >
                   Trash
                 </Button>
-              </a>
+              </Link>
               <input
                 ref={importRef}
                 type="file"

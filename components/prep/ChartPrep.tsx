@@ -382,7 +382,7 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => fetch(`/api/news/session?day=${localDay()}`).then((r) => r.json()).then((j: SessionNewsData) => setD(j)).catch(() => {}), []);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (d && !answered && (d.syncedAt || d.events.length)) onAnswer(d.answer); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [d]);
+  useEffect(() => { if (d && !answered && (d.syncedAt || d.events.length)) onAnswer(d.answer); }, [d]);
   const refresh = async () => { setBusy(true); await fetch('/api/news/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: true }) }); await load(); setBusy(false); };
   const ny = (at: string) => { const m = nyMinutesOf(at); return m == null ? at.slice(11, 16) : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} NY`; };
   if (!d) return <p className="mt-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading the calendar…</p>;

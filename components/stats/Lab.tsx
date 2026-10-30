@@ -102,6 +102,19 @@ export function RuleLabPanel({ each }: { each: Record<string, LabResult> }) {
 export interface EvalPreset { key: string; label: string; rules: Omit<EvalRules, 'risk'> }
 
 /** Section E. */
+/** One line of the eval table — a component of its own, not one rebuilt on every render. */
+function Row({ name, r }: { name: string; r: NonNullable<ReturnType<typeof evalSim>> }) {
+  return (
+    <tr className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}>
+      <td className="py-1.5 pr-3">{name}</td>
+      <td className="text-right text-[15px] font-semibold tabular-nums" data-eval-pass>{pct(r.pPass)}</td>
+      <td className="text-right tabular-nums">{pct(r.pBust)}</td>
+      <td className="text-right tabular-nums" style={{ color: 'var(--text-faint)' }}>{pct(r.pOpen)}</td>
+      <td className="text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>{r.medianDays ?? '—'}{r.medianTrades != null ? ` · ${r.medianTrades} trades` : ''}</td>
+    </tr>
+  );
+}
+
 export function EvalPanel({ presets }: { presets: EvalPreset[] }) {
   const { rows, on } = useLab();
   const [key, setKey] = useState(presets[0]?.key ?? '');
@@ -118,15 +131,6 @@ export function EvalPanel({ presets }: { presets: EvalPreset[] }) {
     return { base, filtered };
   }, [preset, risk, rows, keep, on]);
   if (!presets.length) return <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Add a prop account on the Prop page to simulate it.</p>;
-  const Row = ({ name, r }: { name: string; r: NonNullable<ReturnType<typeof evalSim>> }) => (
-    <tr className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}>
-      <td className="py-1.5 pr-3">{name}</td>
-      <td className="text-right text-[15px] font-semibold tabular-nums" data-eval-pass>{pct(r.pPass)}</td>
-      <td className="text-right tabular-nums">{pct(r.pBust)}</td>
-      <td className="text-right tabular-nums" style={{ color: 'var(--text-faint)' }}>{pct(r.pOpen)}</td>
-      <td className="text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>{r.medianDays ?? '—'}{r.medianTrades != null ? ` · ${r.medianTrades} trades` : ''}</td>
-    </tr>
-  );
   return (
     <div data-eval>
       <div className="mb-3 flex flex-wrap items-end gap-3 text-[12px]">

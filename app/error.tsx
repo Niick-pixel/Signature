@@ -35,6 +35,8 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
             style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
             Try again
           </button>
+          {/* A full page load on purpose: the app just failed, so nothing client-side is trusted. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/" className="glass rounded-[calc(14px*var(--rk))] px-5 py-2.5 text-[13px] font-medium">Back to the board</a>
         </div>
         <p className="mt-4 text-[11px]" style={{ color: 'var(--text-faint)' }}>

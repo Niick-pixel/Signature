@@ -237,7 +237,6 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
               {/* Entry, stop and target live on the chart rather than in the
                   form, so the chart has to be openable. */}
               {trade.screenshot_path ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <ChartImage key={trade.screenshot_path} path={trade.screenshot_path}
                   onZoom={() => setGalleryAt(0)} />
               ) : (

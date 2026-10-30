@@ -27,7 +27,7 @@ export function GoalsView() {
   const week = currentMonday(today);
 
   const load = () => fetch(`/api/goals?today=${today}`).then((r) => r.json()).then((d) => { setRows(d.goals ?? []); setCheckins(d.checkins ?? []); });
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { load(); }, []);
 
   const patch = async (id: string, body: Record<string, unknown>) => { await fetch(`/api/goals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); load(); };
   const remove = async (g: Goal) => {

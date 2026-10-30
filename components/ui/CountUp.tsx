@@ -94,7 +94,6 @@ export function CountUp({ text, duration = 700 }: { text: string; duration?: num
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, duration]);
 
   return <span className="tabular-nums">{shown}</span>;

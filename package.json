@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --conditions=react-server --import tsx --test \"tests/*.test.mts\"",
     "migrate": "tsx --conditions=react-server db/cli-migrate.ts",
@@ -32,6 +32,8 @@
     "@types/react-dom": "^19.3.0",
     "electron": "^44.3.0",
     "electron-builder": "^26.15.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3"

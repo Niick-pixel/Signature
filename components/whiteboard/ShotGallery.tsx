@@ -39,7 +39,7 @@ export function ShotGallery({ tradeId, editable = true, onOpen, title = 'Trade' 
     if (!Array.isArray(list) || !list.length) return;
     fetch(`/api/drawings?${list.map((x) => `path=${encodeURIComponent(x.path)}`).join('&')}`).then((r) => r.json()).then((d) => setDrawings(d.drawings ?? {})).catch(() => {});
   });
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tradeId]);
+  useEffect(() => { load(); }, [tradeId]);
 
   async function add(file: File, slot: ShotSlot) {
     setBusy(true); setError(null);

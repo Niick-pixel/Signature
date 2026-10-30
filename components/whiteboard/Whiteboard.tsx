@@ -43,6 +43,7 @@ import { PathBanner } from '@/components/path/PathBanner';
 import { SavedViews } from './SavedViews';
 import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 import { useConfirm } from '@/components/ui/Confirm';
+import Link from 'next/link';
 
 /** How far below the top of the canvas the board starts, clear of the floating toolbar. */
 const TOP_CLEARANCE = 150;
@@ -1068,9 +1069,9 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
             Log a trade and it will appear here, clustered with every other trade you took
             for the same reason.
           </p>
-          <a href="/new" className="mt-7 inline-block outline-none">
+          <Link href="/new" className="mt-7 inline-block outline-none">
             <Button variant="primary" tabIndex={-1}>Log your first trade</Button>
-          </a>
+          </Link>
         </motion.div>
       </div>
     );
