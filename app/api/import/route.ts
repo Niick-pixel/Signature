@@ -18,6 +18,9 @@ import { restoreDrawings } from '@/db/drawings';
 import { restoreTags } from '@/db/tags';
 import { restorePredictions } from '@/db/predictions';
 import { restoreEdge } from '@/db/edge';
+import { restoreRawTables } from '@/db/rawTables';
+import { restoreScreenshotFile } from '@/db/screenshots';
+import { readZip } from '@/lib/unzip';
 
 /**
  * Restores trades from an export.
@@ -28,10 +31,26 @@ import { restoreEdge } from '@/db/edge';
  *
  * Screenshots are matched by the path already stored on the row. A trade whose
  * image is missing still imports — a record without its chart is worth more
- * than no record.
+ * than no record. Given the export's .zip rather than its trades.json, the
+ * charts in it are put back too (never over a file already there).
  */
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null) as
+  const raw = Buffer.from(await request.arrayBuffer());
+  let parsed: unknown = null;
+  let charts = 0;
+  if (raw.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
+    let files: Map<string, Buffer>;
+    try { files = readZip(raw); } catch { return NextResponse.json({ error: 'That zip could not be read.' }, { status: 400 }); }
+    const json = files.get('trades.json');
+    if (!json) return NextResponse.json({ error: 'Not a Signature export — the zip has no trades.json.' }, { status: 400 });
+    try { parsed = JSON.parse(json.toString('utf8')); } catch { parsed = null; }
+    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { trades?: unknown }).trades)) {
+      for (const [name, data] of files) if (name.startsWith('screenshots/') && restoreScreenshotFile(name.slice(12), data)) charts += 1;
+    }
+  } else {
+    try { parsed = JSON.parse(raw.toString('utf8')); } catch { parsed = null; }
+  }
+  const body = parsed as
     {
       trades?: unknown; cash?: unknown; journal?: unknown; format?: unknown;
       daily_reviews?: unknown; weekly_reviews?: unknown; session_prep?: unknown;
@@ -226,8 +245,9 @@ export async function POST(request: Request) {
   const tags = restoreTags(body as Parameters<typeof restoreTags>[0]);
   const predictions = restorePredictions(body as Parameters<typeof restorePredictions>[0]);
   const edge = restoreEdge(body as Parameters<typeof restoreEdge>[0]);
+  const rawRows = restoreRawTables(body as { raw_tables?: unknown });
 
   return NextResponse.json({
-    executions, prop, news, study, goals, drawings, tags, predictions, edge, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
+    executions, prop, news, study, goals, drawings, tags, predictions, edge, rawRows, charts, imported, skipped, rejected, cash, cashSkipped, journal, journalSkipped, reviews, reviewsSkipped, preps, path: hadPath,
   });
 }

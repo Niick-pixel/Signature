@@ -12,6 +12,7 @@ import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
 import { listCashEvents } from '@/db/cash';
+import { exportRawTables } from '@/db/rawTables';
 import { listJournalPages } from '@/db/journal';
 import { listDailyReviews, listWeeklyReviews } from '@/db/reviews';
 import { listPreps } from '@/db/prep';
@@ -78,15 +79,17 @@ function toCsv(trades: Trade[]): string {
 function screenshotEntries(trades: Trade[]): Array<{ name: string; data: Buffer }> {
   const out: Array<{ name: string; data: Buffer }> = [];
   const seen = new Set<string>();
-  for (const t of trades) {
+  // The main chart of each trade, and every chart in its gallery (Result, HTF, Other).
+  const gallery = (getDb().prepare('SELECT path FROM trade_screenshots').all() as Array<{ path: string }>).map((r) => r.path);
+  for (const rel of [...trades.map((t) => t.screenshot_path), ...gallery]) {
     // A quick log may have no chart at all; '' would name the folder itself.
-    if (!t.screenshot_path || seen.has(t.screenshot_path)) continue;
-    seen.add(t.screenshot_path);
-    const abs = path.join(SCREENSHOTS_DIR, t.screenshot_path);
+    if (!rel || seen.has(rel)) continue;
+    seen.add(rel);
+    const abs = path.join(SCREENSHOTS_DIR, rel);
     // A missing file must not fail the whole export — the point of an export is
     // to get everything that still exists out.
     if (!abs.startsWith(SCREENSHOTS_DIR) || !fs.existsSync(abs)) continue;
-    out.push({ name: `screenshots/${t.screenshot_path}`, data: fs.readFileSync(abs) });
+    out.push({ name: `screenshots/${rel}`, data: fs.readFileSync(abs) });
   }
   return out;
 }
@@ -153,7 +156,8 @@ export async function GET() {
     // 7 the red-day pages (which journal page answers which losing day).
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
-    version: 16,
+    // 17: the tables the export used to miss (db/rawTables) and every gallery chart's file.
+    version: 17,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
@@ -182,6 +186,7 @@ export async function GET() {
     ...exportTags(),
     ...exportPredictions(),
     ...exportEdge(),
+    ...exportRawTables(),
   };
 
   const zip = makeZip([

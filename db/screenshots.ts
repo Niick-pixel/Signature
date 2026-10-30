@@ -64,3 +64,16 @@ export function deleteScreenshot(relative: string): void {
     /* the row is going away regardless */
   }
 }
+
+/**
+ * Puts back a chart from an export, at the path its rows already name. Never
+ * replaces a file that is there, never writes outside the screenshots folder.
+ */
+export function restoreScreenshotFile(relative: string, data: Buffer): boolean {
+  let absolute: string;
+  try { absolute = resolveScreenshot(relative); } catch { return false; }
+  if (!/\.(png|jpe?g|webp|gif|avif)$/i.test(absolute) || fs.existsSync(absolute)) return false;
+  fs.mkdirSync(path.dirname(absolute), { recursive: true });
+  fs.writeFileSync(absolute, data);
+  return true;
+}

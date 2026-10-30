@@ -132,11 +132,12 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     setImporting(true);
     setImportResult(null);
     try {
-      const body = await file.text();
+      // The export's .zip (charts included) or its trades.json — the server tells them apart.
+      const zip = /\.zip$/i.test(file.name);
       const res = await fetch('/api/import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
+        headers: { 'Content-Type': zip ? 'application/zip' : 'application/json' },
+        body: zip ? await file.arrayBuffer() : await file.text(),
       });
       const json = await res.json();
       setImportResult(res.ok
@@ -491,7 +492,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               <input
                 ref={importRef}
                 type="file"
-                accept="application/json,.json"
+                accept="application/json,.json,application/zip,.zip"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
