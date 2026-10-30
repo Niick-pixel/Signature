@@ -9,8 +9,11 @@ const nextConfig: NextConfig = {
   // File tracing swept ./data into the bundle, which means a build made on a
   // machine that had been used would carry that machine's journal.db inside
   // the executable. Never ship someone's trades.
+  // Source, tests, docs and the Electron shell are not run by the server
+  // either (the shell is packaged on its own, see package.json "files").
   outputFileTracingExcludes: {
-    '*': ['data/**', 'brand/**', 'release/**', 'build/**'],
+    '*': ['data/**', 'brand/**', 'release/**', 'build/**', 'tests/**', 'docs/**', 'scripts/**', 'electron/**',
+      '*.md', 'tsconfig.tsbuildinfo', 'eslint.config.mjs'],
   },
 
   // The Electron shell loads the app over 127.0.0.1 while Next's dev server

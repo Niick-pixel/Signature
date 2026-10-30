@@ -14,9 +14,12 @@ import path from 'node:path';
  * process.cwd() is not trustworthy in a packaged app, which is why this is
  * handed in rather than inferred.
  */
+// turbopackIgnore: a run-time folder, not source — without it the bundler
+// treats every file read under it as "could be anything" and traces the whole
+// project into the server build.
 export const DATA_DIR = process.env.SIGNATURE_DATA_DIR
-  ? path.resolve(process.env.SIGNATURE_DATA_DIR)
-  : path.join(process.cwd(), 'data');
+  ? path.resolve(/* turbopackIgnore: true */ process.env.SIGNATURE_DATA_DIR)
+  : path.join(/* turbopackIgnore: true */ process.cwd(), 'data');
 
 export const DB_PATH = path.join(DATA_DIR, 'journal.db');
 export const SCREENSHOTS_DIR = path.join(DATA_DIR, 'screenshots');

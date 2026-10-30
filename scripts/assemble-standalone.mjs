@@ -21,6 +21,11 @@ const migrations = path.join(standalone, 'db', 'migrations');
 mkdirSync(migrations, { recursive: true });
 cpSync(path.join(root, 'db', 'migrations'), migrations, { recursive: true });
 
+// The window icon (electron/main.js). It used to arrive only because the
+// build traced the whole project; it is copied on purpose now.
+mkdirSync(path.join(standalone, 'assets'), { recursive: true });
+cpSync(path.join(root, 'assets', 'icon.ico'), path.join(standalone, 'assets', 'icon.ico'));
+
 if (existsSync(path.join(root, 'public'))) {
   cpSync(path.join(root, 'public'), path.join(standalone, 'public'), { recursive: true });
 }
