@@ -13,3 +13,12 @@ export function localDay(d: Date = new Date()): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+/**
+ * Whether a trade in the form starts undated. A backtest never carries a date
+ * unless you add one (product rule): a new one starts undated, an edit keeps
+ * whatever it had. Other accounts ignore this — they always have a date.
+ */
+export function startsUndated(trade: { undated: boolean } | null | undefined): boolean {
+  return trade ? trade.undated : true;
+}

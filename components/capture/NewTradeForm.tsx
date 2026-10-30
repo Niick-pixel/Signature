@@ -71,6 +71,7 @@ import { PastLessons } from './PastLessons';
 import { dialogIsOpen } from '@/components/ui/Overlay';
 import type { PastLesson } from '@/lib/lessons';
 import { closeCapture } from '@/lib/nav';
+import { startsUndated } from '@/lib/day';
 import { CommitmentSheet } from '@/components/path/CommitmentSheet';
 import { SkippedLosers } from './SkippedLosers';
 import { PathBanner, usePathSummary } from '@/components/path/PathBanner';
@@ -244,12 +245,12 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   const [openedByTransition] = useState(() => inSheet || (typeof document !== 'undefined' && Boolean(document.documentElement.dataset.nav)));
   const [date, setDate] = useState(() => (trade ? toLocalInput(new Date(trade.date)) : toLocalInput(new Date())));
   /*
-    A backtest never asks for the replayed chart's date: it starts on today,
-    like every trade, so it lands on the Backtest calendar on the day it was
-    done — nothing to look up from months back. "No date" leaves it off the
-    calendar entirely. Ignored on every other account, which always has one.
+    A backtest has no date unless you add one: it starts undated, so a replay
+    logged tonight never counts as a trade taken today. "Add a date" puts it
+    on the Backtest calendar. Ignored on every other account, which always
+    has a date.
   */
-  const [undated, setUndated] = useState(trade ? trade.undated : false);
+  const [undated, setUndated] = useState(() => startsUndated(trade));
   const backtest = isBacktest(account);
   const noDate = backtest && undated;
   const lessonsHere = backtest ? backtestLessons : pastLessons;
@@ -919,7 +920,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field quiet label="Date & time"
-            hint={backtest ? 'When you logged it — a backtest keeps only this. "No date" leaves it off the calendar.' : undefined}>
+            hint={backtest ? 'A backtest has no date unless you add one — then it shows on the Backtest calendar.' : undefined}>
             {noDate ? (
               <div data-undated className="flex h-[38px] items-center justify-between gap-2 rounded-[calc(12px*var(--rk))] border border-dashed px-3 text-[12.5px]"
                 style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)' }}>
