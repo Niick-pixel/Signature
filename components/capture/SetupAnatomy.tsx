@@ -92,19 +92,12 @@ export function SetupAnatomy({ a, set, backtest, lastSession }: { a: Anatomy; se
             label={(n) => (n === (lastSession ?? 0) + 1 ? `${n} · new` : `Session ${n}`)} testid="session" />
         </Row>
       )}
-      <Disclosure label={`Setup anatomy · ${filled} of ${PRE.length} recorded`}>
+      {/* Three questions the engine leans on (the Rule Lab, the setup score, planned vs achieved);
+          everything else is optional and folded — several restate the checklist. */}
+      <Disclosure label={`Setup detail · optional${filled ? ` · ${filled} recorded` : ''}`}>
         <div className="space-y-3" data-anatomy-body>
-          <Row label="Liquidity event" help="What was taken or delivered before the entry (rubric 4)."><Chips options={LIQUIDITY_EVENTS} value={a.liquidity_event as never} onChange={(v) => set('liquidity_event', v)} testid="liquidity_event" /></Row>
-          <Row label="Bias timeframe"><Chips options={BIAS_TIMEFRAMES} value={a.htf_bias_tf as never} onChange={(v) => set('htf_bias_tf', v)} /></Row>
-          <Row label="Sweep · FVG · entry TF" help="The timeframe of the sweep, of the FVG, and of the entry.">
-            <div className="space-y-1.5">
-              <Sub label="Sweep"><Chips options={TIMEFRAMES} value={a.sweep_tf as never} onChange={(v) => set('sweep_tf', v)} /></Sub>
-              <Sub label="FVG"><Chips options={TIMEFRAMES} value={a.fvg_tf as never} onChange={(v) => set('fvg_tf', v)} /></Sub>
-              <Sub label="Entry"><Chips options={TIMEFRAMES} value={a.entry_tf as never} onChange={(v) => set('entry_tf', v)} /></Sub>
-            </div>
-          </Row>
-          <Row label="FVG quality"><Chips options={FVG_QUALITIES} value={a.fvg_quality as never} onChange={(v) => set('fvg_quality', v)} /></Row>
-          <Row label="Inversion candle" help="Dodgy's rating: candle strength 0–4, inversion speed 0–3, R:R 0–3. The closure score is their sum, out of 10.">
+          <Row label="Entry" help="How you got in. Anticipation entries (before the close) are one of the Rule Lab's tests."><Chips options={ENTRY_METHODS} value={a.entry_method as never} onChange={(v) => set('entry_method', v)} /></Row>
+          <Row label="Inversion candle" help="Dodgy's rating: candle strength 0–4, inversion speed 0–3, R:R 0–3. The closure score is their sum, out of 10 — the setup score learns whether it predicts R.">
             <div className="space-y-1.5">
               <Sub label="Strength"><Chips options={[0, 1, 2, 3, 4]} value={a.candle_strength} onChange={(v) => set('candle_strength', v)} testid="strength" /></Sub>
               <Sub label="Speed"><Chips options={[0, 1, 2, 3]} value={a.inversion_speed} onChange={(v) => set('inversion_speed', v)} testid="speed" /></Sub>
@@ -112,13 +105,26 @@ export function SetupAnatomy({ a, set, backtest, lastSession }: { a: Anatomy; se
               {score != null && <span className="text-[11.5px] tabular-nums" style={{ color: 'rgb(var(--accent))' }} data-closure>Closure {score}/10 · {closureLetter(score)}</span>}
             </div>
           </Row>
-          <Row label="CISD"><Chips options={YES_NO} value={yn(a.cisd)} onChange={(v) => set('cisd', fromYn(v))} /></Row>
-          <Row label="SMT (NQ vs ES)"><Chips options={SMT_STATES} value={a.smt_state as never} onChange={(v) => set('smt_state', v)} /></Row>
-          <Row label="Into an EQ pool" help="Longing into EQH or shorting into EQL — against the plan."><Chips options={YES_NO} value={yn(a.into_eq_pool)} onChange={(v) => set('into_eq_pool', fromYn(v))} /></Row>
-          <Row label="Planned R:R"><Chips options={PLANNED_RRS} value={a.planned_rr as never} onChange={(v) => set('planned_rr', v)} label={(r) => `${r}R`} /></Row>
-          <Row label="Entry"><Chips options={ENTRY_METHODS} value={a.entry_method as never} onChange={(v) => set('entry_method', v)} /></Row>
-          <Row label="Stop"><Chips options={STOP_METHODS} value={a.stop_method as never} onChange={(v) => set('stop_method', v)} /></Row>
-          <Row label="Calm before entry" help="One tap: 1 tense, 5 calm. Honest if you set it before you knew; after, it is a memory."><Chips options={[1, 2, 3, 4, 5]} value={a.pre_state} onChange={(v) => set('pre_state', v)} /></Row>
+          <Row label="Planned R:R" help="What you aimed for — Stats compares it with what you got."><Chips options={PLANNED_RRS} value={a.planned_rr as never} onChange={(v) => set('planned_rr', v)} label={(r) => `${r}R`} /></Row>
+          <Disclosure label="More detail">
+            <div className="space-y-3 pt-1" data-anatomy-more>
+              <Row label="Liquidity event" help="What was taken or delivered before the entry (rubric 4)."><Chips options={LIQUIDITY_EVENTS} value={a.liquidity_event as never} onChange={(v) => set('liquidity_event', v)} testid="liquidity_event" /></Row>
+              <Row label="Sweep · FVG · entry TF" help="The timeframe of the sweep, of the FVG, and of the entry.">
+                <div className="space-y-1.5">
+                  <Sub label="Sweep"><Chips options={TIMEFRAMES} value={a.sweep_tf as never} onChange={(v) => set('sweep_tf', v)} /></Sub>
+                  <Sub label="FVG"><Chips options={TIMEFRAMES} value={a.fvg_tf as never} onChange={(v) => set('fvg_tf', v)} /></Sub>
+                  <Sub label="Entry"><Chips options={TIMEFRAMES} value={a.entry_tf as never} onChange={(v) => set('entry_tf', v)} /></Sub>
+                </div>
+              </Row>
+              <Row label="Bias timeframe"><Chips options={BIAS_TIMEFRAMES} value={a.htf_bias_tf as never} onChange={(v) => set('htf_bias_tf', v)} /></Row>
+              <Row label="Stop"><Chips options={STOP_METHODS} value={a.stop_method as never} onChange={(v) => set('stop_method', v)} /></Row>
+              <Row label="CISD"><Chips options={YES_NO} value={yn(a.cisd)} onChange={(v) => set('cisd', fromYn(v))} /></Row>
+              <Row label="SMT (NQ vs ES)"><Chips options={SMT_STATES} value={a.smt_state as never} onChange={(v) => set('smt_state', v)} /></Row>
+              <Row label="FVG quality"><Chips options={FVG_QUALITIES} value={a.fvg_quality as never} onChange={(v) => set('fvg_quality', v)} /></Row>
+              <Row label="Into an EQ pool" help="Longing into EQH or shorting into EQL — against the plan."><Chips options={YES_NO} value={yn(a.into_eq_pool)} onChange={(v) => set('into_eq_pool', fromYn(v))} /></Row>
+              <Row label="Calm before entry" help="One tap: 1 tense, 5 calm."><Chips options={[1, 2, 3, 4, 5]} value={a.pre_state} onChange={(v) => set('pre_state', v)} /></Row>
+            </div>
+          </Disclosure>
         </div>
       </Disclosure>
     </div>
@@ -130,22 +136,31 @@ export function OutcomeAnatomy({ a, set }: { a: Anatomy; set: Set }) {
   return (
     <div className="space-y-3" data-outcome-anatomy>
       <Row label="Exit"><Chips options={EXIT_REASONS} value={a.exit_reason as never} onChange={(v) => set('exit_reason', v)} testid="exit_reason" /></Row>
-      <Row label="Max in favour" help="The furthest it went your way before the exit, in R."><Chips options={MFE_BUCKETS} value={a.mfe_bucket as never} onChange={(v) => set('mfe_bucket', v)} label={(r) => `${r}R`} /></Row>
-      <Row label="Max heat" help="The furthest it went against you, in R."><Chips options={MAE_BUCKETS} value={a.mae_bucket as never} onChange={(v) => set('mae_bucket', v)} label={(r) => `${r}R`} /></Row>
-      <Row label="Moved to BE"><Chips options={MOVED_TO_BE} value={a.moved_to_be as never} onChange={(v) => set('moved_to_be', v)} /></Row>
-      <Row label="Target hit later" help="After you were out, did price reach the original target?"><Chips options={TRI_ANSWERS} value={a.target_hit_later as never} onChange={(v) => set('target_hit_later', v)} /></Row>
+      {/* Only after a breakeven or early exit: the cost of getting out too soon. */}
+      {(a.exit_reason === 'BE stop' || a.exit_reason === 'Manual early') && (
+        <Row label="Did price reach your target later?"><Chips options={TRI_ANSWERS} value={a.target_hit_later as never} onChange={(v) => set('target_hit_later', v)} /></Row>
+      )}
+      <Disclosure label="More detail · optional">
+        <div className="space-y-3 pt-1">
+          <Row label="Max heat" help="The furthest it went against you, in R — winners that took about 1R of heat show where the stop barely held."><Chips options={MAE_BUCKETS} value={a.mae_bucket as never} onChange={(v) => set('mae_bucket', v)} label={(r) => `${r}R`} /></Row>
+          <Row label="Max in favour" help="Only if you didn't type Max R reached above."><Chips options={MFE_BUCKETS} value={a.mfe_bucket as never} onChange={(v) => set('mfe_bucket', v)} label={(r) => `${r}R`} /></Row>
+          <Row label="Moved to BE"><Chips options={MOVED_TO_BE} value={a.moved_to_be as never} onChange={(v) => set('moved_to_be', v)} /></Row>
+          <Row label="After the trade"><Chips options={EMOTIONS_AFTER} value={a.emotion_after as never} onChange={(v) => set('emotion_after', v)} /></Row>
+        </div>
+      </Disclosure>
     </div>
   );
 }
 
 /** After the trade: how you felt, and the rules you say you broke (the computer checks its own separately). */
-export function PostAnatomy({ a, set }: { a: Anatomy; set: Set }) {
+export function PostAnatomy({ a, set, broke }: { a: Anatomy; set: Set; broke: boolean }) {
   const rules = TRADE_RULES.filter((r) => r.kind !== 'logging');
+  // Asked only once you say a rule was broken (or one is already ticked); the rule book checks its own.
+  if (!broke && !a.rule_breaks_manual.length) return null;
   const toggle = (id: string) => set('rule_breaks_manual', a.rule_breaks_manual.includes(id) ? a.rule_breaks_manual.filter((x) => x !== id) : [...a.rule_breaks_manual, id]);
   return (
     <div className="space-y-3" data-post-anatomy>
-      <Row label="After the trade"><Chips options={EMOTIONS_AFTER} value={a.emotion_after as never} onChange={(v) => set('emotion_after', v)} /></Row>
-      <Row label="Rules I broke" help="Your own account. The rule book checks what it can by itself and shows those with an 'auto' badge; these carry a 'self' badge.">
+      <Row label="Which rules?" help="Your own account. The rule book checks what it can by itself and shows those with an 'auto' badge; these carry a 'self' badge.">
         <div className="flex flex-wrap gap-1.5" data-rule-breaks>
           {rules.map((r) => {
             const on = a.rule_breaks_manual.includes(r.id);

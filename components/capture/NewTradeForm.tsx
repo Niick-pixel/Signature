@@ -1280,12 +1280,13 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
 
               {/* How far it ran, and whether +1R came first — the fastest way to
                   tell a management problem from a selection problem. */}
-              <div className="grid gap-3 sm:grid-cols-[7.5rem_1fr] sm:items-end">
+              {/* Stacked: side by side, the yes / no ran into the next column. */}
+              <div className="grid gap-3">
                 <Field quiet label="Max R reached" hint="How far it went your way before it turned. Check the chart.">
                   <Input type="number" step="0.1" min="0" inputMode="decimal" placeholder="—"
                     value={mfeR} onChange={(e) => setMfeR(e.target.value)} />
                 </Field>
-                <TriState inline value={reached1R} onChange={setReached1R}
+                <TriState value={reached1R} onChange={setReached1R}
                   label="Reached +1R before the stop?"
                   hint="If most of your losers did, the problem is management rather than selection." />
               </div>
@@ -1444,7 +1445,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
             hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
           />
         </div>
-        <PostAnatomy a={anat} set={setA} />
+        <PostAnatomy a={anat} set={setA} broke={followedRules === false} />
         </div>
         )}
       </div>
