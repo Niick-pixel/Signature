@@ -39,5 +39,7 @@ Also from earlier sessions:
 - Lint: `npm run lint` (ESLint flat config, `eslint.config.mjs`). 0 errors required; React Compiler rules are warnings.
 - Run against a copy of a journal: `SIGNATURE_DATA_DIR=/path/to/copy npx next start -p 3312`.
 - Today's date is `localDay()` (lib/day.ts), never `toISOString().slice(0, 10)`.
+- Wall clock ↔ UTC/New York goes through `lib/traderZone.ts` (the computer's own zone). Tests pin UTC−6 (tests/setup.mts).
+- Rows from `node:sqlite` have a null prototype: copy them (`{ ...row }`) before passing to a client component.
 - The Stats page / `lib/edge/` (Edge Engine, `docs/edge-engine.md`) has its own plan;
   report bugs there rather than redesigning it.

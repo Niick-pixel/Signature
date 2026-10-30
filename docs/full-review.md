@@ -2,7 +2,7 @@
 
 Branch: `review/full-pass` · Reviewed at commit `df70ba4` · 2026-10-30
 
-Status: Phase A done · **Phase B (10 fixes) done** · Phase C (features 1, 7, 10, 11) in progress.
+Status: Phase A done · **Phase B (10 fixes) done** · **Phase C (features 1, 7, 10, 11) done.** Nothing merged to main.
 
 ---
 
@@ -195,4 +195,23 @@ Skipped in Phase B (see section 4): Q3 file splits, E5 CSP, E6 signing, P2/P3, C
 
 | Feature | Commits | Result |
 |---|---|---|
-| 1 Backtest fast lane | d86aaa4 (undated), this commit (chips) | Finished backtest: **19 → 15 clicks** measured (13 with the account remembered). Reveal step kept pending R2. |
+| 1 Backtest fast lane | d86aaa4, 28bc9bb | Finished backtest: **19 → 15 clicks** measured (13 with the account remembered). Reveal step kept pending R2. |
+| 7 Backups you can trust | fcbdb81 | Second folder (another drive / synced) gets a daily zip of journal + charts, newest 14; Restore from Settings with a safety copy first. Restore tested: in `safe-backup.test.mts` (local and folder) and end to end through the Settings UI on a test journal. |
+| 10 Auto-rule gaps | e823b81, 8a0e1fe | Trader's clock = the computer's own (was fixed UTC−6; finding C7). Killzone rule read from the entry time (London 02:00–05:00, NY AM 09:30–12:00 NY time); tick only without a clock. Test journals: 9 dated trades, 3 now flagged outside. |
+| 11 Screenshot care | c3c82b2, 5aa9fef | Chart storage: As pasted (default) / Lossless WebP / Smaller WebP — lossless verified pixel-identical, >10× smaller on a flat screenshot. Gallery Compare (C): pin one chart left, step through trades on the right. |
+
+### Found during Phase C
+
+| Bug | Commit | Notes |
+|---|---|---|
+| **One board note (or link) crashed every screen** — null-prototype rows passed to a client component | 5fa9e6f | Introduced in 2e82447 (board data moved to the server). Found while testing restore. Test fails without the fix. Other server→client reads checked: none affected. |
+
+### Definition of done
+
+- [x] Build, lint (0 errors), typecheck and tests (369 → **381**) pass; build tracing warnings 3 → 0; lint warnings stay at the 98 baseline.
+- [ ] **Your real journal** opening identically and export → import with zero differences: verified on the test journals and by `roundtrip-full.test.mts`, but your own database is on your PC — check after installing this build (export, then import into a copy).
+- [x] DB backup exists and restore tested once (test journals; on your PC: Settings → Backups → Restore).
+- [x] `CLAUDE.md` holds the product rules; this file lists what was fixed and skipped.
+- [x] Finished backtest: **19 → 15 clicks** (13 with the account remembered).
+- [x] Everything on `review/full-pass`; nothing merged to main.
+
