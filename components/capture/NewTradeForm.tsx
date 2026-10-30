@@ -70,7 +70,7 @@ import { ShotSlots, type SlotFiles } from './ShotSlots';
 import { PastLessons } from './PastLessons';
 import { dialogIsOpen } from '@/components/ui/Overlay';
 import type { PastLesson } from '@/lib/lessons';
-import { navigate } from '@/lib/nav';
+import { closeCapture } from '@/lib/nav';
 import { CommitmentSheet } from '@/components/path/CommitmentSheet';
 import { SkippedLosers } from './SkippedLosers';
 import { PathBanner, usePathSummary } from '@/components/path/PathBanner';
@@ -441,7 +441,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       const el = document.activeElement;
       const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
       // A dialog open over the form owns Escape; leaving would discard the entry.
-      if (e.key === 'Escape' && !typing && !dialogIsOpen()) navigate('/');
+      if (e.key === 'Escape' && !typing && !dialogIsOpen()) closeCapture();
       if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         e.preventDefault();
         // Ctrl/Cmd+Shift+Enter: save and start the next backtest.
@@ -748,8 +748,8 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
         onNext();
         return;
       }
-      // Back to the board — animated closed, not reloaded (lib/nav.ts).
-      navigate('/');
+      // Back to the screen it was opened over — animated closed, not reloaded (lib/nav.ts).
+      closeCapture();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the trade.');
       setSubmitting(false);
@@ -798,7 +798,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
         {backtest && !editing && <SessionTally />}
         {/* Mounted only when asked, so it starts from the winner as saved. */}
         {losersPrompt && (
-          <SkippedLosers open onDone={() => { setLosersPrompt(false); navigate('/'); }}
+          <SkippedLosers open onDone={() => { setLosersPrompt(false); closeCapture(); }}
             winner={{ instrument, session, reason: reason ?? 'FOMO', htf_bias: htfBias ?? '', premium_discount: premiumDiscount,
               target_type: targetType, setup_type: setupType, direction }} />
         )}
@@ -838,7 +838,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           type="button"
           aria-label="Close without saving"
           title="Close without saving (Esc)"
-          onClick={() => navigate('/')}
+          onClick={() => closeCapture()}
           whileTap={press}
           whileHover={{ scale: 1.06 }}
           transition={spring}

@@ -42,6 +42,14 @@ let underneath: string | null = null;
 /** Whether New trade, if open, is over the whiteboard. */
 export function boardUnderneath(): boolean { return underneath === '/'; }
 
+/**
+ * Leave New trade — saved, closed or Esc — back to the screen it was opened
+ * over. It always went to the whiteboard, so saving from the Dashboard threw
+ * you onto the board (and woke it, the lag spike) instead of where you were.
+ * Opened on its own (a reload on /new), it falls back to the board.
+ */
+export function closeCapture(): void { navigate(underneath && underneath !== '/new' ? underneath : '/'); }
+
 /** Wired once by <NavTransitions/> with the router. */
 export function registerNavigator(p: Push) { push = p; }
 
