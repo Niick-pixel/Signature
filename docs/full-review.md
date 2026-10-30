@@ -190,3 +190,9 @@ Checks after the batch: typecheck ✅ · tests 355 → **369** ✅ · build ✅ 
 Installer size can only be measured by the Windows CI build; it runs when this branch is merged.
 
 Skipped in Phase B (see section 4): Q3 file splits, E5 CSP, E6 signing, P2/P3, C7 (machine time zone — folded into feature 10).
+
+### Phase C — features
+
+| Feature | Commits | Result |
+|---|---|---|
+| 1 Backtest fast lane | d86aaa4 (undated), this commit (chips) | Finished backtest: **19 → 15 clicks** measured (13 with the account remembered). Reveal step kept pending R2. |
