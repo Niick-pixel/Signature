@@ -158,3 +158,23 @@ export function field(key: string): FieldDef | undefined {
 export function completeness(trades: readonly Trade[], fields: readonly FieldDef[] = FIELDS): Array<{ key: string; label: string; timing: Timing; filled: number; n: number }> {
   return fields.map((f) => ({ key: f.key, label: f.label, timing: f.timing, filled: trades.filter((t) => f.get(t) != null).length, n: trades.length }));
 }
+
+/* ── tier 3 (200+ trades): two-way interactions and a regime split ── */
+
+/** Two pre fields crossed: "PDH/PDL × NY AM". Pre, so the firewall lets it through; shrunk twice as hard. */
+export function interaction(a: string, b: string): FieldDef | null {
+  const fa = field(a); const fb = field(b); if (!fa || !fb) return null;
+  const lv = (f: FieldDef, v: FieldValue) => (v == null ? null : f.kind === 'num' ? ((v as number) >= ((f.range?.[0] ?? 0) + (f.range?.[1] ?? 1)) / 2 ? `${f.label} high` : `${f.label} low`) : f.kind === 'bool' ? `${f.label}: ${v ? 'yes' : 'no'}` : String(v));
+  return { key: `${a}×${b}`, label: `${fa.label} × ${fb.label}`, kind: 'cat', timing: 'pre', objective: fa.objective && fb.objective, source: 'derived', predictor: true,
+    get: (t) => { const x = lv(fa, fa.get(t)); const y = lv(fb, fb.get(t)); return x == null || y == null ? null : `${x} × ${y}`; } };
+}
+export const INTERACTIONS: Array<[string, string]> = [['liquidity_event', 'killzone'], ['closure_score', 'target_type'], ['entry_method', 'killzone']];
+
+/** A volatility regime from the stop size in points: wider than the median of the trades in view, or not. */
+export function regimeField(trades: readonly Trade[]): FieldDef | null {
+  const pts = trades.map((t) => t.stop_points).filter((v): v is number => v != null && v > 0).sort((a, b) => a - b);
+  if (pts.length < 20) return null;
+  const med = pts[Math.floor(pts.length / 2)];
+  return { key: 'regime', label: 'Volatility regime (stop size)', kind: 'cat', options: ['Wide stops', 'Tight stops'], timing: 'pre', objective: true, source: 'derived', predictor: true,
+    get: (t) => (t.stop_points == null || t.stop_points <= 0 ? null : t.stop_points > med ? 'Wide stops' : 'Tight stops') };
+}

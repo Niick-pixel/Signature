@@ -58,6 +58,8 @@ export interface ExploreOptions {
    * live one, added to its level as pseudo-trades — replay is optimistic (no fear, hindsight).
    */
   backtest?: { trades: readonly Trade[]; weight: number };
+  /** Multiplies the shrinkage strength (interactions use 2). */
+  kScale?: number;
 }
 export const BACKTEST_WEIGHT = 0.3;
 
@@ -102,7 +104,7 @@ export function explore(trades: readonly Trade[], fields: readonly FieldDef[] = 
       wins: idx.filter((i) => resultClass(rs[i]) === 'W').reduce((a, i) => a + w[i], 0),
       losses: idx.filter((i) => resultClass(rs[i]) === 'L').reduce((a, i) => a + w[i], 0),
     }));
-    const sh = shrinkGroups(groups, prior ? { prior } : {});
+    const sh = shrinkGroups(groups, { ...(prior ? { prior } : {}), kScale: opts.kScale });
     const mu = sh.mu;
     // Replay trades at each level, as discounted pseudo-trades.
     const btAt = new Map<string, number[]>();

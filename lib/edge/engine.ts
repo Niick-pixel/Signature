@@ -5,7 +5,7 @@
  */
 import { edgeMetrics, type EdgeMetrics } from './metrics';
 import { explore, type Explorer } from './explorer';
-import { completeness, PREDICTORS, FIELDS } from './fields';
+import { completeness, PREDICTORS, FIELDS, INTERACTIONS, interaction, regimeField, type FieldDef } from './fields';
 import { nPerGroup } from './power';
 import { DEFAULT_HALF_LIFE, type Window } from './recency';
 import { hashString } from './rng';
@@ -19,6 +19,8 @@ export interface EngineResult {
   hash: string; window: Window; n: number;
   metrics: EdgeMetrics;
   explorer: Explorer;
+  /** Tier 3 (200+ trades): interactions and the regime split, shrunk twice as hard, with their own correction. */
+  interactions: Explorer | null;
   /** Trades per group to tell a 0.5R difference at your spread (α 0.05, power 0.8). */
   nFor05R: number | null;
   completeness: ReturnType<typeof completeness>;
@@ -47,6 +49,10 @@ export function runEngine(input: readonly Trade[], opts: EngineOptions = {}): En
     hash, window, n: trades.length, metrics,
     // State is computed over the trades in view, in order: trade of the day, losses in a row before…
     explorer: explore(withState(trades, tradeStates(trades)), PREDICTORS, { halfLife, thresholds: opts.thresholds, backtest: backtest ? { trades: withState(backtest.trades, tradeStates(backtest.trades)), weight: backtest.weight } : undefined }),
+    interactions: trades.length >= 200 ? (() => {
+      const extra = [...INTERACTIONS.map(([a, b]) => interaction(a, b)), regimeField(trades)].filter((f): f is FieldDef => f != null);
+      return explore(withState(trades, tradeStates(trades)), extra, { halfLife, thresholds: opts.thresholds, kScale: 2 });
+    })() : null,
     nFor05R: metrics.sd ? nPerGroup(metrics.sd, 0.5) : null,
     completeness: completeness(trades, FIELDS),
   };

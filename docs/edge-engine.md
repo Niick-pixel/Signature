@@ -583,3 +583,77 @@ Tests: `tests/edge-text.test.mts`. It covers:
 - missed stats with both readings (hesitation and filter)
 - the replay prior pulling more with more weight
 - the 037 tables: blind grades leave "last edited" alone, backup round-trip, rollback
+
+---
+
+# Milestone 10: the engine grades itself, tiers, Blind Re-grade
+
+## 41. The insight ledger (`lib/edge/claims.ts`, table `insights`)
+
+**Recording.** Every claim the Setup anatomy shows **above Too early** is written down once per view (accounts + filters + window + prior). It stores the field, level, direction, size, verdict, the trade count, and when it was made.
+
+**Re-checking.** Once **30 more trades in that view were logged after the claim**, it's tested on those trades only (true out of sample):
+
+| Status | When |
+|---|---|
+| **held** | same direction, P(that direction) ≥ 75% |
+| **reversed** | the other direction, P ≥ 75% |
+| **faded** | anything else |
+
+**Confirmed** is reachable only here: P ≥ 97.5%, at least 30 trades, **and** the same claim held out of sample.
+
+## 42. Thresholds that learn
+
+- **Hit rate per level:** claims held ÷ claims checked.
+- **Likely:** if Likely claims hold **under 70%** of the time (5 or more checked), the Likely threshold rises **0.03 for every 10 points short**, for example 0.90 → 0.93, at most 0.99.
+- **Hint:** the same rule against 60%.
+
+The raised thresholds apply to every verdict on the page: hero, focus, anatomy, ledger. The engine gets stricter when it was wrong and keeps its bar when it was right.
+
+## 43. Brier score
+
+The win probabilities saved at the reveal (section 10) are scored once the trade settles:
+
+  **Brier = mean of (predicted p − outcome)²**
+
+- outcome = 1 for a win, 0 for a loss; breakevens are left out
+- lower is better; 0.25 is a coin flip
+- shown beside the score of always predicting your base win rate
+
+## 44. O — Engine health
+
+- the ledger: each claim, what it said, at what n, and what happened
+- hit rates and the current thresholds, with any rise and why
+- the Brier score
+- data completeness for every pre-trade field
+- the unlock list (tiers)
+- the Blind Re-grade counter
+
+## 45. Tier 3 (200+ trades)
+
+- **Two-way interactions:**
+  - liquidity event × killzone
+  - closure score × target
+  - entry method × killzone
+- **A regime split:** each trade's stop in points against the median of the trades in view (wide stops = higher volatility).
+
+These rows are shrunk **twice as hard** (k × 2), because many thin cells mean many chances to be fooled. They get their own Benjamini–Hochberg correction.
+
+## 46. Blind Re-grade (`/blind`, table `blind_grades`)
+
+1. **Mark the entry candle once** on a trade's page (the "Entry candle" card): click it, and its position is stored as a 0–1 fraction of the width.
+2. **The weekly session:** up to 10 setups (taken trades and missed setups with an entry marked), shuffled by a seed from the ISO week, so the same week gives the same session. It prefers setups never graded blind, plus up to 3 graded blind 14 or more days ago, for a retest.
+3. **What you see:** everything right of the entry line masked. No date, account or result. You give a grade (A+, A, B, C, F) and a checklist score.
+4. **What it produces:**
+   - the blind grade on the trade. Your entry grade is never changed and "last edited" isn't touched.
+   - **self-consistency:** quadratic-weighted kappa between the first and latest blind grade of setups graded 14+ days apart. 1 = the same grade every time, 0 = chance.
+   - **blind grade vs outcome:** mean R by blind grade, shrunk. The cleanest test of whether the rubric works, since nothing about the result could colour the grade.
+   - a counter on the Stats header and in Engine health
+
+Tests: `tests/edge-ledger.test.mts`. It covers:
+- claims once per view
+- the re-check after 30 trades: held, reversed and faded
+- thresholds rising only with 5+ checked, Confirmed only after a held claim
+- Brier: perfect, coin flip
+- ISO weeks, kappa, the deterministic weekly session with a retest, the counter
+- tier-3 fields pre-trade and only from 200 trades

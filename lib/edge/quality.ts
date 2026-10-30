@@ -21,9 +21,10 @@ export interface GradeTable { mu: number; rows: GradeRow[] }
 export interface Drift { against: 'regrade' | 'blind'; n: number; mean: number | null; down: number; same: number; up: number }
 export interface Quality { clean: GradeTable; exposed: GradeTable; drift: Drift[]; cleanN: number; exposedN: number }
 
-function table(trades: readonly Trade[]): GradeTable {
+/** Mean R by a grade (the grade at entry, or another: the blind grade), shrunk. */
+export function gradeTable(trades: readonly Trade[], gradeOf: (t: Trade) => string | null = (t) => t.grade_letter): GradeTable {
   const by = new Map<string, Trade[]>();
-  for (const t of trades) if (t.grade_letter) by.set(t.grade_letter, [...(by.get(t.grade_letter) ?? []), t]);
+  for (const t of trades) { const g = gradeOf(t); if (g) by.set(g, [...(by.get(g) ?? []), t]); }
   const groups = [...by].map(([key, ts]) => { const x = ts.map((t) => t.r_multiple as number); return { key, x, w: x.map(() => 1), wins: x.filter((r) => resultClass(r) === 'W').length, losses: x.filter((r) => resultClass(r) === 'L').length }; });
   if (!groups.length) return { mu: 0, rows: [] };
   const sh = shrinkGroups(groups);
@@ -42,5 +43,5 @@ function drift(trades: readonly Trade[], against: Drift['against']): Drift {
 
 export function setupQuality(trades: readonly Trade[]): Quality {
   const clean = trades.filter((t) => !t.graded_post_hoc); const exposed = trades.filter((t) => t.graded_post_hoc);
-  return { clean: table(clean), exposed: table(exposed), drift: [drift(trades, 'regrade'), drift(trades, 'blind')], cleanN: clean.length, exposedN: exposed.length };
+  return { clean: gradeTable(clean), exposed: gradeTable(exposed), drift: [drift(trades, 'regrade'), drift(trades, 'blind')], cleanN: clean.length, exposedN: exposed.length };
 }

@@ -1,6 +1,6 @@
 import { Help } from '@/components/ui/Help';
 import type { EdgeMetrics } from '@/lib/edge/metrics';
-import { VERDICT_LABEL, verdict, type VerdictLevel } from '@/lib/edge/verdict';
+import { VERDICT_LABEL, verdict, type Thresholds, type VerdictLevel } from '@/lib/edge/verdict';
 
 const sR = (v: number | null | undefined, dp = 2) => (v == null ? '—' : `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(dp)}R`);
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v * 100)}%`);
@@ -44,9 +44,9 @@ function Cell({ label, help, value, sub, tone }: { label: string; help: string; 
  * zero, the evidence level, and the numbers that make it up — every one with
  * its n and formula (lib/edge/metrics).
  */
-export function EdgeHero({ m, scopeLabel, maturity }: { m: EdgeMetrics; scopeLabel: string; maturity?: React.ReactNode }) {
+export function EdgeHero({ m, scopeLabel, maturity, thresholds }: { m: EdgeMetrics; scopeLabel: string; maturity?: React.ReactNode; thresholds?: Thresholds }) {
   const ci = m.expectancyCI;
-  const v = ci ? verdict({ n: m.n, pPositive: ci.pPositive, lo80: ci.lo80, hi80: ci.hi80 }) : null;
+  const v = ci ? verdict({ n: m.n, pPositive: ci.pPositive, lo80: ci.lo80, hi80: ci.hi80 }, thresholds) : null;
   const more = m.tradesFor95 != null ? Math.max(0, m.tradesFor95 - m.n) : null;
   const needLine = m.expectancy == null ? null
     : m.expectancy <= 0 ? 'Expectancy is not above zero — more trades at this rate would not make the edge real.'

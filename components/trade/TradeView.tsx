@@ -8,6 +8,7 @@ import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
 import { OPEN_TRADE_KEY } from '@/components/stats/OpenOnBoard';
 import { ShotGallery } from '@/components/whiteboard/ShotGallery';
+import { EntryLine } from './EntryLine';
 import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
 import { CONTEXT_FLAG_LIST, SWEEP_TIER_SPEC, accountLabel } from '@/lib/domain';
 import { PLAN_LABEL, type PlanMatch } from '@/lib/planMatch';
@@ -149,6 +150,10 @@ export function TradeView(p: TradeViewProps) {
 
           {on.shots && (
             <Card title="Screenshots"><ShotGallery tradeId={t.id} /></Card>
+          )}
+
+          {t.screenshot_path && (
+            <Card title="Entry candle" note="for Blind Re-grade"><EntryLine tradeId={t.id} shot={t.screenshot_path} initial={t.entry_line_x ?? null} /></Card>
           )}
         </div>
 

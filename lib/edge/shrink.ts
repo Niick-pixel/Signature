@@ -23,14 +23,15 @@ export interface ShrunkGroup {
 }
 export interface Shrinkage { mu: number; sigma2: number; tau2: number; k: number; pBar: number; groups: ShrunkGroup[] }
 
-export function shrinkGroups(groups: readonly GroupInput[], opts: { prior?: { mu: number; pBar: number } } = {}): Shrinkage {
+export function shrinkGroups(groups: readonly GroupInput[], opts: { prior?: { mu: number; pBar: number }; kScale?: number } = {}): Shrinkage {
   const all = groups.flatMap((g) => g.x.map((v, i) => ({ v, w: g.w[i] })));
   const global = weightedMoments(all.map((a) => a.v), all.map((a) => a.w));
   const mu = opts.prior?.mu ?? global.mean;
   const stats = groups.map((g) => ({ g, m: weightedMoments(g.x, g.w) }));
   // Pooled within-group variance, weighted by each group's effective n − 1.
   const dof = stats.reduce((a, s) => a + Math.max(0, s.m.nEff - 1), 0);
-  const sigma2 = dof > 0 ? stats.reduce((a, s) => a + s.m.variance * Math.max(0, s.m.nEff - 1), 0) / dof : (global.variance || 1);
+  // No within-group spread to measure (one trade per group): assume at least 1R², never the spread between two lucky points.
+  const sigma2 = dof > 0 ? stats.reduce((a, s) => a + s.m.variance * Math.max(0, s.m.nEff - 1), 0) / dof : Math.max(1, global.variance || 1);
   const s2 = sigma2 > 0 ? sigma2 : (global.variance || 1);
   const usable = stats.filter((s) => s.m.nEff > 0);
   let k = K_FEW; let tau2 = NaN;
@@ -42,6 +43,8 @@ export function shrinkGroups(groups: readonly GroupInput[], opts: { prior?: { mu
     tau2 = Math.max(1e-6, varMeans - noise);
     k = Math.min(K_MAX, Math.max(K_MIN, s2 / tau2));
   }
+  // Interactions (tier 3) shrink harder: many thin cells, each one a chance to fool you.
+  k *= opts.kScale ?? 1;
   const W = groups.reduce((a, g) => a + g.wins, 0); const L = groups.reduce((a, g) => a + g.losses, 0);
   const pBar = opts.prior?.pBar ?? (W + L ? W / (W + L) : 0.5);
   return {

@@ -42,6 +42,14 @@ import { listThemeWords } from '@/db/edge';
 import { language } from '@/lib/edge/text';
 import { missedStats } from '@/lib/edge/missed';
 import { BACKTEST_WEIGHT } from '@/lib/edge/explorer';
+import { HealthPanel } from '@/components/stats/HealthPanel';
+import { addInsight, listBlindGrades, listInsights, settleInsight } from '@/db/edge';
+import { listPredictions } from '@/db/predictions';
+import { adjustedThresholds, brier, hitRates, newClaims, recheck, withConfirmed, type StoredClaim } from '@/lib/edge/claims';
+import { blindCounter, retestPairs, weightedKappa } from '@/lib/edge/blind';
+import { DEFAULT_THRESHOLDS } from '@/lib/edge/verdict';
+import { PREDICTORS, field as fieldDef } from '@/lib/edge/fields';
+import { localDay } from '@/lib/day';
 import { PRESETS, type PropRules } from '@/lib/prop';
 import { HypotheticalNote } from '@/components/money/MissedCard';
 import { StatsFilters } from '@/components/stats/StatsFilters';
@@ -153,7 +161,20 @@ export default async function StatsPage(
   const btEligible = backtests.length > 0 && !scope.accounts.some((a) => isBacktest(a));
   const btWeight = Number(one(params.btw)) || BACKTEST_WEIGHT;
   const btPrior = btEligible && one(params.prior) === 'backtest';
-  const engine = runEngine(settled, { window, rubric: latestRubric, backtest: btPrior ? { trades: backtests, weight: btWeight } : undefined });
+  // The insight ledger (lib/edge/claims): its record sets the thresholds every verdict uses.
+  const claimsBefore = listInsights() as StoredClaim[];
+  const { thresholds, changes: thresholdChanges } = adjustedThresholds(claimsBefore);
+  const engine = runEngine(settled, { window, rubric: latestRubric, thresholds, backtest: btPrior ? { trades: backtests, weight: btWeight } : undefined });
+  const scopeKey = `${account}|${new URLSearchParams(filterParams).toString()}|${window}${btPrior ? `|bt${btWeight}` : ''}`;
+  const explorerRows = withConfirmed(engine.explorer.rows, scopeKey, claimsBefore, thresholds);
+  // Re-check this scope's open claims on the trades logged after each, then record new ones.
+  for (const c of claimsBefore.filter((x) => x.scope === scopeKey && x.status === 'open')) {
+    const res = recheck(c, withState(settled, tradeStates(settled)).filter((t) => t.created_at > c.created_at));
+    if (res) settleInsight(c.id, { status: res.status, eval_n: res.n, eval_size: res.size, eval_p: res.p });
+  }
+  const lastLogged = settled.reduce((m, t) => (t.created_at > m ? t.created_at : m), '');
+  for (const c of newClaims(explorerRows, scopeKey, settled.length, lastLogged, claimsBefore)) addInsight(c);
+  const claims = listInsights() as StoredClaim[];
   // Backtest vs live, level by level: a big gap means execution, not the setup.
   const btEngine = btEligible ? runEngine(backtests, { window: 'all' }) : null;
   const btGap = btEngine ? engine.explorer.rows.filter((r) => !r.hidden).flatMap((r) => {
@@ -162,8 +183,14 @@ export default async function StatsPage(
   }).sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, 8) : [];
   const issues = integrity(settled, metrics, { noR: trades.filter((t) => t.outcome !== 'Not taken' && t.status === 'Settled' && t.r_multiple == null).length });
   const themeWords = listThemeWords();
-  const focus = weeklyFocus(stateful, breaksOf, { sd: metrics.sd, words: themeWords });
-  const ledger = ledgerV2(settled, breaksOf, { words: themeWords });
+  const focus = weeklyFocus(stateful, breaksOf, { sd: metrics.sd, words: themeWords, thresholds });
+  const ledger = ledgerV2(settled, breaksOf, { words: themeWords, thresholds });
+  // Engine health: Brier score of stored predictions, blind re-grade counter and consistency.
+  const brierScore = brier(listPredictions(), everything);
+  const blindGrades = listBlindGrades();
+  const blindK = weightedKappa(retestPairs(blindGrades));
+  const blind = { ...blindCounter(blindGrades, localDay()), kappa: blindK.kappa, kappaN: blindK.n };
+  const preCompleteness = engine.completeness.filter((c) => PREDICTORS.some((f) => f.key === c.key)).sort((a, b) => b.filled - a.filled);
   const lang = language(settled);
   const missed = missedStats(everything.filter((t) => scope.accounts.includes(t.account) || isHypothetical(t.account)));
   const rs = settled.map((t) => t.r_multiple as number);
@@ -194,7 +221,7 @@ export default async function StatsPage(
   const similar = simTarget ? similarSetups(simTarget, settled.filter((t) => t.id !== simTarget.id && t.date <= simTarget.date)) : null;
   const simOptions = [...settled].reverse().slice(0, 80).map((t) => ({ id: t.id, label: `${thumbs[t.id].day} · ${t.setup_type} ${t.direction === 'Long' ? '↗' : '↘'} · ${t.grade_letter ?? ''}` }));
   const exec = execution(settled);
-  const visibleRows = engine.explorer.rows.filter((r) => !r.hidden);
+  const visibleRows = explorerRows.filter((r) => !r.hidden);
   const strongest = visibleRows.filter((r) => r.verdict.level !== 'too-early').sort((a, b) => b.verdict.p - a.verdict.p)[0];
   const winHref = (w: string) => `/stats?${new URLSearchParams({ account, ...filterParams, win: w }).toString()}`;
   const lockNote = (f: Parameters<typeof unlocked>[1], what: string) => (unlocked(mat, f) ? null
@@ -222,6 +249,7 @@ export default async function StatsPage(
             <div className="flex flex-wrap items-center gap-2 text-[12px]">
               <a href={toggle(preOnly, 'pregraded')} className="rounded-full border px-3 py-1 font-medium" style={pill(preOnly)} title="Only trades graded before the outcome was known">Pre-graded only</a>
               {quickCount > 0 && <a href={toggle(noQuick, 'quick')} className="rounded-full border px-3 py-1 font-medium" style={pill(noQuick)} title="Leave out trades saved with Log it fast">No quick logs</a>}
+              <a href="/blind" className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Grade past setups with the outcome hidden" data-blind-link>Blind re-grade · {listBlindGrades().length ? blindCounter(listBlindGrades(), localDay()).thisWeek : 0} this week</a>
               <a href="/reports" className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Compare, breakdowns, fees, the rules heatmap, your tags (R)">Reports →</a>
               <a href="/analytics" className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Time, confluences, psychology, mistake cost, what if, tilt, news (A)" data-analytics-link>Analytics →</a>
             </div>
@@ -259,7 +287,7 @@ export default async function StatsPage(
             <LabProvider rows={lab}>
             <div className="space-y-5">
               <IntegrityBanner issues={issues} />
-              <EdgeHero m={metrics} scopeLabel={scopeLabel} maturity={<MaturityRing m={mat} />} />
+              <EdgeHero m={metrics} scopeLabel={scopeLabel} maturity={<MaturityRing m={mat} />} thresholds={thresholds} />
               <FocusCard f={focus} thumbs={thumbs} />
               <EquityRisk curves={curves} rs={rs} m={metrics} split={split} adherence={adh} cone={cone} />
 
@@ -297,6 +325,12 @@ export default async function StatsPage(
                   </div>
                 )}
                 <AnatomyExplorer rows={visibleRows} mu={engine.explorer.mu} tests={engine.explorer.tests} hidden={engine.explorer.rows.length - visibleRows.length} thumbs={thumbs} />
+                <div className="mt-4" data-interactions>
+                  <div className="mb-1 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>Interactions and the volatility regime (tier 3)</div>
+                  {engine.interactions ? (
+                    <AnatomyExplorer rows={engine.interactions.rows.filter((r) => !r.hidden)} mu={engine.interactions.mu} tests={engine.interactions.tests} hidden={engine.interactions.rows.filter((r) => r.hidden).length} thumbs={thumbs} />
+                  ) : <p className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Liquidity event × killzone, closure score × target, entry × killzone, and wide vs tight stops — shrunk twice as hard, from 200 trades ({Math.max(0, 200 - settled.length)} to go).</p>}
+                </div>
                 {btGap.length > 0 && (
                   <div className="mt-4" data-bt-gap>
                     <div className="mb-1 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>Backtest vs live — a big gap on the same setup means execution, not the setup</div>
@@ -351,6 +385,13 @@ export default async function StatsPage(
               <Collapsible id="language" title="Journal language" summary={`Diagnostic, not predictive · ${lang.phrases.length} phrases${lang.suggestions.length ? ` · ${lang.suggestions.length} could be structured fields` : ''}`}
                 help="Phrases from text written after the outcome, outcome words removed, shrunk and corrected. They describe how you talk about trades; they can never say what wins.">
                 <LanguagePanel l={lang} thumbs={thumbs} />
+              </Collapsible>
+
+              <Collapsible id="health" title="Engine health"
+                help="The engine grades itself: every claim above Too early is recorded and re-checked on the next 30 trades logged after it. If its claims don't hold, its thresholds rise."
+                summary={`${claims.filter((c) => c.status !== 'open').length} claims checked · ${claims.filter((c) => c.status === 'open').length} waiting${thresholdChanges.length ? ' · thresholds raised' : ''} · tier ${mat.tier}`}>
+                <HealthPanel claims={claims} rates={hitRates(claims)} brier={brierScore} thresholds={thresholds} base={DEFAULT_THRESHOLDS} changes={thresholdChanges}
+                  completeness={preCompleteness} mat={mat} blind={blind} labelOf={(f) => fieldDef(f)?.label ?? f} />
               </Collapsible>
 
               <p className="pt-1 text-center text-[11px]" style={{ color: 'var(--text-faint)' }}>

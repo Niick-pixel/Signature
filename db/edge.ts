@@ -79,3 +79,9 @@ export function restoreEdge(b: { themeDictionary?: unknown; insights?: unknown; 
     try { n += Number(db.prepare('INSERT OR IGNORE INTO blind_grades (id, trade_id, created_at, grade, score) VALUES (?, ?, ?, ?, ?)').run(r.id as string, r.trade_id as string, str(r.created_at) ?? new Date().toISOString(), r.grade as string, num(r.score)).changes); } catch { /* skipped */ }
   return n;
 }
+
+/** Where the entry candle sits on the main screenshot, 0–1 from the left (null clears it). An edit by you. */
+export function setEntryLine(tradeId: string, x: number | null): boolean {
+  const v = x == null ? null : Math.min(1, Math.max(0, x));
+  return Number(getDb().prepare('UPDATE trades SET entry_line_x = ? WHERE id = ? AND deleted_at IS NULL').run(v, tradeId).changes) > 0;
+}
