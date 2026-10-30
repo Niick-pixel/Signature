@@ -30,6 +30,9 @@ export function getDb(): DatabaseSync {
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec('PRAGMA synchronous = NORMAL');
+  // Another process on the journal (a migration from the command line, a
+  // backup tool) waits up to 3 s for a lock instead of failing at once.
+  db.exec('PRAGMA busy_timeout = 3000');
 
   // A snapshot BEFORE any migration runs. A table-rebuild migration is the one
   // moment this journal is genuinely at risk, and the transaction only protects
@@ -49,6 +52,16 @@ export function getDb(): DatabaseSync {
   }
 
   migrate(db);
+
+  /*
+    The daily copy was taken only when the journal was first opened, so an
+    app left open for a week made one backup. Check again every hour; a day
+    that already has its copy costs one stat call.
+  */
+  const hourly = setInterval(() => {
+    try { backupToday(db); } catch (err) { console.warn('[signature] daily backup failed:', err); }
+  }, 60 * 60 * 1000);
+  hourly.unref?.();
 
   globalForDb.__signatureDb = db;
   return db;
