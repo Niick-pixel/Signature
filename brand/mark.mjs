@@ -2,63 +2,47 @@
 // bellies — between two candlesticks, over a fair-value-gap band.
 // "Market insight, beautifully clear."
 
-/** The S: centreline points [x, y, half-width] on the 1024 grid. */
-const S = [[562, 254, 4], [538, 210, 9], [480, 200, 22], [398, 236, 42], [352, 310, 56], [360, 400, 60], [440, 476, 58],
-  [548, 540, 58], [640, 610, 60], [680, 700, 54], [656, 778, 40], [568, 832, 18], [410, 846, 4]];
-
-/**
- * A pen stroke along a Catmull-Rom curve through the points, as one filled
- * outline. `weight` thickens it for small sizes.
- *
- * Drawn large (the watermark), the first version showed its seams: the tips
- * were cut square, the width — eased per segment — flattened at every point
- * so the edge rippled, and the inner side folded over on tight bends, leaving
- * dents. Now the width follows the same smooth curve as the line, the tangent
- * comes from the curve itself, points that run backwards (a fold) are
- * dropped, and each tip is a half circle.
- */
-export function sPath(weight = 1, step = 40) {
-  const n = S.length; const at = (i) => S[Math.max(0, Math.min(n - 1, i))];
-  const pts = []; // [x, y, tx, ty, w]
-  for (let i = 0; i < n - 1; i++) {
-    const [a, b, c, d] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
-    const last = i === n - 2;
-    for (let k = 0; k <= (last ? step : step - 1); k++) {
-      const t = k / step; const t2 = t * t; const t3 = t2 * t;
-      const f = (p0, p1, p2, p3) => 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
-      const df = (p0, p1, p2, p3) => 0.5 * ((-p0 + p2) + 2 * (2 * p0 - 5 * p1 + 4 * p2 - p3) * t + 3 * (-p0 + 3 * p1 - 3 * p2 + p3) * t2);
-      const tx = df(a[0], b[0], c[0], d[0]); const ty = df(a[1], b[1], c[1], d[1]); const l = Math.hypot(tx, ty) || 1;
-      // The width follows the same smooth curve as the line: eased per segment it
-      // flattened at every point, and the edge rippled.
-      const wd = Math.max(Math.min(b[2], c[2]) * 0.6, f(a[2], b[2], c[2], d[2]));
-      pts.push([f(a[0], b[0], c[0], d[0]), f(a[1], b[1], c[1], d[1]), tx / l, ty / l, wd * weight]);
-    }
+/** The S: points along its outline on the 1024 grid (traced from the approved artwork, in its own units, mapped by the candles). */
+const Z = [
+  [447, 167],
+  [432, 161], [405, 160.5], [375, 162.5], [345, 168], [315, 177], [290, 187], [266, 198], [234, 220], [213, 240], [196, 260], [184, 280], [175, 300], [170, 320], [168, 340], [169, 360], [174, 380], [183, 400], [196, 420], [212, 440], [233, 460], [256, 480], [280, 500], [305, 520], [331, 540], [356, 560], [379, 580], [399, 600], [414, 620], [423, 640], [429, 660], [430, 680], [427, 700], [420, 720], [409, 740], [392, 760], [366, 780], [343, 792], [324, 800], [307, 804], [280, 808], [262, 811],
+  [253, 815],
+  [262, 820], [300, 821.5], [325, 819.5], [350, 816], [375, 811], [400, 803], [425, 794], [452, 780], [481, 760], [503, 740], [520, 720], [533, 700], [543, 680], [549, 660], [551, 640], [551, 620], [547, 600], [539, 580], [528, 560], [514, 540], [495, 520], [474, 500], [450, 480], [425, 460], [399, 440], [374, 420], [350, 400], [327, 380], [308, 360], [295, 340], [286, 320], [282, 300], [283, 280], [287, 260], [297, 240], [313, 220], [337, 200], [355, 190], [375, 182], [407, 174], [443, 171],
+];
+const TIPS = new Set([0, 42]);
+function glyphPoints() {
+  let p = Z.map(([x, y]) => [0.944 * x + 162, 0.94 * y + 73]);
+  // Two light smoothing passes take out the pixel steps of the trace; the tips stay put.
+  for (let pass = 0; pass < 2; pass++) {
+    p = p.map((q, i) => {
+      if (TIPS.has(i)) return q;
+      const a = p[(i - 1 + p.length) % p.length]; const b = p[(i + 1) % p.length];
+      return [(a[0] + 2 * q[0] + b[0]) / 4, (a[1] + 2 * q[1] + b[1]) / 4];
+    });
   }
-  // Each side, offset along the normal — dropping any point that runs backwards
-  // along the stroke: that is the fold a tight bend makes on its inner side.
-  const side = (sgn) => {
-    const out = [];
-    for (const [x, y, tx, ty, w] of pts) {
-      const p = [x - ty * w * sgn, y + tx * w * sgn];
-      const q = out[out.length - 1];
-      if (q && (p[0] - q[0]) * tx + (p[1] - q[1]) * ty <= 0) continue;
-      out.push(p);
-    }
-    return out;
-  };
-  const left = side(1); const right = side(-1);
-  // Round tips: a half circle of the tip's own width at each end.
-  const cap = ([x, y, tx, ty, w], dir) => {
-    const out = []; const a0 = Math.atan2(tx, -ty); // angle of the left normal
-    for (let k = 1; k < 12; k++) {
-      const a = a0 - dir * Math.PI * (k / 12);
-      out.push([x + Math.cos(a) * w, y + Math.sin(a) * w]);
-    }
-    return out;
-  };
-  const end = cap(pts[pts.length - 1], 1); const start = cap(pts[0], -1).reverse();
-  const ring = [...left, ...end, ...right.reverse(), ...start];
-  return `M${ring.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L')}Z`;
+  return p;
+}
+/**
+ * The S, as a type designer would draw it: one closed outline — a thin tail
+ * at the top right, a thick diagonal spine, a tail tapering away at the
+ * bottom left — written as cubic Béziers, smooth all the way round.
+ *
+ * It used to be generated as a pen stroke along a curve (hundreds of short
+ * straight segments, a hook at the top); drawn large, the seams showed. The
+ * outline is traced from the approved artwork and placed on the grid by its
+ * candles; `weight` is applied as a stroke in body() so small sizes keep
+ * their hairlines.
+ */
+export function sPath() {
+  const p = glyphPoints(); const n = p.length; const f = (v) => v.toFixed(1);
+  let d = `M${f(p[0][0])} ${f(p[0][1])}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = p[(i - 1 + n) % n]; const p1 = p[i]; const p2 = p[(i + 1) % n]; const p3 = p[(i + 2) % n];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += `C${f(c1[0])} ${f(c1[1])} ${f(c2[0])} ${f(c2[1])} ${f(p2[0])} ${f(p2[1])}`;
+  }
+  return `${d}Z`;
 }
 
 /** The mark's inner drawing (no tile), in any colours — also what the title bar inlines. */
@@ -68,7 +52,7 @@ export function body({ ink, gap, gapOpacity, weight = 1 }) {
   <path d="M656 125V430M335 610V910" stroke="${ink}" stroke-width="${wick}" stroke-linecap="round"/>
   <rect x="${656 - 46 * weight}" y="185" width="${92 * weight}" height="160" rx="24" fill="${ink}"/>
   <rect x="${335 - 46 * weight}" y="690" width="${92 * weight}" height="145" rx="24" fill="${ink}"/>
-  <path d="${sPath(weight)}" fill="${ink}"/>`;
+  <path d="${sPath()}" fill="${ink}"${weight > 1 ? ` stroke="${ink}" stroke-width="${((weight - 1) * 40).toFixed(1)}" stroke-linejoin="round"` : ''}/>`;
 }
 
 /** Master geometry, 1024 grid. */
