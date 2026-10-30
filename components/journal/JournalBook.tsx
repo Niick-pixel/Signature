@@ -13,8 +13,10 @@ import { RichText } from './RichText';
 import { DayStrip, type DayTradeSummary } from './DayStrip';
 import { useConfirm } from '@/components/ui/Confirm';
 import { WeekReviewButton } from './WeekReviewButton';
+import { localDay } from '@/lib/day';
 
-const today = () => new Date().toISOString().slice(0, 10);
+// The local calendar day — the UTC date opened tomorrow's page after 6 pm in Costa Rica.
+const today = () => localDay();
 const longDate = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString(undefined, {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
