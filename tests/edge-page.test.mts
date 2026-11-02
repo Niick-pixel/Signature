@@ -67,6 +67,23 @@ test('focus: the leak is controllable and costly, the strength is never its mirr
   assert.equal(few.leakClear, false);
 });
 
+test('focus: a strength comes only from the setup known before the entry — never a tag ticked on winners', () => {
+  const trades = [];
+  for (let d = 1; d <= 24; d++) {
+    const win = d % 2 === 0;
+    // "What worked" ticked on every winner: the perfect leak. Range location: unrelated to the result.
+    trades.push(t({ date: `2026-09-${String(d).padStart(2, '0')}T09:40`, r_multiple: win ? 2 : -1, worked_tags: win ? ['Long in discount / short in premium'] : [],
+      direction: 'Long', premium_discount: d % 3 ? 'Discount' : 'Premium', target_type: d % 4 === 0 ? 'PDH/PDL' : 'ITH/ITL', entry_method: d % 5 === 0 ? 'Before close (anticipation)' : 'On inversion close' }));
+  }
+  const s = withState(trades, tradeStates(trades));
+  const f = weeklyFocus(s, () => [], { sd: 1 });
+  assert.ok(f.strength, 'a pre-trade strength exists');
+  assert.notEqual(f.strength!.label, 'Long in discount / short in premium');
+  assert.equal(f.strength!.kind === 'setup' || f.strength!.kind === 'clean' || f.strength!.key === 'first', true);
+  // Never a level that breaks the plan.
+  assert.ok(!/anticipation/.test(f.strength!.label));
+});
+
 test('ledger: theme costs, repeated lessons, contradictions without self-contradiction, auto vs self', () => {
   const xs = [
     t({ r_multiple: -1, lesson: 'I entered late again, chased the move.', mistake_tags: ['Chased'] }),

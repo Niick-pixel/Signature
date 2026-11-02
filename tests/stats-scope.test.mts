@@ -5,7 +5,7 @@
 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseStatsScope, applyStatsScope, periodStart, accountParam, mixesWorlds } from '../lib/statsScope';
+import { parseStatsScope, applyStatsScope, periodStart, accountParam, mixesWorlds, measuredTrades } from '../lib/statsScope';
 import type { Trade } from '../lib/types';
 
 const available = ['Live', 'Backtest (FX Replay)', 'Demo', 'Missed'] as const;
@@ -49,4 +49,17 @@ test('period, session and direction narrow the trades; a period leaves undated b
   assert.deepEqual(ids({ session: 'London' }), ['d']);
   assert.deepEqual(ids({ dir: 'Long', session: 'NY AM,London' }), ['a', 'b', 'c']);
   assert.deepEqual(ids({ period: 'nonsense' }), ['a', 'b', 'c', 'd']);
+});
+
+test('All keeps backtests (the page says it is mixed) but never counts missed setups as trades', () => {
+  const s = parseStatsScope({ account: 'All' }, [...available]);
+  const trades = [t({ account: 'Live' }), t({ account: 'Demo' }), t({ account: 'Backtest (FX Replay)' }), t({ account: 'Backtest (FX Replay)' }), t({ account: 'Missed' })];
+  const m = measuredTrades(trades, s);
+  assert.deepEqual(m.inView.map((x) => x.account), ['Live', 'Demo', 'Backtest (FX Replay)', 'Backtest (FX Replay)']);
+  assert.deepEqual(m.leftOut, [{ account: 'Missed', n: 1 }]);
+  // Missed on its own is measured as itself.
+  const missed = measuredTrades(trades.filter((x) => x.account === 'Missed'), parseStatsScope({ account: 'Missed' }, [...available]));
+  assert.equal(missed.inView.length, 1); assert.deepEqual(missed.leftOut, []);
+  // Real accounts together: nothing left out.
+  assert.equal(measuredTrades(trades, parseStatsScope({ account: 'Live,Demo' }, [...available])).leftOut.length, 0);
 });

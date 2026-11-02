@@ -13,8 +13,49 @@ const sR = (v: number | null | undefined, dp = 2) => (v == null ? '—' : `${v <
  * on a 3rd trade is not a reason to take more trades.
  */
 export function behaviourSummary(tilt: TiltIndex, hesitation: { breaks: Hesitation[] }): string {
-  const caught = tilt.sequences.length;
-  return `${caught ? `${caught} day${caught === 1 ? '' : 's'} or session${caught === 1 ? '' : 's'} broke a tilt rule` : 'No tilt rule broken'}${hesitation.breaks.length ? ` · ${hesitation.breaks.length} hesitation${hesitation.breaks.length === 1 ? '' : 's'}` : ''}`;
+  const caught = tilt.sequences.length; const a = tilt.audit;
+  const head = caught ? `${caught} day${caught === 1 ? '' : 's'} broke a tilt rule` : `No tilt rule broken on ${a.daysChecked} real trading day${a.daysChecked === 1 ? '' : 's'}`;
+  const extra = [
+    a.notDayChecked.backtest ? `${a.notDayChecked.backtest} backtest${a.notDayChecked.backtest === 1 ? '' : 's'} not day-checked` : '',
+    a.orderUncertain ? `${a.orderUncertain} day${a.orderUncertain === 1 ? '' : 's'} ordered by log time` : '',
+    hesitation.breaks.length ? `${hesitation.breaks.length} hesitation${hesitation.breaks.length === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+  return [head, ...extra].join(' · ');
+}
+
+/** Every real trading day with 2+ trades, in the order the rules checked them — "no tilt rule broken" you can verify. */
+function DayAudit({ tilt }: { tilt: TiltIndex }) {
+  const a = tilt.audit;
+  return (
+    <details className="mt-5" data-tilt-audit>
+      <summary className="cursor-pointer text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
+        Check it yourself — every day with 2+ trades, in order ({a.days.length} day{a.days.length === 1 ? '' : 's'}; {a.singleTradeDays} single-trade day{a.singleTradeDays === 1 ? '' : 's'} can’t break these rules)
+      </summary>
+      <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+        Real trading days only. {a.notDayChecked.backtest ? `${a.notDayChecked.backtest} backtest${a.notDayChecked.backtest === 1 ? ' is' : 's are'} never day-checked — a replay evening is not a trading day, so several losses logged the same evening are not a tilt break. ` : ''}
+        {a.notDayChecked.other ? `${a.notDayChecked.other} trade${a.notDayChecked.other === 1 ? '' : 's'} had no day to check. ` : ''}
+        {a.orderUncertain ? `Days marked “by log time” had a trade with no entry time, so their order is the order you logged them — add entry times to make the order certain.` : ''}
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {a.days.map((d) => (
+          <li key={d.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[calc(10px*var(--rk))] border px-3 py-1.5 text-[11.5px]" style={{ borderColor: 'var(--glass-stroke)' }} data-audit-day={d.key}>
+            <b className="w-24 font-medium">{d.label}</b>
+            <span className="flex flex-wrap gap-1.5 tabular-nums">
+              {d.trades.map((t, i) => (
+                <Link key={t.id} href={`/trade/${t.id}`} className="rounded-full border px-2 py-0.5"
+                  style={t.rules.length ? { borderColor: 'rgb(var(--outcome-loss) / 0.4)', color: 'rgb(var(--outcome-loss))' } : { borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
+                  #{i + 1}{t.time ? ` ${t.time}` : ''} {sR(t.r, 1)}
+                </Link>
+              ))}
+            </span>
+            <span className="ml-auto" style={{ color: d.verdicts.some((v) => v.broken) ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
+              {d.verdicts.filter((v) => v.broken).map((v) => v.short).join(', ') || 'Inside the day rules'}{d.ordered === 'logged' ? ' · by log time' : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 export function BehaviourCard({ tilt, hesitation }: { tilt: TiltIndex; hesitation: { breaks: Hesitation[]; hindsightLeftOut: number } }) {
@@ -86,6 +127,7 @@ export function BehaviourCard({ tilt, hesitation }: { tilt: TiltIndex; hesitatio
           )}
         </div>
       </div>
+      <DayAudit tilt={tilt} />
     </div>
   );
 }

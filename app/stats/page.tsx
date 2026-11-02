@@ -57,7 +57,8 @@ import { localDay } from '@/lib/day';
 import { PRESETS, type PropRules } from '@/lib/prop';
 import { HypotheticalNote } from '@/components/money/MissedCard';
 import { StatsFilters } from '@/components/stats/StatsFilters';
-import { accountParam, applyStatsScope, mixesWorlds, parseStatsScope } from '@/lib/statsScope';
+import { accountParam, applyStatsScope, measuredTrades, parseStatsScope } from '@/lib/statsScope';
+import { sourceOf } from '@/lib/edge/fields';
 import { Panel } from '@/components/stats/Bars';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { MissedPatternsView } from '@/components/stats/MissedPatterns';
@@ -106,8 +107,9 @@ export default async function StatsPage(
   const single = scope.accounts.length === 1 ? scope.accounts[0] : null;
   // The URL value for this selection, carried by every link on the page.
   const account = accountParam(scope.accounts, accounts.map((a) => a.account));
-  const inAccounts = all.filter((t) => scope.accounts.includes(t.account));
-  const scoped = applyStatsScope(all, scope);
+  const inAccounts = measuredTrades(all.filter((t) => scope.accounts.includes(t.account)), scope).inView;
+  // Missed setups never join taken trades in a number; backtests stay when you select them (the page says it is mixed).
+  const { inView: scoped, leftOut: leftOutWorlds } = measuredTrades(applyStatsScope(all, scope), scope);
   const undatedOut = scope.period !== 'all' ? inAccounts.filter((t) => !isDated(t)).length : 0;
   // Every filter but the account, carried by the page's own links.
   const filterParams = {
@@ -153,7 +155,10 @@ export default async function StatsPage(
   const stateful = withState(settled, states);
   const tilt = tiltIndex(settled, states, breaksOf);
   const hesitation = hesitations(all.filter((t) => scope.accounts.includes(t.account) || isHypothetical(t.account)));
-  const scopeLabel = scope.all ? 'all accounts' : scope.accounts.map((a) => (isBacktest(a) ? 'Backtest' : a)).join(' + ');
+  // Where the trades in the numbers came from, so a blended total is never read as a live one.
+  const mix = (['live', 'demo', 'eval', 'backtest', 'missed'] as const)
+    .map((s) => [s, settled.filter((t) => sourceOf(t.account) === s).length] as const).filter(([, n]) => n > 0);
+  const scopeLabel = `${scope.all ? 'all accounts' : scope.accounts.map((a) => (isBacktest(a) ? 'Backtest' : a)).join(' + ')}${mix.length > 1 ? ` · ${mix.map(([s, n]) => `${s} ${n}`).join(' · ')}` : ''}`;
 
   // The Edge Engine (lib/edge): window, maturity, integrity, focus, the explorer, the ledger.
   const mat = maturity(settled.length);
@@ -274,9 +279,15 @@ export default async function StatsPage(
           <div className="mb-5"><StatsFilters available={accounts} scope={scope}
             rubrics={[...new Set(everything.map((t) => t.rubric_version))].sort((a, b) => a - b)} /></div>
 
-          {mixesWorlds(scope.accounts) && (
+          {scoped.some((t) => isBacktest(t.account)) && scoped.some((t) => isReal(t.account)) && (
             <p data-mixed-note className="mb-4 text-[12px]" style={{ color: 'rgb(var(--amber))' }}>
-              Mixed: {scope.accounts.filter((a) => !isReal(a)).map((a) => isBacktest(a) ? 'backtests' : 'missed setups').join(' and ')} are counted with real trades here.
+              Mixed: backtests are counted with real trades here — replay fills carry no fear, so read this total as a blend, not a live result.
+            </p>
+          )}
+          {leftOutWorlds.some((x) => x.n > 0) && (
+            <p data-missed-out className="mb-4 text-[12px]" style={{ color: 'var(--text-dim)' }}>
+              {leftOutWorlds.reduce((a, x) => a + x.n, 0)} missed setup{leftOutWorlds.reduce((a, x) => a + x.n, 0) === 1 ? '' : 's'} left out of every number — they were not taken. They count in Missed trades &amp; hesitation below,{' '}
+              <a className="underline underline-offset-2" href={`/stats?${new URLSearchParams({ account: 'Missed', ...filterParams }).toString()}`}>or on their own →</a>
             </p>
           )}
           {(hindsight > 0 && (single == null || isHypothetical(single) || scope.all)) || undatedOut > 0 ? (
@@ -319,7 +330,7 @@ export default async function StatsPage(
 
               <Collapsible id="quality" title="Setup quality" locked={lockNote('gradeCalibration', 'Grade calibration')}
                 help="Do your grades mean anything? Grades locked before the outcome against those given after it, grade drift, and whether a score predicts R out of sample."
-                summary={model?.wf ? `Learned score: ${mv ? VERDICT_LABEL[mv.level] : 'Too early'} (ρ ${model.wf.model.rho?.toFixed(2) ?? '—'} out of sample) · ${quality.exposedN} of ${settled.length} grades hindsight-exposed` : `${quality.exposedN} of ${settled.length} grades hindsight-exposed`}>
+                summary={`${model?.wf ? `Learned score: ${mv ? VERDICT_LABEL[mv.level] : 'Too early'} (ρ ${model.wf.model.rho?.toFixed(2) ?? '—'} out of sample) · ` : ''}${quality.exposedN} of ${settled.length} grades hindsight-exposed${quality.spread.oneGrade ? ` · every pre-graded trade is ${quality.spread.oneGrade}` : ''}${quality.spread.items.some((i) => i.notFiltering) ? ` · ${quality.spread.items.filter((i) => i.notFiltering).length} checklist items not filtering` : ''}`}>
                 <QualityPanel q={quality} model={model} thumbs={thumbs} weightsLocked={unlocked(mat, 'scoreModel') ? null : `Under 100 trades the learned weights barely leave yours (40 pseudo-trades of prior) — ${100 - settled.length} to go before they can visibly diverge.`} />
               </Collapsible>
 

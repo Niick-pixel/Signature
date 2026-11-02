@@ -97,7 +97,11 @@ export const FIELDS: FieldDef[] = [
   { key: 'closure_letter', label: 'Closure grade', kind: 'cat', options: ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'F'], timing: 'pre', objective: false, source: 'derived', predictor: false, get: (t) => closureLetter(closureScore(t)) },
   { key: 'cisd', label: 'CISD', kind: 'bool', timing: 'pre', objective: true, source: 'trade', predictor: true, get: tri('cisd') },
   { key: 'smt_state', label: 'SMT (NQ vs ES)', kind: 'cat', options: SMT_STATES, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('smt_state') },
-  { key: 'target_type', label: 'Target', kind: 'cat', options: TARGET_TYPES, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('target_type') },
+  // One target per trade, from the current, mutually exclusive list. A retired value ("Horizontal liquidity
+  // pool" overlaps EQH/EQL, PDH/PDL and session levels) can't be placed in it, so it reads as unanswered
+  // here — and the integrity banner lists those trades to re-tag.
+  { key: 'target_type', label: 'Target', kind: 'cat', options: TARGET_TYPES, timing: 'pre', objective: true, source: 'trade', predictor: true,
+    get: (t) => ((TARGET_TYPES as readonly string[]).includes(t.target_type ?? '') ? t.target_type : null) },
   { key: 'into_eq_pool', label: 'Into an EQ pool', kind: 'bool', timing: 'pre', objective: true, source: 'trade', predictor: true, get: tri('into_eq_pool') },
   { key: 'planned_rr', label: 'Planned R:R', kind: 'cat', options: PLANNED_RRS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('planned_rr') },
   { key: 'entry_method', label: 'Entry', kind: 'cat', options: ENTRY_METHODS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('entry_method') },

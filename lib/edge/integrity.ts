@@ -12,8 +12,9 @@
 import { equity, type EdgeMetrics } from './metrics';
 import { PREDICTORS } from './fields';
 import type { Trade } from '../types';
+import { TARGET_TYPES } from '../domain';
 
-export interface IntegrityIssue { id: string; text: string; tone: 'bug' | 'warn' | 'info' }
+export interface IntegrityIssue { id: string; text: string; tone: 'bug' | 'warn' | 'info'; links?: Array<{ href: string; label: string }> }
 
 const share = (a: number, b: number) => `${Math.round((a / b) * 100)}%`;
 
@@ -34,5 +35,13 @@ export function integrity(settled: readonly Trade[], m: EdgeMetrics, opts: { noR
   const anatomy = PREDICTORS.filter((f) => ['liquidity_event', 'entry_method', 'stop_method', 'closure_score', 'fvg_quality', 'entry_tf'].includes(f.key));
   const filled = settled.filter((t) => anatomy.some((f) => f.get(t) != null)).length;
   if (settled.length && filled / settled.length < 0.5) out.push({ id: 'anatomy', tone: 'info', text: `Setup anatomy (liquidity event, entry, stop, closure score…) recorded on ${filled} of ${settled.length} trades. Those fields can't be analysed until more trades carry them.` });
+  // Targets filed under a retired, overlapping type: left out of the target comparison until re-tagged.
+  const retired = settled.filter((t) => t.target_type && !(TARGET_TYPES as readonly string[]).includes(t.target_type));
+  if (retired.length) {
+    const by = [...new Set(retired.map((t) => t.target_type as string))].map((v) => `${v} ×${retired.filter((t) => t.target_type === v).length}`).join(', ');
+    out.push({ id: 'retired-target', tone: 'warn',
+      text: `${retired.length} trade${retired.length === 1 ? '' : 's'} use a retired target type (${by}) that overlaps the current ones — left out of the target comparison. Re-tag each as exactly one of: ${TARGET_TYPES.join(', ')}.`,
+      links: retired.slice(0, 12).map((t, i) => ({ href: `/trade/${t.id}`, label: `${t.undated || !t.date ? `#${i + 1}` : t.date.slice(5, 10)}` })) });
+  }
   return out;
 }

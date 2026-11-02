@@ -10,7 +10,10 @@ export function IntegrityBanner({ issues }: { issues: IntegrityIssue[] }) {
         {issues.map((i) => (
           <li key={i.id} className="flex gap-2" data-integrity-issue={i.id}>
             <span className="mt-[5px] size-1.5 shrink-0 rounded-full" style={{ background: tone(i.tone) }} />
-            <span style={{ color: i.tone === 'info' ? 'var(--text-dim)' : 'var(--text)' }}>{i.text}</span>
+            <span style={{ color: i.tone === 'info' ? 'var(--text-dim)' : 'var(--text)' }}>
+              {i.text}
+              {i.links?.map((l) => <a key={l.href} href={l.href} className="ml-1.5 underline underline-offset-2" style={{ color: 'var(--text-dim)' }}>{l.label}</a>)}
+            </span>
           </li>
         ))}
       </ul>

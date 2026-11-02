@@ -26,10 +26,17 @@ test('score model: the hand-computed case — λ equal to n halves the data’s 
   close(fit.beta[0], 0.5); close(fit.intercept, 1);
   close(S.predict(fit, [1]), 1.5);
   close(S.weights(fit, 4, f)[0].learned, 1);
-  // With your points as the prior, the fitted scale reproduces a one-item rubric exactly.
+  // The scale has its own prior (0.01 R per point): four trades barely move it…
   const g = [{ key: 'x', label: 'x', points: 10, get: () => 0 }];
   const fg = S.fitScore([[0], [1], [0], [1]], [0, 3, 0, 3], [1, 1, 1, 1], g, 40);
-  close(fg.s, 0.3); close(fg.beta0[0], 1.5); close(fg.beta[0], 1.5);
+  // slope 0.3 R/pt, Σ(P − P̄)² = 100, σ² = 2.25 → data precision 44.4 against the prior's 22,500
+  close(fg.s, (22500 * 0.01 + (100 / 2.25) * 0.3) / (22500 + 100 / 2.25), 1e-12);
+  close(fg.beta0[0], fg.s * 10 * 0.5, 1e-12);
+  // …and a long enough history that agrees with a one-item rubric recovers its scale (one 10-point item
+  // carries little information per trade; a full checklist overtakes the prior in a few hundred).
+  const X = Array.from({ length: 200000 }, (_, i) => [i % 2]); const y = X.map(([v]) => v * 3);
+  const big = S.fitScore(X, y, y.map(() => 1), g, 40);
+  assert.ok(Math.abs(big.s - 0.3) < 0.01, `s ${big.s}`);
 });
 
 test('score model: the prior holds at small n and lets go at large n; s never reverses your rubric', () => {
@@ -43,8 +50,13 @@ test('score model: the prior holds at small n and lets go at large n; s never re
   assert.ok(Math.abs(wb[1].learned) < 0.1);
   assert.ok(Math.abs(ws[1].learned - ws[1].prior) < Math.abs(wb[1].learned - wb[1].prior) + 0.5);
   assert.ok(wb[0].learned > 0.8);
+  // Data against your rubric pulls the scale down, never below zero.
   const rev = S.fitScore([[0], [1], [0], [1]], [2, 0, 2, 0], [1, 1, 1, 1], [{ key: 'x', label: 'x', points: 10, get: () => 0 }], 40);
-  assert.equal(rev.s, 0);
+  assert.ok(rev.s >= 0 && rev.s < S.S_PRIOR);
+  const Xr = Array.from({ length: 4000 }, (_, i) => [i % 2]);
+  assert.equal(S.fitScore(Xr, Xr.map(([v]) => 2 - 2 * v), Xr.map(() => 1), [{ key: 'x', label: 'x', points: 10, get: () => 0 }], 40).s, 0);
+  // A noisy small sample no longer flattens the rubric to zero.
+  assert.ok(S.scalePosterior(0, 900, 1.5) > 0.5 * S.S_PRIOR);
 });
 
 test('spearman: perfect, reversed, ties', () => {
@@ -116,4 +128,49 @@ test('score model: only pre-trade inputs (firewall), and fast at 2,000 trades', 
   const t0 = performance.now(); const m = S.scoreModel(many); const ms = performance.now() - t0;
   assert.ok(m && m.wf && m.wf.n === 1980);
   assert.ok(ms < 3000, `${ms} ms`);
+});
+
+test('score model: items ticked on exactly the same trades are shown as one, with the combined effect', () => {
+  const f = [{ key: 'a', label: 'Clean path', points: 5, get: () => 0 }, { key: 'b', label: 'Returned to FVG', points: 5, get: () => 0 }, { key: 'c', label: 'Other', points: 10, get: () => 0 }];
+  const r = mulberry32(3);
+  const X = Array.from({ length: 60 }, () => { const ab = r() < 0.7 ? 1 : 0; return [ab, ab, r() < 0.5 ? 1 : 0]; });
+  const y = X.map(([a]) => a * 0.6 + (r() - 0.5));
+  const groups = S.collinearGroups(X, f);
+  assert.deepEqual(groups, [[0, 1]]);
+  const fit = S.fitScore(X, y, y.map(() => 1), f);
+  const each = S.weights(fit, 60, f);
+  close(each[0].learned, each[1].learned, 1e-9);               // ridge splits it evenly: the same made-up number twice
+  const w = S.weights(fit, 60, f, groups);
+  assert.equal(w.length, 2);
+  assert.equal(w[0].label, 'Clean path + Returned to FVG'); assert.equal(w[0].points, 10);
+  close(w[0].learned, each[0].learned + each[1].learned, 1e-9);
+  assert.ok(w[0].lo80 < w[0].learned && w[0].learned < w[0].hi80);
+  assert.deepEqual(w[0].members, ['Clean path', 'Returned to FVG']);
+});
+
+test('spread: one pre-outcome grade and near-always-yes items are flagged as not filtering', async () => {
+  const { spread } = await import('../lib/edge/quality');
+  const xs = Array.from({ length: 20 }, (_, i) => ({ id: `q${i}`, graded_post_hoc: i >= 15, grade_letter: i >= 15 ? 'C' : 'A', checklist_score: 85,
+    chk_displacement_fvg: i !== 3, chk_clean_path: i % 2 === 0, chk_killzone: null }) as never);
+  const s = spread(xs);
+  assert.equal(s.gradeN, 15); assert.equal(s.oneGrade, 'A');
+  assert.deepEqual(s.grades, [{ grade: 'A', n: 15, share: 1 }]);
+  const item = (k: string) => s.items.find((i) => i.key === k)!;
+  assert.equal(item('chk_displacement_fvg').notFiltering, true);      // 19 of 20
+  assert.equal(item('chk_clean_path').notFiltering, false);           // half
+  assert.equal(item('chk_killzone').answered, 0);
+  assert.deepEqual(s.scores, { n: 15, distinct: 1, atOrAbove: 15, threshold: 70 });
+});
+
+test('targets: a retired, overlapping target type is unanswered for the engine and listed to re-tag', async () => {
+  const { field } = await import('../lib/edge/fields');
+  const { integrity } = await import('../lib/edge/integrity');
+  const { edgeMetrics } = await import('../lib/edge/metrics');
+  const f = field('target_type')!;
+  assert.equal(f.get({ target_type: 'EQH/EQL' } as never), 'EQH/EQL');
+  assert.equal(f.get({ target_type: 'Horizontal liquidity pool' } as never), null);
+  const xs = [{ id: 'a', date: '2026-10-01T09:40', r_multiple: 1, rubric_version: 3, target_type: 'Horizontal liquidity pool' }, { id: 'b', date: '2026-10-02T09:40', r_multiple: -1, rubric_version: 3, target_type: 'PDH/PDL' }] as never[];
+  const issue = integrity(xs, edgeMetrics([{ r: 1 }, { r: -1 }])).find((i) => i.id === 'retired-target')!;
+  assert.match(issue.text, /Horizontal liquidity pool ×1/);
+  assert.deepEqual(issue.links, [{ href: '/trade/a', label: '10-01' }]);
 });

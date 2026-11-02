@@ -1,6 +1,6 @@
 import { ForestBar, Thumbs, VerdictChip, sR, pct, type Thumb } from './EdgeUI';
 import { Help } from '@/components/ui/Help';
-import type { Quality, GradeTable } from '@/lib/edge/quality';
+import type { Quality, GradeTable, Spread } from '@/lib/edge/quality';
 import type { ScoreModel, Skill } from '@/lib/edge/scoreModel';
 import { verdict, type Verdict } from '@/lib/edge/verdict';
 
@@ -59,6 +59,49 @@ function Calibration({ wf }: { wf: NonNullable<ScoreModel['wf']> }) {
   );
 }
 
+/** Does a filter filter? The spread of pre-outcome grades and of each checklist item. */
+function SpreadCheck({ s }: { s: Spread }) {
+  const flat = s.items.filter((i) => i.notFiltering);
+  const shown = s.items.filter((i) => i.answered > 0);
+  return (
+    <div className="rounded-[calc(14px*var(--rk))] border px-4 py-3" style={{ borderColor: 'var(--glass-stroke)' }} data-spread>
+      <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[12.5px] font-medium">
+        Does your filter filter?
+        <Help>A grade or checklist item only means something if it varies. If every setup you take is an A, or an item is ticked yes on more than 90% of trades, it cannot separate good setups from bad — nothing can be learned from it, and it usually means the checklist is confirming a decision already made.</Help>
+      </div>
+      <p className="text-[12px]" style={{ color: 'var(--text-dim)' }} data-spread-grades>
+        Grades given before the outcome ({s.gradeN}): {s.grades.length ? s.grades.map((g) => `${g.grade} ${g.n}`).join(' · ') : 'none yet'}
+        {s.oneGrade ? <> — <b style={{ color: 'rgb(var(--amber))' }}>every one is {s.oneGrade}</b>, so your grading can’t be tested yet. A selective trader’s grades spread out.</> : ''}
+      </p>
+      {s.scores.n > 0 && (
+        <p className="mt-1 text-[12px]" style={{ color: 'var(--text-dim)' }} data-spread-scores>
+          Checklist scores before the outcome: {s.scores.distinct} different value{s.scores.distinct === 1 ? '' : 's'} across {s.scores.n} trades, {s.scores.atOrAbove} at or above {s.scores.threshold}.
+          {s.scores.distinct <= 1 ? ' With no spread, the checklist score cannot be tested — that is why its row reads “—”.' : ''}
+        </p>
+      )}
+      {shown.length > 0 && (
+        <table className="mt-2 w-full text-[12px]">
+          <tbody>
+            {shown.map((i) => (
+              <tr key={i.key} className="border-t" style={{ borderColor: 'var(--glass-stroke)' }} data-spread-item={i.key}>
+                <td className="py-1">{i.label}</td>
+                <td className="w-40 px-3">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--glass-fill)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.round((i.share ?? 0) * 100)}%`, background: i.notFiltering ? 'rgb(var(--amber))' : 'var(--text-faint)' }} />
+                  </div>
+                </td>
+                <td className="w-24 text-right tabular-nums" style={{ color: 'var(--text-dim)' }}>{i.yes}/{i.answered} yes</td>
+                <td className="w-28 pl-3 text-[11px]" style={{ color: i.notFiltering ? 'rgb(var(--amber))' : 'var(--text-faint)' }}>{i.notFiltering ? 'not filtering' : i.answered < 10 ? 'too few' : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {flat.length > 0 && <p className="mt-2 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>{flat.length} item{flat.length === 1 ? ' is' : 's are'} yes on more than 90% of trades. Either the bar is too low, or the box is being ticked to get to the trade. Grade it harder, or grade it blind.</p>}
+    </div>
+  );
+}
+
 /** Section F. */
 export function QualityPanel({ q, model, thumbs, weightsLocked }: { q: Quality; model: ScoreModel | null; thumbs: Record<string, Thumb>; weightsLocked: string | null }) {
   const wf = model?.wf ?? null;
@@ -77,6 +120,8 @@ export function QualityPanel({ q, model, thumbs, weightsLocked }: { q: Quality; 
           </span>
         ))}
       </div>
+
+      <SpreadCheck s={q.spread} />
 
       <div className="rounded-[calc(14px*var(--rk))] border px-4 py-3" style={{ borderColor: 'var(--glass-stroke)' }} data-predictive>
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[12.5px] font-medium">
@@ -109,9 +154,10 @@ export function QualityPanel({ q, model, thumbs, weightsLocked }: { q: Quality; 
         <div data-weights>
           <div className="mb-1 flex items-center gap-1.5 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
             Weights: yours vs learned
-            <Help>R when the item is present vs absent. Yours: your points × one scale fitted to your results ({model.fit.s.toFixed(3)} R per point). Learned: the posterior, pulled toward yours by 40 pseudo-trades — at {model.n} trades it has barely moved; past 150 your data dominates.</Help>
+            <Help>R when the item is present vs absent. Yours: your points × one scale ({model.fit.s.toFixed(4)} R per point). The scale starts from 30 points ≈ 0.3R and moves with your results only as they build up, so your rubric stays the starting point. Learned: the posterior, pulled toward yours by 40 pseudo-trades — at {model.n} trades it has barely moved; past 150 your data dominates.</Help>
           </div>
-          {model.fit.s === 0 && <p className="mb-2 text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-flat-prior>Your points don’t line up with R in these trades yet (the fitted scale is 0), so “yours” is flat and the learned weights start from zero.</p>}
+          {model.fit.s === 0 && <p className="mb-2 text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-flat-prior>Your results so far run against your points strongly enough to pull the scale to 0 — “yours” is flat until that changes.</p>}
+          {model.weights.some((w) => w.members) && <p className="mb-2 text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-collinear>Items joined with “+” were ticked yes and no on exactly the same trades, so no amount of maths can split their effect — they are shown together. Tick them independently and they separate.</p>}
           {weightsLocked && <p className="mb-2 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>{weightsLocked}</p>}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[30rem] text-[12px]">

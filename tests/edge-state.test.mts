@@ -95,3 +95,28 @@ test('hesitation: real-time missed setups at the threshold with the trigger; hin
   assert.equal(h.breaks.length, 1); assert.equal(h.breaks[0].wouldBeR, 2.5);
   assert.equal(h.hindsightLeftOut, 2);
 });
+
+test('tilt audit: the real rule book catches a 3-loss day; backtests are counted, never day-checked; untimed days are marked', async () => {
+  const { dayBreaksByTrade, planBreaks } = await import('../lib/review');
+  const real = [
+    t({ date: '2026-10-17T09:35', r_multiple: -1, outcome: 'Loss' }),
+    t({ date: '2026-10-17T09:58', r_multiple: -1, outcome: 'Loss' }),
+    t({ date: '2026-10-17T10:30', r_multiple: -1, outcome: 'Loss' }),
+    t({ date: '2026-10-18', r_multiple: 1, outcome: 'Win' }),
+    t({ date: '2026-10-18', r_multiple: -1, outcome: 'Loss' }),
+    t({ date: '2026-10-19T09:40', r_multiple: 2, outcome: 'Win' }),
+  ];
+  const replays = [t({ account: BACKTEST, session_index: 4, date: '2026-10-17T20:00', r_multiple: -1, outcome: 'Loss' }), t({ account: BACKTEST, session_index: 4, date: '2026-10-17T20:05', r_multiple: -1, outcome: 'Loss' })];
+  const xs = [...real, ...replays];
+  const breaks = dayBreaksByTrade(xs);
+  const s = tradeStates(xs);
+  const tilt = tiltIndex(xs, s, (x) => planBreaks(x, breaks).map((b) => ({ id: b.id, short: b.short, source: b.source })));
+  const oct17 = tilt.audit.days.find((d) => d.key === '2026-10-17')!;
+  assert.deepEqual(oct17.trades[2].rules.sort(), ['max-trades', 'stop-after-losses']);
+  assert.equal(oct17.ordered, 'time');
+  assert.equal(tilt.sequences.length, 1);
+  assert.equal(tilt.audit.days.find((d) => d.key === '2026-10-18')!.ordered, 'logged');
+  assert.equal(tilt.audit.daysChecked, 3); assert.equal(tilt.audit.singleTradeDays, 1);
+  assert.deepEqual(tilt.audit.notDayChecked, { backtest: 2, other: 0 });
+  assert.equal(tilt.audit.orderUncertain, 1);
+});

@@ -11,12 +11,28 @@ import { Z80 } from './dist';
 import { resultClass } from './metrics';
 import type { TradeState } from './state';
 import type { Trade } from '../types';
+import { isBacktest } from '../domain';
 
 export const TILT_RULES = ['max-trades', 'stop-after-losses', 'cooldown'] as const;
 
 export interface TiltCell { losses: '0' | '1' | '2+'; tradeNo: '1st' | '2nd' | '3rd+'; n: number; shrunk: number; lo80: number; hi80: number; rawMean: number | null }
 export interface TiltSequence { key: string; label: string; trades: Array<{ id: string; date: string; r: number | null; rules: Array<{ id: string; short: string; source: 'auto' | 'self' }> }>; netR: number }
-export interface TiltIndex { cells: TiltCell[]; mu: number; k: number; sequences: TiltSequence[] }
+/**
+ * The audit behind "no tilt rule broken": every real trading day the day
+ * rules ran on, its trades in the order they were checked, and what each
+ * rule said — so the claim can be checked by eye. Trades a day rule cannot
+ * see (backtests, undated) are counted, and a day whose order came from when
+ * you logged the trades rather than from entry times is marked.
+ */
+export interface AuditDay {
+  key: string; label: string;
+  /** 'time': every trade carried an entry time; 'logged': at least one did not, so the order is the logging order. */
+  ordered: 'time' | 'logged';
+  trades: Array<{ id: string; time: string | null; r: number | null; rules: string[] }>;
+  verdicts: Array<{ id: string; short: string; broken: number }>;
+}
+export interface TiltAudit { days: AuditDay[]; daysChecked: number; singleTradeDays: number; notDayChecked: { backtest: number; other: number }; orderUncertain: number }
+export interface TiltIndex { cells: TiltCell[]; mu: number; k: number; sequences: TiltSequence[]; audit: TiltAudit }
 
 // One formatter, built once: toLocaleDateString builds a new one on every call.
 const DAY_LABEL = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -54,5 +70,35 @@ export function tiltIndex(trades: readonly Trade[], states: Map<string, TradeSta
     });
   }
   sequences.sort((a, b) => (b.trades[0]?.date ?? '').localeCompare(a.trades[0]?.date ?? ''));
-  return { cells, mu: sh.mu, k: sh.k, sequences };
+  return { cells, mu: sh.mu, k: sh.k, sequences, audit: tiltAudit(trades, states, breaks, byKey) };
+}
+
+const TILT_SHORT: Record<(typeof TILT_RULES)[number], string> = { 'max-trades': 'At most 2 trades', 'stop-after-losses': 'Done after 2 losses in a row', cooldown: '10 minutes after a loss' };
+const timeOf = (t: Trade) => (/T\d{2}:\d{2}/.test(t.date) ? t.date.slice(11, 16) : null);
+
+export function tiltAudit(trades: readonly Trade[], states: Map<string, TradeState>,
+  breaks: (t: Trade) => Array<{ id: string; short: string; source?: 'auto' | 'self' }>, byKey?: Map<string, Trade[]>): TiltAudit {
+  const groups = byKey ?? (() => { const m = new Map<string, Trade[]>(); for (const t of trades) { const k = states.get(t.id)?.key; if (k) m.set(k, [...(m.get(k) ?? []), t]); } return m; })();
+  const unkeyed = trades.filter((t) => !states.get(t.id)?.key);
+  const days: AuditDay[] = [];
+  let single = 0;
+  for (const [key, ts] of groups) {
+    if (key.startsWith('session:')) continue;
+    if (ts.length < 2) { single += 1; continue; }
+    const sorted = [...ts].sort((a, b) => (states.get(a.id)!.tradeNo ?? 0) - (states.get(b.id)!.tradeNo ?? 0));
+    const times = sorted.map(timeOf);
+    const rows = sorted.map((t, i) => ({ id: t.id, time: times[i], r: t.r_multiple, rules: breaks(t).filter((b) => (TILT_RULES as readonly string[]).includes(b.id)).map((b) => b.id) }));
+    days.push({
+      key, label: DAY_LABEL.format(new Date(`${key}T12:00:00Z`)),
+      ordered: times.every((x) => x != null) && new Set(times).size === times.length ? 'time' : 'logged',
+      trades: rows,
+      verdicts: TILT_RULES.map((id) => ({ id, short: TILT_SHORT[id], broken: rows.filter((r) => r.rules.includes(id)).length })),
+    });
+  }
+  days.sort((a, b) => b.key.localeCompare(a.key));
+  return {
+    days, daysChecked: days.length + single, singleTradeDays: single,
+    notDayChecked: { backtest: unkeyed.filter((t) => isBacktest(t.account)).length, other: unkeyed.filter((t) => !isBacktest(t.account)).length },
+    orderUncertain: days.filter((d) => d.ordered === 'logged').length,
+  };
 }

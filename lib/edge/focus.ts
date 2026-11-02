@@ -9,6 +9,12 @@
  * (lib/edge/compare) and recent frequency is its share of the last 20 trades.
  * One leak, one strength to protect (never a broken rule or a mistake), one
  * experiment. If no leak reaches Hint, it says so and names the top candidate.
+ *
+ * A strength is read only from what was known before the entry — a field of
+ * the setup (lib/edge/fields PREDICTORS), the first trade of the day, or
+ * keeping every rule — never from anything ticked or written after the
+ * outcome ("what worked" tags, lesson text): those are ticked on winners,
+ * so they would always look like they pay.
  */
 import { compare, type Comparison } from './compare';
 import { nPerGroup } from './power';
@@ -17,8 +23,9 @@ import { allThemes, themesWith, type ThemeWord } from './text';
 import type { Trade } from '../types';
 import type { Thresholds } from './verdict';
 import { breaksKey, memo, tradesKey } from './memo';
+import { PREDICTORS, type FieldDef, type FieldValue } from './fields';
 
-export type FocusKind = 'rule' | 'theme' | 'state' | 'entry' | 'worked' | 'clean';
+export type FocusKind = 'rule' | 'theme' | 'state' | 'entry' | 'setup' | 'clean';
 export interface FocusItem {
   kind: FocusKind; key: string; label: string;
   n: number; recent: number; cmp: Comparison; priority: number;
@@ -77,17 +84,16 @@ function weeklyFocusUncached(trades: readonly Trade[], breaks: (t: Trade) => Bre
   for (const s of STATES) add('state', s.key, s.label, (t) => { const x = st(t); return x ? s.test(x) : false; }, s.experiment);
   const methods = new Set(trades.map((t) => t.entry_method).filter(Boolean) as string[]);
   for (const m of methods) add('entry', m, `Entry: ${m}`, (t) => t.entry_method === m, `No “${m}” entries.`);
-  // Strengths: things that keep the plan, never a break.
+  // Strengths: things that keep the plan, never a break — and only what was known before the entry.
   add('clean', 'no-break', 'Inside every rule', (_, i) => br[i].length === 0, null);
-  const worked = new Set(trades.flatMap((t) => (t.worked_tags ?? []) as string[]));
-  for (const w of worked) add('worked', w, w, (t) => ((t.worked_tags ?? []) as string[]).includes(w), null);
+  for (const { f, level, label } of strengthLevels(trades)) add('setup', `${f.key}=${String(level)}`, label, (t) => f.get(t) === level, null);
   add('state', 'first', 'The first trade of the day', (t) => st(t)?.tradeNo === 1, null);
 
   const freq = (x: FocusItem) => (recentN ? x.recent / recentN : 0);
-  const leaks = items.filter((x) => x.kind !== 'clean' && x.kind !== 'worked' && x.key !== 'first' && x.cmp.diff < 0)
+  const leaks = items.filter((x) => x.kind !== 'clean' && x.kind !== 'setup' && x.key !== 'first' && x.cmp.diff < 0)
     .map((x) => ({ ...x, priority: (1 - x.cmp.pBetter) * Math.abs(x.cmp.diff) * freq(x) }))
     .sort((a, b) => b.priority - a.priority || a.cmp.diff - b.cmp.diff);
-  const strengths = items.filter((x) => (x.kind === 'clean' || x.kind === 'worked' || x.key === 'first' || x.kind === 'entry') && x.cmp.diff > 0)
+  const strengths = items.filter((x) => (x.kind === 'clean' || x.kind === 'setup' || x.key === 'first') && x.cmp.diff > 0)
     .map((x) => ({ ...x, priority: x.cmp.pBetter * x.cmp.diff * freq(x) }))
     .sort((a, b) => b.priority - a.priority);
   const leak = leaks.find((x) => x.priority > 0) ?? leaks[0] ?? null;
@@ -100,4 +106,30 @@ function weeklyFocusUncached(trades: readonly Trade[], breaks: (t: Trade) => Bre
     ? { text: leak.experiment, from: leak.label, n: sd ? Math.min(400, Math.max(10, nPerGroup(sd, Math.max(0.25, Math.abs(leak.cmp.diff))))) : 30 }
     : null;
   return { leak, leakClear: Boolean(leak && leak.cmp.verdict.level !== 'too-early'), strength, experiment, candidates: leaks.slice(0, 5) };
+}
+
+/**
+ * Setup levels that may be a strength: objective pre-trade fields only, never the
+ * state fields (a good 3rd trade is not a reason to take more), never a level
+ * that breaks the plan (anticipating the close, outside the killzone, against
+ * the bias, into an EQ pool, overlapping gaps, no liquidity event), and for a
+ * yes/no field only the "yes".
+ */
+const STATE_FIELDS = new Set(['trade_no', 'after_result', 'losses_in_row_before', 'day_r_before', 'news_conflict', 'into_eq_pool', 'pre_state']);
+export const PLAN_BREAKING: Record<string, readonly FieldValue[]> = {
+  entry_method: ['Before close (anticipation)'], killzone: ['Outside'], fvg_overlap: ['Overlapping gaps'],
+  liquidity_event: ['None'], sweep_tier: ['none'], fvg_quality: ['Drift'], target_type: ['Other'],
+};
+export function strengthLevels(trades: readonly Trade[], fields: readonly FieldDef[] = PREDICTORS): Array<{ f: FieldDef; level: FieldValue; label: string }> {
+  const out: Array<{ f: FieldDef; level: FieldValue; label: string }> = [];
+  for (const f of fields) {
+    // Objective fields only: a judgement (bias clear, FVG strong) ticked after the outcome can carry the result.
+    if (f.timing !== 'pre' || !f.objective || STATE_FIELDS.has(f.key) || f.kind === 'num') continue;
+    const levels = f.kind === 'bool' ? [true] : [...new Set(trades.map((t) => f.get(t)).filter((v) => v != null))];
+    for (const level of levels) {
+      if (PLAN_BREAKING[f.key]?.includes(level)) continue;
+      out.push({ f, level, label: f.kind === 'bool' ? f.label : `${f.label}: ${String(level)}` });
+    }
+  }
+  return out;
 }

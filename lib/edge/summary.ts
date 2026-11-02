@@ -48,7 +48,7 @@ export function summarize(i: {
   points.push(leak ? {
     id: 'fix', title: 'Fix first', tone: focus.leakClear ? 'bad' : 'watch',
     headline: leak.label.replace(/^Broke: /, 'Breaking “') + (leak.label.startsWith('Broke: ') ? '”' : ''),
-    body: `${focus.leakClear ? 'It costs' : 'It may cost'} about ${A(leak.cmp.diff)} each time (${leak.n} trade${leak.n === 1 ? '' : 's'}, ${leak.recent} of your last 20).${leak.experiment ? ` Try: ${leak.experiment}` : ''}${focus.leakClear ? '' : ' Not proven yet — your best candidate.'}`,
+    body: `${focus.leakClear ? 'It costs' : 'It may cost'} about ${A(leak.cmp.diff)} each time (80% between ${R(leak.cmp.lo80)} and ${R(leak.cmp.hi80)}; ${leak.n} trade${leak.n === 1 ? '' : 's'}, ${leak.recent} of your last 20).${leak.experiment ? ` Try: ${leak.experiment}` : ''}${focus.leakClear ? '' : ' Not proven yet — your best candidate.'}`,
     href: '#focus',
   } : { id: 'fix', title: 'Fix first', tone: 'neutral', headline: 'Nothing stands out yet', body: 'No mistake, rule break or habit costs you clearly more than the rest. Keep logging.' });
 
@@ -56,7 +56,7 @@ export function summarize(i: {
   const s = focus.strength;
   points.push(s ? {
     id: 'keep', title: 'Keep doing', tone: 'good', headline: s.label,
-    body: `Trades with it did ${A(s.cmp.diff)} better each (${s.n} trade${s.n === 1 ? '' : 's'}).${s.cmp.verdict.level === 'too-early' ? ' Early — but worth protecting.' : ''}`,
+    body: `Trades with it did ${A(s.cmp.diff)} better each — 80% between ${R(s.cmp.lo80)} and ${R(s.cmp.hi80)}, ${s.n} trade${s.n === 1 ? '' : 's'}, from what you knew before the entry.${s.cmp.verdict.level === 'too-early' ? ' Too early to call — worth protecting, not yet proven.' : ''}`,
   } : { id: 'keep', title: 'Keep doing', tone: 'neutral', headline: 'Nothing proven yet', body: 'As your trades add up, the habit that pays most shows up here.' });
 
   // 4. Rules.

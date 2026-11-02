@@ -1,5 +1,5 @@
 import {
-  ACCOUNT_VALUES, DIRECTIONS, SESSIONS, isDated, isReal, marketDay,
+  ACCOUNT_VALUES, DIRECTIONS, SESSIONS, isDated, isHypothetical, isReal, marketDay,
   type Account, type Direction, type Session,
 } from './domain';
 import { localDay } from './day';
@@ -114,4 +114,21 @@ export function accountParam(accounts: readonly string[], available: readonly st
 /** Whether a selection mixes real trades with replays or missed setups. */
 export function mixesWorlds(accounts: readonly Account[]): boolean {
   return accounts.some((a) => isReal(a)) && accounts.some((a) => !isReal(a));
+}
+
+/**
+ * The trades every number on Stats is computed from. Backtests stay in when
+ * you select them with real accounts ("All accounts" means all — the page
+ * says the total is mixed). Missed setups never do: they were not taken, so
+ * they never join an expectancy, an equity curve or a rule count, whatever
+ * else is selected. They are measured on their own (select Missed alone) and
+ * in the hesitation section. What was left out is counted so the page can
+ * say so.
+ */
+export function measuredTrades<T extends { account: Account }>(trades: readonly T[], scope: Pick<StatsScope, 'accounts'>): { inView: T[]; leftOut: Array<{ account: Account; n: number }> } {
+  const others = scope.accounts.some((a) => !isHypothetical(a));
+  if (!others) return { inView: [...trades], leftOut: [] };
+  const leftOut = scope.accounts.filter((a) => isHypothetical(a))
+    .map((account) => ({ account, n: trades.filter((t) => t.account === account).length }));
+  return { inView: trades.filter((t) => !isHypothetical(t.account)), leftOut };
 }

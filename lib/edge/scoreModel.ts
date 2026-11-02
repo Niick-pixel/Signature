@@ -9,8 +9,12 @@
  *
  *   features standardised (z = (x − mean) / sd), missing → the feature's mean
  *   prior   β₀_j = s · points_j · sd_j   (your points in R, via one scale s)
- *   s       fitted freely by least squares of R on the points-weighted sum,
- *           floored at 0 (a prior is your rubric, never its reverse)
+ *   s       the scale has its own prior: 100 vs 70 points ≈ +0.3R
+ *           (s₀ = 0.01 R per point, SD 0.2R per 30 points). The least-squares
+ *           slope of R on the points-weighted sum updates it like any other
+ *           Normal mean, floored at 0 (a prior is your rubric, never its
+ *           reverse). Fitted freely, a few dozen noisy trades sent s to 0 and
+ *           flattened your rubric — the prior then said nothing at all.
  *   post    β = (XᵀWX + λI)⁻¹ (XᵀW(y − ȳ) + λβ₀),  λ = n₀ = 40 pseudo-trades
  *   cov     σ² (XᵀWX + λI)⁻¹,  σ² from the weighted residuals
  *
@@ -33,6 +37,19 @@ import { datasetHash } from './engine';
 import type { Trade } from '../types';
 
 export const N0 = 40; export const WF_START = 20;
+/** The scale's prior: 30 points of rubric ≈ 0.3R, with an SD of 0.2R per 30 points. */
+export const S_PRIOR = 0.3 / 30; export const S_PRIOR_SD = 0.2 / 30;
+
+/**
+ * The scale's posterior mean (Normal prior, Normal likelihood): the slope of R
+ * on the points sum, weighted by its precision Σ(P − P̄)² / σ², against the
+ * prior's 1 / S_PRIOR_SD². σ² is the variance of R. Floored at 0.
+ */
+export function scalePosterior(slope: number | null, sumSqDevP: number, sigma2: number): number {
+  const prior = 1 / S_PRIOR_SD ** 2;
+  const data = slope != null && sumSqDevP > 0 && sigma2 > 0 ? sumSqDevP / sigma2 : 0;
+  return Math.max(0, (prior * S_PRIOR + data * (slope ?? 0)) / (prior + data));
+}
 
 export interface ScoreFeature { key: string; label: string; points: number; get: (t: Trade) => number | null }
 
@@ -70,7 +87,8 @@ export function fitScore(X: readonly number[][], y: readonly number[], w: readon
   const P = X.map((r) => r.reduce((a, v, j) => a + features[j].points * v, 0));
   const pm = P.reduce((a, v, i) => a + w[i] * v, 0) / W;
   const vp = P.reduce((a, v, i) => a + w[i] * (v - pm) ** 2, 0);
-  const s = vp > 0 ? Math.max(0, P.reduce((a, v, i) => a + w[i] * (v - pm) * (y[i] - ybar), 0) / vp) : 0;
+  const vy = y.reduce((a, v, i) => a + w[i] * (v - ybar) ** 2, 0) / W;
+  const s = scalePosterior(vp > 0 ? P.reduce((a, v, i) => a + w[i] * (v - pm) * (y[i] - ybar), 0) / vp : null, vp, vy);
   const beta0 = features.map((f, j) => s * f.points * sd[j]);
   const A = zeros(p); const rhs = new Array(p).fill(0);
   for (let i = 0; i < n; i++) for (let j = 0; j < p; j++) {
@@ -88,15 +106,59 @@ export function fitScore(X: readonly number[][], y: readonly number[], w: readon
 
 export const predict = (f: Fit, x: readonly number[]) => f.intercept + x.reduce((a, v, j) => a + (f.sd[j] > 0 ? ((v - f.mean[j]) / f.sd[j]) * f.beta[j] : 0), 0);
 
-export interface Weight { key: string; label: string; points: number; prior: number; learned: number; lo80: number; hi80: number; chip: 'earning' | 'overweighted' | 'too-early' | 'none' }
+export interface Weight {
+  key: string; label: string; points: number; prior: number; learned: number; lo80: number; hi80: number; chip: 'earning' | 'overweighted' | 'too-early' | 'none';
+  /** Items that were yes and no on exactly the same trades: the model cannot tell them apart, so they are shown as one. */
+  members?: string[];
+}
 
 /** Per feature: R when present vs absent (raw units) — your points in R, and what the data now says. */
-export function weights(f: Fit, n: number, features = SCORE_FEATURES): Weight[] {
+const chipOf = (n: number, learned: number, half: number, prior: number, points: number): Weight['chip'] =>
+  n < 30 ? 'too-early' : learned - half > 0 && learned - half >= prior * 0.5 ? 'earning' : points > 0 && learned + half < prior ? 'overweighted' : 'too-early';
+
+/**
+ * Columns that move together: identical on every trade in the design (same
+ * yes/no on the same trades, missing filled alike). Ridge splits their effect
+ * evenly between them, so each alone would show the same made-up number.
+ * Only columns with variation; each group has 2+ members, in feature order.
+ */
+export function collinearGroups(X: readonly number[][], features = SCORE_FEATURES): number[][] {
+  const byCol = new Map<string, number[]>();
+  features.forEach((_, j) => {
+    const col = X.map((r) => r[j]);
+    if (col.every((v) => v === col[0])) return;
+    const key = col.map((v) => v.toFixed(9)).join(',');
+    byCol.set(key, [...(byCol.get(key) ?? []), j]);
+  });
+  return [...byCol.values()].filter((g) => g.length > 1);
+}
+
+export function weights(f: Fit, n: number, features = SCORE_FEATURES, groups: readonly number[][] = []): Weight[] {
+  const each = weightsEach(f, n, features);
+  if (!groups.length) return each;
+  const inGroup = new Map<number, number[]>(); for (const g of groups) for (const j of g) inGroup.set(j, g);
+  const out: Weight[] = [];
+  features.forEach((ft, j) => {
+    const g = inGroup.get(j);
+    if (!g) { out.push(each[j]); return; }
+    if (g[0] !== j) return;
+    // Both present vs both absent: the sum of the raw-unit effects, with the summed (co)variance.
+    const learned = g.reduce((a, k) => a + f.beta[k] / f.sd[k], 0);
+    const v = g.reduce((a, k) => a + g.reduce((b, l) => b + f.cov[k][l] / (f.sd[k] * f.sd[l]), 0), 0);
+    const half = Z80 * Math.sqrt(Math.max(0, v));
+    const points = g.reduce((a, k) => a + features[k].points, 0); const prior = f.s * points;
+    out.push({ key: g.map((k) => features[k].key).join('+'), label: g.map((k) => features[k].label).join(' + '), points, prior, learned, lo80: learned - half, hi80: learned + half,
+      chip: chipOf(n, learned, half, prior, points), members: g.map((k) => features[k].label) });
+  });
+  return out;
+}
+
+function weightsEach(f: Fit, n: number, features = SCORE_FEATURES): Weight[] {
   return features.map((ft, j) => {
     const sd = f.sd[j];
     if (!(sd > 0)) return { key: ft.key, label: ft.label, points: ft.points, prior: f.s * ft.points, learned: f.s * ft.points, lo80: NaN, hi80: NaN, chip: 'none' as const };
     const learned = f.beta[j] / sd; const half = (Z80 * Math.sqrt(f.cov[j][j])) / sd; const prior = f.s * ft.points;
-    const chip = n < 30 ? 'too-early' : learned - half > 0 && learned - half >= prior * 0.5 ? 'earning' : ft.points > 0 && learned + half < prior ? 'overweighted' : 'too-early';
+    const chip = chipOf(n, learned, half, prior, ft.points);
     return { key: ft.key, label: ft.label, points: ft.points, prior, learned, lo80: learned - half, hi80: learned + half, chip };
   });
 }
@@ -152,10 +214,10 @@ export function walkForward(trades: readonly Trade[], features = SCORE_FEATURES,
   const N = trades.length; if (N <= WF_START + 4) return null;
   const X = design(trades, features); const y = trades.map((t) => t.r_multiple as number); const p = features.length;
   const cs = trades.map((t) => t.checklist_score ?? 0);
-  const Sx = new Array(p).fill(0); const Sxx = zeros(p); const Sxy = new Array(p).fill(0); let Sy = 0; const pts = features.map((f) => f.points);
+  const Sx = new Array(p).fill(0); const Sxx = zeros(p); const Sxy = new Array(p).fill(0); let Sy = 0; let Syy = 0; const pts = features.map((f) => f.points);
   let SP = 0; let SPP = 0; let SPy = 0; let Sc = 0; let Scc = 0; let Scy = 0;
   const add = (i: number) => {
-    const x = X[i]; Sy += y[i]; const P = x.reduce((a, v, j) => a + pts[j] * v, 0); SP += P; SPP += P * P; SPy += P * y[i];
+    const x = X[i]; Sy += y[i]; Syy += y[i] * y[i]; const P = x.reduce((a, v, j) => a + pts[j] * v, 0); SP += P; SPP += P * P; SPy += P * y[i];
     Sc += cs[i]; Scc += cs[i] * cs[i]; Scy += cs[i] * y[i];
     for (let j = 0; j < p; j++) { Sx[j] += x[j]; Sxy[j] += x[j] * y[i]; for (let k = 0; k <= j; k++) Sxx[j][k] += x[j] * x[k]; }
   };
@@ -164,7 +226,8 @@ export function walkForward(trades: readonly Trade[], features = SCORE_FEATURES,
   for (let t = WF_START; t < N; t++) {
     const n = t; const mean = Sx.map((v) => v / n); const ybar = Sy / n;
     const sd = mean.map((m, j) => Math.sqrt(Math.max(0, Sxx[j][j] / n - m * m)));
-    const pm = SP / n; const vp = SPP / n - pm * pm; const s = vp > 1e-12 ? Math.max(0, (SPy / n - pm * ybar) / vp) : 0;
+    const pm = SP / n; const vp = SPP / n - pm * pm;
+    const s = scalePosterior(vp > 1e-12 ? (SPy / n - pm * ybar) / vp : null, vp > 1e-12 ? vp * n : 0, Math.max(0, Syy / n - ybar * ybar));
     const A = zeros(p); const rhs = new Array(p).fill(0);
     for (let j = 0; j < p; j++) {
       const dj = sd[j] > 0 ? sd[j] : 0;
@@ -215,5 +278,5 @@ export function scoreModel(trades: readonly Trade[], opts: { halfLife?: number |
 function scoreModelUncached(trades: readonly Trade[], opts: { halfLife?: number | null }): ScoreModel | null {
   const X = design(trades); const y = trades.map((t) => t.r_multiple as number);
   const fit = fitScore(X, y, recencyWeights(trades.length, opts.halfLife ?? null));
-  return { fit, weights: weights(fit, trades.length), wf: walkForward(trades), n: trades.length };
+  return { fit, weights: weights(fit, trades.length, SCORE_FEATURES, collinearGroups(X)), wf: walkForward(trades), n: trades.length };
 }
