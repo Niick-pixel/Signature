@@ -11,6 +11,18 @@ import { openFocus, startTimer } from '@/lib/studyTimer';
 import { localDay } from '@/lib/day';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import type { Trade } from '@/lib/types';
+import type { StudyPlan } from '@/db/studyHub';
+import { motion } from 'framer-motion';
+import { springSnappy } from '@/lib/motion';
+import { TodayTab, type HubTab } from './hub/TodayTab';
+import { Flashcards, type CardStats } from './hub/Flashcards';
+import { Lessons } from './hub/Lessons';
+import { Drills } from './hub/Drills';
+import { WatchLater } from './hub/WatchLater';
+
+const TABS: HubTab[] = ['today', 'cards', 'lessons', 'drills', 'notes', 'later'];
+const TAB_LABEL: Record<HubTab, string> = { today: 'Today', cards: 'Flashcards', lessons: 'Lessons', drills: 'Drills', notes: 'Notes', later: 'Watch later' };
+const TAB_KEY = 'signature:study-tab';
 
 interface LinkedTrade { id: string; role: 'example' | 'counter'; date: string; undated: boolean; setup: string; direction: string; account: string; outcome: string; r: number | null; grade: string; shot: string | null }
 interface Detail { note: StudyNote; trades: LinkedTrade[]; marks: VideoMark[] }
@@ -33,12 +45,35 @@ export function StudyRoom() {
   const [query, setQuery] = useState('');
   const [totals, setTotals] = useState<StudyTotals | null>(null);
 
+
   const loadNotes = useCallback(() => fetch('/api/study/notes').then((r) => r.json()).then((j) => setNotes(j.notes)).catch(() => {}), []);
   const loadTotals = useCallback(() => fetch(`/api/study/sessions?today=${localDay()}&goal=${prefs.studyGoal}`).then((r) => r.json()).then((j) => setTotals(j.totals)).catch(() => {}), [prefs.studyGoal]);
   useEffect(() => { void loadNotes(); }, [loadNotes]);
   useEffect(() => { void loadTotals(); window.addEventListener(JOURNAL_CHANGED, loadTotals); return () => window.removeEventListener(JOURNAL_CHANGED, loadTotals); }, [loadTotals]);
   useEffect(() => { if (!selected && notes?.length) setSelected(notes[0].id); }, [notes, selected]);
-
+  // The server renders Today; the remembered tab is applied after hydration (no mismatch).
+  const [tab, setTab] = useState<HubTab>('today');
+  const [plan, setPlan] = useState<StudyPlan | null>(null);
+  const [cardStats, setCardStats] = useState<CardStats | null>(null);
+  const [drillsWeek, setDrillsWeek] = useState<number | null>(null);
+  const [waiting, setWaiting] = useState<number | null>(null);
+  useEffect(() => {
+    try { const v = window.localStorage.getItem(TAB_KEY) as HubTab | null; if (v && TABS.includes(v)) setTab(v); } catch { /* fresh */ }
+    fetch('/api/study/plan').then((r) => r.json()).then(setPlan).catch(() => setPlan({ leak: null, examples: [], trades: 0 }));
+    fetch(`/api/study/drills?today=${localDay()}`).then((r) => r.json()).then((d) => setDrillsWeek(d.counter.thisWeek)).catch(() => {});
+    fetch('/api/study/later').then((r) => r.json()).then((d) => setWaiting(d.items.filter((w: { done_at: string | null }) => !w.done_at).length)).catch(() => {});
+  }, []);
+  const focusIds = useMemo(() => plan?.leak?.tradeIds ?? [], [plan]);
+  useEffect(() => {
+    if (cardStats || !plan) return;
+    fetch(`/api/study/cards?today=${localDay()}&focus=${focusIds.join(',')}`).then((r) => r.json()).then((j) => setCardStats(j.stats)).catch(() => {});
+  }, [plan, focusIds, cardStats]);
+  const go = useCallback((t: HubTab) => { setTab(t); try { window.localStorage.setItem(TAB_KEY, t); } catch { /* fine */ } }, []);
+  const openNote = useCallback((id: string) => { void loadNotes(); setSelected(id); go('notes'); }, [go, loadNotes]);
+  const writePlaybook = async (title: string, body: string) => {
+    const r = await fetch('/api/study/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'playbook', title, body }) });
+    const j = await r.json(); openNote(j.note.id);
+  };
   const create = async (kind: StudyKind) => {
     const r = await fetch('/api/study/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kind, title: kind === 'playbook' ? 'New playbook' : kind === 'video' ? 'New video' : 'New note' }) });
@@ -54,7 +89,7 @@ export function StudyRoom() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Study room</h1>
-          <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>Notes, playbooks and video notes — each with the trades that show it.</p>
+          <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>Study what costs you: your own trades as flashcards, your lessons, drills, notes and videos.</p>
         </div>
         <div className="flex items-center gap-4">
           {totals && (
@@ -88,39 +123,64 @@ export function StudyRoom() {
       )}
       {prefs.quoteInStudy && <QuoteOfDay className="mt-6" />}
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[18rem_1fr]">
-        <aside className="glass flex max-h-[calc(100dvh-14rem)] min-h-[24rem] flex-col rounded-[calc(20px*var(--rk))] p-3" data-card>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes" aria-label="Search notes" className={INPUT} style={ST} />
-          <div className="mt-2 flex flex-wrap gap-1">
-            {(['all', ...STUDY_KINDS] as const).map((k) => (
-              <button key={k} type="button" onClick={() => setFilter(k)} className="rounded-full px-2 py-0.5 text-[11px]"
-                style={filter === k ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-faint)' }}>{k === 'all' ? 'All' : STUDY_KIND_LABEL[k]}</button>
-            ))}
-          </div>
-          <ul className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto" data-study-list={shown.length}>
-            {shown.map((n) => (
-              <li key={n.id}>
-                <button type="button" onClick={() => setSelected(n.id)} className="w-full rounded-[10px] px-2.5 py-2 text-left"
-                  style={{ background: selected === n.id ? 'var(--glass-fill-strong, var(--glass-fill))' : undefined }}>
-                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium">
-                    {n.pinned && <span style={{ color: 'rgb(var(--accent))' }}>●</span>}<span className="truncate">{n.title || 'Untitled'}</span>
-                  </div>
-                  <div className="truncate text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{STUDY_KIND_LABEL[n.kind]}{n.tags.length ? ` · ${n.tags.join(', ')}` : ''}</div>
-                </button>
-              </li>
-            ))}
-            {notes && !notes.length && <li className="px-2 py-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Nothing yet. Start with a playbook for the setup you trade most — the steps, in your words, with an A+ example and one that failed.</li>}
-          </ul>
-          <div className="mt-2 grid grid-cols-3 gap-1">
-            {STUDY_KINDS.map((k) => <button key={k} type="button" onClick={() => create(k)} className="rounded-full border px-2 py-1 text-[11px] font-medium" style={ST}>+ {k === 'video' ? 'Video' : STUDY_KIND_LABEL[k]}</button>)}
-          </div>
-        </aside>
-        {selected ? <Editor key={selected} id={selected} onChanged={loadNotes} onDeleted={() => {
-          // Out of the list at once, so the editor never reopens a note that is gone.
-          const rest = (notes ?? []).filter((x) => x.id !== selected);
-          setNotes(rest); setSelected(rest[0]?.id ?? null); void loadNotes();
-        }} /> : (
-          <div className="glass grid min-h-[24rem] place-items-center rounded-[calc(20px*var(--rk))] text-[12.5px]" style={{ color: 'var(--text-faint)' }} data-card>Pick a note, or start one.</div>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3" data-study-tabs>
+        <nav className="glass flex flex-wrap gap-1 rounded-full p-1" aria-label="Study room">
+          {TABS.map((t) => {
+            const n = t === 'cards' && cardStats ? cardStats.due + cardStats.fresh : t === 'later' ? waiting : null;
+            const on = tab === t;
+            return (
+              <button key={t} type="button" onClick={() => go(t)} data-study-tab={t} aria-current={on}
+                className="relative rounded-full px-3.5 py-1.5 text-[12.5px] font-medium" style={{ color: on ? 'var(--text)' : 'var(--text-dim)' }}>
+                {on && <motion.span layoutId="study-tab" transition={springSnappy} className="absolute inset-0 rounded-full" style={{ background: 'var(--glass-fill-strong)', border: '1px solid var(--glass-stroke)' }} />}
+                <span className="relative">{TAB_LABEL[t]}{n ? <span className="ml-1.5 rounded-full px-1.5 text-[10.5px] tabular-nums" style={{ background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' }}>{n}</span> : null}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="mt-4">
+        {tab === 'today' && <TodayTab plan={plan} cards={cardStats} drillsThisWeek={drillsWeek} waiting={waiting} go={go} writePlaybook={writePlaybook} />}
+        {tab === 'cards' && <Flashcards focus={focusIds} onStats={setCardStats} />}
+        {tab === 'lessons' && <Lessons />}
+        {tab === 'drills' && <Drills />}
+        {tab === 'later' && <WatchLater onOpenNote={openNote} />}
+        {tab === 'notes' && (
+        <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
+          <aside className="glass flex max-h-[calc(100dvh-14rem)] min-h-[24rem] flex-col rounded-[calc(20px*var(--rk))] p-3" data-card>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes" aria-label="Search notes" className={INPUT} style={ST} />
+            <div className="mt-2 flex flex-wrap gap-1">
+              {(['all', ...STUDY_KINDS] as const).map((k) => (
+                <button key={k} type="button" onClick={() => setFilter(k)} className="rounded-full px-2 py-0.5 text-[11px]"
+                  style={filter === k ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-faint)' }}>{k === 'all' ? 'All' : STUDY_KIND_LABEL[k]}</button>
+              ))}
+            </div>
+            <ul className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto" data-study-list={shown.length}>
+              {shown.map((n) => (
+                <li key={n.id}>
+                  <button type="button" onClick={() => setSelected(n.id)} className="w-full rounded-[10px] px-2.5 py-2 text-left"
+                    style={{ background: selected === n.id ? 'var(--glass-fill-strong, var(--glass-fill))' : undefined }}>
+                    <div className="flex items-center gap-1.5 text-[12.5px] font-medium">
+                      {n.pinned && <span style={{ color: 'rgb(var(--accent))' }}>●</span>}<span className="truncate">{n.title || 'Untitled'}</span>
+                    </div>
+                    <div className="truncate text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{STUDY_KIND_LABEL[n.kind]}{n.tags.length ? ` · ${n.tags.join(', ')}` : ''}</div>
+                  </button>
+                </li>
+              ))}
+              {notes && !notes.length && <li className="px-2 py-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Nothing yet. Start with a playbook for the setup you trade most — the steps, in your words, with an A+ example and one that failed.</li>}
+            </ul>
+            <div className="mt-2 grid grid-cols-3 gap-1">
+              {STUDY_KINDS.map((k) => <button key={k} type="button" onClick={() => create(k)} className="rounded-full border px-2 py-1 text-[11px] font-medium" style={ST}>+ {k === 'video' ? 'Video' : STUDY_KIND_LABEL[k]}</button>)}
+            </div>
+          </aside>
+          {selected ? <Editor key={selected} id={selected} onChanged={loadNotes} onDeleted={() => {
+            // Out of the list at once, so the editor never reopens a note that is gone.
+            const rest = (notes ?? []).filter((x) => x.id !== selected);
+            setNotes(rest); setSelected(rest[0]?.id ?? null); void loadNotes();
+          }} /> : (
+            <div className="glass grid min-h-[24rem] place-items-center rounded-[calc(20px*var(--rk))] text-[12.5px]" style={{ color: 'var(--text-faint)' }} data-card>Pick a note, or start one.</div>
+          )}
+        </div>
         )}
       </div>
     </div>

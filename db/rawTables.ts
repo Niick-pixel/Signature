@@ -15,6 +15,8 @@ import { getDb } from './index';
 export const RAW_TABLES = [
   'trade_screenshots', 'board_notes', 'board_edges', 'app_settings',
   'trade_edits', 'trade_partials', 'playbooks', 'flag_dismissals',
+  // 039: flashcard progress and the watch-later list.
+  'study_cards', 'watch_later',
 ] as const;
 
 export function exportRawTables(): { raw_tables: Record<string, Record<string, unknown>[]> } {

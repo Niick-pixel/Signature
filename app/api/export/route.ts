@@ -157,7 +157,8 @@ export async function GET() {
     // An older file simply has no key for the newer things, which the
     // importer reads as "none" rather than as an error.
     // 17: the tables the export used to miss (db/rawTables) and every gallery chart's file.
-    version: 17,
+    // 18: flashcard progress and the watch-later list (raw tables).
+    version: 18,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
