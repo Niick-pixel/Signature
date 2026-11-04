@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
 import { HomeReview } from '@/components/review/HomeReview';
+import { Card } from './Card';
+import { DashRow, DashRowEditor } from './DashRow';
 import { PropMini } from '@/components/prop/PropMini';
 import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
@@ -33,6 +35,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
   const filtered = chosen.length > 0 || f.period !== 'all' || f.sessions.length > 0 || f.dirs.length > 0;
   const nFilters = (chosen.length ? 1 : 0) + (f.period !== 'all' ? 1 : 0) + (f.sessions.length ? 1 : 0) + (f.dirs.length ? 1 : 0);
   const [open, setOpen] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const [picked, setPicked] = useState<DashboardData | null>(null);
   // Filtered views are worked out on the server (app/api/dashboard); the three unfiltered worlds come with the page.
   const query = `accounts=${encodeURIComponent(chosen.join(','))}&world=${prefs.dashWorld}&period=${f.period}&session=${encodeURIComponent(f.sessions.join(','))}&dir=${encodeURIComponent(f.dirs.join(','))}&today=${today}`;
@@ -67,6 +70,9 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           <Chip on={open || nFilters > 0} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" data="filters">
             Filters{nFilters ? ` · ${nFilters}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
           </Chip>
+          <Chip on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data="cards">
+            Cards <span aria-hidden className="inline-block transition-transform" style={{ transform: arranging ? 'rotate(180deg)' : 'none' }}>▾</span>
+          </Chip>
           <Chip on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data="hide-pnl">
             {prefs.hidePnl ? 'Show P&L' : 'Hide P&L'}
           </Chip>
@@ -75,6 +81,12 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           </Chip>
         </div>
       </header>
+
+      {arranging && (
+        <div className="glass mb-3 rounded-[calc(18px*var(--rk))] px-4 py-3" data-dash-arrange>
+          <DashRowEditor />
+        </div>
+      )}
 
       {open && (
         <div className="glass mb-3 grid gap-x-6 gap-y-2.5 rounded-[calc(18px*var(--rk))] px-4 py-3 sm:grid-cols-[auto_1fr]" data-dash-filters>
@@ -126,13 +138,11 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
               {b.week && <Card title="This week" note="Net per day" grow><Week d={d} money={money} today={today} /></Card>}
             </div>
           )}
-          {(b.score || b.recent || b.prop) && (
-            <div className="grid gap-3 lg:grid-cols-[1.25fr_1fr_0.8fr]">
-              {b.score && <Card title="Discipline score" note="Hover an axis for what it measures"><Score d={d} enabled={prefs.scoreAxes} /></Card>}
-              {b.recent && <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>}
-              {b.prop && <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} empty={null} />}
-            </div>
-          )}
+          <DashRow slots={prefs.dashRow} d={d} money={money} builtIn={{
+            score: <Card title="Discipline score" note="Hover an axis for what it measures"><Score d={d} enabled={prefs.scoreAxes} /></Card>,
+            recent: <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>,
+            prop: <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} empty={null} />,
+          }} />
         </div>
       )}
     </div>
@@ -167,18 +177,6 @@ function Chip({ on = false, onClick, title, children, data }: { on?: boolean; on
   );
 }
 
-function Card({ title, note, children, grow }: { title: string; note?: string; children: React.ReactNode; grow?: boolean }) {
-  return (
-    <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={springSoft}
-      className={`glass flex min-h-0 flex-col rounded-[calc(20px*var(--rk))] px-4 py-3.5 ${grow ? 'h-full' : ''}`}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{title}</h2>
-        {note && <span className="truncate text-[10px]" style={{ color: 'var(--text-faint)' }}>{note}</span>}
-      </div>
-      <div className={`mt-2 ${grow ? 'min-h-0 flex-1' : ''}`}>{children}</div>
-    </motion.section>
-  );
-}
 
 function Hero({ d, money }: { d: DashboardData; money: boolean }) {
   const main = money ? d.total.money : d.total.r;

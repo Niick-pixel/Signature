@@ -61,6 +61,8 @@ export interface Preferences {
   dashUnit: 'money' | 'r';
   /** Each Dashboard block, on or off. */
   dashBlocks: Record<DashBlock, boolean>;
+  /** The bottom row: cards, in order, narrow (1) or wide (2). */
+  dashRow: DashSlot[];
   /** The discipline score's axes, on or off (off axes leave the average). */
   scoreAxes: Record<ScoreAxis, boolean>;
   /** The Today panel on the right: off, on the Dashboard, or on every screen. */
@@ -176,6 +178,44 @@ export const TRADE_SECTION_LABEL: Record<TradeSection, string> = {
 };
 
 export const DASH_BLOCKS = ['hero', 'tiles', 'chart', 'week', 'score', 'recent', 'prop'] as const;
+/** The blocks still switched on and off; the bottom row is built from DASH_CARDS instead. */
+export const DASH_FIXED_BLOCKS = ['hero', 'tiles', 'chart', 'week'] as const;
+
+/**
+ * The Dashboard's bottom row: up to four cards from this catalogue, in your
+ * order, each narrow or wide. A card with nothing to show (no prop accounts)
+ * steps aside and the others widen — no gaps.
+ */
+export const DASH_CARDS = ['score', 'recent', 'prop', 'process', 'study', 'goals', 'fix', 'month', 'news', 'quote'] as const;
+export type DashCard = (typeof DASH_CARDS)[number];
+export const DASH_ROW_MAX = 4;
+export interface DashSlot { id: DashCard; size: 1 | 2 }
+export const DASH_CARD_INFO: Record<DashCard, { label: string; hint: string }> = {
+  score: { label: 'Discipline score', hint: 'The score and its axes.' },
+  recent: { label: 'Recent trades', hint: 'The last five, click to open.' },
+  prop: { label: 'Prop accounts', hint: 'Room left on each active account. Hidden when you have none.' },
+  process: { label: 'Process this week', hint: 'The rings for each trading day and the streak.' },
+  study: { label: 'Study', hint: 'Minutes today, the study streak, flashcards due.' },
+  goals: { label: 'Goals', hint: 'Each goal, its streak, and today.' },
+  fix: { label: 'Fix first', hint: 'What costs you most right now, from Stats. Information, never a signal.' },
+  month: { label: 'This month', hint: 'Every day of the month, by what it made or lost.' },
+  news: { label: "Today's news", hint: 'High and medium releases today, in your currencies.' },
+  quote: { label: "Today's line", hint: 'The quote of the day, as a card.' },
+};
+export const DEFAULT_DASH_ROW: DashSlot[] = [{ id: 'score', size: 2 }, { id: 'recent', size: 2 }, { id: 'prop', size: 1 }];
+export function parseDashRow(raw: unknown, blocks?: Partial<Record<string, boolean>>): DashSlot[] {
+  if (!Array.isArray(raw)) {
+    // Before the row was modular: the three blocks that were switched on.
+    return blocks ? DEFAULT_DASH_ROW.filter((s) => blocks[s.id] !== false) : DEFAULT_DASH_ROW;
+  }
+  const seen = new Set<string>();
+  return raw.flatMap((x) => {
+    const id = (x as DashSlot)?.id;
+    if (!(DASH_CARDS as readonly string[]).includes(id) || seen.has(id)) return [];
+    seen.add(id);
+    return [{ id, size: (x as DashSlot).size === 1 ? 1 : 2 } as DashSlot];
+  }).slice(0, DASH_ROW_MAX);
+}
 export type DashBlock = (typeof DASH_BLOCKS)[number];
 export const DASH_BLOCK_LABEL: Record<DashBlock, string> = {
   hero: 'Total and the last 7 days', tiles: 'Win rate, average win, win / loss tiles', chart: 'Cumulative chart',
@@ -223,6 +263,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dashAccounts: [],
   dashFilters: { period: 'all', sessions: [], dirs: [] },
   dashBlocks: { hero: true, tiles: true, chart: true, week: true, score: true, recent: true, prop: true },
+  dashRow: DEFAULT_DASH_ROW,
   scoreAxes: { rules: true, honesty: true, consistency: true, profitFactor: true, avgR: true, winRate: true },
   sidebar: 'dashboard',
   sidebarSections: { rings: true, plan: true, grade: true, checklist: true, goals: true, focus: true, rules: true, prop: true, recent: true },
@@ -315,6 +356,7 @@ export function readPreferences(): Preferences {
       ...DEFAULT_PREFERENCES, ...saved,
       // One level deeper for the on/off maps, so a block added later is on, not undefined.
       dashBlocks: { ...DEFAULT_PREFERENCES.dashBlocks, ...(saved.dashBlocks ?? {}) },
+      dashRow: parseDashRow(saved.dashRow, saved.dashBlocks),
       scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
       sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },

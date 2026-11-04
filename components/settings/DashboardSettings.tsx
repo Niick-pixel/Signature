@@ -6,9 +6,10 @@ import { TogglePill } from '@/components/ui/TogglePill';
 import { Button } from '@/components/ui/Button';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import {
-  DASH_BLOCKS, DASH_BLOCK_LABEL, DEFAULT_CHECKLIST, SIDEBAR_SECTIONS, SIDEBAR_SECTION_LABEL, type Preferences,
+  DASH_FIXED_BLOCKS, DASH_BLOCK_LABEL, DEFAULT_CHECKLIST, SIDEBAR_SECTIONS, SIDEBAR_SECTION_LABEL, type Preferences,
 } from '@/lib/preferences';
 import { SCORE_AXES } from '@/lib/dashboard';
+import { DashRowEditor } from '@/components/dashboard/DashRow';
 
 /** Settings → Dashboard and Today panel (Phase 1): everything on those two screens, customizable. */
 export function DashboardSettings({ Section }: { Section: (p: { title: string; hint?: string; children: React.ReactNode }) => React.ReactElement }) {
@@ -32,11 +33,12 @@ export function DashboardSettings({ Section }: { Section: (p: { title: string; h
               options={['money', 'r']} labelFor={(v) => (v === 'money' ? 'Dollars' : 'R')} />
           </Labeled>
           <div className="flex flex-wrap gap-2">
-            {DASH_BLOCKS.map((b) => (
+            {DASH_FIXED_BLOCKS.map((b) => (
               <TogglePill key={b} checked={prefs.dashBlocks[b]} label={DASH_BLOCK_LABEL[b]}
                 onChange={(on) => update({ dashBlocks: { ...prefs.dashBlocks, [b]: on } })} />
             ))}
           </div>
+          <DashRowEditor />
           <Labeled label="Discipline score axes — the parts the score is built from; hover each for what it measures">
             <div className="flex flex-wrap gap-2">
               {SCORE_AXES.map((a) => (
