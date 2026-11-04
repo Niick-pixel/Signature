@@ -5,7 +5,7 @@
 import { utcToWall } from './traderZone';
 import { isTradingDay, marketHoliday } from './marketHolidays';
 
-export type ReminderKind = 'prep' | 'news' | 'stop' | 'cooldown' | 'journal' | 'evening' | 'weekly' | 'prop' | 'backup';
+export type ReminderKind = 'prep' | 'news' | 'stop' | 'cooldown' | 'journal' | 'evening' | 'weekly' | 'prop' | 'backup' | 'consistency';
 export const REMINDER_KINDS: ReadonlyArray<{ kind: ReminderKind; label: string; hint: string; live: boolean }> = [
   { kind: 'prep', label: 'Prep not done', hint: 'Before the NY open, if the morning check-in or chart prep is not finished.', live: false },
   { kind: 'news', label: 'News heads-up', hint: 'Before a high-impact release inside your session.', live: true },
@@ -15,6 +15,7 @@ export const REMINDER_KINDS: ReadonlyArray<{ kind: ReminderKind; label: string; 
   { kind: 'evening', label: 'Evening review', hint: 'In the evening, if you traded and the day has no journal page yet.', live: false },
   { kind: 'weekly', label: 'Weekly review', hint: 'Friday after the close and over the weekend, until the week is reviewed.', live: false },
   { kind: 'prop', label: 'Prop accounts', hint: 'Little daily-loss or drawdown room left; a payout you can request.', live: true },
+  { kind: 'consistency', label: 'Sunday consistency report', hint: 'Sunday morning: your week in process — the rings, the streak, the one to work on.', live: false },
   { kind: 'backup', label: 'Backup health', hint: 'No second backup folder, or the last backup zip failed.', live: false },
 ];
 
@@ -36,7 +37,7 @@ export interface NotifySettings {
 
 export const DEFAULT_NOTIFY: NotifySettings = {
   enabled: true,
-  kinds: { prep: true, news: true, stop: true, cooldown: true, journal: true, evening: true, weekly: true, prop: true, backup: true },
+  kinds: { prep: true, news: true, stop: true, cooldown: true, journal: true, evening: true, weekly: true, prop: true, backup: true, consistency: true },
   quietFrom: null, quietTo: null, tradingDaysOnly: true, holdWhileLive: true, prepLead: 30, newsLead: 15, eveningAt: '19:00',
 };
 

@@ -4,6 +4,8 @@
  * Pure — the database layer and the page pass the rows in.
  */
 
+import { fairStreak } from './consistency';
+
 export type StudyKind = 'note' | 'playbook' | 'video';
 export const STUDY_KINDS: readonly StudyKind[] = ['note', 'playbook', 'video'];
 export const STUDY_KIND_LABEL: Record<StudyKind, string> = { note: 'Note', playbook: 'Playbook', video: 'Video notes' };
@@ -26,22 +28,16 @@ export interface StudyTotals {
   goal: number;
 }
 
-export function studyTotals(sessions: ReadonlyArray<Pick<StudySession, 'day' | 'minutes'>>, today: string, goal: number): StudyTotals {
+export function studyTotals(sessions: ReadonlyArray<Pick<StudySession, 'day' | 'minutes'>>, today: string, goal: number, restDay = false): StudyTotals {
   const per = new Map<string, number>();
   for (const s of sessions) per.set(s.day, (per.get(s.day) ?? 0) + s.minutes);
   const met = (d: string) => (per.get(d) ?? 0) >= Math.max(1, goal);
-  let streak = 0;
-  let d = met(today) ? today : addDays(today, -1);
-  while (met(d)) { streak += 1; d = addDays(d, -1); }
-  // The best run ever, for "your record".
-  let best = 0; let run = 0; let prev: string | null = null;
-  for (const day of [...per.keys()].filter(met).sort()) {
-    run = prev && addDays(prev, 1) === day ? run + 1 : 1;
-    best = Math.max(best, run); prev = day;
-  }
+  // Fair streak (lib/consistency): with the rest day on, one missed day a week is forgiven.
+  const first = [...per.keys()].sort()[0] ?? today;
+  const { current: streak, best } = fairStreak(met, today, { tradingOnly: false, restDay }, first < today ? first : today);
   const monday = mondayOf(today);
   const days = Array.from({ length: 7 }, (_, i) => { const day = addDays(monday, i); return { day, minutes: Math.round(per.get(day) ?? 0) }; });
-  return { today: Math.round(per.get(today) ?? 0), week: days.reduce((s, x) => s + x.minutes, 0), days, streak, best: Math.max(best, streak), goal };
+  return { today: Math.round(per.get(today) ?? 0), week: days.reduce((s, x) => s + x.minutes, 0), days, streak, best, goal };
 }
 
 /** "1:02:03", "12:30", "90", "4m20s" → seconds; null when it is not a time. */

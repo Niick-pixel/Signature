@@ -104,8 +104,8 @@ test('evening review: only on a traded day without a page; red days say so', () 
 test('weekly review: Friday afternoon and the weekend', () => {
   assert.deepEqual(ids(snap({ clock: at('2026-11-06T18:30:00Z') })), ['weekly:2026-11-02']);  // Fri 13:30 NY
   assert.deepEqual(ids(snap({ clock: at('2026-11-06T16:00:00Z') })), []);                     // Fri 11:00 NY
-  assert.deepEqual(ids(snap({ clock: at('2026-11-08T17:00:00Z') })), ['weekly:2026-11-02']);  // Sunday 11:00 wall
-  assert.deepEqual(ids(snap({ clock: at('2026-11-08T17:00:00Z'), weeklyReviewDone: true })), []);
+  assert.deepEqual(ids(snap({ clock: at('2026-11-08T17:00:00Z') })), ['weekly:2026-11-02', 'consistency:2026-11-02']);  // Sunday 11:00 wall
+  assert.deepEqual(ids(snap({ clock: at('2026-11-08T17:00:00Z'), weeklyReviewDone: true })), ['consistency:2026-11-02']);
 });
 
 test('prop: daily room, drawdown room, payout', () => {
@@ -140,4 +140,12 @@ test('resolved: the bell clears what is no longer true', () => {
   assert.deepEqual(resolvedIds(s, ['evening:2026-11-04', 'evening:2026-11-03', 'stop:2026-11-04', 'backup-folder:2026-11-02']), ['evening:2026-11-04', 'backup-folder:2026-11-02']);
   assert.deepEqual(resolvedIds(snap(), ['prep:2026-11-04']), ['prep:2026-11-04']);
   assert.deepEqual(resolvedIds(snap({ prepSteps: 1 }), ['prep:2026-11-04']), []);
+});
+
+test('Sunday consistency report: from 10:00, with the week in its body', () => {
+  const sunday = at('2026-11-08T17:00:00Z');
+  const r = dueReminders(snap({ clock: sunday, weeklyReviewDone: true, weekClosed: { closed: 3, of: 5 } }))[0];
+  assert.equal(r.route, '/consistency?week=2026-11-02');
+  assert.match(r.body, /^3 of 5 trading days/);
+  assert.deepEqual(ids(snap({ clock: at('2026-11-08T15:00:00Z'), weeklyReviewDone: true })), []); // 09:00
 });

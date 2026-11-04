@@ -14,6 +14,8 @@ import { localDay } from '@/lib/day';
 import { navigate } from '@/lib/nav';
 import type { Goal, GoalProgress } from '@/lib/goals';
 import { springSoft, exitQuick } from '@/lib/motion';
+import { RingLegend, Rings } from '@/components/consistency/Rings';
+import type { ProcessOverview } from '@/db/consistency';
 
 interface TodayData {
   tilt?: { lossAt: string; lossR: number; minutesSince: number | null; fastUnder: number; usualWait: number | null; tiltedAvg: number | null; patientAvg: number | null; flaggedToday: number } | null;
@@ -44,10 +46,12 @@ export function TodayPanel() {
   const [folded, setFolded] = useState(false);
   const [ticks, setTicks] = useState<number[]>([]);
   const [goals, setGoals] = useState<Array<{ goal: Goal; progress: GoalProgress }>>([]);
+  const [process, setProcess] = useState<ProcessOverview | null>(null);
 
   const load = useCallback(() => {
     const today = localDay();
     fetch(`/api/today?today=${today}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
+    fetch(`/api/consistency?today=${today}&from=${today}`).then((r) => (r.ok ? r.json() : null)).then(setProcess).catch(() => {});
     fetch(`/api/review/focus?today=${today}`).then((r) => (r.ok ? r.json() : null)).then(setFocus).catch(() => {});
     fetch(`/api/goals?today=${today}`).then((r) => (r.ok ? r.json() : null)).then((d) => setGoals((d?.goals ?? []).filter((g: { goal: Goal }) => !g.goal.archived))).catch(() => {});
   }, []);
@@ -113,6 +117,15 @@ export function TodayPanel() {
           </div>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4 pt-2 text-[12px]">
             {prefs.tiltWatch && data?.tilt && <TiltLine t={data.tilt} />}
+            {s.rings && process && (
+              <Section title="Process" right={process.streak.current ? `${process.streak.current} day${process.streak.current === 1 ? '' : 's'} in a row` : undefined}>
+                <button type="button" onClick={() => navigate('/consistency')} data-today-rings className="flex w-full items-center gap-3 text-left" title="Your week in process">
+                  <Rings day={process.today} size={64} />
+                  <div className="min-w-0 flex-1"><RingLegend day={process.today} /></div>
+                </button>
+                {!process.today.tradingDay && <Faint>{process.today.holiday ? `${process.today.holiday} — markets closed.` : 'Not a trading day — the streak waits.'}</Faint>}
+              </Section>
+            )}
             {s.plan && (
               <Section title="The plan" right={data?.prep.started ? `${data.prep.done}/${data.prep.total} prep` : undefined}>
                 {!data?.plan.length ? <Faint>No chart prep yet today — press P or open the morning check-in.</Faint> : (

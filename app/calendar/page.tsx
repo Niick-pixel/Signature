@@ -171,6 +171,7 @@ export default async function CalendarPage(
                 <NavLink href={href(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)} label="This month" />
                 <NavLink href={href(shift(1))} label="Next →" />
                 <ReviewExport month={asMonth} label={MONTHS[month]} />
+                <NavLink href="/consistency" label="Process calendar →" />
                 <KeyNav prev={href(shift(-1))} next={href(shift(1))}
                   home={href(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)} />
               </div>

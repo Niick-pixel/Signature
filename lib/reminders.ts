@@ -32,6 +32,8 @@ export interface ReminderSnapshot {
   news: Array<{ id: string; at: string; title: string; currency: string; impact: string }>;
   prop: Array<{ id: string; label: string; dailyLeft: number | null; dailyLimit: number | null; room: number; maxDrawdown: number; payoutAvailable: number | null; payoutSince: string | null }>;
   backup: { folder: string | null; lastError: string | null };
+  /** On Sundays: the week's closed days, for the consistency report. */
+  weekClosed?: { closed: number; of: number } | null;
 }
 
 const PREP_STEPS_DONE = 4;
@@ -110,6 +112,14 @@ function candidates(s: ReminderSnapshot): Reminder[] {
   const monday = mondayOf(c.nyDay);
   if (!s.weeklyReviewDone && ((c.nyWeekday === 5 && c.nyMins >= 13 * 60) || ((c.nyWeekday === 6 || c.nyWeekday === 0) && c.localMins >= 10 * 60))) {
     add({ id: `weekly:${monday}`, kind: 'weekly', title: 'Weekly review', body: 'The week is done — review it while you remember it.', route: `/review?week=${monday}`, urgent: false });
+  }
+
+  // 16. The Sunday consistency report, for the week just done.
+  if (c.nyWeekday === 0 && c.localMins >= 10 * 60) {
+    const w = s.weekClosed;
+    add({ id: `consistency:${monday}`, kind: 'consistency', title: 'Your week in process',
+      body: w && w.of ? `${w.closed} of ${w.of} trading days with every ring closed. The rings, the streak, and the one to work on.` : 'The rings, the streak, and the one to work on.',
+      route: `/consistency?week=${monday}`, urgent: false });
   }
 
   // 11. Prop accounts: little room left, or a payout available.

@@ -5,6 +5,7 @@
  */
 import { utcToWall } from './traderZone';
 import { afterLossStop } from './ruleBook';
+import { isTradingDay } from './marketHolidays';
 import type { Trade } from './types';
 
 export type GoalKind = 'session_only' | 'max_trades' | 'stop_after' | 'same_day' | 'pre_graded' | 'no_tag' | 'min_grade' | 'prep_done' | 'study';
@@ -20,7 +21,7 @@ export const GOAL_KINDS: Array<{ kind: GoalKind; label: string; hint: string; un
   { kind: 'pre_graded', label: 'Grade before the outcome', hint: 'Every trade graded before you knew how it ended.', unit: 'day', defaults: {}, title: () => 'Grade every trade before the outcome' },
   { kind: 'no_tag', label: 'Drop a mistake', hint: 'Not one trade with this mistake tag.', unit: 'day', defaults: { tag: 'Chased' }, title: (p) => `No “${p.tag ?? 'Chased'}”` },
   { kind: 'min_grade', label: 'Only good setups', hint: 'Every trade at this grade or better.', unit: 'day', defaults: { letter: 'B' }, title: (p) => `Only ${p.letter ?? 'B'} grade or better` },
-  { kind: 'prep_done', label: 'Prep every weekday', hint: 'The chart prep done (4+ steps) Monday to Friday.', unit: 'day', defaults: {}, title: () => 'Chart prep every weekday' },
+  { kind: 'prep_done', label: 'Prep every weekday', hint: 'The chart prep done (4+ steps) on every trading day — weekends and market holidays skipped.', unit: 'day', defaults: {}, title: () => 'Chart prep every weekday' },
   { kind: 'study', label: 'Study each week', hint: 'At least this many study minutes a week.', unit: 'week', defaults: { minutes: 120 }, title: (p) => `Study ${p.minutes ?? 120} min a week` },
 ];
 
@@ -38,7 +39,6 @@ export interface GoalContext {
 
 const addDays = (day: string, n: number) => { const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const mondayOf = (day: string) => { const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
-const weekday = (day: string) => (new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7;
 const GRADES = ['F', 'D', 'C', 'B', 'A', 'A+'];
 const loggedDay = (t: Trade) => utcToWall(Date.parse(t.created_at.endsWith('Z') ? t.created_at : `${t.created_at}Z`)).toISOString().slice(0, 10);
 
@@ -46,7 +46,8 @@ const loggedDay = (t: Trade) => utcToWall(Date.parse(t.created_at.endsWith('Z') 
 function judgeDay(g: Goal, day: string, ts: Trade[], ctx: GoalContext): GoalDay | null {
   const p = g.params;
   if (g.kind === 'prep_done') {
-    if (weekday(day) > 4) return null;
+    // Weekends and market holidays are not days to prep for: skipped, never missed.
+    if (!isTradingDay(day)) return null;
     const n = ctx.prepDone(day);
     return { day, kept: n >= 4, why: n ? `${n} of 6 prep steps` : 'No prep' };
   }

@@ -17,6 +17,7 @@ import { DEFAULT_RULE_CONFIG } from '../lib/ruleBook';
 import { sessionNews } from '../lib/news';
 import { nyMinutes } from '../lib/planMatch';
 import { mondayOf } from '../lib/study';
+import { consistencyWeek } from './consistency';
 import { clockAt, parseNotify, type NotifySettings } from '../lib/notify';
 import { dueReminders, resolvedIds, type Reminder, type ReminderSnapshot } from '../lib/reminders';
 
@@ -66,6 +67,7 @@ export function reminderSnapshot(now: Date = new Date()): ReminderSnapshot {
       payoutAvailable: s.payout?.eligible ? s.payout.available : null, payoutSince: s.payout?.since ?? null,
     })),
     backup: { folder: backup.folder, lastError: backup.lastError ?? null },
+    weekClosed: clock.nyWeekday === 0 ? (() => { const w = consistencyWeek(mondayOf(clock.nyDay), day); return { closed: w.closedDays, of: w.tradingDays }; })() : null,
   };
 }
 
