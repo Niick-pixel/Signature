@@ -6,6 +6,7 @@ import { PreferencesProvider } from '@/components/shell/PreferencesProvider';
 import { NewTradeButton } from '@/components/shell/NewTradeButton';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { MorningCheckIn } from '@/components/shell/MorningCheckIn';
+import { ReminderPoller } from '@/components/shell/Reminders';
 import { Shortcuts } from '@/components/shell/Shortcuts';
 import { NavTransitions } from '@/components/shell/NavTransitions';
 import { Tooltips } from '@/components/shell/Tooltips';
@@ -54,6 +55,7 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           </BottomLeftControls>
           <NewTradeButton />
           <MorningCheckIn />
+          <ReminderPoller />
           {/* Saturdays and Sundays: how the week went on the Path. */}
           <WeekendReview />
           {/* After a red day: the page, asked for once, quietly. */}

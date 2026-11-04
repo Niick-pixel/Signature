@@ -50,6 +50,7 @@ declare global {
         onChange: (handler: (state: DisplayWire) => void) => () => void;
         onTextSize: (handler: (step: number) => void) => () => void;
       };
+      notify?: (note: { title: string; body: string; route: string; urgent?: boolean; silent?: boolean }) => Promise<boolean>;
       onNavigate: (handler: (route: string) => void) => () => void;
     };
   }

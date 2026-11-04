@@ -2,7 +2,7 @@
 // process starts and owns — nothing is ever served to an outside browser, and
 // the server dies with the window.
 
-const { app, BrowserWindow, shell, Menu, dialog, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, shell, Menu, dialog, ipcMain, screen, Notification } = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -420,6 +420,36 @@ ipcMain.handle('signature:display', (_event, value) => {
 });
 ipcMain.handle('signature:display-state', () => ({ ...display, ...scaled }));
 
+// Reminders: the renderer decides what is due and asks for a system
+// notification; clicking it brings the window forward on the right screen.
+// Shown notifications are kept referenced until clicked or closed — on
+// Windows a collected one loses its click handler.
+const shownNotes = new Set();
+const NOTE_ROUTE = /^(\/[\w\-/?=&.%]*|checkin:(morning|chart)|settings:[a-z-]+)$/;
+ipcMain.handle('signature:notify', (_event, note) => {
+  if (!Notification.isSupported() || !note || typeof note.title !== 'string') return false;
+  const route = typeof note.route === 'string' && NOTE_ROUTE.test(note.route) ? note.route : '/dashboard';
+  const n = new Notification({
+    title: note.title.slice(0, 120),
+    body: typeof note.body === 'string' ? note.body.slice(0, 300) : '',
+    silent: Boolean(note.silent),
+    urgency: note.urgent ? 'critical' : 'normal',
+  });
+  const forget = () => shownNotes.delete(n);
+  n.on('click', () => {
+    forget();
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send('signature:navigate', route);
+  });
+  n.on('close', forget);
+  shownNotes.add(n);
+  n.show();
+  return true;
+});
+
 ipcMain.on('signature:titlebar-theme', (_event, theme) => {
   // Six themes send their own colours; the old 'light' | 'dark' still works.
   const valid = (c) => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
@@ -576,6 +606,9 @@ if (!app.requestSingleInstanceLock()) {
       mainWindow.focus();
     }
   });
+
+  // Windows shows notifications under this id (the installer's appId), named Signature.
+  if (process.platform === 'win32') app.setAppUserModelId('com.signature.journal');
 
   app.whenReady().then(async () => {
     DATA_DIR = await resolveDataDir();

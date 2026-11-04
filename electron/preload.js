@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('signature', {
       return () => ipcRenderer.off('signature:text-size', listener);
     },
   },
+  /** A system notification; clicking it opens `route` (see signature:notify in main.js). */
+  notify: (note) => ipcRenderer.invoke('signature:notify', note),
   onNavigate: (handler) => {
     const listener = (_event, route) => handler(route);
     ipcRenderer.on('signature:navigate', listener);

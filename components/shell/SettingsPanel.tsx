@@ -15,6 +15,7 @@ import { DashboardSettings } from '@/components/settings/DashboardSettings';
 import { TradeSettings } from '@/components/settings/TradeSettings';
 import { PropSettings } from '@/components/settings/PropSettings';
 import { AnalyticsSettings } from '@/components/settings/AnalyticsSettings';
+import { NotificationSettings } from '@/components/settings/NotificationSettings';
 import { StudySettings } from '@/components/settings/StudySettings';
 import { PersonalSettings } from '@/components/settings/PersonalSettings';
 import { navigate } from '@/lib/nav';
@@ -79,6 +80,7 @@ const CATEGORIES = [
   { id: 'prop', label: 'Prop firms', hint: 'Trading day, warnings' },
   { id: 'analytics', label: 'Analytics', hint: 'Reading, words, news' },
   { id: 'study', label: 'Study room', hint: 'Your timer, the streak' },
+  { id: 'notifications', label: 'Notifications', hint: 'Reminders, quiet hours' },
   { id: 'data', label: 'Journal & data', hint: 'Folder, backups, updates' },
 ] as const;
 type Category = (typeof CATEGORIES)[number]['id'];
@@ -339,6 +341,9 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </>)}
             {cat === 'study' && (<>
             <StudySettings Section={Section} />
+            </>)}
+            {cat === 'notifications' && (<>
+            <NotificationSettings Section={Section} />
             </>)}
             {cat === 'appearance' && (<>
             <PersonalSettings Section={Section} />
@@ -652,7 +657,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 export function BottomLeftControls({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    const toggle = () => setOpen((o) => !o);
+    // A reminder's "open Settings" asks for open, not a toggle.
+    const toggle = (e: Event) => setOpen((o) => ((e as CustomEvent<{ open?: boolean }>).detail?.open ? true : !o));
     window.addEventListener(SETTINGS_TOGGLE, toggle);
     return () => window.removeEventListener(SETTINGS_TOGGLE, toggle);
   }, []);
