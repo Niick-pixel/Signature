@@ -896,9 +896,10 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           >
             <Select value={account} onChange={changeAccount} options={accountOptions(account)} labelFor={accountName} />
           </Field>
-          <Field quiet label="Account label" hint="Optional — which prop firm, which phase.">
+          <Field quiet label="Account label" hint="Optional — which prop firm, which phase. A prop account counts the trades whose label matches its own.">
             <Input placeholder="—" value={accountLabel} onChange={(e) => setAccountLabel(e.target.value)} />
           </Field>
+          <PropPicker account={account} label={accountLabel} onPick={setAccountLabel} />
           {isHypothetical(account) && (
             <div className="sm:col-span-2" data-written-before>
               <TriState inline value={writtenBefore} onChange={setWrittenBefore}
@@ -1541,5 +1542,40 @@ function LockIcon() {
       <rect x="2" y="5.5" width="8" height="5.5" rx="1.4" stroke="currentColor" strokeWidth="1.3" />
       <path d="M4 5.5V4a2 2 0 0 1 4 0v1.5" stroke="currentColor" strokeWidth="1.3" />
     </svg>
+  );
+}
+
+/**
+ * Which prop account a trade belongs to: your active prop accounts on this
+ * journal account, as chips. Picking one fills the label the hub matches on
+ * (lib/prop tradesFor), so the trade counts toward its rules.
+ */
+function PropPicker({ account, label, onPick }: { account: string; label: string; onPick: (label: string) => void }) {
+  const [props, setProps] = useState<Array<{ id: string; label: string; firm: string; plan: string; journal_account: string; status: string }> | null>(null);
+  useEffect(() => {
+    fetch('/api/prop').then((r) => (r.ok ? r.json() : null))
+      .then((j) => setProps((j?.accounts ?? []).map((x: { account: { id: string; label: string; firm: string; plan: string; journal_account: string; status: string } }) => x.account)))
+      .catch(() => setProps([]));
+  }, []);
+  const mine = (props ?? []).filter((p) => p.status === 'active' && p.journal_account === account);
+  if (!mine.length) return null;
+  const norm = (v: string) => v.trim().toLowerCase();
+  return (
+    <div className="sm:col-span-2" data-prop-picker>
+      <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Prop account — the trade counts toward its rules</span>
+      <div className="flex flex-wrap gap-1.5">
+        {mine.map((p) => {
+          const name = p.label || `${p.firm} ${p.plan}`;
+          const on = norm(label) === norm(p.label);
+          return (
+            <button key={p.id} type="button" data-prop-chip={p.id} onClick={() => onPick(on ? '' : p.label || '')}
+              className="rounded-full border px-3 py-1 text-[12px] font-medium"
+              style={on ? { borderColor: 'rgb(var(--accent) / 0.5)', background: 'rgb(var(--accent) / 0.12)', color: 'rgb(var(--accent))' } : { borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
+              {on ? '✓ ' : ''}{name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

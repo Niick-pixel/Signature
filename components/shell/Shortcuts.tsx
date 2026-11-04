@@ -1,5 +1,6 @@
 'use client';
 
+import { openGoals } from '@/components/goals/GoalsSheet';
 import { useEffect, useState } from 'react';
 import { SHORTCUTS, shortcutAllowed } from '@/lib/keys';
 import { Overlay } from '@/components/ui/Overlay';
@@ -45,7 +46,7 @@ export function Shortcuts() {
         case '1': case '2': case '3': case '4': case '5': case '6': case '7': return go(TABS[Number(k) - 1]);
         case '0': return go('/dashboard');
         case 'a': return go('/analytics');
-        case 'g': return go('/goals');
+        case 'g': e.preventDefault(); openGoals(); return;
         case 'r': return go('/reports');
       }
     };

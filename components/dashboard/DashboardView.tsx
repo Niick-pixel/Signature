@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
+import { HomeReview } from '@/components/review/HomeReview';
 import { PropMini } from '@/components/prop/PropMini';
 import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
@@ -58,8 +59,11 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           <p className="truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
             {new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · {scope}
           </p>
+          {/* Today's line, in the header — its own place, whatever the cards below show. */}
+          {prefs.quoteOnDashboard && <QuoteOfDay inline className="mt-0.5 max-w-[44rem]" />}
         </div>
         <div className="flex flex-wrap items-center gap-1.5" data-dash-accounts>
+          <HomeReview />
           <Chip on={open || nFilters > 0} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" data="filters">
             Filters{nFilters ? ` · ${nFilters}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
           </Chip>
@@ -126,8 +130,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
             <div className="grid gap-3 lg:grid-cols-[1.25fr_1fr_0.8fr]">
               {b.score && <Card title="Discipline score" note="Hover an axis for what it measures"><Score d={d} enabled={prefs.scoreAxes} /></Card>}
               {b.recent && <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>}
-              {b.prop ? <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} empty={prefs.quoteOnDashboard ? <Card title="Today's line"><QuoteOfDay className="text-left" /></Card> : null} />
-                : prefs.quoteOnDashboard && <Card title="Today's line"><QuoteOfDay className="text-left" /></Card>}
+              {b.prop && <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} empty={null} />}
             </div>
           )}
         </div>

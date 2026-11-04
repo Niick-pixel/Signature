@@ -81,6 +81,11 @@ function Overview({ data, reload }: { data: AccountData; reload: () => void }) {
     await fetch(`/api/prop/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
     reload();
   };
+  const remove = async () => {
+    if (!(await confirm({ title: `Delete ${data.account.label || `${data.account.firm} ${data.account.plan}`}?`, body: 'Its rules and payouts go. Your trades are not touched — they stay in the journal under their account. Costs stay on the Path, unassigned.', action: 'Delete account' }))) return;
+    await fetch(`/api/prop/${data.account.id}`, { method: 'DELETE' });
+    navigate('/prop');
+  };
   const toFunded = async () => {
     if (!(await confirm({ title: 'Mark passed and open the funded account?', body: `The evaluation is marked passed today, and a funded ${a.firm} account starts with its rules (editable).`, action: 'Open funded account', danger: false }))) return;
     const r = await fetch(`/api/prop/${a.id}/funded`, { method: 'POST' });
@@ -142,8 +147,14 @@ function Overview({ data, reload }: { data: AccountData; reload: () => void }) {
             {a.phase === 'eval' && <PillButton onClick={toFunded}>Passed → funded</PillButton>}
             <PillButton onClick={() => setStatus('failed')}>Mark failed</PillButton>
             <PillButton onClick={() => setStatus('archived')}>Archive</PillButton>
+            <button type="button" onClick={remove} data-prop-delete className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ color: 'rgb(var(--outcome-loss))' }}>Delete</button>
           </div>
-        ) : <PillButton onClick={() => setStatus('active')}>Reopen</PillButton>}
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <PillButton onClick={() => setStatus('active')}>Reopen</PillButton>
+            <button type="button" onClick={remove} data-prop-delete className="rounded-full px-3 py-1.5 text-[12px] font-medium" style={{ color: 'rgb(var(--outcome-loss))' }}>Delete</button>
+          </div>
+        )}
       </div>
     </div>
   );

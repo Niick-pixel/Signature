@@ -135,7 +135,9 @@ export function NotificationBell() {
         onClick={() => { if (!open) void load(); setOpen(!open); }} whileTap={press} whileHover={{ y: -1 }} transition={springSnappy}
         title="Reminders"
         className="relative grid size-[26px] place-items-center rounded-full border outline-none"
-        style={{ borderColor: open ? 'rgb(var(--accent) / 0.45)' : 'var(--glass-stroke)', background: 'var(--glass-fill)', color: count ? 'var(--text)' : 'var(--text-faint)' }}>
+        style={count
+          ? { borderColor: 'rgb(var(--accent) / 0.6)', background: 'rgb(var(--accent) / 0.14)', color: 'rgb(var(--accent))', boxShadow: '0 0 14px -4px rgb(var(--accent) / 0.7)' }
+          : { borderColor: open ? 'rgb(var(--accent) / 0.45)' : 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-faint)' }}>
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" aria-hidden>
           <path d="M10 2.8a5 5 0 0 0-5 5v2.6c0 .8-.3 1.6-.8 2.2L3.4 13.6c-.4.5 0 1.2.6 1.2h12c.6 0 1-.7.6-1.2l-.8-1c-.5-.6-.8-1.4-.8-2.2V7.8a5 5 0 0 0-5-5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
           <path d="M8 16.6a2.1 2.1 0 0 0 4 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -143,8 +145,11 @@ export function NotificationBell() {
         <AnimatePresence>
           {count > 0 && (
             <motion.span key="n" data-bell-count initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={springBouncy}
-              className="absolute -right-1 -top-1 grid h-[15px] min-w-[15px] place-items-center rounded-full px-1 text-[9.5px] font-semibold tabular-nums"
-              style={{ background: 'rgb(var(--accent))', color: 'var(--bg)' }}>{count > 9 ? '9+' : count}</motion.span>
+              className="absolute -right-1 -top-1 grid h-[15px] min-w-[15px] place-items-center">
+              <span className="checkin-ping absolute inset-0 rounded-full" style={{ background: 'rgb(var(--accent))' }} />
+              <span className="relative grid h-[15px] min-w-[15px] place-items-center rounded-full px-1 text-[9.5px] font-semibold tabular-nums"
+                style={{ background: 'rgb(var(--accent))', color: 'var(--bg)' }}>{count > 9 ? '9+' : count}</span>
+            </motion.span>
           )}
         </AnimatePresence>
       </motion.button>

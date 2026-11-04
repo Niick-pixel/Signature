@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { springSoft, exitQuick, press, spring } from '@/lib/motion';
 import { localDay } from '@/lib/day';
@@ -19,29 +18,34 @@ type Today =
 
 const FOLD_KEY = 'signature:home-review-folded';
 const HIDE_KEY = 'signature:home-review-hidden';
-const MIN_KEY = 'signature:home-review-minimized';
+const MIN_KEY = 'signature:home-review-open';
+const SEEN_KEY = 'signature:home-review-seen';
 const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 
 /**
- * On the board, two cards from the review engine (lib/review):
+ * On the Dashboard, folded into one button by default (it lit up the board
+ * too much), two cards from the review engine (lib/review):
  *   Before you trade — on a day with nothing logged yet: the #1 leak and its
  *     rule, what the last session broke, how long since the #1 rule went.
  *   Session close — once today's trades are all settled: three lines at most.
- * Folds to a pill for the rest of the day; never a dialog.
+ * Folds to a pill for the rest of the day; never a dialog. The button
+ * fills with the accent and pulses when something changed since you last
+ * opened it.
  */
 export function HomeReview() {
-  const path = usePathname();
   const [data, setData] = useState<Today | null>(null);
   const [folded, setFolded] = useState(false);
 
   // Hidden for today, per item (strip, focus, card); the whole column minimized until reopened.
   const [hidden, setHidden] = useState<string[]>([]);
-  const [minimized, setMinimized] = useState(false);
+  const [minimized, setMinimized] = useState(true);
+  const [seen, setSeen] = useState<string | null>(null);
   useEffect(() => {
     try {
       const raw = JSON.parse(window.localStorage.getItem(HIDE_KEY) ?? 'null') as { day: string; items: string[] } | null;
       if (raw?.day === localDay()) setHidden(raw.items);
-      setMinimized(window.localStorage.getItem(MIN_KEY) === '1');
+      setMinimized(window.localStorage.getItem(MIN_KEY) !== '1');
+      setSeen(window.localStorage.getItem(SEEN_KEY));
     } catch { /* shown */ }
   }, []);
   const hide = (item: string) => setHidden((h) => {
@@ -49,7 +53,10 @@ export function HomeReview() {
     try { window.localStorage.setItem(HIDE_KEY, JSON.stringify({ day: localDay(), items: next })); } catch { /* fine */ }
     return next;
   });
-  const minimize = (v: boolean) => { setMinimized(v); try { if (v) window.localStorage.setItem(MIN_KEY, '1'); else window.localStorage.removeItem(MIN_KEY); } catch { /* fine */ } };
+  const minimize = (v: boolean) => {
+    setMinimized(v);
+    try { if (v) window.localStorage.removeItem(MIN_KEY); else window.localStorage.setItem(MIN_KEY, '1'); } catch { /* fine */ }
+  };
   const [strip, setStrip] = useState<SessionStrip | null>(null);
   const [focus, setFocus] = useState<FocusData | null>(null);
   const load = useCallback(() => {
@@ -78,25 +85,50 @@ export function HomeReview() {
     && (data.mode === 'close' ? data.close.length > 0 : Boolean(data.before.leak || data.before.lastSession || data.before.topRule));
   const title = data?.mode === 'close' ? 'Session close' : 'Before you trade';
 
-  if (path !== '/') return null;
+  // What is in it, in a few words: when this changes, the button lights up until opened.
+  const signature = JSON.stringify([data?.mode ?? null,
+    data?.mode === 'before' ? [data.before.leak?.title, data.before.lastSession?.day, data.before.lastSession?.broken.length, data.before.topRule?.daysSince] : null,
+    data?.mode === 'close' ? data.close.map((l) => l.text) : null,
+    focus?.focus ? [focus.focus.ruleId, focus.focus.week.broken] : null, strip?.trades ?? null]);
+  const fresh = data != null && seen !== signature;
+  const markSeen = () => { setSeen(signature); try { window.localStorage.setItem(SEEN_KEY, signature); } catch { /* fine */ } };
+  // Seen while open: whatever arrives while you are looking at it is not news.
+  useEffect(() => { if (!minimized && data != null && seen !== signature) markSeen(); });
+
   const stripShows = Boolean(strip && (strip.trades > 0 || strip.redFolder));
   const anything = (stripShows && !hidden.includes('strip')) || (focus?.focus && !hidden.includes('focus')) || (visible && !hidden.includes('card'));
   if (!anything) return null;
   if (minimized) {
     return (
-      <div data-home-column="minimized" className="fixed bottom-[7.5rem] left-6 z-[44]">
-        <button type="button" onClick={() => minimize(false)} data-home-restore
-          className="rounded-full border px-3.5 py-1.5 text-[11.5px] font-medium"
-          style={{ background: 'var(--bg-raised)', borderColor: 'rgb(var(--accent) / 0.4)', color: 'rgb(var(--accent))', boxShadow: 'var(--shadow-card)' }}>
-          Review ▴
-        </button>
+      <div data-home-column="minimized" className="relative">
+        <motion.button type="button" onClick={() => { minimize(false); markSeen(); }} data-home-restore={fresh ? 'new' : 'seen'}
+          whileTap={press} whileHover={{ y: -1 }} transition={spring}
+          className="flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11.5px] font-semibold"
+          style={fresh
+            ? { background: 'rgb(var(--accent))', borderColor: 'transparent', color: 'var(--bg-raised)', boxShadow: 'var(--shadow-card), 0 0 22px -6px rgb(var(--accent) / 0.8)' }
+            : { background: 'var(--bg-raised)', borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)', boxShadow: 'var(--shadow-card)' }}>
+          {fresh && (
+            <span className="relative flex size-2">
+              <span className="checkin-ping absolute inset-0 rounded-full" style={{ background: 'var(--bg-raised)' }} />
+              <span className="relative size-2 rounded-full" style={{ background: 'var(--bg-raised)' }} />
+            </span>
+          )}
+          {fresh ? `${title} · new` : title} ▾
+        </motion.button>
       </div>
     );
   }
   return (
-    // The board's bottom-left column: today's strip, the week's focus, then the card.
-    <div data-home-column className="pointer-events-none fixed bottom-[7.5rem] left-6 z-[44] flex w-[min(21rem,calc(100vw-3rem))] flex-col items-start gap-2 [&>*]:pointer-events-auto">
-    <CloseX kind="minimize" onClick={() => minimize(true)} label="Minimize — tuck all of this into one button" className="border bg-[var(--bg-raised)]" />
+    // In the Dashboard header: the button, and below it today's strip, the week's focus, then the card.
+    <div className="relative">
+    <button type="button" onClick={() => minimize(true)} data-home-fold
+      className="rounded-full border px-3.5 py-1.5 text-[11.5px] font-semibold"
+      style={{ background: 'rgb(var(--accent) / 0.12)', borderColor: 'rgb(var(--accent) / 0.4)', color: 'rgb(var(--accent))' }}>
+      {title} ▾
+    </button>
+    <motion.div data-home-column initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={springSoft}
+      style={{ transformOrigin: 'top right' }}
+      className="absolute right-0 top-[calc(100%+8px)] z-[45] flex w-[min(22rem,calc(100vw-2rem))] flex-col items-end gap-2">
     {!hidden.includes('strip') && <SessionStripView strip={strip} onHide={() => hide('strip')} />}
     {!hidden.includes('focus') && <FocusPill data={focus} onChanged={load} onHide={() => hide('focus')} />}
     <AnimatePresence>
@@ -125,6 +157,7 @@ export function HomeReview() {
         </motion.section>
       ))}
     </AnimatePresence>
+    </motion.div>
     </div>
   );
 }

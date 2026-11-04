@@ -1,5 +1,6 @@
 'use client';
 
+import { openGoals } from '@/components/goals/GoalsSheet';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
@@ -53,7 +54,7 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => router.push('/goals')} data-path-goals title="Goals (G)">Goals</Button>
+          <Button onClick={openGoals} data-path-goals title="Goals (G)">Goals</Button>
           <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
         </div>
       </header>

@@ -7,6 +7,7 @@ import { NewTradeButton } from '@/components/shell/NewTradeButton';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { MorningCheckIn } from '@/components/shell/MorningCheckIn';
 import { ReminderPoller } from '@/components/shell/Reminders';
+import { GoalsSheet } from '@/components/goals/GoalsSheet';
 import { Shortcuts } from '@/components/shell/Shortcuts';
 import { NavTransitions } from '@/components/shell/NavTransitions';
 import { Tooltips } from '@/components/shell/Tooltips';
@@ -14,7 +15,6 @@ import { ConfirmProvider } from '@/components/ui/Confirm';
 import { BoardLayer } from '@/components/whiteboard/BoardLayer';
 import { WeekendReview } from '@/components/path/WeekendReview';
 import { RedDayPrompt } from '@/components/path/RedDayPrompt';
-import { HomeReview } from '@/components/review/HomeReview';
 import { TodayPanel } from '@/components/today/TodayPanel';
 import { Watermark } from '@/components/personal/Watermark';
 import { Backdrop } from '@/components/personal/Backdrop';
@@ -56,12 +56,12 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <NewTradeButton />
           <MorningCheckIn />
           <ReminderPoller />
+          <GoalsSheet />
           {/* Saturdays and Sundays: how the week went on the Path. */}
           <WeekendReview />
           {/* After a red day: the page, asked for once, quietly. */}
           <RedDayPrompt />
           {/* The review engine: before the session, and once it is closed (lib/review). */}
-          <HomeReview />
           {/* The Today panel on the right (Settings → Today panel). */}
           <TodayPanel />
           {/* Phase 5: your background, the study timer, and focus mode. */}

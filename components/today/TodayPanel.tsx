@@ -12,6 +12,7 @@ import { BOARD_SHOWN } from '@/lib/keys';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import { localDay } from '@/lib/day';
 import { navigate } from '@/lib/nav';
+import { openGoals } from '@/components/goals/GoalsSheet';
 import type { Goal, GoalProgress } from '@/lib/goals';
 import { springSoft, exitQuick } from '@/lib/motion';
 import { RingLegend, Rings } from '@/components/consistency/Rings';
@@ -179,7 +180,7 @@ export function TodayPanel() {
                 <ul className="space-y-1" data-today-goals>
                   {goals.slice(0, 5).map(({ goal, progress: p }) => (
                     <li key={goal.id}>
-                      <button type="button" onClick={() => navigate('/goals')} className="flex w-full items-start gap-2 text-left hover:opacity-80"
+                      <button type="button" onClick={openGoals} className="flex w-full items-start gap-2 text-left hover:opacity-80"
                         title={p.lastBroken ? `Last broken ${p.lastBroken.day}: ${p.lastBroken.why}` : 'Not broken yet'}>
                         <span className="mt-[1px] text-[11px]" style={{ color: p.todayOk == null ? 'var(--text-faint)' : p.todayOk ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>
                           {p.todayOk == null ? '·' : p.todayOk ? '✓' : '✗'}
