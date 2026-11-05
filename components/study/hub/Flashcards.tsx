@@ -36,6 +36,8 @@ export function Flashcards({ focus, onStats }: { focus: string[]; onStats?: (s: 
     setBusy(true);
     await fetch('/api/study/cards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tradeId: cur.tradeId, rating, today }) });
     setBusy(false); setShown(false);
+    // The deck's numbers, fresh — without reloading the cards you are going through.
+    void fetch(`/api/study/cards?today=${today}`).then((r) => r.json()).then((j) => { setStats(j.stats); onStats?.(j.stats); }).catch(() => {});
     // "Again" comes back at the end of today's session.
     if (rating === 'again') setCards((cs) => (cs ? [...cs, { ...cur, isNew: false }] : cs));
     setI((x) => x + 1);

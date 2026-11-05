@@ -1,5 +1,6 @@
 'use client';
 
+import { useLive } from '@/lib/useLive';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BlindSession, type BlindItem } from '@/components/blind/BlindSession';
@@ -14,7 +15,10 @@ import { Card, Faint, Head } from './shared';
  */
 export function Drills() {
   const [d, setD] = useState<{ items: BlindItem[]; pool: number; counter: { thisWeek: number; total: number }; needEntry: number } | null>(null);
-  useEffect(() => { fetch(`/api/study/drills?today=${localDay()}`).then((r) => r.json()).then(setD).catch(() => {}); }, []);
+  const load = () => { fetch(`/api/study/drills?today=${localDay()}`).then((r) => r.json()).then(setD).catch(() => {}); };
+  useEffect(load, []);
+  // Not on your own grades: the set would reshuffle under you.
+  useLive(load, { ignore: ['/api/blind'], focus: false });
   if (!d) return <Card><div className="h-48" /></Card>;
   return (
     <div className="space-y-4" data-drills>

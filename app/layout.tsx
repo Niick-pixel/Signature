@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { MorningCheckIn } from '@/components/shell/MorningCheckIn';
 import { ReminderPoller } from '@/components/shell/Reminders';
 import { GoalsSheet } from '@/components/goals/GoalsSheet';
+import { LiveRefresh } from '@/components/shell/LiveRefresh';
 import { Shortcuts } from '@/components/shell/Shortcuts';
 import { NavTransitions } from '@/components/shell/NavTransitions';
 import { Tooltips } from '@/components/shell/Tooltips';
@@ -57,6 +58,7 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <MorningCheckIn />
           <ReminderPoller />
           <GoalsSheet />
+          <LiveRefresh />
           {/* Saturdays and Sundays: how the week went on the Path. */}
           <WeekendReview />
           {/* After a red day: the page, asked for once, quietly. */}

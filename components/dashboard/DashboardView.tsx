@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
 import { HomeReview } from '@/components/review/HomeReview';
 import { Card } from './Card';
+import { useLiveTick } from '@/lib/useLive';
 import { DashRow, DashRowEditor } from './DashRow';
 import { PropMini } from '@/components/prop/PropMini';
 import { motion } from 'framer-motion';
@@ -39,13 +40,15 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
   const [picked, setPicked] = useState<DashboardData | null>(null);
   // Filtered views are worked out on the server (app/api/dashboard); the three unfiltered worlds come with the page.
   const query = `accounts=${encodeURIComponent(chosen.join(','))}&world=${prefs.dashWorld}&period=${f.period}&session=${encodeURIComponent(f.sessions.join(','))}&dir=${encodeURIComponent(f.dirs.join(','))}&today=${today}`;
+  // A filtered view is fetched here, so it reloads on changes itself (the unfiltered ones come with the refreshed page).
+  const live = useLiveTick({ focus: false });
   useEffect(() => {
     if (!filtered) { setPicked(null); return; }
-    let live = true;
-    void fetch(`/api/dashboard?${query}`).then((r) => r.json()).then((j) => { if (live) setPicked(j); }).catch(() => {});
-    return () => { live = false; };
+    let alive = true;
+    void fetch(`/api/dashboard?${query}`).then((r) => r.json()).then((j) => { if (alive) setPicked(j); }).catch(() => {});
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, live]);
   const d = (filtered && picked) ? picked : data[prefs.dashWorld] ?? data.real;
   const setF = (patch: Partial<typeof f>) => update({ dashFilters: { ...f, ...patch } });
   const flip = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);

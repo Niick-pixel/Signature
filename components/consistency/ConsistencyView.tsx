@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useLive, useLiveTick } from '@/lib/useLive';
 import { motion } from 'framer-motion';
 import { TogglePill } from '@/components/ui/TogglePill';
 import { localDay } from '@/lib/day';
@@ -36,6 +37,7 @@ export function ConsistencyView({ initialWeek }: { initialWeek: string | null })
     fetch(`/api/consistency?today=${today}&week=${monday}`).then((r) => r.json()).then(setReport).catch(() => {});
   }, [today, monday]);
   useEffect(() => { load(); }, [load]);
+  useLive(load, { ignore: ['/api/consistency'] });
   useEffect(() => { fetch(`/api/consistency?today=${today}&from=${today}`).then((r) => r.json()).then((d) => setRestDay(Boolean(d.restDay))).catch(() => {}); }, [today]);
 
   const toggleRest = async (on: boolean) => {
@@ -162,12 +164,13 @@ const marketNote = (d: string) => marketHoliday(d) ?? '';
 function ProcessMonth({ today }: { today: string }) {
   const [month, setMonth] = useState(today.slice(0, 7));
   const [days, setDays] = useState<DayRings[] | null>(null);
+  const live = useLiveTick({ ignore: ['/api/consistency'] });
   useEffect(() => {
     const first = `${month}-01`;
     const last = addDays(`${addDays(first, 32).slice(0, 7)}-01`, -1);
     const end = last < today ? last : today;
     fetch(`/api/consistency?today=${end}&from=${first}`).then((r) => r.json()).then((d) => setDays(d.days)).catch(() => {});
-  }, [month, today]);
+  }, [month, today, live]);
   const first = `${month}-01`;
   const lead = (new Date(`${first}T12:00:00Z`).getUTCDay() + 6) % 7;
   const len = Number(addDays(`${addDays(first, 32).slice(0, 7)}-01`, -1).slice(8));

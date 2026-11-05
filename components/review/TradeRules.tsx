@@ -1,18 +1,20 @@
 'use client';
 
+import { useLiveTick } from '@/lib/useLive';
 import { useEffect, useState } from 'react';
 import type { BrokenRule } from '@/lib/review';
 
 /** Fetch the rules a saved trade broke — its own and its day's (lib/review). */
 export function useBrokenRules(tradeId: string | null, version: unknown = null): BrokenRule[] | null {
   const [rules, setRules] = useState<BrokenRule[] | null>(null);
+  const live = useLiveTick();
   useEffect(() => {
     if (!tradeId) { setRules(null); return; }
     let alive = true;
     fetch(`/api/review/trade/${tradeId}`).then((r) => (r.ok ? r.json() : null))
       .then((r) => { if (alive) setRules(r?.broken ?? null); }).catch(() => {});
     return () => { alive = false; };
-  }, [tradeId, version]);
+  }, [tradeId, version, live]);
   return rules;
 }
 

@@ -45,6 +45,11 @@ function syncCards(trades: readonly Trade[]): Map<string, CardRow> {
   return new Map(rows.map((r) => [r.trade_id, r]));
 }
 
+/*
+  last_review holds your local day (the one the review counted on) with the
+  time after it: an ISO timestamp is in UTC, and in the evening west of
+  Greenwich its date is already tomorrow — "reviewed today" read 0 after 6pm.
+*/
 const asCard = (t: Trade, c: CardRow, today: string): Flashcard => ({
   tradeId: t.id, shot: t.screenshot_path!, setup: t.setup_type, direction: t.direction, account: accountLabel(t.account),
   date: t.undated ? null : t.date.slice(0, 10), grade: t.grade_letter ?? null, outcome: t.outcome, r: t.r_multiple ?? null,
@@ -75,7 +80,7 @@ export function reviewCard(tradeId: string, rating: Rating, today: string): { du
   if (!c) return null;
   const next = schedule(c.reps === 0 && c.due == null ? NEW_CARD : c, rating, today);
   db.prepare(`UPDATE study_cards SET interval = ?, ease = ?, reps = ?, lapses = ?, due = ?, introduced = COALESCE(introduced, ?), last_review = ?
-    WHERE trade_id = ?`).run(next.interval, next.ease, next.reps, next.lapses, next.due, today, new Date().toISOString(), tradeId);
+    WHERE trade_id = ?`).run(next.interval, next.ease, next.reps, next.lapses, next.due, today, `${today}T${new Date().toISOString().slice(11, 19)}`, tradeId);
   return { due: next.due, interval: next.interval };
 }
 

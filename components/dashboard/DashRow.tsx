@@ -13,6 +13,7 @@ import { mondayOf, type DayRings, type Streak } from '@/lib/consistency';
 import { DASH_CARDS, DASH_CARD_INFO, DASH_ROW_MAX, type DashCard, type DashSlot } from '@/lib/preferences';
 import type { DashboardData } from '@/lib/dashboard';
 import { Card } from './Card';
+import { useLiveTick } from '@/lib/useLive';
 
 const WEEKDAY = ['M', 'T', 'W', 'T', 'F'];
 const faint = { color: 'var(--text-faint)' } as const;
@@ -114,7 +115,8 @@ function Mini({ children, onClick, disabled, label, data }: { children: React.Re
 /** Process this week: the rings for each trading day and the streak (lib/consistency). */
 function ProcessCard() {
   const [r, setR] = useState<{ days: DayRings[]; closedDays: number; tradingDays: number; streak: Streak } | null>(null);
-  useEffect(() => { const t = localDay(); void getJson<typeof r>(`/api/consistency?today=${t}&week=${mondayOf(t)}`).then(setR); }, []);
+  const live = useLiveTick();
+  useEffect(() => { const t = localDay(); void getJson<typeof r>(`/api/consistency?today=${t}&week=${mondayOf(t)}`).then(setR); }, [live]);
   if (!r) return null;
   const monday = mondayOf(localDay());
   const days = Array.from({ length: 5 }, (_, i) => { const d = new Date(`${monday}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); });
@@ -141,13 +143,14 @@ function ProcessCard() {
 function StudyCard() {
   const { prefs } = usePreferences();
   const [s, setS] = useState<{ today: number; goal: number; streak: number; due: number | null } | null>(null);
+  const live = useLiveTick();
   useEffect(() => {
     const t = localDay();
     void Promise.all([
       getJson<{ totals: { today: number; goal: number; streak: number } }>(`/api/study/sessions?today=${t}&goal=${prefs.studyGoal}`),
       getJson<{ stats: { due: number; fresh: number } }>(`/api/study/cards?today=${t}`),
     ]).then(([a, b]) => a && setS({ ...a.totals, due: b ? b.stats.due + b.stats.fresh : null }));
-  }, [prefs.studyGoal]);
+  }, [prefs.studyGoal, live]);
   if (!s) return null;
   const share = Math.min(1, s.today / Math.max(1, s.goal));
   return (
@@ -167,14 +170,15 @@ function StudyCard() {
 /** Goals: each live goal with its streak and how today stands. */
 function GoalsCard() {
   const [g, setG] = useState<Array<{ goal: { id: string; title: string; archived: boolean }; progress: { streak: number; unit: 'day' | 'week'; todayOk: boolean | null } }> | null>(null);
-  useEffect(() => { void getJson<{ goals: NonNullable<typeof g> }>(`/api/goals?today=${localDay()}`).then((j) => setG(j?.goals ?? [])); }, []);
+  const live = useLiveTick();
+  useEffect(() => { void getJson<{ goals: NonNullable<typeof g> }>(`/api/goals?today=${localDay()}`).then((j) => setG(j?.goals ?? [])); }, [live]);
   if (!g) return null;
-  const live = g.filter((x) => !x.goal.archived);
+  const active = g.filter((x) => !x.goal.archived);
   return (
     <Card title="Goals" onTitle={openGoals}>
-      {!live.length ? <Empty>No goals yet — press G to set one.</Empty> : (
+      {!active.length ? <Empty>No goals yet — press G to set one.</Empty> : (
         <ul className="space-y-1.5 text-[12px]" data-dash-goals>
-          {live.slice(0, 5).map((x, i) => (
+          {active.slice(0, 5).map((x, i) => (
             <motion.li key={x.goal.id} initial={{ opacity: 0, x: 4 }} animate={{ opacity: 1, x: 0 }} transition={stagger(i)} className="flex items-center gap-2">
               <span className="text-[11px]" style={{ color: x.progress.todayOk == null ? 'var(--text-faint)' : x.progress.todayOk ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>
                 {x.progress.todayOk == null ? '·' : x.progress.todayOk ? '✓' : '✗'}
@@ -192,7 +196,8 @@ function GoalsCard() {
 /** Fix first: the leak from Stats. Information about a habit — never a setup to take. */
 function FixCard() {
   const [p, setP] = useState<{ leak: { label: string; clear: boolean; costR: number; n: number; experiment: string | null } | null; trades: number } | null>(null);
-  useEffect(() => { void getJson<NonNullable<typeof p>>('/api/study/plan').then(setP); }, []);
+  const live = useLiveTick();
+  useEffect(() => { void getJson<NonNullable<typeof p>>('/api/study/plan').then(setP); }, [live]);
   if (!p) return null;
   return (
     <Card title="Fix first" note={p.leak ? (p.leak.clear ? 'from Stats' : 'not proven yet') : undefined} onTitle={() => navigate('/study')}>
@@ -250,10 +255,11 @@ function MonthCard({ d, money }: { d: DashboardData; money: boolean }) {
 /** Today's news: high and medium releases today, in the currencies you count. */
 function NewsCard() {
   const [ev, setEv] = useState<Array<{ id: string | number; at: string; title: string; currency: string; impact: string; all_day?: boolean }> | null>(null);
+  const live = useLiveTick();
   useEffect(() => {
     const t = localDay();
     void getJson<{ events: NonNullable<typeof ev> }>(`/api/news?from=${t}&to=${t}`).then((j) => setEv((j?.events ?? []).filter((e) => e.impact === 'High' || e.impact === 'Medium')));
-  }, []);
+  }, [live]);
   if (!ev) return null;
   return (
     <Card title="Today's news" onTitle={() => navigate('/analytics?tab=news')}>

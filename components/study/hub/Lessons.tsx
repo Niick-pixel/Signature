@@ -1,5 +1,6 @@
 'use client';
 
+import { useLive } from '@/lib/useLive';
 import { useEffect, useMemo, useState } from 'react';
 import { openTrade } from '@/components/trade/openTrade';
 import type { LessonRow } from '@/db/studyHub';
@@ -11,7 +12,9 @@ export function Lessons() {
   const [q, setQ] = useState('');
   const [theme, setTheme] = useState<string | null>(null);
   const [only, setOnly] = useState<'all' | 'losses'>('all');
-  useEffect(() => { fetch('/api/study/lessons').then((r) => r.json()).then(setData).catch(() => {}); }, []);
+  const load = () => { fetch('/api/study/lessons').then((r) => r.json()).then(setData).catch(() => {}); };
+  useEffect(load, []);
+  useLive(load);
 
   const shown = useMemo(() => (data?.lessons ?? []).filter((l) => (!theme || l.themes.includes(theme))
     && (only === 'all' || l.outcome === 'Loss')

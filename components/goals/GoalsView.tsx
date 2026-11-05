@@ -1,5 +1,6 @@
 'use client';
 
+import { useLive } from '@/lib/useLive';
 import { useEffect, useState } from 'react';
 import { CloseX } from '@/components/review/CloseX';
 import { useConfirm } from '@/components/ui/Confirm';
@@ -28,6 +29,7 @@ export function GoalsView() {
 
   const load = () => fetch(`/api/goals?today=${today}`).then((r) => r.json()).then((d) => { setRows(d.goals ?? []); setCheckins(d.checkins ?? []); });
   useEffect(() => { load(); }, []);
+  useLive(load, { ignore: ['/api/goals'] });
 
   const patch = async (id: string, body: Record<string, unknown>) => { await fetch(`/api/goals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); load(); };
   const remove = async (g: Goal) => {

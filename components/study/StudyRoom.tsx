@@ -9,7 +9,7 @@ import { logBlock } from './useTimer';
 import { STUDY_KINDS, STUDY_KIND_LABEL, formatTimestamp, videoAt, type StudyKind, type StudyNote, type StudyTotals, type VideoMark } from '@/lib/study';
 import { openFocus, startTimer } from '@/lib/studyTimer';
 import { localDay } from '@/lib/day';
-import { JOURNAL_CHANGED } from '@/lib/freshness';
+import { useLive } from '@/lib/useLive';
 import type { Trade } from '@/lib/types';
 import type { StudyPlan } from '@/db/studyHub';
 import { motion } from 'framer-motion';
@@ -49,7 +49,8 @@ export function StudyRoom() {
   const loadNotes = useCallback(() => fetch('/api/study/notes').then((r) => r.json()).then((j) => setNotes(j.notes)).catch(() => {}), []);
   const loadTotals = useCallback(() => fetch(`/api/study/sessions?today=${localDay()}&goal=${prefs.studyGoal}`).then((r) => r.json()).then((j) => setTotals(j.totals)).catch(() => {}), [prefs.studyGoal]);
   useEffect(() => { void loadNotes(); }, [loadNotes]);
-  useEffect(() => { void loadTotals(); window.addEventListener(JOURNAL_CHANGED, loadTotals); return () => window.removeEventListener(JOURNAL_CHANGED, loadTotals); }, [loadTotals]);
+  useEffect(() => { void loadTotals(); }, [loadTotals]);
+  useLive(() => { void loadTotals(); });
   useEffect(() => { if (!selected && notes?.length) setSelected(notes[0].id); }, [notes, selected]);
   // The server renders Today; the remembered tab is applied after hydration (no mismatch).
   const [tab, setTab] = useState<HubTab>('today');
@@ -59,15 +60,23 @@ export function StudyRoom() {
   const [waiting, setWaiting] = useState<number | null>(null);
   useEffect(() => {
     try { const v = window.localStorage.getItem(TAB_KEY) as HubTab | null; if (v && TABS.includes(v)) setTab(v); } catch { /* fresh */ }
-    fetch('/api/study/plan').then((r) => r.json()).then(setPlan).catch(() => setPlan({ leak: null, examples: [], trades: 0 }));
-    fetch(`/api/study/drills?today=${localDay()}`).then((r) => r.json()).then((d) => setDrillsWeek(d.counter.thisWeek)).catch(() => {});
-    fetch('/api/study/later').then((r) => r.json()).then((d) => setWaiting(d.items.filter((w: { done_at: string | null }) => !w.done_at).length)).catch(() => {});
   }, []);
+  // The plan (the leak from Stats): reloads when trades change, not when you study.
+  const loadPlan = useCallback(() => {
+    fetch('/api/study/plan').then((r) => r.json()).then(setPlan).catch(() => setPlan({ leak: null, examples: [], trades: 0 }));
+  }, []);
+  useEffect(() => { loadPlan(); }, [loadPlan]);
+  useLive(loadPlan, { ignore: ['/api/study', '/api/blind'], focus: false });
   const focusIds = useMemo(() => plan?.leak?.tradeIds ?? [], [plan]);
-  useEffect(() => {
-    if (cardStats || !plan) return;
-    fetch(`/api/study/cards?today=${localDay()}&focus=${focusIds.join(',')}`).then((r) => r.json()).then((j) => setCardStats(j.stats)).catch(() => {});
-  }, [plan, focusIds, cardStats]);
+  // The counts on the tabs and tiles: after every change — a card rated, a drill graded, a video saved.
+  const loadCounts = useCallback(() => {
+    const today = localDay();
+    fetch(`/api/study/drills?today=${today}`).then((r) => r.json()).then((d) => setDrillsWeek(d.counter.thisWeek)).catch(() => {});
+    fetch('/api/study/later').then((r) => r.json()).then((d) => setWaiting(d.items.filter((w: { done_at: string | null }) => !w.done_at).length)).catch(() => {});
+    fetch(`/api/study/cards?today=${today}`).then((r) => r.json()).then((j) => setCardStats(j.stats)).catch(() => {});
+  }, []);
+  useEffect(() => { loadCounts(); }, [loadCounts]);
+  useLive(loadCounts);
   const go = useCallback((t: HubTab) => { setTab(t); try { window.localStorage.setItem(TAB_KEY, t); } catch { /* fine */ } }, []);
   const openNote = useCallback((id: string) => { void loadNotes(); setSelected(id); go('notes'); }, [go, loadNotes]);
   const writePlaybook = async (title: string, body: string) => {

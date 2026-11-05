@@ -1,5 +1,6 @@
 'use client';
 
+import { useLiveTick } from '@/lib/useLive';
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Field } from '@/components/ui/Field';
@@ -24,12 +25,13 @@ export interface GuardContext {
 /** My own numbers, for the account and day in the form (db/rules guardContext). */
 export function useGuardContext(account: string, day: string | null, exclude: string | null): GuardContext | null {
   const [ctx, setCtx] = useState<GuardContext | null>(null);
+  const live = useLiveTick();
   useEffect(() => {
     let alive = true;
     const q = new URLSearchParams({ account, ...(day ? { day } : {}), ...(exclude ? { exclude } : {}) });
     fetch(`/api/guard?${q}`).then((r) => (r.ok ? r.json() : null)).then((c) => { if (alive && c) setCtx(c); }).catch(() => {});
     return () => { alive = false; };
-  }, [account, day, exclude]);
+  }, [account, day, exclude, live]);
   return ctx;
 }
 

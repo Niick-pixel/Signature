@@ -1,5 +1,6 @@
 'use client';
 
+import { useLiveTick } from '@/lib/useLive';
 import { useEffect, useState } from 'react';
 import { localDay } from '@/lib/day';
 import { stopSuggestion, type Tally } from '@/lib/backtestSession';
@@ -14,11 +15,12 @@ const KEEP_KEY = 'signature:session-keep-going';
 export function SessionTally() {
   const [t, setT] = useState<Tally | null>(null);
   const [kept, setKept] = useState(() => { try { return window.sessionStorage.getItem(KEEP_KEY) === localDay(); } catch { return false; } });
+  const live = useLiveTick();
   useEffect(() => {
     let alive = true;
     fetch(`/api/review/tally?today=${localDay()}&world=backtest`).then((r) => (r.ok ? r.json() : null)).then((x) => { if (alive) setT(x); }).catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [live]);
   if (!t || t.trades === 0) return null;
   const why = kept ? null : stopSuggestion(t, new Date().getHours());
   return (

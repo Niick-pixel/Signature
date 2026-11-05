@@ -1,5 +1,6 @@
 'use client';
 
+import { useLive } from '@/lib/useLive';
 import { useCallback, useEffect, useState } from 'react';
 import { useConfirm } from '@/components/ui/Confirm';
 import { startTimer } from '@/lib/studyTimer';
@@ -21,6 +22,7 @@ export function WatchLater({ onOpenNote }: { onOpenNote: (id: string) => void })
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => fetch('/api/study/later').then((r) => r.json()).then((j) => setItems(j.items)).catch(() => {}), []);
   useEffect(() => { void load(); }, [load]);
+  useLive(() => { void load(); }, { ignore: ['/api/study/later'] });
 
   const add = async () => {
     setError(null);

@@ -42,7 +42,42 @@ let watching = false;
   board, the Today panel and the rest (the reveal asks /api/similar), which
   was the lag on close.
 */
-const READ_POSTS = ['/api/similar', '/api/executions/preview', '/api/analytics/ask'];
+const READ_POSTS = ['/api/similar', '/api/executions/preview', '/api/analytics/ask', '/api/client-error'];
+/** Not journal data: the reminder poll and the bell. Neither stale nor news. */
+const QUIET_PREFIXES = ['/api/reminders'];
+/*
+  Writes a screen makes about its own layout — the board's card positions,
+  notes and offsets, chart drawings, themes and backgrounds. They mark the
+  cache stale (another screen may show them) but are not broadcast: the
+  screen that made them already shows them, and reloading it mid-drag would
+  fight the hand on the mouse.
+*/
+const LOCAL_PREFIXES = ['/api/board', '/api/trades/positions', '/api/drawings', '/api/themes', '/api/backgrounds', '/api/screenshot-settings'];
+
+/*
+  Live updates. Every other successful write is announced as JOURNAL_CHANGED
+  (detail: the API paths written), once per burst — a quarter of a second
+  after the last write — so typing into an autosaving field or a bulk edit
+  reloads things once, not per keystroke. Screens listen (useLive) and reload
+  in place; server-rendered pages are refreshed by <LiveRefresh/>.
+*/
+const BURST_MS = 250;
+let burst: string[] = [];
+let burstTimer: number | null = null;
+function announce(path: string): void {
+  burst.push(path);
+  if (burstTimer != null) window.clearTimeout(burstTimer);
+  burstTimer = window.setTimeout(() => {
+    const paths = [...new Set(burst)];
+    burst = []; burstTimer = null;
+    window.dispatchEvent(new CustomEvent(JOURNAL_CHANGED, { detail: { paths } }));
+  }, BURST_MS);
+}
+
+/** The API paths a JOURNAL_CHANGED event was about (empty: a general "reload", e.g. New trade closing). */
+export function changedPaths(e: Event): string[] {
+  return ((e as CustomEvent<{ paths?: string[] }>).detail?.paths) ?? [];
+}
 
 /** Mark stale after every successful non-GET request to this app's API. */
 export function watchWrites(): void {
@@ -56,7 +91,11 @@ export function watchWrites(): void {
       if (method !== 'GET' && method !== 'HEAD' && res.ok) {
         const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         const url = new URL(href, window.location.href);
-        if (url.origin === window.location.origin && url.pathname.startsWith('/api/') && !READ_POSTS.includes(url.pathname)) markStale();
+        const p = url.pathname;
+        if (url.origin === window.location.origin && p.startsWith('/api/') && !READ_POSTS.includes(p) && !QUIET_PREFIXES.some((q) => p.startsWith(q))) {
+          markStale();
+          if (!LOCAL_PREFIXES.some((q) => p.startsWith(q))) announce(p);
+        }
       }
     } catch { /* never let bookkeeping break a request */ }
     return res;

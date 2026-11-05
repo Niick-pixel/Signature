@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { SPRING_CSS, press, spring } from '@/lib/motion';
 import { Wordmark } from './Wordmark';
@@ -38,6 +38,7 @@ let lastPill: { left: number; width: number } | null = null;
 
 export function TitleBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { prefs } = usePreferences();
   const pill = useRef<HTMLSpanElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -109,6 +110,13 @@ export function TitleBar() {
               <motion.div key={tab.href} whileTap={press} transition={spring}>
                 <Link
                   href={tab.href}
+                  // Prefetched on hover, not on sight: after every save the page cache is
+                  // cleared (lib/freshness, LiveRefresh), and eight tabs re-rendering on the
+                  // server at once — Stats among them — would compete with the refresh you
+                  // are waiting for. A hover is a few hundred ms ahead of the click.
+                  prefetch={false}
+                  onMouseEnter={() => router.prefetch(tab.href)}
+                  onFocus={() => router.prefetch(tab.href)}
                   className="relative block rounded-full px-3.5 py-1.5 text-[12px] font-medium outline-none"
                   style={{ color: active ? 'var(--text)' : 'var(--text-faint)' }}
                 >
