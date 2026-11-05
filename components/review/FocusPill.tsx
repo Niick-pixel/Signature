@@ -16,6 +16,23 @@ export interface FocusData { focus: FocusStatus | null; options: Array<{ id: str
 export function FocusPill({ data, onChanged, onHide }: { data: FocusData | null; onChanged: () => void; onHide?: () => void }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  /*
+    Which way the menu opens, measured when it opens: up where there is room
+    above (the board's bottom-left, where it began), down where there is not
+    (the Dashboard header — opening up there ran into the title bar), and no
+    taller than the room on that side.
+  */
+  const [place, setPlace] = useState<{ up: boolean; max: number }>({ up: true, max: 420 });
+  const toggle = () => {
+    if (!open && box.current) {
+      const r = box.current.getBoundingClientRect();
+      const above = r.top - 56;            // the title bar
+      const below = window.innerHeight - r.bottom - 16;
+      const up = above >= Math.min(320, below) && above > below * 0.8;
+      setPlace({ up, max: Math.max(160, Math.min(window.innerHeight * 0.6, (up ? above : below) - 8)) });
+    }
+    setOpen((o) => !o);
+  };
   // The menu closes on its ✕, on Escape, and on any click outside it.
   useEffect(() => {
     if (!open) return;
@@ -34,7 +51,7 @@ export function FocusPill({ data, onChanged, onHide }: { data: FocusData | null;
   }
   return (
     <div ref={box} className="relative flex items-center gap-1" data-focus-pill={f.ruleId}>
-      <button type="button" onClick={() => setOpen((o) => !o)} title={`${f.text}${f.chosen ? '' : ' — the rule behind your #1 leak. Click to choose another.'}`}
+      <button type="button" onClick={toggle} title={`${f.text}${f.chosen ? '' : ' — the rule behind your #1 leak. Click to choose another.'}`}
         className="glass flex min-w-0 max-w-[18.5rem] items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[11.5px]"
         style={{ background: 'color-mix(in srgb, var(--bg-raised) 95%, transparent)', borderColor: 'rgb(var(--accent) / 0.4)' }}>
         <span className="shrink-0 font-semibold" style={{ color: 'rgb(var(--accent))' }}>This week:</span>
@@ -46,9 +63,10 @@ export function FocusPill({ data, onChanged, onHide }: { data: FocusData | null;
       {onHide && <CloseX onClick={onHide} label="Hide for today" className="border bg-[var(--bg-raised)]" />}
       <AnimatePresence>
         {open && (
-          <motion.ul initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={springSoft}
-            className="glass absolute bottom-full left-0 mb-2 max-h-[60vh] w-[19rem] overflow-y-auto rounded-[calc(16px*var(--rk))] p-1.5"
-            style={{ background: 'color-mix(in srgb, var(--bg-raised) 98%, transparent)' }}>
+          <motion.ul initial={{ opacity: 0, y: place.up ? 6 : -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }} transition={springSoft}
+            data-focus-menu={place.up ? 'up' : 'down'}
+            className={`glass absolute left-0 z-50 w-[19rem] overflow-y-auto rounded-[calc(16px*var(--rk))] p-1.5 ${place.up ? 'bottom-full mb-2' : 'top-full mt-2'}`}
+            style={{ background: 'color-mix(in srgb, var(--bg-raised) 98%, transparent)', maxHeight: place.max, transformOrigin: place.up ? 'bottom left' : 'top left' }}>
             <li className="flex items-center justify-between px-2.5 pb-1 pt-1">
               <span className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Focus this week on</span>
               <CloseX onClick={() => setOpen(false)} label="Close" />
