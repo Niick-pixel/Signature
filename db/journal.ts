@@ -1,6 +1,7 @@
 import 'server-only';
 import crypto from 'node:crypto';
 import { getDb } from './index';
+import { listTrades } from './trades';
 import { sanitiseHtml, toPlainText } from '../lib/sanitise';
 import type { JournalPage } from '../lib/types';
 
@@ -17,16 +18,46 @@ function hydrate(row: Record<string, unknown>): JournalPage {
   };
 }
 
+/*
+  The weekly review's best and worst charts were written with an encoded path
+  and a width (…%2F…?w=720) that the sanitiser did not accept, so the page was
+  saved with each image's address dropped: <img alt="Best chart" />. Each one
+  sits under its trade's line ("Best: 2026-11-05 · Backtest (FX Replay) · …
+  · +3.10R"), which is enough to find the trade and its chart again. Repaired
+  once, the first time the page is read; only images with no address are
+  touched, never the writing around them.
+*/
+const BROKEN_CHART = /(<p><b>(Best|Worst):<\/b> (\d{4}-\d{2}-\d{2}) · ([^<]+?) · [^<]*?<b>([−+-]?)(\d+\.\d{2})R<\/b><\/p>\s*<p>)<img alt="(?:Best|Worst) chart" \/>/g;
+const unesc = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+export function repairWeekCharts(body: string, trades: ReadonlyArray<{ date: string; account: string; r_multiple: number | null; screenshot_path: string | null; deleted_at: string | null }>): string {
+  return body.replace(BROKEN_CHART, (whole, before: string, label: string, day: string, account: string, sign: string, num: string) => {
+    const r = Number(num) * (sign === '−' || sign === '-' ? -1 : 1);
+    const t = trades.find((x) => !x.deleted_at && x.screenshot_path && x.date.startsWith(day) && x.account === unesc(account.trim())
+      && x.r_multiple != null && Math.abs(x.r_multiple - r) < 0.006);
+    return t ? `${before}<img src="/api/screenshots/${t.screenshot_path}?w=720" alt="${label} chart" />` : whole;
+  });
+}
+
+function repaired(row: Record<string, unknown>): Record<string, unknown> {
+  const body = String(row.body ?? '');
+  if (!/<img alt="(Best|Worst) chart" \/>/.test(body)) return row;
+  const fixed = repairWeekCharts(body, listTrades());
+  if (fixed === body) return row;
+  getDb().prepare('UPDATE journal_pages SET body = ? WHERE id = ?').run(fixed, row.id as string);
+  return { ...row, body: fixed };
+}
+
 export function listJournalPages(): JournalPage[] {
   return (getDb()
     .prepare('SELECT * FROM journal_pages ORDER BY pinned DESC, day DESC, created_at DESC')
-    .all() as Record<string, unknown>[]).map(hydrate);
+    .all() as Record<string, unknown>[]).map(repaired).map(hydrate);
 }
 
 export function getJournalPage(id: string): JournalPage | null {
   const row = getDb().prepare('SELECT * FROM journal_pages WHERE id = ?').get(id) as
     Record<string, unknown> | undefined;
-  return row ? hydrate(row) : null;
+  return row ? hydrate(repaired(row)) : null;
 }
 
 export interface JournalInput {

@@ -85,7 +85,8 @@ const worldLine = (label: string, w: WorldWeek) => (w.n ? `<li>${label}: ${w.n} 
 function tradeBlock(label: string, t: TradeLine): string {
   return [
     `<p><b>${label}:</b> ${esc(t.date)} · ${esc(t.account)} · ${esc(t.setup)} ${esc(t.direction)} · target ${esc(t.target)} · <b>${signed(t.r)}</b></p>`,
-    t.screenshot ? `<p><img src="/api/screenshots/${encodeURIComponent(t.screenshot)}?w=720" alt="${label} chart"></p>` : '',
+    // The stored path as it is (2026-11/2026-11-05-ab12.png): the sanitiser takes the app's own screenshot paths, nothing encoded.
+    t.screenshot ? `<p><img src="/api/screenshots/${t.screenshot}?w=720" alt="${label} chart"></p>` : '',
     t.lesson ? `<blockquote>${esc(t.lesson)}</blockquote>` : '',
   ].join('');
 }

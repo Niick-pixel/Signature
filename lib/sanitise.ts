@@ -45,8 +45,17 @@ const ALLOWED_STYLE = new Set([
 function safeUrl(value: string, kind: 'href' | 'src'): string | null {
   const url = value.trim();
   if (/^https?:\/\//i.test(url)) return kind === 'href' ? url : null;
-  // The app's own screenshot store, and nothing else, for images.
-  if (kind === 'src' && /^\/api\/screenshots\/[\w./-]+$/.test(url)) return url;
+  // The app's own screenshot store, and nothing else, for images — with an optional thumbnail
+  // width (?w=720). An encoded path (%2F) is decoded first, then held to the same characters
+  // and kept inside the store (no "..").
+  if (kind === 'src') {
+    const m = /^\/api\/screenshots\/([^?#]+)(\?w=\d{2,4})?$/.exec(url);
+    if (!m) return null;
+    let p: string;
+    try { p = decodeURIComponent(m[1]); } catch { return null; }
+    if (!/^[\w./-]+$/.test(p) || p.split('/').some((seg) => seg === '..' || seg === '')) return null;
+    return `/api/screenshots/${p}${m[2] ?? ''}`;
+  }
   if (kind === 'href' && url.startsWith('/')) return url;
   return null;
 }
