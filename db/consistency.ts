@@ -47,7 +47,7 @@ export function dayInputs(to: string): { inputs: Map<string, DayInput>; earliest
     d.checkedIn = Boolean(r.checked_in_at);
     if (r.what_happened?.trim() || r.notes?.trim()) d.reviewed = true;
   }
-  for (const p of preps) at(p.day).prepSteps = prepProgress(p.data).done;
+  for (const p of preps) { const pr = prepProgress(p.data); const d = at(p.day); d.prepSteps = pr.done; d.prepComplete = pr.complete; }
   for (const day of pages) at(day);
   const days = [...inputs.keys()].filter((d) => d <= to).sort();
   return { inputs, earliest: days[0] ?? to };

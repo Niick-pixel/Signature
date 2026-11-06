@@ -17,7 +17,7 @@ import { isTradingDay, marketHoliday } from './marketHolidays';
 
 export type RingId = 'prep' | 'rules' | 'journal' | 'review';
 export const RINGS: ReadonlyArray<{ id: RingId; label: string; hint: string }> = [
-  { id: 'prep', label: 'Prep', hint: 'The morning check-in and the chart prep (4 of 6 steps or more).' },
+  { id: 'prep', label: 'Prep', hint: 'The morning check-in and the chart prep, every step.' },
   { id: 'rules', label: 'Rules', hint: 'No written rule broken. A day you sat out breaks nothing.' },
   { id: 'journal', label: 'Journal', hint: 'Every trade finished: settled, not a quick log, with a lesson.' },
   { id: 'review', label: 'Review', hint: 'A journal page or the day review, on a day you traded.' },
@@ -28,6 +28,8 @@ export interface DayInput {
   day: string;
   checkedIn: boolean;
   prepSteps: number;
+  /** The prep counts as done (lib/prep prepProgress().complete); without it, the old rule: 4 steps. */
+  prepComplete?: boolean;
   /** Real trades taken that day. */
   trades: number;
   /** Of those, how many broke a rule (trade, day or self-reported). */
@@ -50,7 +52,7 @@ export interface DayRings {
 
 export function dayRings(d: DayInput): DayRings {
   const rings: Record<RingId, RingState> = {
-    prep: d.checkedIn && d.prepSteps >= 4 ? 'done' : 'open',
+    prep: d.checkedIn && (d.prepComplete ?? d.prepSteps >= 4) ? 'done' : 'open',
     rules: d.broke > 0 ? 'open' : 'done',
     journal: d.trades === 0 ? 'na' : d.unfinished === 0 ? 'done' : 'open',
     review: d.trades === 0 ? 'na' : d.reviewed ? 'done' : 'open',

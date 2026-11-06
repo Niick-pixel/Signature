@@ -28,7 +28,7 @@ export function dayGrade(day: string, trades: readonly Trade[], prep: PrepData |
 
   if (!ts.length && !prep && !open) return { day, score: null, letter: null, parts: [], trades: 0 };
   const progress = prep ? prepProgress(prep) : null;
-  const prepared = progress ? progress.done >= Math.min(4, progress.total) : false;
+  const prepared = progress ? progress.complete : false;
   parts.push({
     id: 'prepared', label: 'Prepared before the session',
     kept: prepared ? true : open && !ts.length ? null : false,

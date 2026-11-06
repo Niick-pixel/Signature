@@ -31,8 +31,8 @@ test('carried in only when today has not answered, and dropped from the sweeps t
 });
 
 test('the retired killzone mark is never shown, ticked or counted — and old ticks still line up', async () => {
-  const { PREP_STEPS, liveMarks, parsePrepData } = await import('../lib/prep');
-  const step = PREP_STEPS.find((s) => s.id === 'session')!;
+  const { LEGACY_STEPS, liveMarks, parsePrepData } = await import('../lib/prep');
+  const step = LEGACY_STEPS.find((s) => s.id === 'session')!;
   assert.ok(!liveMarks(step).some((m) => /killzone/i.test(m.text)));
   assert.equal(liveMarks(step)[1].text, step.marks[2], 'positions are kept');
   assert.deepEqual(parsePrepData({ ticks: { session: [0, 1, 2] } }).ticks.session, [0, 2]);

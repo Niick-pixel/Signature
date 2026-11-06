@@ -22,6 +22,9 @@ export interface ReminderSnapshot {
   settings: NotifySettings;
   checkInDone: boolean;
   prepSteps: number;
+  /** Of how many, and whether the prep counts as done (lib/prep); without them, the old rule: 4 of 6. */
+  prepTotal?: number;
+  prepComplete?: boolean;
   /** Real accounts' trades on the trader's local day, any stage. */
   today: DayTrade[];
   maxTrades: number; maxLosses: number; cooldownMinutes: number;
@@ -37,6 +40,7 @@ export interface ReminderSnapshot {
 }
 
 const PREP_STEPS_DONE = 4;
+const prepped = (s: ReminderSnapshot) => s.prepComplete ?? s.prepSteps >= PREP_STEPS_DONE;
 const isLoss = (t: DayTrade) => (t.r != null ? t.r < -0.1 : t.outcome === 'Loss');
 const taken = (t: DayTrade) => t.status !== 'Planned' && t.outcome !== 'Not taken';
 const wallMs = (wall: string) => Date.parse(`${wall.slice(0, 16)}:00Z`);
@@ -55,8 +59,8 @@ function candidates(s: ReminderSnapshot): Reminder[] {
   const settled = done.filter((t) => t.status !== 'Live').sort((a, b) => a.date.localeCompare(b.date));
 
   // 5. Prep not done, in the lead-up to the NY open.
-  if (session && c.nyMins >= NY_OPEN - s.settings.prepLead && c.nyMins < NY_OPEN && (!s.checkInDone || s.prepSteps < PREP_STEPS_DONE)) {
-    const missing = [!s.checkInDone && 'the morning check-in', s.prepSteps < PREP_STEPS_DONE && `the chart prep (${s.prepSteps} of 6 steps)`].filter(Boolean).join(' and ');
+  if (session && c.nyMins >= NY_OPEN - s.settings.prepLead && c.nyMins < NY_OPEN && (!s.checkInDone || !prepped(s))) {
+    const missing = [!s.checkInDone && 'the morning check-in', !prepped(s) && `the chart prep (${s.prepSteps} of ${s.prepTotal ?? 6} steps)`].filter(Boolean).join(' and ');
     add({ id: `prep:${c.nyDay}`, kind: 'prep', title: `NY open in ${NY_OPEN - c.nyMins} min`, body: `Not done yet: ${missing}.`, route: s.checkInDone ? 'checkin:chart' : 'checkin:morning', urgent: false });
   }
 
@@ -164,7 +168,7 @@ export function resolvedIds(s: ReminderSnapshot, ids: readonly string[]): string
   const done = s.today.filter(taken);
   return ids.filter((id) => {
     const [kind, key] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
-    if (kind === 'prep') return key === c.nyDay && s.checkInDone && s.prepSteps >= PREP_STEPS_DONE;
+    if (kind === 'prep') return key === c.nyDay && s.checkInDone && prepped(s);
     if (kind === 'journal') return key === c.localDay && !done.some((t) => t.quickLog || (!t.hasLesson && t.status !== 'Live')) && !s.unlinkedExecutions;
     if (kind === 'evening') return key === c.localDay && s.journalPageToday;
     if (kind === 'weekly') return key === mondayOf(c.nyDay) && s.weeklyReviewDone;

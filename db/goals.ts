@@ -52,7 +52,7 @@ export function goalsWithProgress(today: string) {
     const sun = end.toISOString().slice(0, 10);
     return sessions.filter((s) => s.day >= monday && s.day <= sun).reduce((a, s) => a + s.minutes, 0);
   };
-  const prepDone = (day: string) => { const p = getPrep(day); return p ? prepProgress(p.data).done : 0; };
+  const prepDone = (day: string) => { const p = getPrep(day); return p ? prepProgress(p.data) : null; };
   return listGoals().map((g) => ({ goal: g, progress: goalProgress(g, { trades, today, prepDone, studyWeek }) }));
 }
 

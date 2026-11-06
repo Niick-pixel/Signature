@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPrep } from '@/db/prep';
 import { reviewInputs } from '@/db/review';
-import { PREP_STEPS, answerKey, answerText } from '@/lib/prep';
+import { PREP_STEPS, answerKey, answerText, prepProgress } from '@/lib/prep';
 import { brokenFor, dayBreaksByTrade, fieldEras, sessionTrades } from '@/lib/review';
 import { pnlOf } from '@/lib/stats';
 import { dayGrade } from '@/lib/dayGrade';
@@ -22,7 +22,8 @@ export async function GET(request: Request) {
   const prep = getPrep(today);
   const plan = prep ? PREP_STEPS.flatMap((s) => s.fields.filter((f) => !f.hidden).map((f) => ({ label: f.label, value: answerText(prep.data.answers[answerKey(s, f)]) })))
     .filter((x): x is { label: string; value: string } => x.value != null) : [];
-  const done = prep ? Object.values(prep.data.steps).filter((v) => v === 'done').length : 0;
+  const progress = prep ? prepProgress(prep.data) : null;
+  const done = progress?.done ?? 0;
 
   const { trades, ctxFor, cfg } = reviewInputs();
   const breaks = dayBreaksByTrade(trades, ctxFor, cfg);
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     tilt: tiltNow(real, today, now.getHours() * 60 + now.getMinutes()),
     grade: gradeOf(today), pastGrades: days.map((d) => { const g = gradeOf(d); return { day: d, score: g.score, letter: g.letter }; }).filter((g) => g.score != null),
-    plan, prep: { done, total: PREP_STEPS.length, started: Boolean(prep) },
+    plan, prep: { done, total: progress?.total ?? PREP_STEPS.length, started: Boolean(prep) },
     rules: { trades: session.length, kept, broken: [...counts].sort((a, b) => b[1] - a[1]).map(([short, count]) => ({ short, count })) },
     recent,
   });

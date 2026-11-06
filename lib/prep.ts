@@ -4,16 +4,20 @@ import { TARGET_TYPES } from './domain';
  * The chart prep: the second half of the morning check-in, done on the chart
  * before the New York session.
  *
- * Six steps, each a set of reminders to tick as they go on the chart and a
- * few answers to tap — every one of them something the model uses (plus the
- * order-book heatmap, kept on purpose):
+ * The TradingView script (Nick iFVG v6) now draws what the prep used to ask
+ * for by hand — killzone highs and lows, PDH/PDL, PWH/PWL, equal highs and
+ * lows, FVGs from 5m to 4H, the dealing range and its 50%, the HTF bias and
+ * its invalidation, alerts on every level. So the prep reads, then decides:
  *
- *   1. Bias            the HTF swing range, its 50%, the nearest HTF FVGs
- *   2. Liquidity       every nameable level a sweep can take
- *   3. HTF gaps        FVGs in the direction of travel, 5m up to 4H, and the opening gaps
- *   4. Heatmap         the resting size in the book
- *   5. Draw and plan   which way, to which target class, where it is wrong
- *   6. Session         news, the killzone, the rules for today
+ *   1. Read the panel   the two rows read before an entry: HTF bias + 1H inv
+ *                       (and the "A+ only" conflict), and the nearest levels
+ *   2. Off the script   what it does not do: the order-book heatmap, Daily
+ *                       FVGs, NDOG, and NWOG until the script's one works
+ *   3. Plan and rules   the sweep to wait for, the draw, the target, the side,
+ *                       the stop — and the day's news, filled in on its own
+ *
+ * The six steps of the version before are kept as LEGACY_STEPS: preps saved
+ * under them still read, show and export, and still count by their own rule.
  *
  * The reminders are the point: the important levels and checks, each one
  * ticked, so nothing gets skipped on a rushed morning. Order blocks, breakers
@@ -33,6 +37,12 @@ export interface PrepField {
   options: string[];
   /** No longer asked; answers already saved still read (plan match, exports). */
   hidden?: boolean;
+  /**
+   * The answer's stored key, when it is not "step.field": a question that
+   * moved to another step keeps the key it was saved under, so everything
+   * reading it (plan match, the plan grade, the stop rule) still finds it.
+   */
+  key?: string;
 }
 
 export interface PrepStep {
@@ -61,7 +71,7 @@ const SWEEPABLE = ['PDH', 'PDL', 'PWH', 'PWL', 'Asia high', 'Asia low', 'London 
   draw.target, …) so a prep saved under it still reads; the new answers only
   add to them.
 */
-export const PREP_STEPS: PrepStep[] = [
+export const LEGACY_STEPS: PrepStep[] = [
   {
     id: 'bias', title: 'Bias', frames: 'Daily · 4H',
     marks: [
@@ -151,6 +161,79 @@ export const PREP_STEPS: PrepStep[] = [
   },
 ];
 
+
+/** Levels the script's Above and Below rows name. */
+const PANEL_LEVELS = ['PDH', 'PDL', 'PWH', 'PWL', 'Asia high', 'Asia low', 'London high', 'London low', 'NY AM high', 'NY AM low',
+  'EQH', 'EQL', 'Data high', 'Data low', '$ internal', 'LRLR'];
+
+/** The prep as it is asked now. */
+export const PREP_STEPS: PrepStep[] = [
+  {
+    id: 'panel', title: 'Read the panel', frames: 'The script',
+    marks: [
+      'Script on the chart, on Costa Rica time, daylight saving on Auto',
+      'HTF bias row read — 1H and 4H, and how far the invalidation is',
+      'Above and Below rows read — the nearest untaken level each side, and whether it is major',
+    ],
+    fields: [
+      { id: 'h1', label: '1H', kind: 'one', options: ['Bullish', 'Bearish'] },
+      { id: 'h4', label: '4H', kind: 'one', options: ['Bullish', 'Bearish', 'Stale'] },
+      { id: 'conflict', label: 'HTF / LTF conflict', kind: 'one', options: ['A+ only showing', 'No conflict'] },
+      { id: 'inv', label: '1H inv', kind: 'one', options: ['Close — in range today', 'Far', 'Stale'] },
+      { id: 'above', label: 'Nearest above', kind: 'pick', options: PANEL_LEVELS },
+      { id: 'aboveTier', label: 'Above is', kind: 'one', options: ['Major', 'Minor'] },
+      { id: 'below', label: 'Nearest below', kind: 'pick', options: PANEL_LEVELS },
+      { id: 'belowTier', label: 'Below is', kind: 'one', options: ['Major', 'Minor'] },
+    ],
+  },
+  {
+    // Kept as "heatmap" so the heatmap answers saved before still belong to it.
+    id: 'heatmap', title: 'Off the script', frames: 'Order book · Daily', heatmap: true,
+    marks: [
+      'Heatmap open on the futures book',
+      'Bands that held for hours moved to the chart',
+      'Flickering bands ignored — spoofing, not liquidity',
+      'Daily FVGs above and below boxed — the script stops at 4H',
+      'NDOG marked',
+      "NWOG marked — the script's one is not working yet",
+    ],
+    fields: [
+      { id: 'side', label: 'Heaviest liquidity sits', kind: 'one', options: ['Above price', 'Below price', 'Both sides', 'Thin book'] },
+      { id: 'walls', label: 'The walls are', kind: 'one', options: ['Holding', 'Being pulled', 'Mixed'] },
+      { id: 'daily', label: 'Nearest Daily FVG', kind: 'one', options: ['Above price', 'Below price', 'Both sides', 'None close'] },
+    ],
+  },
+  {
+    id: 'plan', title: 'Plan and rules', frames: 'NY AM',
+    marks: [
+      'Draw on liquidity decided — where price is most likely heading',
+      'Only the model: a named sweep, one clean FVG, an inversion close',
+      'Daily loss limit set in the platform',
+      'Step away until an alert rings',
+    ],
+    fields: [
+      { id: 'wait', key: 'liquidity.wait', label: 'Sweep to wait for', kind: 'many', options: SWEEPABLE },
+      { id: 'direction', key: 'draw.direction', label: 'Price draws', kind: 'one', options: ['Up', 'Down', 'Unclear'] },
+      // The same six classes the trade form ranks, strongest first.
+      { id: 'target', key: 'draw.target', label: 'Target', kind: 'pick', options: [...TARGET_TYPES] },
+      { id: 'confidence', key: 'draw.confidence', label: 'How clear', kind: 'one', options: ['Clear', 'Probable', 'Coin flip'] },
+      { id: 'side', key: 'draw.side', label: 'Today I take', kind: 'one', options: ['Longs only', 'Shorts only', 'Both ways', 'No trade today'] },
+      { id: 'news', key: 'session.news', label: 'News', kind: 'one', options: ['None today', 'Before the open', 'Inside the killzone'] },
+      { id: 'stop', key: 'session.stop', label: 'Stop after', kind: 'one', options: ['1 loss', '2 losses', 'Daily limit'] },
+    ],
+  },
+];
+
+/** Every step a saved prep can hold: the live ones, then the legacy ones (not shown, still read). */
+const ALL_STEPS: PrepStep[] = [...PREP_STEPS, ...LEGACY_STEPS.filter((l) => !PREP_STEPS.some((p) => p.id === l.id))];
+const LEGACY_ONLY = new Set(LEGACY_STEPS.map((l) => l.id).filter((id) => !PREP_STEPS.some((p) => p.id === id)));
+
+export const answerKey = (step: PrepStep, field: PrepField) => field.key ?? `${step.id}.${field.id}`;
+
+/** Every question by its stored key: the live one wins where both ask it. */
+const FIELD_BY_KEY = new Map<string, PrepField>();
+for (const st of [...LEGACY_STEPS].reverse().concat(PREP_STEPS)) for (const f of st.fields) FIELD_BY_KEY.set(answerKey(st, f), f);
+
 export const PREP_STEP_IDS = PREP_STEPS.map((s) => s.id);
 
 export type StepState = 'done' | 'skipped';
@@ -185,18 +268,17 @@ export function parsePrepData(raw: unknown): PrepData {
   const r = obj(raw);
   const steps: Record<string, StepState> = {};
   for (const [id, v] of Object.entries(obj(r.steps))) {
-    if (PREP_STEP_IDS.includes(id) && (v === 'done' || v === 'skipped')) steps[id] = v;
+    if (ALL_STEPS.some((st) => st.id === id) && (v === 'done' || v === 'skipped')) steps[id] = v;
   }
   const ticks: Record<string, number[]> = {};
   for (const [id, v] of Object.entries(obj(r.ticks))) {
-    const step = PREP_STEPS.find((s) => s.id === id);
+    const step = ALL_STEPS.find((s) => s.id === id);
     if (!step || !Array.isArray(v)) continue;
     ticks[id] = [...new Set(v.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < step.marks.length && !step.retired?.includes(i)))].sort();
   }
   const answers: Record<string, Answer> = {};
   for (const [key, v] of Object.entries(obj(r.answers))) {
-    const [stepId, fieldId] = key.split('.');
-    const field = PREP_STEPS.find((s) => s.id === stepId)?.fields.find((f) => f.id === fieldId);
+    const field = FIELD_BY_KEY.get(key);
     if (!field) continue;
     if (field.kind === 'many') {
       const list = Array.isArray(v) ? field.options.filter((o) => v.includes(o)) : [];
@@ -260,13 +342,23 @@ export function liveMarks(step: PrepStep): Array<{ text: string; i: number }> {
   return step.marks.map((text, i) => ({ text, i })).filter((m) => !step.retired?.includes(m.i));
 }
 
-/** How far through: steps done or skipped, out of all of them. */
-export function prepProgress(data: PrepData): { answered: number; done: number; total: number } {
-  const states = Object.values(data.steps);
-  return { answered: states.length, done: states.filter((s) => s === 'done').length, total: PREP_STEPS.length };
-}
+/** Saved under the six-step prep (it has a state for a step that is no longer asked). */
+export const isLegacyPrep = (data: PrepData) => Object.keys(data.steps).some((id) => LEGACY_ONLY.has(id));
 
-export const answerKey = (step: PrepStep, field: PrepField) => `${step.id}.${field.id}`;
+/**
+ * How far through. A prep is complete when every step is done — or, for one
+ * saved under the six-step version, by its own rule then: 4 of 6.
+ */
+export function prepProgress(data: PrepData): { answered: number; done: number; total: number; complete: boolean } {
+  if (isLegacyPrep(data)) {
+    const states = Object.values(data.steps);
+    const done = states.filter((s) => s === 'done').length;
+    return { answered: states.length, done, total: LEGACY_STEPS.length, complete: done >= 4 };
+  }
+  const live = PREP_STEPS.map((st) => data.steps[st.id]);
+  const done = live.filter((v) => v === 'done').length;
+  return { answered: live.filter(Boolean).length, done, total: PREP_STEPS.length, complete: done === PREP_STEPS.length };
+}
 
 /** An answer as words: "PDH, PWL" for a list, the option itself otherwise. */
 export function answerText(a: Answer | undefined): string | null {
@@ -280,7 +372,7 @@ export function prepMarkdown(prep: SessionPrep): string {
   const p = prepProgress(d);
   const out: string[] = [];
   out.push(`- Chart prep: ${p.done} of ${p.total} steps marked${p.answered > p.done ? `, ${p.answered - p.done} skipped` : ''}${prep.started_at ? `, started ${prep.started_at.slice(11, 16)} UTC` : ''}`);
-  for (const step of PREP_STEPS) {
+  for (const step of isLegacyPrep(d) ? LEGACY_STEPS : PREP_STEPS) {
     const said = step.fields
       .map((f) => [f.label, answerText(d.answers[answerKey(step, f)])] as const)
       .filter(([, v]) => v != null)

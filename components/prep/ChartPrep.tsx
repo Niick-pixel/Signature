@@ -208,7 +208,7 @@ function StepView({ step, index, data, change, review, carried }: {
       </div>
       <h3 className="mt-1 text-[19px] font-semibold tracking-tight">{step.title}</h3>
 
-      {step.id === 'session' && (
+      {step.id === 'plan' && (
         <SessionNews review={review} answered={data.answers[answerKey(step, step.fields.find((f) => f.id === 'news')!)] != null}
           onAnswer={(v) => setAnswer(step.fields.find((f) => f.id === 'news')!, v)} />
       )}

@@ -21,7 +21,7 @@ export const GOAL_KINDS: Array<{ kind: GoalKind; label: string; hint: string; un
   { kind: 'pre_graded', label: 'Grade before the outcome', hint: 'Every trade graded before you knew how it ended.', unit: 'day', defaults: {}, title: () => 'Grade every trade before the outcome' },
   { kind: 'no_tag', label: 'Drop a mistake', hint: 'Not one trade with this mistake tag.', unit: 'day', defaults: { tag: 'Chased' }, title: (p) => `No “${p.tag ?? 'Chased'}”` },
   { kind: 'min_grade', label: 'Only good setups', hint: 'Every trade at this grade or better.', unit: 'day', defaults: { letter: 'B' }, title: (p) => `Only ${p.letter ?? 'B'} grade or better` },
-  { kind: 'prep_done', label: 'Prep every weekday', hint: 'The chart prep done (4+ steps) on every trading day — weekends and market holidays skipped.', unit: 'day', defaults: {}, title: () => 'Chart prep every weekday' },
+  { kind: 'prep_done', label: 'Prep every weekday', hint: 'The chart prep done, every step, on every trading day — weekends and market holidays skipped.', unit: 'day', defaults: {}, title: () => 'Chart prep every weekday' },
   { kind: 'study', label: 'Study each week', hint: 'At least this many study minutes a week.', unit: 'week', defaults: { minutes: 120 }, title: (p) => `Study ${p.minutes ?? 120} min a week` },
 ];
 
@@ -32,7 +32,8 @@ export interface GoalContext {
   trades: readonly Trade[];
   today: string;
   /** Prep steps done on a day (0 when none). */
-  prepDone: (day: string) => number;
+  /** The day's chart prep: steps done, of how many, and whether it counts as prepped. */
+  prepDone: (day: string) => { done: number; total: number; complete: boolean } | null;
   /** Study minutes in the week starting this Monday. */
   studyWeek: (monday: string) => number;
 }
@@ -48,8 +49,8 @@ function judgeDay(g: Goal, day: string, ts: Trade[], ctx: GoalContext): GoalDay 
   if (g.kind === 'prep_done') {
     // Weekends and market holidays are not days to prep for: skipped, never missed.
     if (!isTradingDay(day)) return null;
-    const n = ctx.prepDone(day);
-    return { day, kept: n >= 4, why: n ? `${n} of 6 prep steps` : 'No prep' };
+    const p = ctx.prepDone(day);
+    return { day, kept: Boolean(p?.complete), why: p?.done ? `${p.done} of ${p.total} prep steps` : 'No prep' };
   }
   if (!ts.length) return null;
   switch (g.kind) {

@@ -48,7 +48,7 @@ export function reminderSnapshot(now: Date = new Date()): ReminderSnapshot {
     clock,
     settings: getNotifySettings(),
     checkInDone: Boolean(getDailyReview(day)?.checked_in_at),
-    prepSteps: prep ? prepProgress(prep.data).done : 0,
+    ...(() => { const p = prep ? prepProgress(prep.data) : null; return { prepSteps: p?.done ?? 0, prepTotal: p?.total, prepComplete: p?.complete ?? false }; })(),
     today: trades.map((t) => ({
       id: t.id, date: t.date, outcome: t.outcome ?? '', r: t.r_multiple ?? null, status: t.status,
       quickLog: Boolean(t.quick_log), hasLesson: Boolean(t.lesson?.trim()), exitTime: t.exit_time ?? null,

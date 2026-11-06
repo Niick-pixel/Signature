@@ -25,7 +25,8 @@ const t = (date: string, o: Record<string, unknown> = {}) => {
     ...(o.outcome === 'Loss' && o.r_multiple === undefined ? { r_multiple: -1 } : {}), ...o } as never;
 };
 const prep = (done: number, side?: string) => ({
-  steps: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f'].slice(0, done).map((k) => [k, 'done'])),
+  // The six steps a prep was saved under before the script took over the drawing (lib/prep LEGACY_STEPS).
+  steps: Object.fromEntries(['bias', 'liquidity', 'gaps', 'heatmap', 'draw', 'session'].slice(0, done).map((k) => [k, 'done'])),
   ticks: {}, answers: side ? { 'draw.side': side } : {},
 }) as never;
 
@@ -48,8 +49,8 @@ test('plan grade: sitting out on a no-trade plan keeps it; replays and other day
   assert.equal(dayGrade(day, [], prep(1), null, 2).parts.find((p) => p.id === 'prepared')!.kept, false, 'a started prep left short is a miss once the day closes');
 });
 
-const ctx = (trades: unknown[], today: string, over: Partial<{ prepDone: (d: string) => number; studyWeek: (m: string) => number }> = {}) =>
-  ({ trades: trades as never, today, prepDone: () => 0, studyWeek: () => 0, ...over });
+const ctx = (trades: unknown[], today: string, over: Partial<{ prepDone: (d: string) => { done: number; total: number; complete: boolean } | null; studyWeek: (m: string) => number }> = {}) =>
+  ({ trades: trades as never, today, prepDone: () => null, studyWeek: () => 0, ...over });
 const goal = (kind: string, params = {}, start = '2026-10-19') => ({ id: 'g', kind, title: kind, params, start_day: start, end_day: null, archived: false, created_at: '' }) as never;
 
 test('goals: a stop-after goal counts days kept, the streak, and when it broke', () => {
@@ -76,7 +77,8 @@ test('goals: session, grade, tag and same-day goals judge each day', () => {
 });
 
 test('goals: prep on weekdays only, and a morning without prep yet is not a miss; study by the week', () => {
-  const prepDone = (d: string) => (d === '2026-10-21' ? 2 : d === '2026-10-28' ? 0 : 5);
+  const n = (d: string) => (d === '2026-10-21' ? 2 : d === '2026-10-28' ? 0 : 5);
+  const prepDone = (d: string) => ({ done: n(d), total: 6, complete: n(d) >= 4 });
   const p = G.goalProgress(goal('prep_done', {}, '2026-10-19'), ctx([], '2026-10-28', { prepDone }));
   assert.equal(p.units, 7, 'Mon 19 – Tue 27, weekdays; today waits'); assert.equal(p.kept, 6);
   const s = G.goalProgress(goal('study', { minutes: 120 }, '2026-10-12'), ctx([], '2026-10-28', { studyWeek: (m: string) => (m === '2026-10-12' ? 150 : m === '2026-10-19' ? 60 : 30) }));

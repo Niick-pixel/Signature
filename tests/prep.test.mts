@@ -12,32 +12,48 @@ import path from 'node:path';
 process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signature-prep-'));
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
-const { PREP_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown } = await import('../lib/prep');
+const { PREP_STEPS, LEGACY_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown, answerKey } = await import('../lib/prep');
 const { savePrep, getPrep, previousPrep, listPreps } = await import('../db/prep');
 const { toMarkdown } = await import('../lib/sanitise');
 const { journalExport } = await import('../lib/journalExport');
 
-test('six steps of reminders, each part of the model (plus the heatmap)', () => {
-  assert.deepEqual(PREP_STEPS.map((s) => s.id), ['bias', 'liquidity', 'gaps', 'heatmap', 'draw', 'session']);
+test('three steps: read the panel, what the script does not do, then plan — the decisions keep their keys', () => {
+  assert.deepEqual(PREP_STEPS.map((s) => s.id), ['panel', 'heatmap', 'plan']);
   // Off-model things stay out: no order blocks, breakers or S/R zones.
   const words = JSON.stringify(PREP_STEPS);
   for (const gone of ['Order block', 'breaker', 'resistance', 'support', 'Uptrend']) {
     assert.ok(!words.toLowerCase().includes(gone.toLowerCase()), gone);
   }
   for (const s of PREP_STEPS) {
-    // The reminders are the point: every step has several.
-    assert.ok(s.marks.length >= 3 && s.marks.length <= 5, s.id);
+    assert.ok(s.marks.length >= 3 && s.marks.length <= 6, s.id);
     for (const f of s.fields) {
       assert.ok(['one', 'many', 'pick'].includes(f.kind), `${s.id}.${f.id}`);
       assert.ok(f.options.length >= 2, `${s.id}.${f.id}`);
     }
   }
+  // What the script draws is no longer ticked by hand; what it does not do still is.
+  for (const drawn of ['PDH and PDL', 'PWH and PWL', 'equal highs and lows', 'Unfilled 1H FVGs']) assert.ok(!words.includes(drawn), drawn);
+  for (const manual of ['Heatmap', 'Daily FVGs', 'NDOG', 'NWOG']) assert.ok(words.includes(manual), manual);
   assert.ok(PREP_STEPS.find((s) => s.id === 'heatmap')?.heatmap);
-  // The important levels and gaps are all reminded.
-  for (const level of ['5m, 10m, 15m, 30m, 1H, 4H', 'PDH and PDL', 'PWH and PWL', 'Asia and London', 'equal highs and lows', '4H FVGs', '1H FVGs', 'NWOG / NDOG', 'killzone', 'Invalidation'])
-    assert.ok(words.includes(level), level);
-  // The target is picked from the same ranked classes as the trade form.
-  assert.equal(PREP_STEPS.find((s) => s.id === 'draw')!.fields.find((f) => f.id === 'target')!.options[0], 'PDH/PDL');
+  // The decisions are stored where the plan grade, plan match and the stop rule read them.
+  const plan = PREP_STEPS.find((s) => s.id === 'plan')!;
+  assert.deepEqual(plan.fields.map((f) => answerKey(plan, f)),
+    ['liquidity.wait', 'draw.direction', 'draw.target', 'draw.confidence', 'draw.side', 'session.news', 'session.stop']);
+  assert.equal(plan.fields.find((f) => f.id === 'target')!.options[0], 'PDH/PDL');
+  // The six steps before are kept, to read what was saved under them.
+  assert.deepEqual(LEGACY_STEPS.map((s) => s.id), ['bias', 'liquidity', 'gaps', 'heatmap', 'draw', 'session']);
+});
+
+test('prepped: every step of the new prep; a prep saved under the six steps keeps its 4-of-6 rule', () => {
+  const now = (steps: Record<string, string>) => prepProgress(parsePrepData({ steps }));
+  assert.deepEqual(now({ panel: 'done', heatmap: 'done' }), { answered: 2, done: 2, total: 3, complete: false });
+  assert.equal(now({ panel: 'done', heatmap: 'done', plan: 'done' }).complete, true);
+  assert.equal(now({ panel: 'done', heatmap: 'skipped', plan: 'done' }).complete, false);
+  assert.deepEqual(now({ bias: 'done', liquidity: 'done', gaps: 'done', draw: 'done' }), { answered: 4, done: 4, total: 6, complete: true });
+  assert.equal(now({ bias: 'done', liquidity: 'done', gaps: 'done' }).complete, false);
+  // An answer moved to the plan step is read under its old key, by either version.
+  const d = parsePrepData({ steps: { plan: 'done' }, answers: { 'draw.side': 'Longs only', 'session.stop': '1 loss', 'panel.h1': 'Bullish', 'panel.h4': 'Sideways' } });
+  assert.deepEqual(d.answers, { 'draw.side': 'Longs only', 'session.stop': '1 loss', 'panel.h1': 'Bullish' });
 });
 
 test('any input reads as a valid prep; answers outside the options are dropped', () => {
@@ -58,7 +74,7 @@ test('any input reads as a valid prep; answers outside the options are dropped',
   assert.deepEqual(d.steps, { bias: 'done', liquidity: 'skipped' });
   assert.deepEqual(d.ticks, { bias: [0] });
   assert.deepEqual(d.answers, { 'bias.bias': 'Bullish', 'liquidity.taken': ['PDH', 'PWL'], 'draw.target': 'EQH/EQL' });
-  assert.deepEqual(prepProgress(d), { answered: 2, done: 1, total: 6 });
+  assert.deepEqual(prepProgress(d), { answered: 2, done: 1, total: 6, complete: false });
 });
 
 test('saving keeps the first start time and the first finish time', async () => {
@@ -121,7 +137,7 @@ test('the journal export lays each page on its day, with the day beside it', () 
   assert.match(md, /Show me where what I write and what I do disagree/);
   assert.match(md, /### Tuesday 29 September 2026 — 1 page · 1 trade, −1\.0R/);
   assert.match(md, /\*\*Morning:\*\* checked in .* · slept 5h · mind 2\/5 · bias Bullish — daily FVG · news High \(CPI 8:30\) · planned at most 2/);
-  assert.match(md, /Draw and plan: price draws Up; target EQH\/EQL/);
+  assert.match(md, /Plan and rules: price draws Up; target EQH\/EQL/);
   assert.match(md, /- 09:41 NQ Long · iFVG · grade C · Loss −1\.0R · why: FOMO · Live · went wrong: Chased/);
   assert.match(md, /Lesson: "Waited for nothing and chased it\."/);
   assert.match(md, /#### Page: Chasing again\n\nI \*\*chased\*\* the open\./);
