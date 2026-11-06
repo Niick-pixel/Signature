@@ -25,10 +25,22 @@ export interface StudyTotals {
   /** Days in a row (ending today, or yesterday when today is not done yet) that met the goal. */
   streak: number;
   best: number;
+  /** The daily minimum (keeps the streak) and the cap (past it, rest). */
   goal: number;
+  max: number;
+  /** Where today stands: under the minimum, in range, or past the cap. */
+  state: 'under' | 'in' | 'over';
+  /** Minutes still needed today to reach the minimum (0 once there). */
+  toGo: number;
+  /** This week (Monday to today): days at the minimum or more, days past the cap, average a day. */
+  weekMet: number;
+  weekOver: number;
+  weekAvg: number;
+  /** Today's blocks, oldest first. */
+  blocks: Array<{ id: string; minutes: number; topic: string | null; at: string }>;
 }
 
-export function studyTotals(sessions: ReadonlyArray<Pick<StudySession, 'day' | 'minutes'>>, today: string, goal: number, restDay = false): StudyTotals {
+export function studyTotals(sessions: ReadonlyArray<Pick<StudySession, 'day' | 'minutes'> & Partial<Pick<StudySession, 'id' | 'topic' | 'created_at'>>>, today: string, goal: number, restDay = false, cap = 0): StudyTotals {
   const per = new Map<string, number>();
   for (const s of sessions) per.set(s.day, (per.get(s.day) ?? 0) + s.minutes);
   const met = (d: string) => (per.get(d) ?? 0) >= Math.max(1, goal);
@@ -37,7 +49,19 @@ export function studyTotals(sessions: ReadonlyArray<Pick<StudySession, 'day' | '
   const { current: streak, best } = fairStreak(met, today, { tradingOnly: false, restDay }, first < today ? first : today);
   const monday = mondayOf(today);
   const days = Array.from({ length: 7 }, (_, i) => { const day = addDays(monday, i); return { day, minutes: Math.round(per.get(day) ?? 0) }; });
-  return { today: Math.round(per.get(today) ?? 0), week: days.reduce((s, x) => s + x.minutes, 0), days, streak, best, goal };
+  const max = Math.max(goal, cap || goal);
+  const now = Math.round(per.get(today) ?? 0);
+  const sofar = days.filter((d) => d.day <= today);
+  const blocks = sessions.filter((x) => x.day === today)
+    .map((x) => ({ id: x.id ?? '', minutes: Math.round(x.minutes), topic: x.topic ?? null, at: x.created_at ?? '' }))
+    .sort((a, b) => a.at.localeCompare(b.at));
+  return {
+    today: now, week: days.reduce((s, x) => s + x.minutes, 0), days, streak, best, goal, max,
+    state: now < goal ? 'under' : now > max ? 'over' : 'in', toGo: Math.max(0, goal - now),
+    weekMet: sofar.filter((d) => d.minutes >= goal).length, weekOver: sofar.filter((d) => d.minutes > max).length,
+    weekAvg: sofar.length ? Math.round(sofar.reduce((a, d) => a + d.minutes, 0) / sofar.length) : 0,
+    blocks,
+  };
 }
 
 /** "1:02:03", "12:30", "90", "4m20s" → seconds; null when it is not a time. */
@@ -102,4 +126,11 @@ export function quoteOfDay(day: string, source: 'classic' | 'mine' | 'both', min
     ...(source !== 'classic' ? mine : []),
   ];
   return pool.length ? pool[hash(day) % pool.length] : null;
+}
+
+/** "1h 05m", "45m", "2h". */
+export function hm(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  const h = Math.floor(m / 60); const r = m % 60;
+  return h ? `${h}h${r ? ` ${String(r).padStart(2, '0')}m` : ''}` : `${r}m`;
 }

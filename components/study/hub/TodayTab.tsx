@@ -5,6 +5,8 @@ import { openTrade } from '@/components/trade/openTrade';
 import { stagger } from '@/lib/motion';
 import type { StudyPlan } from '@/db/studyHub';
 import type { CardStats } from './Flashcards';
+import type { StudyTotals } from '@/lib/study';
+import { StudyToday } from './StudyToday';
 import { Card, Faint, Head, Pill, rTone, shotSrc, signedR } from './shared';
 
 export type HubTab = 'today' | 'cards' | 'lessons' | 'drills' | 'notes' | 'later';
@@ -15,9 +17,10 @@ export type HubTab = 'today' | 'cards' | 'lessons' | 'drills' | 'notes' | 'later
  * trades, drill them as flashcards, write the rule down — never a setup to
  * take, and never a reason to break a written rule.
  */
-export function TodayTab({ plan, cards, drillsThisWeek, waiting, go, writePlaybook }: {
+export function TodayTab({ plan, cards, drillsThisWeek, waiting, go, writePlaybook, totals, reloadTotals }: {
   plan: StudyPlan | null; cards: CardStats | null; drillsThisWeek: number | null; waiting: number | null;
   go: (t: HubTab) => void; writePlaybook: (title: string, body: string) => void;
+  totals: StudyTotals | null; reloadTotals: () => void;
 }) {
   const leak = plan?.leak;
   const steps = leak ? [
@@ -66,6 +69,7 @@ export function TodayTab({ plan, cards, drillsThisWeek, waiting, go, writePlaybo
         )}
       </Card>
       <div className="space-y-4">
+        <StudyToday t={totals} onChange={reloadTotals} />
         <Tile title="Flashcards" value={cards ? `${cards.due + cards.fresh}` : '—'} sub={cards ? `${cards.due} due · ${cards.fresh} new · ${cards.deck} in the deck` : ''} onClick={() => go('cards')} data="cards" />
         <Tile title="Blind re-grade" value={drillsThisWeek == null ? '—' : `${drillsThisWeek}/10`} sub="graded this week" onClick={() => go('drills')} data="drills" />
         <Tile title="Watch later" value={waiting == null ? '—' : String(waiting)} sub="videos waiting" onClick={() => go('later')} data="later" />

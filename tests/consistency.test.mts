@@ -65,3 +65,18 @@ test('study streak keeps its meaning, and the rest day forgives one day', () => 
   assert.equal(studyTotals(gap, '2026-11-04', 20).streak, 2);
   assert.equal(studyTotals(gap, '2026-11-04', 20, true).streak, 3);
 });
+
+test('study range: under, in, over; the week counts days at the minimum and past the cap', () => {
+  const s = [
+    { day: '2026-11-02', minutes: 130 }, { day: '2026-11-03', minutes: 200 }, { day: '2026-11-04', minutes: 60 },
+    { id: 'a', day: '2026-11-05', minutes: 50, topic: 'Video', created_at: '2026-11-05T15:00:00Z' },
+    { id: 'b', day: '2026-11-05', minutes: 25, topic: null, created_at: '2026-11-05T13:00:00Z' },
+  ];
+  const t = studyTotals(s, '2026-11-05', 120, false, 180);
+  assert.deepEqual([t.today, t.state, t.toGo, t.max], [75, 'under', 45, 180]);
+  assert.deepEqual([t.weekMet, t.weekOver, t.weekAvg], [2, 1, 116]);
+  assert.deepEqual(t.blocks.map((b) => b.id), ['b', 'a']);
+  assert.equal(studyTotals(s, '2026-11-03', 120, false, 180).state, 'over');
+  assert.equal(studyTotals(s, '2026-11-02', 120, false, 180).state, 'in');
+  assert.equal(studyTotals(s, '2026-11-02', 120).max, 120, 'no cap: the minimum is the cap');
+});

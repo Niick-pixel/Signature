@@ -1,5 +1,6 @@
 'use client';
 
+import { Pop } from '@/components/ui/Motion';
 import { useEffect, useState } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { ARRANGEMENTS, ARRANGEMENT_HINT, ARRANGEMENT_LABEL, type Arrangement } from '@/lib/layout';
@@ -99,9 +100,8 @@ export function BoardControls({ onRecluster, arrangement, onArrange }: { onReclu
               <rect x="7" y="15" width="6" height="3" rx="1" stroke="currentColor" strokeWidth="1.4" />
             </svg>
           </ControlButton>
-          {open && (
-            <div onClick={(e) => e.stopPropagation()} data-arrange-menu
-              className="absolute bottom-11 right-0 w-64 rounded-[14px] border p-1.5 text-[12px]"
+            <Pop open={open} onClick={(e) => e.stopPropagation()} data-arrange-menu=""
+              className="absolute bottom-11 right-0 w-64 rounded-[14px] border p-1.5 text-[12px]" origin="bottom right"
               style={{ background: 'var(--bg-raised)', borderColor: 'var(--glass-stroke)', boxShadow: 'var(--shadow-panel)' }}>
               <div className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Layout</div>
               {ARRANGEMENTS.map((a) => (
@@ -112,8 +112,7 @@ export function BoardControls({ onRecluster, arrangement, onArrange }: { onReclu
                   <span className="min-w-0"><span className="block font-medium">{ARRANGEMENT_LABEL[a]}</span><span className="block text-[10.5px] leading-snug" style={{ color: 'var(--text-faint)' }}>{ARRANGEMENT_HINT[a]}</span></span>
                 </button>
               ))}
-            </div>
-          )}
+            </Pop>
         </div>
       )}
 

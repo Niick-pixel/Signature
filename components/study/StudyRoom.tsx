@@ -1,15 +1,17 @@
 'use client';
 
+import { SwapIn } from '@/components/ui/Motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { useConfirm } from '@/components/ui/Confirm';
 import { openTrade } from '@/components/trade/openTrade';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
 import { logBlock } from './useTimer';
-import { STUDY_KINDS, STUDY_KIND_LABEL, formatTimestamp, videoAt, type StudyKind, type StudyNote, type StudyTotals, type VideoMark } from '@/lib/study';
+import { hm, STUDY_KINDS, STUDY_KIND_LABEL, formatTimestamp, videoAt, type StudyKind, type StudyNote, type StudyTotals, type VideoMark } from '@/lib/study';
 import { openFocus, startTimer } from '@/lib/studyTimer';
 import { localDay } from '@/lib/day';
 import { useLive } from '@/lib/useLive';
+import { StudyMeter } from './StudyMeter';
 import type { Trade } from '@/lib/types';
 import type { StudyPlan } from '@/db/studyHub';
 import { motion } from 'framer-motion';
@@ -47,7 +49,7 @@ export function StudyRoom() {
 
 
   const loadNotes = useCallback(() => fetch('/api/study/notes').then((r) => r.json()).then((j) => setNotes(j.notes)).catch(() => {}), []);
-  const loadTotals = useCallback(() => fetch(`/api/study/sessions?today=${localDay()}&goal=${prefs.studyGoal}`).then((r) => r.json()).then((j) => setTotals(j.totals)).catch(() => {}), [prefs.studyGoal]);
+  const loadTotals = useCallback(() => fetch(`/api/study/sessions?today=${localDay()}&goal=${prefs.studyMin}&max=${prefs.studyMax}`).then((r) => r.json()).then((j) => setTotals(j.totals)).catch(() => {}), [prefs.studyMin, prefs.studyMax]);
   useEffect(() => { void loadNotes(); }, [loadNotes]);
   useEffect(() => { void loadTotals(); }, [loadTotals]);
   useLive(() => { void loadTotals(); });
@@ -91,7 +93,6 @@ export function StudyRoom() {
   };
   const shown = (notes ?? []).filter((n) => (filter === 'all' || n.kind === filter)
     && (!query.trim() || `${n.title} ${n.body} ${n.tags.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())));
-  const max = Math.max(prefs.studyGoal, ...(totals?.days.map((d) => d.minutes) ?? [0]));
 
   return (
     <div className="mx-auto w-full max-w-[76rem] px-6 pb-24 pt-4" data-study-room>
@@ -102,16 +103,9 @@ export function StudyRoom() {
         </div>
         <div className="flex items-center gap-4">
           {totals && (
-            <div className="flex items-end gap-4" data-study-totals>
-              <Fig label="Today" value={`${totals.today}/${totals.goal} min`} good={totals.today >= totals.goal} />
-              <Fig label="This week" value={`${Math.floor(totals.week / 60) ? `${Math.floor(totals.week / 60)}h ` : ''}${totals.week % 60}m`} />
-              <Fig label="Streak" value={`${totals.streak} day${totals.streak === 1 ? '' : 's'}`} good={totals.streak > 0} hint={`Days in a row with ${totals.goal}+ minutes. Record: ${totals.best}.`} />
-              <div className="flex h-9 items-end gap-1" title="This week, Monday to Sunday">
-                {totals.days.map((d) => (
-                  <div key={d.day} className="w-2.5 rounded-sm" title={`${d.day}: ${d.minutes} min`}
-                    style={{ height: `${Math.max(3, (d.minutes / max) * 36)}px`, background: d.minutes >= totals.goal ? 'rgb(var(--accent))' : 'var(--glass-stroke)' }} />
-                ))}
-              </div>
+            <div className="flex items-end gap-5" data-study-totals>
+              <div className="w-[15rem]"><StudyMeter t={totals} compact /></div>
+              <Fig label="Streak" value={`${totals.streak} day${totals.streak === 1 ? '' : 's'}`} good={totals.streak > 0} hint={`Days in a row with ${hm(totals.goal)} or more. Record: ${totals.best}.`} />
             </div>
           )}
           {prefs.studyClock === 'cube' ? (
@@ -149,7 +143,8 @@ export function StudyRoom() {
       </div>
 
       <div className="mt-4">
-        {tab === 'today' && <TodayTab plan={plan} cards={cardStats} drillsThisWeek={drillsWeek} waiting={waiting} go={go} writePlaybook={writePlaybook} />}
+        <SwapIn k={tab}>
+        {tab === 'today' && <TodayTab totals={totals} reloadTotals={() => void loadTotals()} plan={plan} cards={cardStats} drillsThisWeek={drillsWeek} waiting={waiting} go={go} writePlaybook={writePlaybook} />}
         {tab === 'cards' && <Flashcards focus={focusIds} onStats={setCardStats} />}
         {tab === 'lessons' && <Lessons />}
         {tab === 'drills' && <Drills />}
@@ -191,6 +186,7 @@ export function StudyRoom() {
           )}
         </div>
         )}
+        </SwapIn>
       </div>
     </div>
   );

@@ -123,8 +123,11 @@ export interface Preferences {
   tiltWatch: boolean;
   /** Phase 5. The Study tab in the title bar. */
   studyTab: boolean;
-  /** Minutes a day that keep the study streak going. */
+  /** Before the daily range: minutes a day for the streak. Kept so old settings still read; studyMin replaced it. */
   studyGoal: number;
+  /** The daily study range: the minimum keeps the streak, past the maximum the app says rest. */
+  studyMin: number;
+  studyMax: number;
   /** The timer's length (0: it just counts up), and a soft chime when it is reached. */
   studyTimerLength: number;
   studyChime: boolean;
@@ -296,6 +299,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   tiltWatch: true,
   studyTab: true,
   studyGoal: 20,
+  studyMin: 120,
+  studyMax: 180,
   studyTimerLength: 25,
   studyChime: true,
   studyClock: 'cube',

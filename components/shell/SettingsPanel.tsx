@@ -1,5 +1,6 @@
 'use client';
 
+import { SwapIn } from '@/components/ui/Motion';
 import { createPortal } from 'react-dom';
 
 import { useEffect, useRef, useState } from 'react';
@@ -270,6 +271,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-1" data-settings-body>
+        <SwapIn k={cat}>
 
             {cat === 'general' && (<>
             <Section title="Path" hint="The steps toward a funded account, their criteria, your commitments and the eval budget.">
@@ -643,7 +645,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </Button>
             </div>
             </>)}
-            </div>
+        </SwapIn>
+      </div>
             </div>
           </motion.div>
         </>

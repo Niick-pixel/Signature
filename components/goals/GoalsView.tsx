@@ -1,5 +1,8 @@
 'use client';
 
+import { AnimatePresence, motion } from 'framer-motion';
+import { exitQuick, spring } from '@/lib/motion';
+import { Reveal } from '@/components/ui/Motion';
 import { useLive } from '@/lib/useLive';
 import { useEffect, useState } from 'react';
 import { CloseX } from '@/components/review/CloseX';
@@ -75,7 +78,7 @@ export function GoalsView() {
           <button type="button" onClick={() => setShowArchived((v) => !v)} className="text-[12px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>
             {showArchived ? 'Hide' : 'Show'} {archived.length} finished goal{archived.length === 1 ? '' : 's'}
           </button>
-          {showArchived && (
+          <Reveal open={showArchived}>
             <ul className="mt-3 space-y-2">
               {archived.map((r) => (
                 <li key={r.goal.id} className="glass flex items-center justify-between gap-3 rounded-[calc(14px*var(--rk))] px-4 py-2.5 text-[12.5px]">
@@ -88,11 +91,11 @@ export function GoalsView() {
                 </li>
               ))}
             </ul>
-          )}
+          </Reveal>
         </div>
       )}
 
-      {adding && <AddGoal onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />}
+      <AnimatePresence>{adding && <AddGoal key="add" onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />}</AnimatePresence>
     </div>
   );
 }
@@ -211,8 +214,10 @@ function AddGoal({ onClose, onAdded }: { onClose: () => void; onAdded: () => voi
   const fieldStyle = { background: 'var(--glass-fill)', border: '1px solid var(--glass-stroke)', color: 'var(--text)' };
 
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center p-4" style={{ background: 'rgba(0,0,0,0.35)' }} onClick={onClose}>
-      <div role="dialog" aria-label="New goal" className="w-[34rem] max-w-full rounded-[calc(22px*var(--rk))] p-6" style={{ background: 'var(--bg-raised)' }}
+    <motion.div className="fixed inset-0 z-[70] grid place-items-center p-4" style={{ background: 'rgba(0,0,0,0.35)' }} onClick={onClose}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: exitQuick }}>
+      <motion.div role="dialog" aria-label="New goal" className="w-[34rem] max-w-full rounded-[calc(22px*var(--rk))] p-6" style={{ background: 'var(--bg-raised)', boxShadow: 'var(--shadow-panel)' }}
+        initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98, transition: exitQuick }} transition={spring}
         onClick={(e) => e.stopPropagation()} data-goal-dialog>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[17px] font-semibold tracking-tight">New goal</h2>
@@ -278,7 +283,7 @@ function AddGoal({ onClose, onAdded }: { onClose: () => void; onAdded: () => voi
           <button type="button" onClick={add} disabled={busy} data-goal-save
             className="rounded-full px-4 py-2 text-[12.5px] font-semibold" style={{ background: 'var(--text)', color: 'var(--bg)' }}>{busy ? 'Adding…' : 'Add goal'}</button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

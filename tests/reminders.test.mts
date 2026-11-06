@@ -149,3 +149,11 @@ test('Sunday consistency report: from 10:00, with the week in its body', () => {
   assert.match(r.body, /^3 of 5 trading days/);
   assert.deepEqual(ids(snap({ clock: at('2026-11-08T15:00:00Z'), weeklyReviewDone: true })), []); // 09:00
 });
+
+test('sounds: each kind its own by default; saved choices are checked; volume is clamped', () => {
+  assert.equal(DEFAULT_NOTIFY.sounds.prep, 'rise');
+  assert.notEqual(DEFAULT_NOTIFY.sounds.news, DEFAULT_NOTIFY.sounds.stop);
+  const s = parseNotify({ sound: false, volume: 250, sounds: { stop: 'bell', news: 'off', prep: 'kazoo' } });
+  assert.deepEqual([s.sound, s.volume, s.sounds.stop, s.sounds.news, s.sounds.prep], [false, 100, 'bell', 'off', 'rise']);
+  assert.equal(new Set(Object.values(DEFAULT_NOTIFY.sounds).filter((_, i, a) => i < a.length - 1)).size >= 9, true, 'ten kinds, ten distinct cues');
+});

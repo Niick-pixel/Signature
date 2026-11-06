@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Segmented } from '@/components/ui/Segmented';
 import { TogglePill } from '@/components/ui/TogglePill';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
+import { hm } from '@/lib/study';
 
 type SectionComp = (p: { title: string; hint?: string; children: React.ReactNode }) => React.ReactElement;
 
@@ -14,8 +15,14 @@ export function StudySettings({ Section }: { Section: SectionComp }) {
     <Section title="Study room" hint="Notes, playbooks and video notes with their trades; the study timer and its streak; focus mode. Press 7 to open it.">
       <div className="space-y-3" data-settings="study">
         <div>
-          <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Minutes a day that keep the streak</span>
-          <Segmented<string> value={String(prefs.studyGoal)} onChange={(v) => update({ studyGoal: Number(v) })} options={['10', '20', '30', '45', '60', '90']} labelFor={(v) => `${v} min`} />
+          <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Daily minimum — keeps the study streak</span>
+          <Segmented<string> value={String(prefs.studyMin)} onChange={(v) => update({ studyMin: Number(v), studyMax: Math.max(prefs.studyMax, Number(v)) })}
+            options={['30', '60', '90', '120', '150', '180']} labelFor={(v) => hm(Number(v))} />
+        </div>
+        <div>
+          <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Daily maximum — past it, the app says rest</span>
+          <Segmented<string> value={String(prefs.studyMax)} onChange={(v) => update({ studyMax: Number(v), studyMin: Math.min(prefs.studyMin, Number(v)) })}
+            options={['60', '120', '150', '180', '240', '300']} labelFor={(v) => hm(Number(v))} />
         </div>
         <div>
           <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Time study with</span>

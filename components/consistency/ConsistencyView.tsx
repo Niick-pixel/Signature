@@ -1,5 +1,6 @@
 'use client';
 
+import { SwapIn } from '@/components/ui/Motion';
 import { useCallback, useEffect, useState } from 'react';
 import { useLive, useLiveTick } from '@/lib/useLive';
 import { motion } from 'framer-motion';
@@ -69,7 +70,7 @@ export function ConsistencyView({ initialWeek }: { initialWeek: string | null })
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <SwapIn k={monday}><div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <Head title="The week" right={report ? `${report.closedDays} of ${report.tradingDays} days closed` : ''} />
           <div className="grid grid-cols-5 gap-2">
@@ -150,7 +151,7 @@ export function ConsistencyView({ initialWeek }: { initialWeek: string | null })
             )}
           </Card>
         </div>
-      </div>
+      </div></SwapIn>
 
       <ProcessMonth today={today} />
     </div>
@@ -190,7 +191,7 @@ function ProcessMonth({ today }: { today: string }) {
           <NavButton onClick={() => shift(1)} label="Next month" disabled={month >= today.slice(0, 7)}>›</NavButton>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1.5 text-center text-[10.5px]" style={{ color: 'var(--text-faint)' }}>
+      <SwapIn k={month}><div className="grid grid-cols-7 gap-1.5 text-center text-[10.5px]" style={{ color: 'var(--text-faint)' }}>
         {WEEKDAY.map((w) => <span key={w}>{w}</span>)}
         {Array.from({ length: lead }, (_, i) => <span key={`x${i}`} />)}
         {Array.from({ length: len }, (_, i) => {
@@ -206,7 +207,7 @@ function ProcessMonth({ today }: { today: string }) {
             </div>
           );
         })}
-      </div>
+      </div></SwapIn>
     </Card>
   );
 }

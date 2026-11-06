@@ -7,6 +7,7 @@ import { navigate } from '@/lib/nav';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import { openCheckIn } from './MorningCheckIn';
 import { SETTINGS_TOGGLE } from './Shortcuts';
+import { DEFAULT_SOUNDS, playSound, unlockAudioOnFirstTouch, type SoundId } from '@/lib/sounds';
 
 /**
  * Reminders: a poll every minute (and on focus, and after a save) asks the
@@ -34,11 +35,23 @@ export function openReminderRoute(route: string): void {
 const announce = (n: number) => { lastCount = n; window.dispatchEvent(new CustomEvent(COUNT, { detail: n })); };
 
 /** A notification on the desktop: the app's own (Windows Action Center) or, in a browser, the web one. */
-async function pop(n: BellItem): Promise<void> {
+export interface SoundPrefs { on: boolean; volume: number; sounds: Record<string, SoundId | 'off'> }
+
+/** Each kind its own cue (lib/sounds). True when one played — the system notification then stays silent. */
+function chime(n: BellItem, sound?: SoundPrefs): boolean {
+  if (!sound?.on || n.silent || sound.volume <= 0) return false;
+  const id = sound.sounds[n.kind] ?? DEFAULT_SOUNDS[n.kind] ?? 'bell';
+  if (id === 'off') return false;
+  playSound(id, sound.volume / 100);
+  return true;
+}
+
+async function pop(n: BellItem, sound?: SoundPrefs): Promise<void> {
+  const played = chime(n, sound);
   const bridge = window.signature?.notify;
-  if (bridge) { await bridge({ title: n.title, body: n.body, route: n.route, urgent: n.urgent }); return; }
+  if (bridge) { await bridge({ title: n.title, body: n.body, route: n.route, urgent: n.urgent, silent: played }); return; }
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  const note = new Notification(n.title, { body: n.body, tag: n.id });
+  const note = new Notification(n.title, { body: n.body, tag: n.id, silent: played });
   note.onclick = () => { window.focus(); openReminderRoute(n.route); note.close(); };
 }
 
@@ -52,22 +65,24 @@ export async function enableDesktopNotifications(): Promise<boolean> {
 
 export async function sendTestNotification(): Promise<void> {
   const res = await fetch('/api/reminders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true }) });
-  const { show, unread } = await res.json() as { show: BellItem[]; unread: number };
-  for (const n of show) await pop(n);
+  const { show, unread, sound } = await res.json() as { show: BellItem[]; unread: number; sound?: SoundPrefs };
+  for (const n of show) await pop(n, sound);
   announce(unread);
 }
 
 /** Mounted once, in the layout: the poll. */
 export function ReminderPoller() {
   useEffect(() => {
+    unlockAudioOnFirstTouch();
     let busy = false;
     const tick = async () => {
       if (busy) return; busy = true;
       try {
         const res = await fetch('/api/reminders', { method: 'POST' });
         if (!res.ok) return;
-        const { show, unread } = await res.json() as { show: BellItem[]; unread: number };
-        for (const n of show) await pop(n);
+        const { show, unread, sound } = await res.json() as { show: BellItem[]; unread: number; sound?: SoundPrefs };
+        // Several at once (the app was closed): one sound, the first's — not a cascade.
+        for (const [i, n] of show.entries()) await pop(n, i === 0 ? sound : undefined);
         announce(unread);
       } catch { /* the server is restarting; the next poll catches up */ } finally { busy = false; }
     };

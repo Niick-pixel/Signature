@@ -13,6 +13,8 @@ import { mondayOf, type DayRings, type Streak } from '@/lib/consistency';
 import { DASH_CARDS, DASH_CARD_INFO, DASH_ROW_MAX, type DashCard, type DashSlot } from '@/lib/preferences';
 import type { DashboardData } from '@/lib/dashboard';
 import { Card } from './Card';
+import { StudyMeter } from '@/components/study/StudyMeter';
+import type { StudyTotals } from '@/lib/study';
 import { useLiveTick } from '@/lib/useLive';
 
 const WEEKDAY = ['M', 'T', 'W', 'T', 'F'];
@@ -142,27 +144,20 @@ function ProcessCard() {
 /** Study: minutes today against the goal, the streak, flashcards due. */
 function StudyCard() {
   const { prefs } = usePreferences();
-  const [s, setS] = useState<{ today: number; goal: number; streak: number; due: number | null } | null>(null);
+  const [s, setS] = useState<{ t: StudyTotals; due: number | null } | null>(null);
   const live = useLiveTick();
   useEffect(() => {
     const t = localDay();
     void Promise.all([
-      getJson<{ totals: { today: number; goal: number; streak: number } }>(`/api/study/sessions?today=${t}&goal=${prefs.studyGoal}`),
+      getJson<{ totals: StudyTotals }>(`/api/study/sessions?today=${t}&goal=${prefs.studyMin}&max=${prefs.studyMax}`),
       getJson<{ stats: { due: number; fresh: number } }>(`/api/study/cards?today=${t}`),
-    ]).then(([a, b]) => a && setS({ ...a.totals, due: b ? b.stats.due + b.stats.fresh : null }));
-  }, [prefs.studyGoal, live]);
+    ]).then(([a, b]) => a && setS({ t: a.totals, due: b ? b.stats.due + b.stats.fresh : null }));
+  }, [prefs.studyMin, prefs.studyMax, live]);
   if (!s) return null;
-  const share = Math.min(1, s.today / Math.max(1, s.goal));
   return (
-    <Card title="Study" note={s.streak ? `${s.streak} day${s.streak === 1 ? '' : 's'} in a row` : undefined} onTitle={() => navigate('/study')}>
-      <div className="flex items-baseline gap-2" data-dash-study>
-        <span className="text-[24px] font-semibold tabular-nums tracking-tight">{s.today}</span>
-        <span className="text-[12px]" style={{ color: 'var(--text-dim)' }}>of {s.goal} min today</span>
-      </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--glass-fill-strong)' }}>
-        <motion.div className="h-full rounded-full" style={{ background: 'rgb(var(--accent))' }} initial={{ width: 0 }} animate={{ width: `${share * 100}%` }} transition={springSoft} />
-      </div>
-      {s.due != null && <p className="mt-2 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>{s.due ? `${s.due} flashcard${s.due === 1 ? '' : 's'} waiting` : 'No flashcards due'}</p>}
+    <Card title="Study" note={s.t.streak ? `streak ${s.t.streak}` : undefined} onTitle={() => navigate('/study')}>
+      <div data-dash-study><StudyMeter t={s.t} compact /></div>
+      {s.due != null && <p className="mt-1.5 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>{s.due ? `${s.due} flashcard${s.due === 1 ? '' : 's'} waiting` : 'No flashcards due'}</p>}
     </Card>
   );
 }

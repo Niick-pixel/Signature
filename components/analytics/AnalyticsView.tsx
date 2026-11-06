@@ -1,5 +1,6 @@
 'use client';
 
+import { SwapIn } from '@/components/ui/Motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
@@ -71,6 +72,7 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
       </div>
 
       <div className="mt-5">
+        <SwapIn k={tab}>
         {tab === 'ask' ? <Ask /> : tab === 'whatif' ? <WhatIfTab /> : !data ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading your trades…</p> : (
           <>
             {tab === 'time' && <Time v={data.time} minN={data.minN} clock={prefs.analyticsClock} onClock={(analyticsClock) => update({ analyticsClock })} />}
@@ -81,6 +83,7 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
             {tab === 'news' && <News v={data.news} monday={monday} setMonday={setMonday} reload={load} />}
           </>
         )}
+        </SwapIn>
       </div>
     </div>
   );

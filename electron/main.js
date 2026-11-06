@@ -340,6 +340,8 @@ function createWindow(port) {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      // Reminder sounds (lib/sounds) play when they fire, not only after a click.
+      autoplayPolicy: 'no-user-gesture-required',
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: true,

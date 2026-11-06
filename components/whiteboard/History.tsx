@@ -1,5 +1,6 @@
 'use client';
 
+import { Reveal } from '@/components/ui/Motion';
 import { useEffect, useState } from 'react';
 import type { TradeEdit } from '@/lib/types';
 
@@ -35,7 +36,7 @@ export function History({ tradeId }: { tradeId: string }) {
         History {open ? '−' : '+'}
       </button>
 
-      {open && (
+      <Reveal open={open}>
         <div className="mt-2.5">
           {edits === null ? (
             <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Loading…</p>
@@ -64,7 +65,7 @@ export function History({ tradeId }: { tradeId: string }) {
             </div>
           )}
         </div>
-      )}
+      </Reveal>
     </div>
   );
 }

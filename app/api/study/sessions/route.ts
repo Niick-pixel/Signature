@@ -3,13 +3,14 @@ import { addSession, deleteSession, listSessions } from '@/db/study';
 import { studyTotals } from '@/lib/study';
 import { getRestDay } from '@/db/consistency';
 
-/** GET ?today&goal — study time: today, this week, the streak, the record, and recent sessions. */
+/** GET ?today&goal&max — study time against the daily range: today, this week, the streak, the record, and recent sessions. */
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
   const today = /^\d{4}-\d{2}-\d{2}$/.test(q.get('today') ?? '') ? q.get('today')! : new Date().toLocaleDateString('en-CA');
-  const goal = Math.max(1, Math.min(600, Number(q.get('goal')) || 20));
+  const goal = Math.max(1, Math.min(900, Number(q.get('goal')) || 120));
+  const max = Math.max(goal, Math.min(900, Number(q.get('max')) || goal));
   const all = listSessions();
-  return NextResponse.json({ totals: studyTotals(all, today, goal, getRestDay()), recent: all.slice(-12).reverse() });
+  return NextResponse.json({ totals: studyTotals(all, today, goal, getRestDay(), max), recent: all.slice(-12).reverse() });
 }
 
 /** POST { day, minutes, note_id?, topic? } — a session from the study timer. */

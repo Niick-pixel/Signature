@@ -1,5 +1,6 @@
 'use client';
 
+import { Reveal } from '@/components/ui/Motion';
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
 import { HomeReview } from '@/components/review/HomeReview';
@@ -85,13 +86,13 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
         </div>
       </header>
 
-      {arranging && (
+      <Reveal open={arranging}>
         <div className="glass mb-3 rounded-[calc(18px*var(--rk))] px-4 py-3" data-dash-arrange>
           <DashRowEditor />
         </div>
-      )}
+      </Reveal>
 
-      {open && (
+      <Reveal open={open}>
         <div className="glass mb-3 grid gap-x-6 gap-y-2.5 rounded-[calc(18px*var(--rk))] px-4 py-3 sm:grid-cols-[auto_1fr]" data-dash-filters>
           <Row label="Accounts">
             {/* "All" used to mean the world picked in Settings (Real accounts by default), so a
@@ -120,7 +121,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
             </div>
           )}
         </div>
-      )}
+      </Reveal>
 
       {d.total.trades === 0 ? (
         <div className="glass rounded-[calc(24px*var(--rk))] p-10 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>

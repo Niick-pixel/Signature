@@ -19,7 +19,26 @@ export const REMINDER_KINDS: ReadonlyArray<{ kind: ReminderKind; label: string; 
   { kind: 'backup', label: 'Backup health', hint: 'No second backup folder, or the last backup zip failed.', live: false },
 ];
 
+export const SOUND_IDS = ['rise', 'pings', 'low', 'bell', 'ticks', 'fall', 'arpeggio', 'alert', 'blip', 'chord'] as const;
+export type SoundId = (typeof SOUND_IDS)[number];
+
+export const SOUND_LABEL: Record<SoundId, string> = {
+  rise: 'Rise — two notes up', pings: 'Pings — three quick', low: 'Low — two falling tones', bell: 'Bell — one soft ring',
+  ticks: 'Ticks — two taps and a note', fall: 'Fall — three notes down', arpeggio: 'Arpeggio — four notes up',
+  alert: 'Alert — two-tone', blip: 'Blip — one low', chord: 'Chord — a soft swell',
+};
+
+/** Each reminder's own sound, to start with (Settings → Notifications changes them). The cues themselves are in lib/sounds. */
+export const DEFAULT_SOUNDS: Record<string, SoundId> = {
+  prep: 'rise', news: 'pings', stop: 'low', cooldown: 'bell', journal: 'ticks',
+  evening: 'fall', weekly: 'arpeggio', prop: 'alert', backup: 'blip', consistency: 'chord', test: 'bell',
+};
+
 export interface NotifySettings {
+  /** A sound with each reminder (its own per kind), how loud (0–100), and which sound each kind plays ('off': none). */
+  sound: boolean;
+  volume: number;
+  sounds: Record<string, SoundId | 'off'>;
   /** Master switch. */
   enabled: boolean;
   kinds: Record<ReminderKind, boolean>;
@@ -37,6 +56,7 @@ export interface NotifySettings {
 
 export const DEFAULT_NOTIFY: NotifySettings = {
   enabled: true,
+  sound: true, volume: 60, sounds: { ...DEFAULT_SOUNDS },
   kinds: { prep: true, news: true, stop: true, cooldown: true, journal: true, evening: true, weekly: true, prop: true, backup: true, consistency: true },
   quietFrom: null, quietTo: null, tradingDaysOnly: true, holdWhileLive: true, prepLead: 30, newsLead: 15, eveningAt: '19:00',
 };
@@ -51,8 +71,17 @@ export function parseNotify(raw: unknown): NotifySettings {
   const rk = (r.kinds && typeof r.kinds === 'object' ? r.kinds : {}) as Record<string, unknown>;
   for (const k of Object.keys(kinds) as ReminderKind[]) if (typeof rk[k] === 'boolean') kinds[k] = rk[k] as boolean;
   const time = (v: unknown) => (typeof v === 'string' && HHMM.test(v) ? v : null);
+  const rs = (r.sounds && typeof r.sounds === 'object' ? r.sounds : {}) as Record<string, unknown>;
+  const sounds = { ...DEFAULT_SOUNDS } as Record<string, SoundId | 'off'>;
+  for (const k of Object.keys(sounds)) {
+    const v = rs[k];
+    if (v === 'off' || (typeof v === 'string' && (SOUND_IDS as readonly string[]).includes(v))) sounds[k] = v as SoundId | 'off';
+  }
   return {
     enabled: typeof r.enabled === 'boolean' ? r.enabled : DEFAULT_NOTIFY.enabled,
+    sound: typeof r.sound === 'boolean' ? r.sound : DEFAULT_NOTIFY.sound,
+    volume: clampInt(r.volume, 0, 100, DEFAULT_NOTIFY.volume),
+    sounds,
     kinds,
     quietFrom: time(r.quietFrom), quietTo: time(r.quietTo),
     tradingDaysOnly: typeof r.tradingDaysOnly === 'boolean' ? r.tradingDaysOnly : DEFAULT_NOTIFY.tradingDaysOnly,

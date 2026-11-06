@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { Segmented } from '@/components/ui/Segmented';
 import { TogglePill } from '@/components/ui/TogglePill';
 import { DEFAULT_NOTIFY, REMINDER_KINDS, type NotifySettings } from '@/lib/notify';
+import { DEFAULT_SOUNDS, SOUND_IDS, SOUND_LABEL, playSound, type SoundId } from '@/lib/sounds';
+import { Select } from '@/components/ui/Select';
 import { enableDesktopNotifications, sendTestNotification } from '@/components/shell/Reminders';
 
 type SectionComp = (p: { title: string; hint?: string; children: React.ReactNode }) => React.ReactElement;
@@ -67,6 +69,43 @@ export function NotificationSettings({ Section }: { Section: SectionComp }) {
           {REMINDER_KINDS.map((k) => (
             <TogglePill key={k.kind} checked={s.kinds[k.kind]} onChange={(on) => save({ kinds: { ...s.kinds, [k.kind]: on } })} label={k.label} hint={k.hint} />
           ))}
+        </div>
+      </Section>
+
+      <Section title="Sounds" hint="Each reminder has its own short sound, made by the app — after a few days you know which one it is before you look. None play in quiet hours.">
+        <div className="space-y-3" data-settings="notify-sounds">
+          <div className="flex flex-wrap items-center gap-3">
+            <TogglePill checked={s.sound} onChange={(sound) => save({ sound })} label="Play a sound with each reminder" />
+            <label className="flex items-center gap-2 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
+              Volume
+              <input type="range" min={0} max={100} step={5} value={s.volume} aria-label="Reminder volume" data-notify-volume
+                onChange={(e) => setS({ ...s, volume: Number(e.target.value) })}
+                onPointerUp={(e) => { const v = Number((e.target as HTMLInputElement).value); save({ volume: v }); playSound('bell', v / 100); }}
+                onKeyUp={(e) => save({ volume: Number((e.target as HTMLInputElement).value) })}
+                className="w-28 accent-[rgb(var(--accent))]" />
+              <span className="w-8 tabular-nums">{s.volume}</span>
+            </label>
+          </div>
+          {s.sound && (
+            <ul className="grid gap-1.5 sm:grid-cols-2">
+              {REMINDER_KINDS.map((k) => {
+                const v = s.sounds[k.kind] ?? DEFAULT_SOUNDS[k.kind];
+                return (
+                  <li key={k.kind} className="flex items-center gap-2 rounded-[calc(12px*var(--rk))] px-2.5 py-1.5" style={{ background: 'var(--glass-fill)' }} data-notify-sound={k.kind}>
+                    <span className="w-28 shrink-0 truncate text-[12px]">{k.label}</span>
+                    <div className="min-w-0 flex-1">
+                      <Select<string> compact value={v} options={['off', ...SOUND_IDS]} labelFor={(o) => (o === 'off' ? 'No sound' : SOUND_LABEL[o as SoundId])}
+                        onChange={(o) => { save({ sounds: { ...s.sounds, [k.kind]: o as SoundId | 'off' } }); if (o !== 'off') playSound(o as SoundId, s.volume / 100); }} />
+                    </div>
+                    <button type="button" aria-label={`Play the ${k.label} sound`} title="Play it" disabled={v === 'off'} data-notify-play={k.kind}
+                      onClick={() => v !== 'off' && playSound(v as SoundId, s.volume / 100)}
+                      className="grid size-7 shrink-0 place-items-center rounded-full border text-[10px] disabled:opacity-30"
+                      style={{ borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)' }}>▶</button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </Section>
 

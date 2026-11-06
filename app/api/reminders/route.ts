@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { actOnNotification, listNotifications, testNotification, tickReminders, unreadCount, type NotificationAction } from '@/db/notify';
+import { getNotifySettings, actOnNotification, listNotifications, testNotification, tickReminders, unreadCount, type NotificationAction } from '@/db/notify';
 
 /** The bell: what it holds, and how many are unread. */
 export async function GET() {
@@ -9,8 +9,10 @@ export async function GET() {
 /** A poll (every minute, and on focus): record what became due; returns the ones to pop up now. `{ test: true }` sends one. */
 export async function POST(request: Request) {
   const b = await request.json().catch(() => null) as { test?: boolean } | null;
-  if (b?.test) return NextResponse.json({ show: [testNotification()], unread: unreadCount() });
-  return NextResponse.json(tickReminders());
+  const st = getNotifySettings();
+  const sound = { on: st.sound, volume: st.volume, sounds: st.sounds };
+  if (b?.test) return NextResponse.json({ show: [testNotification()], unread: unreadCount(), sound });
+  return NextResponse.json({ ...tickReminders(), sound });
 }
 
 /** Read, snooze or dismiss one; or mark them all read. */

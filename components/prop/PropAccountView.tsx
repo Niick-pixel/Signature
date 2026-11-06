@@ -1,5 +1,6 @@
 'use client';
 
+import { SwapIn } from '@/components/ui/Motion';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -61,12 +62,14 @@ export function PropAccountView({ id }: { id: string }) {
       </div>
 
       <div className="mt-5">
+        <SwapIn k={tab}>
         {tab === 'overview' && <Overview data={data} reload={reload} />}
         {tab === 'rules' && <Rules data={data} reload={reload} />}
         {tab === 'payouts' && <Payouts data={data} reload={reload} />}
         {tab === 'costs' && <Costs data={data} reload={reload} />}
         {tab === 'calendar' && <Calendar data={data} />}
         {tab === 'trades' && <Trades data={data} />}
+        </SwapIn>
       </div>
     </div>
   );

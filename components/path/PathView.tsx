@@ -1,5 +1,6 @@
 'use client';
 
+import { Reveal } from '@/components/ui/Motion';
 import { openGoals } from '@/components/goals/GoalsSheet';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -248,7 +249,7 @@ function ManualRow({ step, p, onChanged }: { step: StepView; p: StepView['progre
           {state.proof_path && <a href={`/api/screenshots/${state.proof_path}`} target="_blank" rel="noreferrer" className="underline">proof</a>}
         </div>
       )}
-      {open && (
+      <Reveal open={open}>
         <div className="mt-2 space-y-2">
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} data-path-note
             placeholder={c.proof === 'screenshot_or_note' ? 'A note — or attach the screenshot below' : 'A note'}
@@ -259,7 +260,7 @@ function ManualRow({ step, p, onChanged }: { step: StepView; p: StepView['progre
           {error && <p className="text-[11.5px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{error}</p>}
           <Button variant="primary" onClick={() => void send(true)} disabled={busy} data-path-confirm-save>Confirm</Button>
         </div>
-      )}
+      </Reveal>
     </div>
   );
 }
