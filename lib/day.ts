@@ -15,12 +15,13 @@ export function localDay(d: Date = new Date()): string {
 }
 
 /**
- * Whether a trade in the form starts undated. A backtest never carries a date
- * unless you add one (product rule): a new one starts undated, an edit keeps
- * whatever it had. Other accounts ignore this — they always have a date.
+ * Whether the form starts a trade without a date. A new trade — a backtest
+ * included — starts dated, with now, so it counts on the calendar, the
+ * Dashboard and Stats from the moment it is saved; "No date" keeps a replay
+ * off the calendar. An existing trade keeps what it has.
  */
 export function startsUndated(trade: { undated: boolean } | null | undefined): boolean {
-  return trade ? trade.undated : true;
+  return trade ? trade.undated : false;
 }
 
 /** Local wall-clock time as the form writes it: 2026-10-30T19:30. */

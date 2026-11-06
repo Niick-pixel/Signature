@@ -3,7 +3,6 @@
 import { Reveal } from '@/components/ui/Motion';
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
-import { HomeReview } from '@/components/review/HomeReview';
 import { Card } from './Card';
 import { useLiveTick } from '@/lib/useLive';
 import { DashRow, DashRowEditor } from './DashRow';
@@ -70,7 +69,6 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           {prefs.quoteOnDashboard && <QuoteOfDay inline className="mt-0.5 max-w-[44rem]" />}
         </div>
         <div className="flex flex-wrap items-center gap-1.5" data-dash-accounts>
-          <HomeReview />
           <Chip on={open || nFilters > 0} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" data="filters">
             Filters{nFilters ? ` · ${nFilters}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
           </Chip>

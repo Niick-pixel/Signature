@@ -36,6 +36,46 @@ let push: Push | null = null;
 let arrive: (() => void) | null = null;
 /** A tab switch waiting for its new screen, to play the entrance on it. */
 let entering: string | null = null;
+/** Which way it is going in the tab bar: 1 right, -1 left, 0 elsewhere. */
+let enterDir = 0;
+/** The old screen's way out, cancelled once the new one is in. */
+let leaving: Animation | null = null;
+
+/** The tabs, left to right — a screen's sub-pages count as their tab. */
+const TAB_ORDER = ['/dashboard', '/', '/stats', '/calendar', '/journal', '/path', '/prop', '/study'];
+const tabIndex = (path: string) => {
+  if (path === '/') return 1;
+  return TAB_ORDER.findIndex((t) => t !== '/' && (path === t || path.startsWith(`${t}/`)));
+};
+function direction(from: string, to: string): number {
+  const a = tabIndex(from); const b = tabIndex(to);
+  return a < 0 || b < 0 || a === b ? 0 : b > a ? 1 : -1;
+}
+
+/** What is on screen under the title bar: the board layer on the whiteboard, else the page. */
+function contentOf(path: string): HTMLElement | null {
+  return (path === '/'
+    ? document.querySelector('[data-board-layer]')
+    : document.querySelector('header.titlebar-drag')?.nextElementSibling) as HTMLElement | null;
+}
+
+/**
+ * The old screen leaves the moment you click — a short slide toward where
+ * you came from, fading — so the click answers at once instead of the page
+ * sitting still while the next one loads.
+ */
+function exit(from: string, dir: number) {
+  const el = contentOf(from);
+  if (!el) return;
+  leaving?.cancel();
+  leaving = el.animate(
+    [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: dir ? `translateX(${-dir * 18}px)` : 'translateY(-4px)' }],
+    { duration: 150, easing: EASE_IN, fill: 'forwards' },
+  );
+  // If the move never lands (an error, a cancelled navigation), give the screen back.
+  const mine = leaving;
+  window.setTimeout(() => { if (leaving === mine) { mine.cancel(); leaving = null; } }, 4000);
+}
 /** The screen the New trade window was opened over. */
 let underneath: string | null = null;
 
@@ -56,11 +96,14 @@ export function registerNavigator(p: Push) { push = p; }
 /** Called by <NavTransitions/> when the new path has rendered — before it is painted. */
 export function arrived() {
   arrive?.(); arrive = null;
-  if (entering) { enter(entering); entering = null; }
+  if (entering) {
+    enter(entering, enterDir); entering = null;
+    // The board layer stays mounted and hides itself; let go of its exit only after the entrance has started.
+    leaving?.cancel(); leaving = null;
+  }
 }
 
-const still = () => document.documentElement.dataset.reduceMotion === 'true'
-  || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const still = () => document.documentElement.dataset.reduceMotion === 'true';
 
 const pathOf = (href: string) => new URL(href, window.location.href).pathname;
 
@@ -106,7 +149,13 @@ export function navigate(href: string): void {
     shown on the very next frame and rises in on the compositor (enter).
     The New trade window keeps its transition — the sheet opening is worth it.
   */
-  if (kind === 'page') { entering = to; push(href); return; }
+  if (kind === 'page') {
+    const dir = direction(from, to);
+    entering = to; enterDir = dir;
+    exit(from, dir);
+    push(href);
+    return;
+  }
   const root = document.documentElement;
   root.dataset.nav = kind;
   const t = start(() => new Promise<void>((resolve) => {
@@ -128,26 +177,24 @@ export function navigate(href: string): void {
 }
 
 /*
-  The entrance for a tab switch: one animation, on the content under the
-  title bar (which stays put), opacity and transform only — both run on the
-  compositor, so it stays smooth while the new screen finishes mounting.
-  It starts at 40%, never at zero: a fade from nothing shows the bare
-  background for a beat, which read as a flicker. Played once per screen
-  change, from a layout effect, so no frame ever shows the page at full
-  strength before the fade begins.
+  The entrance for a tab switch, on the content under the title bar (which
+  stays put): opacity and transform only, both on the compositor, so it
+  stays smooth while the new screen finishes mounting. It slides in from
+  the side it is coming from — the tab bar's order — with a little spring
+  at the end, answering the exit that started on the click. (It used to
+  start at 40% with no exit: too slight to read as a transition at all —
+  a flash of the new tab.) Played from a layout effect, before the first
+  paint, so no frame shows the page at full strength before it moves.
 */
-function enter(to: string) {
+function enter(to: string, dir = 0) {
   const board = to === '/';
-  // The board is not inside its page: it is the persistent layer (PersistentBoard).
-  const content = (board
-    ? document.querySelector('[data-board-layer]')
-    : document.querySelector('header.titlebar-drag')?.nextElementSibling) as HTMLElement | null;
+  const content = contentOf(to);
   if (!content) return;
   content.animate(board
-    // The whiteboard only fades: it is the one screen never seen to move.
-    ? [{ opacity: 0.4 }, { opacity: 1 }]
-    : [{ opacity: 0.4, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }],
-  { duration: board ? 200 : 260, easing: board ? EASE_OUT : EASE_BOUNCE });
+    // The whiteboard does not slide: it is a canvas, never seen to move. It fades up, a touch of scale.
+    ? [{ opacity: 0, transform: 'scale(0.992)' }, { opacity: 1, transform: 'none' }]
+    : [{ opacity: 0, transform: dir ? `translateX(${dir * 26}px)` : 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+  { duration: board ? 260 : 380, easing: board ? EASE_OUT : EASE_BOUNCE });
 }
 
 /** The New trade window leaving: a quick sink and fade, then the move. */

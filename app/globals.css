@@ -838,7 +838,7 @@ header nav[data-tabs]::-webkit-scrollbar { display: none; }
 }
 .checkin-ping { animation: checkin-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite; }
 [data-reduce-motion='true'] .checkin-ping { animation: none; opacity: 0; }
-@media (prefers-reduced-motion: reduce) { .checkin-ping { animation: none; opacity: 0; } }
+/* Motion follows Settings → Reduce motion only (html[data-reduce-motion]), not the OS: Windows reports "reduce" whenever its animation effects are off. */
 
 /* Held invisible while the board regroups, until each card's glide begins. */
 [data-regrouping] .react-flow__node-trade { opacity: 0; }
@@ -973,10 +973,8 @@ html[data-nav] [data-sheet] { view-transition-name: sheet; }
 ::view-transition-old(titlebar) { animation: none; opacity: 0; }
 ::view-transition-new(titlebar) { animation: none; }
 
-@media (prefers-reduced-motion: reduce) {
-  [data-stagger] > *, [data-cell-in], :focus-visible { animation: none !important; }
-  :where(button, [role='button'], a[href], summary):active { transform: none !important; }
-}
+html[data-reduce-motion='true'] :is([data-stagger] > *, [data-cell-in], :focus-visible) { animation: none !important; }
+html[data-reduce-motion='true'] :where(button, [role='button'], a[href], summary):active { transform: none !important; }
 
 /* A field that wants an answer breathes a soft glow (Followed ALL rules). */
 /*
@@ -998,9 +996,6 @@ html[data-nav] [data-sheet] { view-transition-name: sheet; }
   box-shadow: 0 0 0 3px rgb(var(--accent) / 0.12), 0 0 22px rgb(var(--accent) / 0.38);
   animation: signature-glow 2.4s ease-in-out infinite;
   will-change: opacity;
-}
-@media (prefers-reduced-motion: reduce) {
-  .signature-glow::after { animation: none; opacity: 0.7; }
 }
 html[data-reduce-motion='true'] .signature-glow::after { animation: none; opacity: 0.7; }
 

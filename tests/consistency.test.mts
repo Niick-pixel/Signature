@@ -5,17 +5,25 @@ import { studyTotals } from '../lib/study.ts';
 
 const day = (d: string, o: Partial<DayInput> = {}): DayInput => ({ day: d, checkedIn: true, prepSteps: 5, trades: 1, broke: 0, unfinished: 0, reviewed: true, ...o });
 
-test('rings: each ring on its own; a day without trades has nothing to journal or review', () => {
+test('rings: each ring on its own; a day without trades has no trades to finish, but still a journal entry', () => {
   const full = dayRings(day('2026-11-04'));
   assert.deepEqual(full.rings, { prep: 'done', rules: 'done', journal: 'done', review: 'done' });
   assert.equal(full.closed, true);
   const messy = dayRings(day('2026-11-04', { prepSteps: 3, broke: 1, unfinished: 2, reviewed: false }));
   assert.deepEqual(messy.rings, { prep: 'open', rules: 'open', journal: 'open', review: 'open' });
   assert.equal(messy.done, 0);
+  // Sat out: nothing to finish — but journal once a day still asks for its line.
   const sat = dayRings(day('2026-11-04', { trades: 0, reviewed: false }));
-  assert.deepEqual(sat.rings, { prep: 'done', rules: 'done', journal: 'na', review: 'na' });
-  assert.deepEqual([sat.done, sat.of, sat.closed], [2, 2, true]);
+  assert.deepEqual(sat.rings, { prep: 'done', rules: 'done', journal: 'na', review: 'open' });
+  assert.deepEqual([sat.done, sat.of, sat.closed], [2, 3, false]);
+  assert.equal(dayRings(day('2026-11-04', { trades: 0, reviewed: true })).closed, true);
+  // Backtests count as trades taken, and say how many there were.
+  const bt = dayRings(day('2026-11-04', { trades: 5, backtests: 4 }));
+  assert.deepEqual([bt.trades, bt.backtests], [5, 4]);
   assert.equal(dayRings(day('2026-11-26')).holiday, 'Thanksgiving');
+  // The new prep counts by its own rule when it is given.
+  assert.equal(dayRings(day('2026-11-04', { prepSteps: 3, prepComplete: true })).rings.prep, 'done');
+  assert.equal(dayRings(day('2026-11-04', { prepSteps: 5, prepComplete: false })).rings.prep, 'open');
 });
 
 test('fair streak: weekends and holidays skipped, today never breaks it', () => {

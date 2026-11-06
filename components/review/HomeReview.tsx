@@ -10,6 +10,7 @@ import type { BeforeYouTrade, CloseLine, SessionStrip } from '@/lib/review';
 import { SessionStripView } from './SessionStripView';
 import { FocusPill, type FocusData } from './FocusPill';
 import { CloseX } from './CloseX';
+import { Overlay } from '@/components/ui/Overlay';
 
 type Today =
   | { mode: 'before'; before: BeforeYouTrade }
@@ -32,7 +33,7 @@ const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefine
  * fills with the accent and pulses when something changed since you last
  * opened it.
  */
-export function HomeReview() {
+export function HomeReview({ sheet = false }: { sheet?: boolean }) {
   const [data, setData] = useState<Today | null>(null);
   const [folded, setFolded] = useState(false);
 
@@ -98,7 +99,7 @@ export function HomeReview() {
   const stripShows = Boolean(strip && (strip.trades > 0 || strip.redFolder));
   const anything = (stripShows && !hidden.includes('strip')) || (focus?.focus && !hidden.includes('focus')) || (visible && !hidden.includes('card'));
   if (!anything) return null;
-  if (minimized) {
+  if (minimized && !sheet) {
     return (
       <div data-home-column="minimized" className="relative">
         <motion.button type="button" onClick={() => { minimize(false); markSeen(); }} data-home-restore={fresh ? 'new' : 'seen'}
@@ -119,7 +120,16 @@ export function HomeReview() {
     );
   }
   return (
-    // In the Dashboard header: the button, and below it today's strip, the week's focus, then the card.
+    // In its window (from the bell): today's strip, the week's focus, then the card — no button, no dropdown.
+    sheet ? (
+      <div data-home-column="sheet" className="flex flex-col items-stretch gap-2">
+        {!hidden.includes('strip') && <SessionStripView strip={strip} onHide={() => hide('strip')} />}
+        {!hidden.includes('focus') && <FocusPill data={focus} onChanged={load} />}
+        {visible && data?.mode === 'before' && <section className="glass rounded-[calc(18px*var(--rk))] p-4" data-home-review="before"><Before b={data.before} /></section>}
+        {visible && data?.mode === 'close' && <section className="glass rounded-[calc(18px*var(--rk))] p-4" data-home-review="close"><Close lines={data.close} /></section>}
+        {!visible && <p className="text-[12.5px]" style={{ color: 'var(--text-faint)' }}>Nothing to show right now — trades in progress.</p>}
+      </div>
+    ) :
     <div className="relative">
     <button type="button" onClick={() => minimize(true)} data-home-fold
       className="rounded-full border px-3.5 py-1.5 text-[11.5px] font-semibold"
@@ -218,5 +228,25 @@ function Close({ lines }: { lines: CloseLine[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** "Before you trade", in its own window — opened from the bell's morning reminder (it used to sit in the Dashboard header). */
+export function BeforeSheet() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const on = () => setOpen(true);
+    window.addEventListener('signature:before-open', on);
+    return () => window.removeEventListener('signature:before-open', on);
+  }, []);
+  return (
+    <Overlay open={open} onClose={() => setOpen(false)} className="relative w-[26rem] max-w-full max-h-[86vh] overflow-y-auto rounded-[calc(24px*var(--rk))] p-5"
+      surface="color-mix(in srgb, var(--bg-raised) 97%, transparent)">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-[16px] font-semibold tracking-tight">Before you trade</h2>
+        <CloseX onClick={() => setOpen(false)} label="Close" />
+      </div>
+      {open && <HomeReview sheet />}
+    </Overlay>
   );
 }

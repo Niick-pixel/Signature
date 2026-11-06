@@ -68,7 +68,8 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     <PreferencesContext.Provider value={{ prefs, update, reset }}>
       {/* One switch for every Framer animation: the Reduce motion setting, or
           the operating system's own reduce-motion setting when it is off. */}
-      <MotionConfig reducedMotion={prefs.reduceMotion ? 'always' : 'user'}>
+      {/* Settings → Reduce motion decides — not the OS, which says "reduce" whenever Windows' animation effects are off. */}
+      <MotionConfig reducedMotion={prefs.reduceMotion ? 'always' : 'never'}>
         {children}
       </MotionConfig>
     </PreferencesContext.Provider>

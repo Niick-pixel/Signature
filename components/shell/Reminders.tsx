@@ -29,6 +29,8 @@ let lastCount = 0;
 export function openReminderRoute(route: string): void {
   if (route.startsWith('checkin:')) { openCheckIn(route === 'checkin:chart' ? 'chart' : 'morning'); return; }
   if (route.startsWith('settings:')) { window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: route.slice(9), open: true } })); return; }
+  // The prompts that used to open themselves on the Dashboard now open from here.
+  if (route === 'redday' || route === 'weekend' || route === 'before') { window.dispatchEvent(new Event(`signature:${route}-open`)); return; }
   if (route.startsWith('/')) navigate(route);
 }
 
@@ -138,7 +140,7 @@ export function NotificationBell() {
     return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc, true); };
   }, [open]);
 
-  const act = async (n: BellItem, action: 'read' | 'dismiss' | 'snooze', minutes?: number) => {
+  const act = async (n: BellItem, action: 'read' | 'dismiss' | 'snooze' | 'done', minutes?: number) => {
     setItems((xs) => (action === 'read' ? xs?.map((x) => (x.id === n.id ? { ...x, read_at: x.read_at ?? 'now' } : x)) : xs?.filter((x) => x.id !== n.id)) ?? null);
     await patch({ id: n.id, action, minutes });
   };
@@ -205,6 +207,8 @@ export function NotificationBell() {
                       {n.body && <p className="mt-0.5 text-[11.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>{n.body}</p>}
                     </button>
                     <div className="mt-1.5 flex gap-1.5 text-[10.5px]">
+                      <button type="button" onClick={() => act(n, 'done')} data-bell-done
+                        className="rounded-full px-2.5 py-0.5 font-semibold" style={{ background: 'rgb(var(--accent) / 0.14)', color: 'rgb(var(--accent))' }}>✓ Done</button>
                       {!snoozed && <>
                         <Mini onClick={() => act(n, 'snooze', 15)}>15 min</Mini>
                         <Mini onClick={() => act(n, 'snooze', 60)}>1 hour</Mini>

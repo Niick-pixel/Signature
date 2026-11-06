@@ -11,7 +11,7 @@ interface Pending { day: string; world: 'real' | 'backtest'; netR: number; trade
 const LATER_KEY = 'signature:red-day-later';
 
 /**
- * After a red day, the next time the app opens: a quiet card, not a dialog —
+ * After a red day, from the bell's reminder (it used to appear on its own): a quiet card, not a dialog —
  * "You had a red day on Tue 14 Oct. Write the page." It opens a page already
  * laid out (what I saw, what I did, the rule, one if-then) with the day's
  * trades listed. "Not now" holds it off for the rest of today; "Skip this
@@ -21,14 +21,14 @@ export function RedDayPrompt() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // It no longer opens on its own: the bell's red-day reminder opens it.
   useEffect(() => {
-    try { if (window.localStorage.getItem(LATER_KEY) === localDay()) return; } catch { /* ask anyway */ }
-    let alive = true;
-    const t = window.setTimeout(() => {
+    const open = () => {
       fetch(`/api/redday?today=${localDay()}`).then((r) => (r.ok ? r.json() : null))
-        .then((r) => { if (alive && r?.prompt) setPending(r.prompt); }).catch(() => {});
-    }, 2500);
-    return () => { alive = false; window.clearTimeout(t); };
+        .then((r) => { if (r?.prompt) setPending(r.prompt); }).catch(() => {});
+    };
+    window.addEventListener('signature:redday-open', open);
+    return () => window.removeEventListener('signature:redday-open', open);
   }, []);
 
   async function skip() {

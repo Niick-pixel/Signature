@@ -62,8 +62,7 @@ export function TitleBar() {
     const r = el.getBoundingClientRect();
     const from = lastPill;
     lastPill = { left: r.left, width: r.width };
-    const still = document.documentElement.dataset.reduceMotion === 'true'
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const still = document.documentElement.dataset.reduceMotion === 'true';
     if (!from || still || (from.left === r.left && from.width === r.width) || r.width === 0) return;
     el.animate([
       { transform: `translateX(${from.left - r.left}px) scaleX(${from.width / r.width})` },

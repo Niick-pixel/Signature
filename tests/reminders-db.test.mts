@@ -69,3 +69,10 @@ test('the API: test notification, mark all read, bad actions', async () => {
   const list = await (await route.GET()).json();
   assert.ok(Array.isArray(list.items));
 });
+
+test('Done takes it out of the bell for good', () => {
+  const t = N.testNotification(new Date('2026-11-04T15:00:00Z'));
+  assert.ok(N.listNotifications(new Date('2026-11-04T15:01:00Z')).some((n) => n.id === t.id));
+  assert.ok(N.actOnNotification({ id: t.id, action: 'done' }, new Date('2026-11-04T15:02:00Z')));
+  assert.equal(N.listNotifications(new Date('2026-11-04T15:03:00Z')).some((n) => n.id === t.id), false);
+});

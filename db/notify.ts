@@ -18,6 +18,10 @@ import { sessionNews } from '../lib/news';
 import { nyMinutes } from '../lib/planMatch';
 import { mondayOf } from '../lib/study';
 import { consistencyWeek } from './consistency';
+import { reviewInputs } from './review';
+import { beforeYouTrade } from '../lib/review';
+import { pendingRedDay } from './redDays';
+import { weekendReviewDone } from './path';
 import { clockAt, parseNotify, type NotifySettings } from '../lib/notify';
 import { dueReminders, resolvedIds, type Reminder, type ReminderSnapshot } from '../lib/reminders';
 
@@ -57,7 +61,8 @@ export function reminderSnapshot(now: Date = new Date()): ReminderSnapshot {
     maxLosses: stopAfterFor(prep?.data ?? null, getRuleSettings()),
     cooldownMinutes: DEFAULT_RULE_CONFIG.cooldownMinutes,
     unlinkedExecutions: listExecutions({ unlinked: true }).filter((e) => String(e.entry_at ?? '').slice(0, 10) === day).length,
-    journalPageToday: listJournalPages().some((p) => p.day === day),
+    // Journaled today: a page, or the day review written (the same as the Journal ring).
+    journalPageToday: listJournalPages().some((p) => p.day === day) || (() => { const r = getDailyReview(day); return Boolean(r?.what_happened?.trim() || r?.notes?.trim()); })(),
     weeklyReviewDone: Boolean(getWeeklyReview(mondayOf(clock.nyDay))),
     news: sessionNews(listNews(day, day), day, news.currencies, news.window, nyMinutes)
       .map((e) => ({ id: String(e.id), at: e.at, title: e.title, currency: e.currency, impact: e.impact })),
@@ -67,6 +72,14 @@ export function reminderSnapshot(now: Date = new Date()): ReminderSnapshot {
       payoutAvailable: s.payout?.eligible ? s.payout.available : null, payoutSince: s.payout?.since ?? null,
     })),
     backup: { folder: backup.folder, lastError: backup.lastError ?? null },
+    before: (() => {
+      if (trades.length) return null;
+      const { trades: all, ctxFor, cfg } = reviewInputs();
+      const b = beforeYouTrade(all, day, ctxFor, cfg);
+      return b.leak || b.lastSession || b.topRule ? { leak: b.leak?.title ?? null, rule: b.leak?.rule ?? b.topRule?.text ?? null } : null;
+    })(),
+    redDay: (() => { const r = pendingRedDay(day); return r ? { day: r.day, netR: r.netR, trades: r.trades } : null; })(),
+    weekendDue: clock.nyWeekday === 6 || clock.nyWeekday === 0 ? !weekendReviewDone(mondayOf(day)) : undefined,
     weekClosed: clock.nyWeekday === 0 ? (() => { const w = consistencyWeek(mondayOf(clock.nyDay), day); return { closed: w.closedDays, of: w.tradingDays }; })() : null,
   };
 }
@@ -123,12 +136,14 @@ export function unreadCount(): number {
     .get() as { n: number }).n;
 }
 
-export type NotificationAction = { id: string; action: 'read' | 'dismiss' | 'snooze'; minutes?: number } | { action: 'readAll' };
+export type NotificationAction = { id: string; action: 'read' | 'dismiss' | 'snooze' | 'done'; minutes?: number } | { action: 'readAll' };
 
 export function actOnNotification(a: NotificationAction, now: Date = new Date()): boolean {
   const db = getDb(); const iso = now.toISOString();
   if (a.action === 'readAll') { db.prepare('UPDATE notifications SET read_at = ? WHERE read_at IS NULL').run(iso); return true; }
   if (a.action === 'read') return db.prepare('UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ?').run(iso, a.id).changes > 0;
+  // Done: you did what it asked. It leaves the bell like a resolved one, and does not come back.
+  if (a.action === 'done') return db.prepare('UPDATE notifications SET resolved_at = ?, read_at = COALESCE(read_at, ?), snoozed_until = NULL WHERE id = ?').run(iso, iso, a.id).changes > 0;
   if (a.action === 'dismiss') return db.prepare('UPDATE notifications SET dismissed_at = ?, read_at = COALESCE(read_at, ?) WHERE id = ?').run(iso, iso, a.id).changes > 0;
   const mins = Math.max(5, Math.min(24 * 60, Math.round(a.minutes ?? 60)));
   return db.prepare('UPDATE notifications SET snoozed_until = ?, read_at = ? WHERE id = ?').run(new Date(now.getTime() + mins * 60_000).toISOString(), iso, a.id).changes > 0;

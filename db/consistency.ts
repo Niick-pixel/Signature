@@ -5,7 +5,7 @@ import { listDailyReviews } from './reviews';
 import { listPreps } from './prep';
 import { journalDays } from './journal';
 import { reviewInputs } from './review';
-import { isReal, isTaken } from '../lib/domain';
+import { isBacktest, isReal, isTaken } from '../lib/domain';
 import { prepProgress } from '../lib/prep';
 import { dayBreaksByTrade, planBreaks } from '../lib/review';
 import { addDays, dayRings, fairStreak, mondayOf, weekReport, type DayInput, type DayRings, type Streak, type WeekReport } from '../lib/consistency';
@@ -25,7 +25,8 @@ export function setRestDay(on: boolean): boolean {
 export function dayInputs(to: string): { inputs: Map<string, DayInput>; earliest: string } {
   const { trades: all, ctxFor, cfg } = reviewInputs();
   const breaks = dayBreaksByTrade(all, ctxFor, cfg);
-  const taken = listTrades().filter((t) => isReal(t.account) && !t.deleted_at && !t.undated && t.date && isTaken(t.outcome) && t.status !== 'Planned');
+  // Real accounts and dated backtests — a replay session is trading practice too. Missed setups are not trades taken.
+  const taken = listTrades().filter((t) => (isReal(t.account) || isBacktest(t.account)) && !t.deleted_at && !t.undated && t.date && isTaken(t.outcome) && t.status !== 'Planned');
   const reviews = listDailyReviews();
   const preps = listPreps();
   const pages = new Set(journalDays());
@@ -39,6 +40,7 @@ export function dayInputs(to: string): { inputs: Map<string, DayInput>; earliest
   for (const t of taken) {
     const d = at(t.date.slice(0, 10));
     d.trades += 1;
+    if (isBacktest(t.account)) d.backtests = (d.backtests ?? 0) + 1;
     if (planBreaks(t, breaks, cfg).length) d.broke += 1;
     if (t.quick_log || t.status === 'Live' || !t.lesson?.trim()) d.unfinished += 1;
   }

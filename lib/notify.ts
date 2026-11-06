@@ -5,14 +5,17 @@
 import { utcToWall } from './traderZone';
 import { isTradingDay, marketHoliday } from './marketHolidays';
 
-export type ReminderKind = 'prep' | 'news' | 'stop' | 'cooldown' | 'journal' | 'evening' | 'weekly' | 'prop' | 'backup' | 'consistency';
+export type ReminderKind = 'prep' | 'before' | 'news' | 'stop' | 'cooldown' | 'journal' | 'evening' | 'redday' | 'weekly' | 'weekend' | 'prop' | 'backup' | 'consistency';
 export const REMINDER_KINDS: ReadonlyArray<{ kind: ReminderKind; label: string; hint: string; live: boolean }> = [
   { kind: 'prep', label: 'Prep not done', hint: 'Before the NY open, if the morning check-in or chart prep is not finished.', live: false },
+  { kind: 'before', label: 'Before you trade', hint: 'The morning of a trading day, before the first trade: the #1 leak, the last session, the rule behind it.', live: false },
   { kind: 'news', label: 'News heads-up', hint: 'Before a high-impact release inside your session.', live: true },
   { kind: 'stop', label: 'Stop rules', hint: 'When the day reaches your loss or trade limit. Information only — nothing is blocked.', live: true },
   { kind: 'cooldown', label: 'Cooldown over', hint: 'When the cooldown after a loss has passed.', live: true },
   { kind: 'journal', label: 'Journal it', hint: 'After the session, if trades are left to finish: quick logs, lessons, imported executions.', live: false },
-  { kind: 'evening', label: 'Evening review', hint: 'In the evening, if you traded and the day has no journal page yet.', live: false },
+  { kind: 'evening', label: 'Journal once a day', hint: 'In the evening of every trading day, until the day has a journal page or a day review.', live: false },
+  { kind: 'redday', label: 'Red-day page', hint: 'After a losing day: write the page — what you saw, what you did, the rule.', live: false },
+  { kind: 'weekend', label: 'Weekend review', hint: 'Saturday and Sunday: three questions about the week, saved as a journal page.', live: false },
   { kind: 'weekly', label: 'Weekly review', hint: 'Friday after the close and over the weekend, until the week is reviewed.', live: false },
   { kind: 'prop', label: 'Prop accounts', hint: 'Little daily-loss or drawdown room left; a payout you can request.', live: true },
   { kind: 'consistency', label: 'Sunday consistency report', hint: 'Sunday morning: your week in process — the rings, the streak, the one to work on.', live: false },
@@ -30,7 +33,7 @@ export const SOUND_LABEL: Record<SoundId, string> = {
 
 /** Each reminder's own sound, to start with (Settings → Notifications changes them). The cues themselves are in lib/sounds. */
 export const DEFAULT_SOUNDS: Record<string, SoundId> = {
-  prep: 'rise', news: 'pings', stop: 'low', cooldown: 'bell', journal: 'ticks',
+  prep: 'rise', before: 'bell', redday: 'fall', weekend: 'chord', news: 'pings', stop: 'low', cooldown: 'bell', journal: 'ticks',
   evening: 'fall', weekly: 'arpeggio', prop: 'alert', backup: 'blip', consistency: 'chord', test: 'bell',
 };
 
@@ -57,7 +60,7 @@ export interface NotifySettings {
 export const DEFAULT_NOTIFY: NotifySettings = {
   enabled: true,
   sound: true, volume: 60, sounds: { ...DEFAULT_SOUNDS },
-  kinds: { prep: true, news: true, stop: true, cooldown: true, journal: true, evening: true, weekly: true, prop: true, backup: true, consistency: true },
+  kinds: { prep: true, before: true, redday: true, weekend: true, news: true, stop: true, cooldown: true, journal: true, evening: true, weekly: true, prop: true, backup: true, consistency: true },
   quietFrom: null, quietTo: null, tradingDaysOnly: true, holdWhileLive: true, prepLead: 30, newsLead: 15, eveningAt: '19:00',
 };
 

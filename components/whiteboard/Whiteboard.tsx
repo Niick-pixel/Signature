@@ -310,8 +310,7 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
   const flipFrom = useRef<Map<string, { x: number; y: number }> | null>(null);
   const changeGroupMode = useCallback((next: GroupMode) => {
     const root = canvasRef.current;
-    const still = document.documentElement.dataset.reduceMotion === 'true'
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const still = document.documentElement.dataset.reduceMotion === 'true';
     if (root && !still && !readOnly) {
       const from = new Map<string, { x: number; y: number }>();
       for (const el of root.querySelectorAll<HTMLElement>('.react-flow__node-trade')) {

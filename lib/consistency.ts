@@ -4,8 +4,8 @@
  * Four rings for each trading day:
  *   Prep     the morning check-in and the chart prep (4+ steps)
  *   Rules    no written rule broken (a day with no trades breaks nothing)
- *   Journal  every trade finished: settled, not a quick log, a lesson
- *   Review   a journal page or the day's review, on a day you traded
+ *   Trades   every trade finished (backtests too): settled, not a quick log, a lesson
+ *   Journal  a journal page or the day's review — once a day, traded or not
  * A ring that does not apply (no trades → nothing to journal) is "na" and
  * counts neither way. Pure — db/consistency gathers the days.
  *
@@ -19,8 +19,8 @@ export type RingId = 'prep' | 'rules' | 'journal' | 'review';
 export const RINGS: ReadonlyArray<{ id: RingId; label: string; hint: string }> = [
   { id: 'prep', label: 'Prep', hint: 'The morning check-in and the chart prep, every step.' },
   { id: 'rules', label: 'Rules', hint: 'No written rule broken. A day you sat out breaks nothing.' },
-  { id: 'journal', label: 'Journal', hint: 'Every trade finished: settled, not a quick log, with a lesson.' },
-  { id: 'review', label: 'Review', hint: 'A journal page or the day review, on a day you traded.' },
+  { id: 'journal', label: 'Trades', hint: 'Every trade finished — backtests included: settled, not a quick log, with a lesson.' },
+  { id: 'review', label: 'Journal', hint: 'Journal once a day: a journal page or the day review, every trading day — traded or not.' },
 ];
 export type RingState = 'done' | 'open' | 'na';
 
@@ -30,8 +30,10 @@ export interface DayInput {
   prepSteps: number;
   /** The prep counts as done (lib/prep prepProgress().complete); without it, the old rule: 4 steps. */
   prepComplete?: boolean;
-  /** Real trades taken that day. */
+  /** Trades taken that day: real accounts and dated backtests. */
   trades: number;
+  /** Of those, backtests. */
+  backtests?: number;
   /** Of those, how many broke a rule (trade, day or self-reported). */
   broke: number;
   /** Of those, how many are unfinished (quick log, still Live, or no lesson). */
@@ -48,6 +50,9 @@ export interface DayRings {
   closed: boolean;
   tradingDay: boolean;
   holiday: string | null;
+  /** Trades taken that day, and how many were backtests. */
+  trades: number;
+  backtests: number;
 }
 
 export function dayRings(d: DayInput): DayRings {
@@ -55,11 +60,12 @@ export function dayRings(d: DayInput): DayRings {
     prep: d.checkedIn && (d.prepComplete ?? d.prepSteps >= 4) ? 'done' : 'open',
     rules: d.broke > 0 ? 'open' : 'done',
     journal: d.trades === 0 ? 'na' : d.unfinished === 0 ? 'done' : 'open',
-    review: d.trades === 0 ? 'na' : d.reviewed ? 'done' : 'open',
+    // Journal once a day: every day, traded or not.
+    review: d.reviewed ? 'done' : 'open',
   };
   const applied = Object.values(rings).filter((s) => s !== 'na');
   const done = applied.filter((s) => s === 'done').length;
-  return { day: d.day, rings, done, of: applied.length, closed: done === applied.length, tradingDay: isTradingDay(d.day), holiday: marketHoliday(d.day) };
+  return { day: d.day, rings, done, of: applied.length, closed: done === applied.length, tradingDay: isTradingDay(d.day), holiday: marketHoliday(d.day), trades: d.trades, backtests: d.backtests ?? 0 };
 }
 
 export const addDays = (day: string, n: number) => { const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };

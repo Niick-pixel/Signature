@@ -21,7 +21,7 @@ const ADVICE: Record<RingId, string> = {
   prep: 'Start the morning check-in before the open — the prep reminder fires 30 minutes ahead.',
   rules: 'One rule at a time: make the most broken one this week’s focus rule.',
   journal: 'Finish each trade the same day: settle it, write the lesson, turn quick logs into full ones.',
-  review: 'One page after the session, even two lines. The evening reminder will ask.',
+  review: 'Journal once a day — a page or the day review, even two lines on a day you sat out. The evening reminder asks.',
 };
 
 /**
@@ -85,6 +85,9 @@ export function ConsistencyView({ initialWeek }: { initialWeek: string | null })
                   {r ? <Rings day={r} size={58} /> : <div className="grid size-[58px] place-items-center text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{future ? '' : 'Market closed'}</div>}
                   <span className="text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
                     {r ? `${r.done}/${r.of}` : future ? fmt(d) : marketNote(d)}
+                  </span>
+                  <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-faint)' }} data-day-trades={r?.trades ?? 0}>
+                    {r && r.trades ? `${r.trades} trade${r.trades === 1 ? '' : 's'}${r.backtests ? ` · ${r.backtests === r.trades ? 'all' : r.backtests} BT` : ''}` : r ? 'no trades' : ''}
                   </span>
                 </motion.div>
               );

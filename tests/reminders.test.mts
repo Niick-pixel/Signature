@@ -91,14 +91,18 @@ test('journal it after the AM session: quick logs, missing lessons, unlinked fil
   assert.equal(ids(snap({ clock, today: [trade({})] })).includes('journal:2026-11-04'), false);
 });
 
-test('evening review: only on a traded day without a page; red days say so', () => {
+test('journal once a day: every trading day without a page; red days say so', () => {
   const clock = at('2026-11-05T01:30:00Z'); // 19:30 wall on the 4th
   const red = [trade({ outcome: 'Loss', r: -1.5 })];
   const r = dueReminders(snap({ clock, today: red })).find((x) => x.kind === 'evening')!;
   assert.equal(r.id, 'evening:2026-11-04');
   assert.match(r.body, /red day \(-1\.5R\)/);
   assert.equal(ids(snap({ clock, today: red, journalPageToday: true })).some((i) => i.startsWith('evening')), false);
-  assert.equal(ids(snap({ clock })).some((i) => i.startsWith('evening')), false);
+  // Sat out on a trading day: still asked, gently.
+  const sat = dueReminders(snap({ clock })).find((x) => x.kind === 'evening')!;
+  assert.match(sat.body, /sat out/);
+  // A weekend without trades: not asked.
+  assert.equal(ids(snap({ clock: at('2026-11-08T01:30:00Z') })).some((i) => i.startsWith('evening')), false);
 });
 
 test('weekly review: Friday afternoon and the weekend', () => {
@@ -156,4 +160,23 @@ test('sounds: each kind its own by default; saved choices are checked; volume is
   const s = parseNotify({ sound: false, volume: 250, sounds: { stop: 'bell', news: 'off', prep: 'kazoo' } });
   assert.deepEqual([s.sound, s.volume, s.sounds.stop, s.sounds.news, s.sounds.prep], [false, 100, 'bell', 'off', 'rise']);
   assert.equal(new Set(Object.values(DEFAULT_NOTIFY.sounds).filter((_, i, a) => i < a.length - 1)).size >= 9, true, 'ten kinds, ten distinct cues');
+});
+
+test('the prompts that left the Dashboard come through the bell: before you trade, the red-day page, the weekend review', () => {
+  const morning = at('2026-11-04T13:00:00Z'); // 07:00 here, 08:00 New York
+  const b = dueReminders(snap({ clock: morning, before: { leak: 'Entering before confirmation', rule: 'Wait for the close.' } })).find((r) => r.kind === 'before')!;
+  assert.deepEqual([b.id, b.route], ['before:2026-11-04', 'before']);
+  assert.match(b.body, /#1 leak: Entering before confirmation\. Wait for the close\./);
+  // Once a trade is logged, it has done its job.
+  assert.equal(ids(snap({ clock: morning, before: { leak: 'x', rule: null }, today: [trade({})] })).some((i) => i.startsWith('before')), false);
+  assert.deepEqual(resolvedIds(snap({ today: [trade({})] }), ['before:2026-11-04']), ['before:2026-11-04']);
+
+  const red = dueReminders(snap({ redDay: { day: '2026-11-03', netR: -2.4, trades: 3 } })).find((r) => r.kind === 'redday')!;
+  assert.deepEqual([red.id, red.route, red.title], ['redday:2026-11-03', 'redday', 'A red day on Tue, Nov 3']);
+  assert.deepEqual(resolvedIds(snap({ redDay: null }), ['redday:2026-11-03']), ['redday:2026-11-03']);
+
+  const sat = at('2026-11-07T16:00:00Z'); // Saturday 10:00 here
+  assert.ok(ids(snap({ clock: sat, weekendDue: true, weeklyReviewDone: true })).includes('weekend:2026-11-02'));
+  assert.equal(ids(snap({ clock: sat, weekendDue: false, weeklyReviewDone: true })).some((i) => i.startsWith('weekend')), false);
+  assert.equal(ids(snap({ weekendDue: true })).some((i) => i.startsWith('weekend')), false, 'not on a Wednesday');
 });

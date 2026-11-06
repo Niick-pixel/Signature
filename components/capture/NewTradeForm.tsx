@@ -245,10 +245,10 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   const [openedByTransition] = useState(() => inSheet || (typeof document !== 'undefined' && Boolean(document.documentElement.dataset.nav)));
   const [date, setDate] = useState(() => (trade ? toLocalInput(new Date(trade.date)) : toLocalInput(new Date())));
   /*
-    A backtest has no date unless you add one: it starts undated, so a replay
-    logged tonight never counts as a trade taken today. "Add a date" puts it
-    on the Backtest calendar. Ignored on every other account, which always
-    has a date.
+    A backtest starts dated, with now, like every trade — so it shows on the
+    Backtest calendar, the Dashboard and Stats from the moment it is saved.
+    "No date" leaves a replay undated. Ignored on every other account, which
+    always has a date.
   */
   const [undated, setUndated] = useState(() => startsUndated(trade));
   const backtest = isBacktest(account);
@@ -921,7 +921,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field quiet label="Date & time"
-            hint={backtest ? 'A backtest has no date unless you add one — then it shows on the Backtest calendar.' : undefined}>
+            hint={backtest ? 'Dated, like every trade — it shows on the Backtest calendar, the Dashboard and Stats. "No date" keeps a replay off the calendar.' : undefined}>
             {noDate ? (
               <div data-undated className="flex h-[38px] items-center justify-between gap-2 rounded-[calc(12px*var(--rk))] border border-dashed px-3 text-[12.5px]"
                 style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)' }}>

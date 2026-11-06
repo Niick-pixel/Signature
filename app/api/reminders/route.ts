@@ -20,7 +20,7 @@ export async function PATCH(request: Request) {
   const b = await request.json().catch(() => null) as Record<string, unknown> | null;
   const action = b?.action;
   if (action === 'readAll') { actOnNotification({ action }); return NextResponse.json({ ok: true, unread: unreadCount() }); }
-  if ((action === 'read' || action === 'dismiss' || action === 'snooze') && typeof b?.id === 'string') {
+  if ((action === 'read' || action === 'dismiss' || action === 'snooze' || action === 'done') && typeof b?.id === 'string') {
     const ok = actOnNotification({ id: b.id, action, minutes: Number(b.minutes) || undefined } as NotificationAction);
     return NextResponse.json({ ok, unread: unreadCount() }, { status: ok ? 200 : 404 });
   }

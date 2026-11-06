@@ -39,10 +39,10 @@ test('localDay is the local calendar day, also in the evening', () => {
   assert.equal(localDay(new Date(2026, 0, 1, 0, 5)), '2026-01-01');
 });
 
-test('a new backtest starts undated; an edit keeps what it had', async () => {
+test('a new backtest starts dated (it counts on the calendar and in Stats); an edit keeps what it had', async () => {
   const { startsUndated } = await import('../lib/day.ts');
-  assert.equal(startsUndated(null), true);
-  assert.equal(startsUndated(undefined), true);
+  assert.equal(startsUndated(null), false);
+  assert.equal(startsUndated(undefined), false);
   assert.equal(startsUndated({ undated: false }), false);
   assert.equal(startsUndated({ undated: true }), true);
 });

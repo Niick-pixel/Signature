@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import type { WeekReview } from '@/lib/weekly';
 import { Input } from '@/components/ui/Field';
-import { isWeekend, weekStart, type PathEvent } from '@/lib/path';
+import { weekStart, type PathEvent } from '@/lib/path';
 import { localDay } from '@/lib/day';
 import type { PathSummary } from '@/lib/pathSummary';
 
@@ -22,7 +22,7 @@ interface Week {
 }
 
 /**
- * The weekend review: on the first open on a Saturday or Sunday, three short
+ * The weekend review: from the bell's reminder on Saturday and Sunday, three short
  * questions about the week — how the step went, which promises held, and one
  * rule for next week — saved as a journal page.
  *
@@ -40,9 +40,15 @@ export function WeekendReview() {
   const [error, setError] = useState<string | null>(null);
   const monday = weekStart(new Date());
 
+  // It no longer opens on its own: the bell's weekend reminder opens it.
+  const [asked, setAsked] = useState(0);
   useEffect(() => {
-    if (!isWeekend(new Date())) return;
-    try { if (window.localStorage.getItem(LATER_KEY) === localDay()) return; } catch { /* storage blocked: ask anyway */ }
+    const on = () => setAsked((n) => n + 1);
+    window.addEventListener('signature:weekend-open', on);
+    return () => window.removeEventListener('signature:weekend-open', on);
+  }, []);
+  useEffect(() => {
+    if (!asked) return;
     let alive = true;
     let timer = 0;
     void fetch(`/api/path/weekly?week=${monday}`).then((r) => (r.ok ? r.json() : null)).then((w: Week | null) => {
@@ -56,7 +62,7 @@ export function WeekendReview() {
       timer = window.setTimeout(tryOpen, 1500);
     }).catch(() => {});
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [monday]);
+  }, [monday, asked]);
 
   if (!week) return null;
   const held = week.summary.held;

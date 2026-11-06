@@ -35,6 +35,12 @@ export interface ReminderSnapshot {
   news: Array<{ id: string; at: string; title: string; currency: string; impact: string }>;
   prop: Array<{ id: string; label: string; dailyLeft: number | null; dailyLimit: number | null; room: number; maxDrawdown: number; payoutAvailable: number | null; payoutSince: string | null }>;
   backup: { folder: string | null; lastError: string | null };
+  /** The morning card (lib/review beforeYouTrade): its #1 leak, when there is one. Null once a trade is logged today. */
+  before?: { leak: string | null; rule: string | null } | null;
+  /** The oldest red day still waiting for its page. */
+  redDay?: { day: string; netR: number; trades: number } | null;
+  /** This week's weekend review (the Path) is still to write. */
+  weekendDue?: boolean;
   /** On Sundays: the week's closed days, for the consistency report. */
   weekClosed?: { closed: number; of: number } | null;
 }
@@ -106,10 +112,12 @@ function candidates(s: ReminderSnapshot): Reminder[] {
     if (parts.length) add({ id: `journal:${c.localDay}`, kind: 'journal', title: 'Journal today’s trades', body: `${parts.join(' · ')}.`, route: '/', urgent: false });
   }
 
-  // 9. Evening review: you traded, and the day has no page yet.
-  if (done.length && c.localMins >= hhmmMin(s.settings.eveningAt) && !s.journalPageToday) {
+  // 9. Journal once a day: every trading day (and any day you traded), until there is a page or the day review.
+  if ((done.length || session) && c.localMins >= hhmmMin(s.settings.eveningAt) && !s.journalPageToday) {
     const net = settled.reduce((a, t) => a + (t.r ?? 0), 0);
-    add({ id: `evening:${c.localDay}`, kind: 'evening', title: 'Evening review', body: net < 0 ? `A red day (${net.toFixed(1)}R) — one page on what happened, while it is fresh.` : 'One page on today, while it is fresh.', route: '/journal', urgent: false });
+    add({ id: `evening:${c.localDay}`, kind: 'evening', title: 'Journal today', urgent: false, route: '/journal',
+      body: !done.length ? 'Journal once a day — two lines count, even on a day you sat out.'
+        : net < 0 ? `A red day (${net.toFixed(1)}R) — one page on what happened, while it is fresh.` : 'One page on today, while it is fresh.' });
   }
 
   // 10. Weekly review: Friday after the close, and the weekend, until it is written.
@@ -124,6 +132,25 @@ function candidates(s: ReminderSnapshot): Reminder[] {
     add({ id: `consistency:${monday}`, kind: 'consistency', title: 'Your week in process',
       body: w && w.of ? `${w.closed} of ${w.of} trading days with every ring closed. The rings, the streak, and the one to work on.` : 'The rings, the streak, and the one to work on.',
       route: `/consistency?week=${monday}`, urgent: false });
+  }
+
+  // Before you trade: the morning of a trading day, before the first trade — what the board's card used to show.
+  if (session && s.before && done.length === 0 && c.localMins >= 6 * 60 && c.nyMins < NY_AM_CLOSE) {
+    add({ id: `before:${c.localDay}`, kind: 'before', title: 'Before you trade', route: 'before', urgent: false,
+      body: s.before.leak ? `#1 leak: ${s.before.leak}.${s.before.rule ? ` ${s.before.rule}` : ''}` : 'Your last session and the rule to keep, before the first entry.' });
+  }
+
+  // The red-day page: a losing day still waiting for its page.
+  if (s.redDay) {
+    const when = new Date(`${s.redDay.day}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    add({ id: `redday:${s.redDay.day}`, kind: 'redday', title: `A red day on ${when}`, route: 'redday', urgent: false,
+      body: `${s.redDay.netR.toFixed(1)}R over ${s.redDay.trades} trade${s.redDay.trades === 1 ? '' : 's'}. Write the page — what you saw, what you did, the rule.` });
+  }
+
+  // The weekend review (the Path): Saturday and Sunday, until it is written.
+  if (s.weekendDue && (c.nyWeekday === 6 || c.nyWeekday === 0) && c.localMins >= 9 * 60) {
+    add({ id: `weekend:${mondayOf(c.localDay)}`, kind: 'weekend', title: 'Weekend review', route: 'weekend', urgent: false,
+      body: 'Three questions about the week — how the step went, which promises held, one rule for next week.' });
   }
 
   // 11. Prop accounts: little room left, or a payout available.
@@ -173,6 +200,9 @@ export function resolvedIds(s: ReminderSnapshot, ids: readonly string[]): string
     if (kind === 'evening') return key === c.localDay && s.journalPageToday;
     if (kind === 'weekly') return key === mondayOf(c.nyDay) && s.weeklyReviewDone;
     if (kind === 'backup-folder') return Boolean(s.backup.folder);
+    if (kind === 'before') return key === c.localDay && done.length > 0;
+    if (kind === 'redday') return !s.redDay || s.redDay.day !== key;
+    if (kind === 'weekend') return s.weekendDue === false;
     return false;
   });
 }

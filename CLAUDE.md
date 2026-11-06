@@ -9,7 +9,10 @@ as an Electron desktop app) for one trader: NQ/MNQ, DodgysDD's iFVG model.
    logging before entry. An optional one-click "Lock grade" is fine.
 2. **No price inputs.** No entry/stop/target price fields — the screenshot shows
    them. Use tap-chips, dropdowns and small sliders.
-3. **Backtests have no dates.** Never require or add a date for a backtest trade.
+3. **Backtests start dated.** A new backtest gets a date (now, editable) so it counts on
+   the calendar, the Dashboard and Stats; "No date" stays one click away and is never
+   required. Old undated backtests stay undated. (Changed at the trader's request,
+   November 2026 — it used to be "backtests have no dates".)
 4. **Always available.** Stage, outcome, R, lesson and screenshots are available on
    every account type.
 5. **No biased defaults.** Checklist, grade, "followed rules", HTF bias, outcome,

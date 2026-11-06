@@ -120,8 +120,7 @@ export function applyTheme(id: string, origin?: { x: number; y: number }) {
   if (theme.id === currentTheme().id) return;
 
   const root = document.documentElement;
-  const still = root.dataset.reduceMotion === 'true'
-    || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const still = root.dataset.reduceMotion === 'true';
   const start = (document as Document & {
     startViewTransition?: (cb: () => void) => { ready: Promise<void> };
   }).startViewTransition?.bind(document);

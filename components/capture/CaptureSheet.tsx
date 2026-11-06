@@ -26,7 +26,7 @@ export function CaptureSheet({ children }: { children: ReactNode }) {
     const html = document.documentElement;
     html.dataset.capture = '';
     const el = root.current;
-    const still = html.dataset.reduceMotion === 'true' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const still = html.dataset.reduceMotion === 'true';
     if (el && !still) {
       el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: EASE_SOFT });
       el.querySelector<HTMLElement>('[data-sheet]')?.animate([

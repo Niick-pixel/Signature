@@ -56,8 +56,7 @@ export function CountUp({ text, duration = 700 }: { text: string; duration?: num
   */
   const arriving = useRef(typeof window !== 'undefined' && window.__signatureHydrated === true);
 
-  const reduced = () => document.documentElement.dataset.reduceMotion === 'true'
-    || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduced = () => document.documentElement.dataset.reduceMotion === 'true';
 
   useLayoutEffect(() => {
     if (!arriving.current) return;

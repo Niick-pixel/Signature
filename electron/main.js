@@ -427,7 +427,7 @@ ipcMain.handle('signature:display-state', () => ({ ...display, ...scaled }));
 // Shown notifications are kept referenced until clicked or closed — on
 // Windows a collected one loses its click handler.
 const shownNotes = new Set();
-const NOTE_ROUTE = /^(\/[\w\-/?=&.%]*|checkin:(morning|chart)|settings:[a-z-]+)$/;
+const NOTE_ROUTE = /^(\/[\w\-/?=&.%]*|checkin:(morning|chart)|settings:[a-z-]+|redday|weekend|before)$/;
 ipcMain.handle('signature:notify', (_event, note) => {
   if (!Notification.isSupported() || !note || typeof note.title !== 'string') return false;
   const route = typeof note.route === 'string' && NOTE_ROUTE.test(note.route) ? note.route : '/dashboard';
