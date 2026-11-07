@@ -409,6 +409,8 @@ export const MISTAKE_TAGS = [
   'Moved stop', 'Cut winner early', 'Oversized', 'Revenge', 'Overtraded',
   // Added by the app when a trade is taken below the minimum confidence.
   'Low confidence entry',
+  // Pre-selected from the form's target and stop fields (040); still editable.
+  'Opposing HTF gap in path', 'Stop inside zone',
 ] as const;
 /**
  * No longer offered, still accepted: trades were tagged with them, and a tag
@@ -431,6 +433,7 @@ export const WORKED_TAGS = [
   'Long in discount / short in premium', 'With HTF bias', 'Inside the killzone',
   'Clear target named', 'Stop where the idea fails', 'Sized correctly',
   'Let the winner run', 'Managed to plan', 'Stopped at the limit',
+  'Stop beyond the zone',
 ] as const;
 export const RETIRED_WORKED_TAGS = ['Took only the A+', 'Respected the news', 'Stayed patient', 'Followed the plan exactly'] as const;
 export const WORKED_TAG_VALUES = [...WORKED_TAGS, ...RETIRED_WORKED_TAGS] as const;
@@ -689,3 +692,14 @@ export function isScored(
     || t.chk_sweep === true
     || t.sweep_tier === 'major' || t.sweep_tier === 'minor';
 }
+
+/**
+ * An opposing higher-timeframe gap between entry and target (040): price
+ * often reacts at its near edge, so that is where the R is really measured.
+ */
+export const HTF_GAPS = ['None', '5m', '15m', '1H', '4H'] as const;
+export type HtfGap = (typeof HTF_GAPS)[number];
+
+/** Where the stop was placed (040). "Inside the zone" relies on the zone it sits in. */
+export const STOP_PLACEMENTS = ['Beyond sweep extreme', 'Beyond HTF zone far edge', 'Under-over the iFVG', 'Inside the zone'] as const;
+export type StopPlacement = (typeof STOP_PLACEMENTS)[number];

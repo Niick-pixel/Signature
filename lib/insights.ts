@@ -46,12 +46,12 @@ const isLong = (t: Trade) => t.direction === 'Long';
 export const THEMES: ThemeDef[] = [
   {
     id: 'target',
-    evidence: ['target:', 'target-failed', 'mistake:No defined target'],
+    evidence: ['target:', 'target-failed', 'mistake:No defined target', 'htf-gap', 'htf-gap-big', 'mistake:Opposing HTF gap in path'],
     title: 'Weak or unclear targets',
     why: 'A target price is not drawn to has no reason to be reached. The trade goes nowhere, stalls, and comes back.',
     rule: 'If I cannot name a clean, untested pool as the target — a data wick, PDH/PDL, a real EQH/EQL — then I do not take it.',
     patterns: patternsFor('target'),
-    signal: (t) => tag(t, 'No defined target') || t.target_check_passed === false,
+    signal: (t) => tag(t, 'No defined target', 'Opposing HTF gap in path') || t.target_check_passed === false,
   },
   {
     id: 'late',
@@ -117,10 +117,12 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'stop',
+    evidence: ['stop-inside', 'stop-beyond', 'mistake:Stop inside zone', 'worked:Stop beyond the zone'],
     title: 'Stop placement',
     why: 'A stop inside the level price is likely to revisit gets taken by the retest, even when the idea was right.',
     rule: 'If my stop sits inside the HTF FVG, then I move it past the level where the idea completely fails.',
     patterns: patternsFor('stop'),
+    signal: (t) => tag(t, 'Stop inside zone') || t.stop_placement === 'Inside the zone',
   },
   {
     id: 'breakeven',
@@ -477,7 +479,14 @@ export function distinctivePhrases(trades: readonly Trade[], limit = 8): { loser
 
 /* --------------------------------------------------------- conditions */
 
-interface ConditionDef { id: string; label: string; test: (t: Trade) => boolean }
+/**
+ * `known`, when given, limits the comparison to trades that recorded the
+ * field: a trade logged before the field existed is neither with nor without.
+ */
+interface ConditionDef { id: string; label: string; test: (t: Trade) => boolean; known?: (t: Trade) => boolean }
+
+const gapKnown = (t: Trade) => t.opposing_htf_gap != null;
+const stopKnown = (t: Trade) => t.stop_placement != null;
 
 const FIELD_CONDITIONS: ConditionDef[] = [
   { id: 'against-bias', label: 'Against the HTF bias', test: (t) => t.htf_bias === 'Against bias' || tag(t, 'Against HTF bias') },
@@ -492,6 +501,11 @@ const FIELD_CONDITIONS: ConditionDef[] = [
   { id: 'target-failed', label: 'Target check failed', test: (t) => t.target_check_passed === false },
   { id: 'broke-rules', label: 'Said I broke a rule', test: (t) => t.followed_rules === false },
   { id: 'followed-rules', label: 'Said I followed every rule', test: (t) => t.followed_rules === true },
+  // The gap in the way and the stop's place (040).
+  { id: 'htf-gap', label: 'An opposing HTF gap in the path', known: gapKnown, test: (t) => gapKnown(t) && t.opposing_htf_gap !== 'None' },
+  { id: 'htf-gap-big', label: 'A 1H/4H gap before the target', known: gapKnown, test: (t) => t.opposing_htf_gap === '1H' || t.opposing_htf_gap === '4H' },
+  { id: 'stop-inside', label: 'Stop inside the zone', known: stopKnown, test: (t) => t.stop_placement === 'Inside the zone' },
+  { id: 'stop-beyond', label: 'Stop beyond the sweep or the zone', known: stopKnown, test: (t) => t.stop_placement === 'Beyond sweep extreme' || t.stop_placement === 'Beyond HTF zone far edge' },
 ];
 
 /**
@@ -509,8 +523,9 @@ export function allConditions(trades: readonly Trade[]): Condition[] {
 
   const out: Condition[] = [];
   for (const d of defs) {
-    const yes = taken.filter(d.test);
-    const no = taken.filter((t) => !d.test(t));
+    const pool = d.known ? taken.filter(d.known) : taken;
+    const yes = pool.filter(d.test);
+    const no = pool.filter((t) => !d.test(t));
     if (yes.length < 2 || no.length < 2) continue;
     const avg = mean(yes.map((t) => t.r_multiple as number))!;
     const others = mean(no.map((t) => t.r_multiple as number))!;

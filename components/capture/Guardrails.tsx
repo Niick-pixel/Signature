@@ -7,8 +7,8 @@ import { Field } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { Select } from '@/components/ui/Select';
 import { spring, exitQuick } from '@/lib/motion';
-import { R_BUCKETS, R_BUCKET_FAILS, R_BUCKET_LABEL, SWING_COUNTS, TARGET_TYPES, type BeTrigger, type RBucket, type SwingCount } from '@/lib/domain';
-import { targetCheck, MIN_R_TO_NEAREST } from '@/lib/targetCheck';
+import { HTF_GAPS, R_BUCKETS, R_BUCKET_FAILS, R_BUCKET_LABEL, STOP_PLACEMENTS, SWING_COUNTS, TARGET_TYPES, type BeTrigger, type HtfGap, type RBucket, type StopPlacement, type SwingCount } from '@/lib/domain';
+import { gapHint, gapNote, stopNote, targetCheck, MIN_R_TO_NEAREST } from '@/lib/targetCheck';
 import type { EqhlChecks } from '@/lib/types';
 
 /* ----------------------------------------------------------- live numbers */
@@ -42,8 +42,8 @@ export const recordLine = (r: Record3) =>
 /* ---------------------------------------------------------------- notices */
 
 /** A calm notice: accent edge, soft glow, never a pop-up. */
-export function Notice({ children, tone = 'accent', id }: { children: React.ReactNode; tone?: 'accent' | 'loss'; id?: string }) {
-  const c = tone === 'loss' ? 'var(--outcome-loss)' : 'var(--accent)';
+export function Notice({ children, tone = 'accent', id }: { children: React.ReactNode; tone?: 'accent' | 'loss' | 'amber'; id?: string }) {
+  const c = tone === 'loss' ? 'var(--outcome-loss)' : tone === 'amber' ? 'var(--amber)' : 'var(--accent)';
   return (
     <motion.div data-notice={id} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: exitQuick }}
       transition={spring}
@@ -121,6 +121,8 @@ export interface TargetCheckState {
   swings: SwingCount | null;
   rBucket: RBucket | null;
   eqhl: EqhlChecks;
+  /** The opposing HTF gap in the way (040). */
+  htfGap: HtfGap | null;
 }
 
 /**
@@ -150,11 +152,18 @@ export function TargetCheckBlock({ s, set, ctx }: {
           hint="Swing points standing between your entry and the target that price must break first: swing highs on a long, swing lows on a short. Each one is resting liquidity that can stop the move early. 0 is a clean path; 2+ means the target sits behind obstacles.">
           <Segmented value={s.swings} onChange={(v) => set({ swings: v })} options={SWING_COUNTS} />
         </Field>
+        <Field quiet label="Opposing HTF gap in between" group
+          hint="The biggest unfilled gap against you between entry and target. Price often reacts at its near edge, so that edge is where the room really ends.">
+          <div data-htf-gap={s.htfGap ?? 'unset'}>
+            <Segmented value={s.htfGap} onChange={(v) => set({ htfGap: v })} options={HTF_GAPS} />
+          </div>
+        </Field>
         <Field quiet label="R to nearest liquidity" hint={`Under ${MIN_R_TO_NEAREST}R is no trade by your rules.`} group>
           <div data-r-bucket={s.rBucket ?? 'unset'}>
             <Segmented value={s.rBucket} onChange={(v) => set({ rBucket: v })} options={R_BUCKETS} labelFor={(b) => R_BUCKET_LABEL[b]}
               accentFor={(b) => (R_BUCKET_FAILS.includes(b) ? 'var(--outcome-loss)' : 'var(--outcome-win)')} />
           </div>
+          {gapHint(s.htfGap) && <span data-gap-hint className="mt-1.5 block text-[11px] leading-snug" style={{ color: 'var(--text-dim)' }}>{gapHint(s.htfGap)}</span>}
         </Field>
       </div>
 
@@ -174,6 +183,10 @@ export function TargetCheckBlock({ s, set, ctx }: {
       )}
 
       <AnimatePresence initial={false}>
+        {gapNote(s.htfGap, s.rBucket) && <Notice id="htf-gap" tone="amber">{gapNote(s.htfGap, s.rBucket)}</Notice>}
+      </AnimatePresence>
+
+      <AnimatePresence initial={false}>
         {verdict.warnings.length > 0 && (
           <Notice id="target-check">
             <ul className="space-y-0.5">{verdict.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
@@ -182,6 +195,67 @@ export function TargetCheckBlock({ s, set, ctx }: {
       </AnimatePresence>
     </div>
   );
+}
+
+/* ---------------------------------------------------------- stop placed */
+
+/**
+ * Where the stop sat (040), beside the stop in points. "Inside the zone"
+ * gets an amber note; it never blocks. On a backtest, the sample's stop rule
+ * shows beside it when one is set, and the current choice can be pinned as
+ * the rule (or the rule cleared) in one click.
+ */
+export function StopPlacedField({ value, onChange, backtest, rule, onRule, aside }: {
+  /** Shown beside the select on the same row: the stop in points. */
+  aside?: React.ReactNode;
+  value: StopPlacement | null;
+  onChange: (v: StopPlacement | null) => void;
+  backtest: boolean;
+  rule: StopPlacement | null;
+  onRule: (v: StopPlacement | null) => void;
+}) {
+  const note = stopNote(value);
+  return (
+    <div className="space-y-1.5" data-stop-placement={value ?? 'unset'}>
+      <div className="grid items-start gap-3 sm:grid-cols-[1fr_6.5rem]">
+        <Field quiet label="Stop placed" hint="Where the stop sits: past the sweep's extreme, past the HTF zone's far edge, just under/over the iFVG, or inside the zone itself.">
+          <Select value={value} onChange={onChange} options={STOP_PLACEMENTS} placeholder="Where…" />
+        </Field>
+        {aside}
+      </div>
+      {backtest && (rule || value) && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px]" data-sample-stop-rule={rule ?? 'unset'} style={{ color: 'var(--text-dim)' }}>
+          {rule ? <span>This sample&apos;s stop rule: <b style={{ color: value && value !== rule ? 'rgb(var(--amber))' : 'var(--text)' }}>{rule}</b>{value && value !== rule ? ' — this trade differs' : ''}</span> : <span>No stop rule set for this sample.</span>}
+          {value && value !== rule && (
+            <button type="button" className="underline decoration-dotted underline-offset-2" onClick={() => onRule(value)} data-pin-stop-rule>
+              {rule ? 'Make this the rule' : "Pin as the sample's rule"}
+            </button>
+          )}
+          {rule && <button type="button" className="underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-faint)' }} onClick={() => onRule(null)} data-clear-stop-rule>Clear</button>}
+        </div>
+      )}
+      <AnimatePresence initial={false}>
+        {note && <Notice id="stop-inside" tone="amber">{note}</Notice>}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** The sample's stop rule, read once and set from the form (app_settings, db/sampleRule). */
+export function useSampleStopRule(on: boolean): [StopPlacement | null, (v: StopPlacement | null) => void] {
+  const [rule, setRule] = useState<StopPlacement | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    let alive = true;
+    fetch('/api/backtest-session').then((r) => (r.ok ? r.json() : null)).then((j) => { if (alive && j) setRule(j.stopRule ?? null); }).catch(() => {});
+    return () => { alive = false; };
+  }, [on]);
+  const save = (v: StopPlacement | null) => {
+    setRule(v);
+    void fetch('/api/backtest-session', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stopRule: v }) })
+      .then((r) => r.json()).then((j) => setRule(j.stopRule ?? null)).catch(() => {});
+  };
+  return [rule, save];
 }
 
 /* ------------------------------------------------------------ breakeven */

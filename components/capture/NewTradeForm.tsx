@@ -77,10 +77,11 @@ import { SkippedLosers } from './SkippedLosers';
 import { PathBanner, usePathSummary } from '@/components/path/PathBanner';
 import type { HeldCommitment } from '@/lib/path';
 import {
-  ConfidenceNotice, LateNotice, Notice, TargetCheckBlock, movedStopSuggested, useGuardContext,
+  ConfidenceNotice, LateNotice, Notice, StopPlacedField, TargetCheckBlock, movedStopSuggested, useGuardContext, useSampleStopRule,
   type TargetCheckState,
 } from './Guardrails';
-import { BE_FROM_MANAGEMENT, MANAGEMENTS, type Management } from '@/lib/domain';
+import { BE_FROM_MANAGEMENT, MANAGEMENTS, type HtfGap, type Management, type StopPlacement } from '@/lib/domain';
+import { impliedMistakes, syncImplied } from '@/lib/targetCheck';
 import type { TradeOverride } from '@/lib/types';
 
 /** `datetime-local` wants 'YYYY-MM-DDTHH:mm' in local time, not an ISO string. */
@@ -212,8 +213,23 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
     swings: trade?.opposing_swings_between ?? null,
     rBucket: trade?.r_to_nearest_bucket ?? null,
     eqhl: trade?.eqhl_checks ?? { touches: false, untested: false, in_range: false },
+    htfGap: trade?.opposing_htf_gap ?? null,
   }));
-  const setTcPart = (p: Partial<TargetCheckState>) => setTc((prev) => ({ ...prev, ...p }));
+  // Where the stop sat (040). With the gap above, it pre-selects its
+  // what-went-wrong tag; the tag can still be taken off by hand.
+  const [stopPlacement, setStopPlacement] = useState<StopPlacement | null>(trade?.stop_placement ?? null);
+  const implyTags = (before: { opposing_htf_gap: HtfGap | null; stop_placement: StopPlacement | null }, after: typeof before) =>
+    setMistakeTags((tags) => syncImplied(tags, impliedMistakes(before), impliedMistakes(after)) as MistakeTag[]);
+  const setTcPart = (p: Partial<TargetCheckState>) => {
+    if ('htfGap' in p && p.htfGap !== tc.htfGap) {
+      implyTags({ opposing_htf_gap: tc.htfGap, stop_placement: stopPlacement }, { opposing_htf_gap: p.htfGap ?? null, stop_placement: stopPlacement });
+    }
+    setTc((prev) => ({ ...prev, ...p }));
+  };
+  const changeStopPlacement = (v: StopPlacement | null) => {
+    implyTags({ opposing_htf_gap: tc.htfGap, stop_placement: stopPlacement }, { opposing_htf_gap: tc.htfGap, stop_placement: v });
+    setStopPlacement(v);
+  };
   // Under 1.5R to the nearest liquidity, or 2+ opposing swings: the targets are not clear.
   const targetsNotClear = [
     tc.rBucket === '<1' || tc.rBucket === '1-1.5' ? 'under 1.5R to the nearest liquidity' : null,
@@ -252,6 +268,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   */
   const [undated, setUndated] = useState(() => startsUndated(trade));
   const backtest = isBacktest(account);
+  const [sampleStopRule, setSampleStopRule] = useSampleStopRule(backtest);
   const noDate = backtest && undated;
   const lessonsHere = backtest ? backtestLessons : pastLessons;
   /*
@@ -654,6 +671,8 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       nearest_liquidity_type: tc.nearestType,
       opposing_swings_between: tc.swings,
       r_to_nearest_bucket: tc.rBucket,
+      opposing_htf_gap: tc.htfGap,
+      stop_placement: stopPlacement,
       eqhl_checks: targetType === 'EQH/EQL' && !pending('targetType') ? tc.eqhl : null,
       management,
       be_trigger: beTrigger,
@@ -1186,16 +1205,17 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           set={setTcPart} ctx={guard} />
 
         {/* The plan names the breakeven trigger; the two used to be asked twice. */}
-        <div className="grid gap-3 sm:grid-cols-[1fr_6.5rem]">
-          <Field quiet label="Management plan"
-            hint={`What happens to the stop, decided before the trade. It sets the breakeven trigger${beTrigger ? ` (${beTrigger})` : ''}. Fixed for the whole sample, or the sample measures nothing.`}>
-            <Select value={management} onChange={setManagement} options={MANAGEMENTS}
-              placeholder={trade?.mgmt_plan ? `${MGMT_PLAN_LABEL[trade.mgmt_plan]} (older plan)` : 'Which plan?'} />
-          </Field>
-          <Field quiet label="Stop pts" hint="Stop in points. Optional — it is on the screenshot.">
-            <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
-          </Field>
-        </div>
+        <Field quiet label="Management plan"
+          hint={`What happens to the stop, decided before the trade. It sets the breakeven trigger${beTrigger ? ` (${beTrigger})` : ''}. Fixed for the whole sample, or the sample measures nothing.`}>
+          <Select value={management} onChange={setManagement} options={MANAGEMENTS}
+            placeholder={trade?.mgmt_plan ? `${MGMT_PLAN_LABEL[trade.mgmt_plan]} (older plan)` : 'Which plan?'} />
+        </Field>
+        <StopPlacedField value={stopPlacement} onChange={changeStopPlacement} backtest={backtest} rule={sampleStopRule} onRule={setSampleStopRule}
+          aside={(
+            <Field quiet label="Stop pts" hint="Stop in points. Optional — it is on the screenshot.">
+              <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
+            </Field>
+          )} />
 
         <SetupAnatomy a={anat} set={setA} />
 

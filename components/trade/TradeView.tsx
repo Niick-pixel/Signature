@@ -172,7 +172,7 @@ export function TradeView(p: TradeViewProps) {
                   ...flags.map((f) => f.label),
                   ...(t.trigger_fired ? ['Inversion closed'] : []),
                 ]} />
-                <ChipRow label="Target" items={[t.target_type, ...(t.r_to_nearest_bucket ? [`${t.r_to_nearest_bucket}R to nearest`] : []), ...(t.management ? [t.management] : [])]} />
+                <ChipRow label="Target" items={[t.target_type, ...(t.r_to_nearest_bucket ? [`${t.r_to_nearest_bucket}R to nearest`] : []), ...(t.opposing_htf_gap ? [t.opposing_htf_gap === 'None' ? 'No opposing gap' : `${t.opposing_htf_gap} gap in the way`] : []), ...(t.management ? [t.management] : []), ...(t.stop_placement ? [`Stop: ${t.stop_placement.toLowerCase()}`] : [])]} />
                 <ChipRow label="Context" items={[t.htf_bias, t.premium_discount, t.reason].filter(Boolean) as string[]} />
                 <ChipRow label="Worked" items={t.worked_tags} color="rgb(var(--outcome-win))" />
                 <ChipRow label="Mistakes" items={t.mistake_tags} color="rgb(var(--outcome-loss))" />

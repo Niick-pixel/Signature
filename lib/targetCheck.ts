@@ -61,3 +61,42 @@ export function targetCheck(t: TargetCheckInput): TargetVerdict {
   }
   return { r, warnings, passed: known || t.target_type === 'EQH/EQL' ? warnings.length === 0 : null };
 }
+
+/* ------------------------------------------- the gap in the way, the stop (040) */
+
+/** Under "R to nearest liquidity" once a gap is named: where to measure to. */
+export function gapHint(gap: string | null | undefined): string | null {
+  return gap && gap !== 'None' ? "Measure to the gap's near edge." : null;
+}
+
+/** A 1H/4H gap before the target while the R reads 2+: was it measured to the near edge? A nudge, never a block. */
+export function gapNote(gap: string | null | undefined, bucket: string | null | undefined): string | null {
+  return (gap === '1H' || gap === '4H') && bucket === '2+'
+    ? 'A 1H/4H gap sits before your target — is 2+ measured to its near edge?'
+    : null;
+}
+
+/** A stop inside the zone the trade relies on. A nudge, never a block. */
+export function stopNote(placement: string | null | undefined): string | null {
+  return placement === 'Inside the zone' ? "Inside the zone you're relying on — any retest takes you out." : null;
+}
+
+/** The what-went-wrong tags the two fields say a trade carries. */
+export function impliedMistakes(f: { opposing_htf_gap?: string | null; stop_placement?: string | null }): string[] {
+  return [
+    ...(f.opposing_htf_gap && f.opposing_htf_gap !== 'None' ? ['Opposing HTF gap in path'] : []),
+    ...(f.stop_placement === 'Inside the zone' ? ['Stop inside zone'] : []),
+  ];
+}
+
+/**
+ * The tags after a field changed: a tag the fields now imply is added, one
+ * they implied before and no longer do is taken off. Anything else is the
+ * trader's own choice and stays as it is, so a pre-selected tag removed by
+ * hand stays removed until the field changes again.
+ */
+export function syncImplied<T extends string>(tags: readonly T[], before: readonly string[], after: readonly string[]): T[] {
+  const gone = before.filter((x) => !after.includes(x));
+  const added = after.filter((x) => !before.includes(x) && !tags.includes(x as T)) as T[];
+  return [...tags.filter((x) => !gone.includes(x)), ...added];
+}

@@ -54,6 +54,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'exit_price', 'fees_dollars',
   // The Edge Engine's structured fields (036).
   'session_index', 'htf_bias_tf', 'liquidity_event', 'sweep_tf', 'fvg_tf', 'entry_tf', 'fvg_quality', 'candle_strength', 'inversion_speed', 'rr_score', 'cisd', 'smt_state', 'into_eq_pool', 'planned_rr', 'entry_method', 'stop_method', 'pre_state', 'exit_reason', 'mfe_bucket', 'mae_bucket', 'target_hit_later', 'moved_to_be', 'blind_grade', 'entry_line_x', 'rule_breaks_manual', 'emotion_after',
+  // The gap in the way and the stop's place (040).
+  'opposing_htf_gap', 'stop_placement',
 ];
 
 function csvCell(v: unknown): string {
@@ -158,7 +160,8 @@ export async function GET() {
     // importer reads as "none" rather than as an error.
     // 17: the tables the export used to miss (db/rawTables) and every gallery chart's file.
     // 18: flashcard progress and the watch-later list (raw tables).
-    version: 18,
+    // 19: each trade's opposing HTF gap and stop placement (040).
+    version: 19,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,

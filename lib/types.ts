@@ -1,7 +1,7 @@
 import type {
   Account, ChecklistAnswer, Direction, HtfBias, Instrument, MistakeTag, Outcome, PremiumDiscount, Reason,
   Regrade, Session, SetupType, ShotSlot, SkipReason, SweepTier, TargetType, TradeStatus, Tri, WorkedTag, MarketTag,
-  BiasDirection, NewsLevel, BeTrigger, SwingCount, RBucket, Management,
+  BiasDirection, NewsLevel, BeTrigger, SwingCount, RBucket, Management, HtfGap, StopPlacement,
 } from './domain';
 import type { FlagKey } from './flags';
 import type { GradeLetter } from './grade';
@@ -247,6 +247,11 @@ export interface Trade {
   /** Rules you say you broke (rule-book ids); the computer's own checks are separate. */
   rule_breaks_manual: string[];
   emotion_after: string | null;
+  /* --- The gap in the way and the stop's place (040). Null on older trades: "not recorded". --- */
+  /** The biggest opposing gap between entry and target: None, 5m, 15m, 1H, 4H. */
+  opposing_htf_gap: HtfGap | null;
+  /** Where the stop sat: beyond the sweep, beyond the HTF zone, under/over the iFVG, or inside the zone. */
+  stop_placement: StopPlacement | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */

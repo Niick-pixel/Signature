@@ -1,7 +1,7 @@
 import {
   ACCOUNT_VALUES, BACKTEST, CHECKLIST_ITEMS, signForOutcome, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAG_VALUES,
   OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, RENAMED_TARGET_TYPES, SESSIONS, SETUP_TYPES, SKIP_REASONS,
-  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, R_BUCKETS, MANAGEMENTS, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
+  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, R_BUCKETS, MANAGEMENTS, HTF_GAPS, STOP_PLACEMENTS, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
   type ChecklistKey, type Regrade, type TradeStatus, type WorkedTag, type MarketTag, type ContextFlag, type MistakeTag, type Tri,
 } from './domain';
 import { localStamp } from './day';
@@ -376,6 +376,9 @@ export function parseTradeInput(
       rule_breaks_manual: keep('rule_breaks_manual', Array.isArray(t.rule_breaks_manual)
         ? [...new Set(t.rule_breaks_manual.filter((v): v is string => typeof v === 'string' && TRADE_RULES.some((r) => r.id === v)))] : []),
       emotion_after: keep('emotion_after', oneOf('emotion_after', EMOTIONS_AFTER)),
+      // The gap in the way and the stop's place (040). Unknown reads as "not recorded"; a key left out keeps the stored value.
+      opposing_htf_gap: keep('opposing_htf_gap', oneOf('opposing_htf_gap', HTF_GAPS)),
+      stop_placement: keep('stop_placement', oneOf('stop_placement', STOP_PLACEMENTS)),
   };
 
   /*

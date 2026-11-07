@@ -116,6 +116,10 @@ function confluenceDefs(ts: readonly Trade[]): Def[] {
   };
   each('Setup', 'setup_type'); each('Session', 'session'); each('Target', 'target_type'); each('Context', 'htf_bias');
   each('Context', 'premium_discount'); each('Management', 'management'); each('Direction', 'direction');
+  // The gap in the way and the stop's place (040): only trades that recorded them count, on either side.
+  for (const v of values('opposing_htf_gap')) defs.push({ id: `opposing_htf_gap:${v}`, group: 'Target', label: v === 'None' ? 'No opposing HTF gap' : `${v} gap in the way`, test: (t) => (t.opposing_htf_gap == null ? null : t.opposing_htf_gap === v) });
+  if (ts.some((t) => t.opposing_htf_gap != null && t.opposing_htf_gap !== 'None')) defs.push({ id: 'opposing_htf_gap:any', group: 'Target', label: 'Any opposing HTF gap in the way', test: (t) => (t.opposing_htf_gap == null ? null : t.opposing_htf_gap !== 'None') });
+  for (const v of values('stop_placement')) defs.push({ id: `stop_placement:${v}`, group: 'Stop', label: `Stop: ${v.toLowerCase()}`, test: (t) => (t.stop_placement == null ? null : t.stop_placement === v) });
   for (const [group, key] of [['What worked', 'worked_tags'], ['Mistakes', 'mistake_tags'], ['Market', 'market_tags']] as const) {
     for (const v of new Set(ts.flatMap((t) => (t[key] as string[] | undefined) ?? []))) defs.push({ id: `${key}:${v}`, group, label: v, test: (t) => ((t[key] as string[] | undefined) ?? []).includes(v) });
   }
