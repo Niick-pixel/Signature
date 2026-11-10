@@ -19,6 +19,8 @@ export const RAW_TABLES = [
   'study_cards', 'watch_later',
   // 042: the Flaw Deck — drills worked on, and drills rewritten on their card.
   'flaw_work', 'flaw_drills',
+  // 043: the Stats dashboard's boards (layout and look, versioned).
+  'dashboard_boards',
 ] as const;
 
 export function exportRawTables(): { raw_tables: Record<string, Record<string, unknown>[]> } {

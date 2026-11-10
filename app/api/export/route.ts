@@ -165,7 +165,8 @@ export async function GET() {
     // 19: each trade's opposing HTF gap and stop placement (040).
     // 20: each news event's forecast and previous figures (041).
     // 21: the Flaw Deck — drills worked on (flaw_work, flaw_drills) and each trade's drill (042).
-    version: 21,
+    // 22: the Stats dashboard's boards (043, a raw table).
+    version: 22,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
