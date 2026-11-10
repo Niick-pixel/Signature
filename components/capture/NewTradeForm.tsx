@@ -539,6 +539,38 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   const canSubmit = (Boolean(chart) || saved)
     && Boolean(reason) && explanationOk && lessonOk && choicesDone && !submitting;
 
+  /*
+    What Save is still waiting on, shown on the fields themselves. When the
+    choices are all that is left, they breathe amber; pressing Save anyway
+    blinks every missing piece red and scrolls to the first. Never a lock on
+    anything else — only what Save already needs.
+  */
+  const needs: Record<string, boolean> = {
+    chart: !chart && !saved, reason: !reason, writtenBefore: extrasMissing.length > 0,
+    direction: missing.includes('direction'), htfBias: missing.includes('htfBias'), premiumDiscount: missing.includes('premiumDiscount'),
+    targetType: missing.includes('targetType'), outcome: missing.includes('outcome'),
+    explanation: revealed && !explanationOk, lesson: revealed && !lessonOk,
+  };
+  const CHOICES = ['direction', 'htfBias', 'premiumDiscount', 'targetType', 'outcome', 'writtenBefore'];
+  const onlyChoicesLeft = !choicesDone && (Boolean(chart) || saved) && Boolean(reason) && explanationOk && lessonOk;
+  const [flashing, setFlashing] = useState(false);
+  const need = (k: string) => (!needs[k] ? '' : flashing ? 'need-flash' : onlyChoicesLeft && CHOICES.includes(k) ? 'need-pulse' : '');
+  const nudge = () => {
+    // The outcome fields sit behind the reveal: open them, so the blink has something to land on.
+    if (!revealed) void reveal();
+    setFlashing(false);
+    // Off, then on in the next frame, so a second press blinks again.
+    requestAnimationFrame(() => {
+      setFlashing(true);
+      requestAnimationFrame(() => document.querySelector('.need-flash')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    });
+  };
+  useEffect(() => {
+    if (!flashing) return;
+    const id = window.setTimeout(() => setFlashing(false), 1600);
+    return () => window.clearTimeout(id);
+  }, [flashing]);
+
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
   // Backtest session mode: "Save & next" on a new backtest.
   const canNext = backtest && !editing && Boolean(onNext);
@@ -592,7 +624,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
     // Nothing is refused: a save before the reveal opens the outcome fields, which the trade needs anyway.
     if (!revealed) { void reveal(); setError('The outcome fields are open now — fill in how it ended, then save.'); return; }
     const quick = m === 'quick';
-    if (quick ? (!reason || submitting || !choicesDone) : (!canSubmit || !reason)) return;
+    if (quick ? (!reason || submitting || !choicesDone) : (!canSubmit || !reason)) { if (!submitting) nudge(); return; }
     const unexplained = brokenFor(account);
     if (unexplained.length) { setSheet({ kind: 'commitment', items: unexplained, prev: null, thenSubmit: m }); return; }
     // The day's loss limit, on a trade being taken now.
@@ -920,7 +952,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           </Field>
           <PropPicker account={account} label={accountLabel} onPick={setAccountLabel} />
           {isHypothetical(account) && (
-            <div className="sm:col-span-2" data-written-before>
+            <div className={`sm:col-span-2 ${need('writtenBefore')}`} data-written-before>
               <TriState inline value={writtenBefore} onChange={setWrittenBefore}
                 label="Written down before the move played out?"
                 hint="Yes only if it existed as a Planned trade or a note before price moved. Logged afterwards it is Hindsight: kept and shown, but left out of every number — otherwise only the winners ever get remembered." />
@@ -983,20 +1015,20 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
         <div className="grid gap-3 sm:grid-cols-2">
           <Field quiet label="Instrument" pending={pending('instrument')}><Select value={instrument} onChange={(v) => { setInstrument(v); confirm('instrument'); }} options={INSTRUMENTS} /></Field>
           {/* Tap-chips, not dropdowns: one tap each instead of two (product rule 2). Still empty until tapped. */}
-          <Field quiet label="Direction" pending={pending('direction')} group><Segmented value={pending('direction') ? null : direction} onChange={(v) => { setDirection(v); confirm('direction'); }} options={DIRECTIONS} compact /></Field>
+          <Field quiet label="Direction" pending={pending('direction')} group className={need('direction')}><Segmented value={pending('direction') ? null : direction} onChange={(v) => { setDirection(v); confirm('direction'); }} options={DIRECTIONS} compact /></Field>
           <Field quiet label="Setup type" pending={pending('setupType')}><Select value={pending('setupType') ? null : setupType} placeholder="Choose…" onChange={(v) => { setSetupType(v); confirm('setupType'); }} options={SETUP_TYPES} /></Field>
-          <Field quiet label="HTF bias" pending={pending('htfBias')} group><Segmented value={pending('htfBias') ? null : htfBias} onChange={(v) => { setHtfBias(v); confirm('htfBias'); }} options={HTF_BIASES}
+          <Field quiet label="HTF bias" pending={pending('htfBias')} group className={need('htfBias')}><Segmented value={pending('htfBias') ? null : htfBias} onChange={(v) => { setHtfBias(v); confirm('htfBias'); }} options={HTF_BIASES}
             labelFor={(b) => ({ 'With bias': 'With', 'Against bias': 'Against', 'No bias defined': 'None' } as Record<string, string>)[b] ?? b} titleFor={(b) => b} compact /></Field>
-          <Field quiet label="Premium / discount" pending={pending('premiumDiscount')} group><Segmented value={pending('premiumDiscount') ? null : premiumDiscount} onChange={(v) => { setPremiumDiscount(v); confirm('premiumDiscount'); }} options={PREMIUM_DISCOUNTS}
+          <Field quiet label="Premium / discount" pending={pending('premiumDiscount')} group className={need('premiumDiscount')}><Segmented value={pending('premiumDiscount') ? null : premiumDiscount} onChange={(v) => { setPremiumDiscount(v); confirm('premiumDiscount'); }} options={PREMIUM_DISCOUNTS}
             labelFor={(z) => (z === 'Equilibrium' ? 'EQ' : z)} titleFor={(z) => z} compact /></Field>
-          <Field quiet label="Why did you take it" hint="Answer honestly. Nothing else in this app works if this is wrong.">
+          <Field quiet label="Why did you take it" hint="Answer honestly. Nothing else in this app works if this is wrong." className={need('reason')}>
             <Select value={reason} onChange={setReason} options={reasonOptions} placeholder="Name your motive…"
               accentFor={(r) => reasonAccent(r as Reason)} />
           </Field>
         </div>
 
         {/* The charts. */}
-        <div>
+        <div className={need('chart')} data-need-chart={needs.chart ? '' : undefined}>
         {editing ? (
           <ScreenshotDropzone
             file={file}
@@ -1101,7 +1133,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
                 when the box was not ticked — untick it if it was not clear.
               */
               chk_targets_clear: (
-                <div data-target-picker className="w-[10.5rem] rounded-[calc(10px*var(--rk))]"
+                <div data-target-picker className={`w-[10.5rem] rounded-[calc(10px*var(--rk))] ${need('targetType')}`}
                   title={targetType === WEAK_TARGET ? `${WEAK_TARGET_WARNING} Max grade B.`
                     : (targetType && TARGET_WHY[targetType]) || 'The target you aimed at — ranked strongest first. Hover an option for why.'}
                   data-target-warning={targetType === WEAK_TARGET ? '' : undefined}
@@ -1262,7 +1294,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           ) : (
             <Collapse key="outcome">
               <div className="space-y-4">
-              <Field quiet label="How did it end" pending={pending('outcome')} group>
+              <Field quiet label="How did it end" pending={pending('outcome')} group className={need('outcome')}>
                 <Segmented
                   value={pending('outcome') ? null : outcome}
                   onChange={(o) => { setOutcome(o); confirm('outcome'); }}
@@ -1364,7 +1396,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
         {/* D — the words, and the reckoning that goes with them. */}
         {revealed && (
         <div className="space-y-4">
-        <Field quiet label="Explanation">
+        <Field quiet label="Explanation" className={need('explanation')}>
           <ExplanationField
             value={explanation}
             onChange={setExplanation}
@@ -1381,7 +1413,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           only the second one changes anything. Not asked of a Planned trade.
         */}
         {!planned && (
-          <Field quiet
+          <Field quiet className={need('lesson')}
             label="Lesson"
             hint={`What would you do differently? At least ${MIN_LESSON} characters — a label is not a lesson.`}
           >
@@ -1496,7 +1528,10 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
               key={!chart && !saved ? 'file' : !reason ? 'reason'
                 : !explanationOk ? 'expl' : !choicesDone ? 'choose' : !lessonOk ? 'lesson' : 'ready'}
               initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: exitQuick }}
-              transition={spring} className="block truncate"
+              transition={spring} className={`block truncate ${!canSubmit && !submitting ? 'cursor-pointer' : ''}`}
+              // What Save waits on, in the colour of the fields it points at; a click shows them.
+              style={!canSubmit && !submitting ? { color: onlyChoicesLeft ? 'rgb(var(--amber))' : 'rgb(var(--outcome-loss) / 0.85)', fontWeight: 500 } : undefined}
+              onClick={!canSubmit && !submitting ? nudge : undefined} data-save-status
             >
               {!chart && !saved ? 'A screenshot is required.'
                 : !reason ? 'Name your motive to continue.'
@@ -1531,14 +1566,18 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           </button>
         )}
         {canNext && (
-          <Button accent={accent} disabled={!canSubmit} onClick={() => void submit('next')} className="shrink-0" data-save-next
+          <span onClick={!canSubmit && !submitting ? nudge : undefined} className={!canSubmit ? 'cursor-not-allowed' : ''}>
+          <Button accent={accent} disabled={!canSubmit} onClick={() => void submit('next')} className="shrink-0 disabled:pointer-events-none" data-save-next
             title="Save, and start the next backtest with the same account, session, setup and management (Ctrl+Shift+Enter)">
             Save &amp; next
           </Button>
+          </span>
         )}
-        <Button variant="primary" accent={accent} disabled={!canSubmit} onClick={() => void submit()} className="shrink-0" data-save-trade>
+        <span onClick={!canSubmit && !submitting ? nudge : undefined} className={!canSubmit ? 'cursor-not-allowed' : ''} data-save-wrap>
+        <Button variant="primary" accent={accent} disabled={!canSubmit} onClick={() => void submit()} className="shrink-0 disabled:pointer-events-none" data-save-trade>
           {submitting ? 'Saving…' : editing ? 'Save changes' : 'Save trade'}
         </Button>
+        </span>
         </div>
       </div>
 

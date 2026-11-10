@@ -1013,3 +1013,22 @@ html[data-hide-pnl='true'] [data-money]:hover { filter: none; }
 html[data-today-open='true'] [data-new-trade-fab] { right: calc(19rem + 2rem); }
 /* …and every screen's content makes room for it, at any window width. */
 html[data-today-open='true'] .signature-enter { padding-right: calc(19rem + 1rem); }
+
+/*
+  Required and still missing (New Trade). Amber, a slow breath: the only
+  thing left before Save is a choice. Red, three quick blinks: Save was
+  pressed with something still missing. Reduce motion keeps a still outline.
+*/
+@keyframes need-pulse {
+  0%, 100% { box-shadow: 0 0 0 1.5px rgb(var(--amber) / 0.35), 0 0 0 0 rgb(var(--amber) / 0); }
+  50% { box-shadow: 0 0 0 2px rgb(var(--amber) / 0.9), 0 0 18px 2px rgb(var(--amber) / 0.35); }
+}
+@keyframes need-flash {
+  0%, 40%, 80% { box-shadow: 0 0 0 2.5px rgb(var(--outcome-loss) / 0.95), 0 0 22px 3px rgb(var(--outcome-loss) / 0.45); background-color: rgb(var(--outcome-loss) / 0.08); }
+  20%, 60%, 100% { box-shadow: 0 0 0 1.5px rgb(var(--outcome-loss) / 0.5), 0 0 0 0 rgb(var(--outcome-loss) / 0); background-color: transparent; }
+}
+.need-pulse, .need-flash { border-radius: calc(14px * var(--rk)); }
+.need-pulse { animation: need-pulse 1.6s ease-in-out infinite; }
+.need-flash { animation: need-flash 1.5s ease-in-out 1 forwards; }
+html[data-reduce-motion='true'] .need-pulse { animation: none; box-shadow: 0 0 0 2px rgb(var(--amber) / 0.85); }
+html[data-reduce-motion='true'] .need-flash { animation: none; box-shadow: 0 0 0 2.5px rgb(var(--outcome-loss) / 0.95); }
