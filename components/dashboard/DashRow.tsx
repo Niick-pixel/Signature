@@ -16,6 +16,7 @@ import { Card } from './Card';
 import { StudyMeter } from '@/components/study/StudyMeter';
 import type { StudyTotals } from '@/lib/study';
 import { useLiveTick } from '@/lib/useLive';
+import { figuresLine } from '@/lib/news';
 
 const WEEKDAY = ['M', 'T', 'W', 'T', 'F'];
 const faint = { color: 'var(--text-faint)' } as const;
@@ -249,7 +250,7 @@ function MonthCard({ d, money }: { d: DashboardData; money: boolean }) {
 
 /** Today's news: high and medium releases today, in the currencies you count. */
 function NewsCard() {
-  const [ev, setEv] = useState<Array<{ id: string | number; at: string; title: string; currency: string; impact: string; all_day?: boolean }> | null>(null);
+  const [ev, setEv] = useState<Array<{ id: string | number; at: string; title: string; currency: string; impact: string; all_day?: boolean; forecast?: string | null; previous?: string | null }> | null>(null);
   const live = useLiveTick();
   useEffect(() => {
     const t = localDay();
@@ -265,6 +266,7 @@ function NewsCard() {
               <span className="w-10 shrink-0 tabular-nums" style={faint}>{e.all_day ? 'All day' : e.at.slice(11, 16)}</span>
               <span className="size-1.5 shrink-0 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
               <span className="min-w-0 flex-1 truncate">{e.currency} {e.title}</span>
+              {figuresLine(e, true) && <span className="shrink-0 tabular-nums text-[10.5px]" style={faint} title={figuresLine(e) ?? undefined} data-news-figures>{figuresLine(e, true)}</span>}
             </li>
           ))}
         </ul>

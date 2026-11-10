@@ -16,6 +16,7 @@ import { Choice } from '@/components/ui/Choice';
 import { Scale } from '@/components/ui/Scale';
 import { usePreferences } from './PreferencesProvider';
 import { ChartPrep, usePrepProgress } from '@/components/prep/ChartPrep';
+import { figuresLine } from '@/lib/news';
 
 /*
   The morning check-in.
@@ -189,14 +190,14 @@ function CheckInForm({ day, existing, onDone, onSaved, onChart }: {
   useEffect(() => {
     if (existing?.news != null) return;
     let live = true;
-    fetch(`/api/news/session?day=${day}`).then((r) => (r.ok ? r.json() : null)).then((j: { events?: Array<{ impact: string; title: string; at: string; currency: string }>; syncedAt?: string | null; auto?: boolean; error?: string } | null) => {
+    fetch(`/api/news/session?day=${day}`).then((r) => (r.ok ? r.json() : null)).then((j: { events?: Array<{ impact: string; title: string; at: string; currency: string; forecast?: string | null; previous?: string | null }>; syncedAt?: string | null; auto?: boolean; error?: string } | null) => {
       if (!live || !j) return;
       // The pull failed and nothing is stored for today: say so rather than guess.
       if (!j.events?.length && (j.error || !j.syncedAt)) { if (j.auto) setNewsFrom('Couldn’t reach ForexFactory just now — pick it by hand.'); return; }
       const ev = j.events ?? [];
       const level: NewsLevel = ev.some((e) => e.impact === 'High') ? 'High' : ev.length ? 'Medium' : 'None';
       setNews((cur) => cur ?? level);
-      if (ev.length) setNewsNote((cur) => cur || ev.map((e) => `${e.currency} ${e.title} ${e.at.slice(11, 16)}`).join(', '));
+      if (ev.length) setNewsNote((cur) => cur || ev.map((e) => `${e.currency} ${e.title} ${e.at.slice(11, 16)}${figuresLine(e, true) ? ` (${figuresLine(e, true)})` : ''}`).join(', '));
       setNewsFrom(ev.length ? `From ForexFactory: ${ev.length} release${ev.length === 1 ? '' : 's'} in your session.` : 'From ForexFactory: nothing red or orange in your session.');
     }).catch(() => {});
     return () => { live = false; };

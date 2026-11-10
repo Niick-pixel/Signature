@@ -161,7 +161,8 @@ export async function GET() {
     // 17: the tables the export used to miss (db/rawTables) and every gallery chart's file.
     // 18: flashcard progress and the watch-later list (raw tables).
     // 19: each trade's opposing HTF gap and stop placement (040).
-    version: 19,
+    // 20: each news event's forecast and previous figures (041).
+    version: 20,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,

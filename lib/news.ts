@@ -8,7 +8,30 @@ import { parseCsv, toJournalClock, type SourceZone } from './executions';
 export type Impact = 'High' | 'Medium' | 'Low' | 'Holiday';
 export const IMPACTS: readonly Impact[] = ['High', 'Medium', 'Low', 'Holiday'];
 
-export interface NewsEvent { at: string; all_day: boolean; currency: string; title: string; impact: Impact }
+export interface NewsEvent {
+  at: string; all_day: boolean; currency: string; title: string; impact: Impact;
+  /** The consensus and the last print, as the calendar writes them ("150K", "0.3%"). Null when not given (041). */
+  forecast?: string | null; previous?: string | null;
+}
+
+/** A figure as the calendar printed it, or null for an empty one. */
+export const figure = (v: unknown): string | null => {
+  const s = typeof v === 'string' || typeof v === 'number' ? String(v).trim() : '';
+  return s ? s.slice(0, 24) : null;
+};
+
+/**
+ * "Forecast 150K · Previous 142K" — beside a release, so you know how big a
+ * surprise would be. It informs only: the market moves on the surprise
+ * against the forecast, which no figure here predicts.
+ */
+export function figuresLine(e: Pick<NewsEvent, 'forecast' | 'previous'>, short = false): string | null {
+  const parts = [
+    e.forecast ? `${short ? 'f' : 'Forecast'} ${e.forecast}` : null,
+    e.previous ? `${short ? 'p' : 'Previous'} ${e.previous}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
 export interface StoredNews extends NewsEvent { id: string; source: string; created_at: string }
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'NZD', 'CHF', 'CNY'];
@@ -149,7 +172,8 @@ export function parseFfFeed(text: string, journalOffsetHours: number | ((utcMs: 
     const impact = impactOf(String(r.impact ?? '')) ?? 'Low';
     // "All Day" and "Tentative" items come at midnight New York.
     const allDay = /T00:00:00/.test(String(r.date)) && impact === 'Holiday';
-    events.push({ at, all_day: allDay, currency: String(r.country ?? 'USD').toUpperCase().slice(0, 3), title: title.slice(0, 160), impact });
+    events.push({ at, all_day: allDay, currency: String(r.country ?? 'USD').toUpperCase().slice(0, 3), title: title.slice(0, 160), impact,
+      forecast: figure(r.forecast), previous: figure(r.previous) });
   }
   return { events, skipped };
 }

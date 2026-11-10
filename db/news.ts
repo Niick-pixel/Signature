@@ -1,7 +1,7 @@
 import 'server-only';
 import crypto from 'node:crypto';
 import { getDb } from './index';
-import { FF_FEED_URL, parseFfFeed, redDays, type NewsEvent, type StoredNews } from '../lib/news';
+import { FF_FEED_URL, figure, parseFfFeed, redDays, type NewsEvent, type StoredNews } from '../lib/news';
 import { offsetMinutesAt } from '../lib/traderZone';
 
 /** News events and the two settings that decide what they mean for the rules. */
@@ -13,14 +13,24 @@ export function listNews(from?: string, to?: string): StoredNews[] {
   return (rows as Record<string, unknown>[]).map((r) => ({ ...r, all_day: r.all_day === 1 }) as unknown as StoredNews);
 }
 
-/** Adds events; the same event (time, currency, title) twice is kept once. */
+/**
+ * Adds events; the same event (time, currency, title) twice is kept once.
+ * An event already stored takes the newer forecast and previous figures,
+ * when the new copy has them: the calendar revises its forecasts during
+ * the week, and nothing else about a stored event is touched.
+ */
 export function addNews(events: NewsEvent[], source: string): { added: number; already: number } {
-  const put = getDb().prepare(`INSERT OR IGNORE INTO news_events (id, at, all_day, currency, title, impact, source)
-    VALUES (@id, @at, @all_day, @currency, @title, @impact, @source)`);
+  const db = getDb();
+  const put = db.prepare(`INSERT OR IGNORE INTO news_events (id, at, all_day, currency, title, impact, source, forecast, previous)
+    VALUES (@id, @at, @all_day, @currency, @title, @impact, @source, @forecast, @previous)`);
+  const figures = db.prepare(`UPDATE news_events SET forecast = COALESCE(@forecast, forecast), previous = COALESCE(@previous, previous)
+    WHERE at = @at AND currency = @currency AND title = @title`);
   let added = 0;
   for (const e of events) {
-    added += Number(put.run({ id: crypto.randomUUID(), at: e.at, all_day: e.all_day ? 1 : 0, currency: e.currency.toUpperCase().slice(0, 3),
-      title: e.title, impact: e.impact, source }).changes);
+    const row = { at: e.at, currency: e.currency.toUpperCase().slice(0, 3), title: e.title, forecast: figure(e.forecast), previous: figure(e.previous) };
+    const n = Number(put.run({ ...row, id: crypto.randomUUID(), all_day: e.all_day ? 1 : 0, impact: e.impact, source }).changes);
+    added += n;
+    if (!n && (row.forecast || row.previous)) figures.run(row);
   }
   return { added, already: events.length - added };
 }
@@ -68,15 +78,17 @@ export function exportNews() { return { news_events: listNews().map((e) => ({ ..
 
 export function restoreNews(body: { news_events?: unknown }): number {
   if (!Array.isArray(body.news_events)) return 0;
-  const put = getDb().prepare(`INSERT OR IGNORE INTO news_events (id, at, all_day, currency, title, impact, source, created_at)
-    VALUES (@id, @at, @all_day, @currency, @title, @impact, @source, @created_at)`);
+  const put = getDb().prepare(`INSERT OR IGNORE INTO news_events (id, at, all_day, currency, title, impact, source, created_at, forecast, previous)
+    VALUES (@id, @at, @all_day, @currency, @title, @impact, @source, @created_at, @forecast, @previous)`);
   let n = 0;
   for (const r of body.news_events as Record<string, unknown>[]) {
     if (!r || typeof r.id !== 'string' || typeof r.at !== 'string' || typeof r.title !== 'string') continue;
     try {
       n += Number(put.run({ id: r.id, at: r.at, all_day: r.all_day ? 1 : 0, currency: String(r.currency ?? 'USD'), title: r.title,
         impact: ['High', 'Medium', 'Low', 'Holiday'].includes(String(r.impact)) ? String(r.impact) : 'High', source: String(r.source ?? 'manual'),
-        created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString() }).changes);
+        created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
+        // An export from before 041 has neither: "not given".
+        forecast: figure(r.forecast), previous: figure(r.previous) }).changes);
     } catch { /* skipped */ }
   }
   return n;

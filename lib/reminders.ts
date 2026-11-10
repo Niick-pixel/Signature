@@ -10,6 +10,7 @@
  */
 import { NY_AM_CLOSE, NY_OPEN, hhmmMin, inQuiet, type Clock, type NotifySettings, type ReminderKind } from './notify';
 import { mondayOf } from './study';
+import { figuresLine } from './news';
 
 export interface Reminder { id: string; kind: ReminderKind; title: string; body: string; route: string; urgent: boolean; silent: boolean }
 
@@ -32,7 +33,7 @@ export interface ReminderSnapshot {
   journalPageToday: boolean;
   weeklyReviewDone: boolean;
   /** Today's releases inside the session window, wall clock `at`. */
-  news: Array<{ id: string; at: string; title: string; currency: string; impact: string }>;
+  news: Array<{ id: string; at: string; title: string; currency: string; impact: string; forecast?: string | null; previous?: string | null }>;
   prop: Array<{ id: string; label: string; dailyLeft: number | null; dailyLimit: number | null; room: number; maxDrawdown: number; payoutAvailable: number | null; payoutSince: string | null }>;
   backup: { folder: string | null; lastError: string | null };
   /** The morning card (lib/review beforeYouTrade): its #1 leak, when there is one. Null once a trade is logged today. */
@@ -76,7 +77,7 @@ function candidates(s: ReminderSnapshot): Reminder[] {
     for (const e of s.news) {
       const until = (wallMs(e.at) - nowMs) / 60_000;
       if (e.impact === 'High' && until > 0 && until <= s.settings.newsLead) {
-        add({ id: `news:${e.id}`, kind: 'news', title: `${e.currency} ${e.title} in ${Math.round(until)} min`, body: `High-impact release at ${e.at.slice(11, 16)}.`, route: '/analytics?tab=news', urgent: true });
+        add({ id: `news:${e.id}`, kind: 'news', title: `${e.currency} ${e.title} in ${Math.round(until)} min`, body: `High-impact release at ${e.at.slice(11, 16)}.${figuresLine(e) ? ` ${figuresLine(e)}.` : ''}`, route: '/analytics?tab=news', urgent: true });
       }
     }
   }

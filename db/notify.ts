@@ -65,7 +65,7 @@ export function reminderSnapshot(now: Date = new Date()): ReminderSnapshot {
     journalPageToday: listJournalPages().some((p) => p.day === day) || (() => { const r = getDailyReview(day); return Boolean(r?.what_happened?.trim() || r?.notes?.trim()); })(),
     weeklyReviewDone: Boolean(getWeeklyReview(mondayOf(clock.nyDay))),
     news: sessionNews(listNews(day, day), day, news.currencies, news.window, nyMinutes)
-      .map((e) => ({ id: String(e.id), at: e.at, title: e.title, currency: e.currency, impact: e.impact })),
+      .map((e) => ({ id: String(e.id), at: e.at, title: e.title, currency: e.currency, impact: e.impact, forecast: e.forecast ?? null, previous: e.previous ?? null })),
     prop: prop.map(({ account: a, standing: s }) => ({
       id: a.id, label: a.label || `${a.firm} ${a.plan}`, dailyLeft: s.today.dailyLeft, dailyLimit: a.daily_loss,
       room: s.room, maxDrawdown: a.max_drawdown,

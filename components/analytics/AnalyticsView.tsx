@@ -10,7 +10,7 @@ import { ANALYTICS_TABS, ANALYTICS_TAB_LABEL, type AnalyticsTab, type Preference
 import { SESSION_RANGES, SUGGESTED_QUESTIONS, hhmm, type AskAnswer, type ConfluenceRow, type NewsView, type Psychology, type PsychRow, type Stat, type TimeView } from '@/lib/analytics';
 import { nyMinutes } from '@/lib/planMatch';
 import { SOURCE_ZONES, SOURCE_ZONE_LABEL, type SourceZone } from '@/lib/executions';
-import type { StoredNews } from '@/lib/news';
+import { figuresLine, type StoredNews } from '@/lib/news';
 import { localDay } from '@/lib/day';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import type { MistakeCost, Tilt } from '@/lib/behaviour';
@@ -358,6 +358,7 @@ function News({ v, monday, setMonday, reload }: { v: Data['news']; monday: strin
                     <li key={e.id} className="group text-[10.5px] leading-tight">
                       <span className="mr-1 inline-block size-1.5 rounded-full align-middle" style={{ background: IMPACT_COLOR[e.impact] }} />
                       <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.all_day ? 'All day' : e.at.slice(11, 16)}</span> {e.title}
+                      {figuresLine(e, true) && <span className="ml-1 tabular-nums" style={{ color: 'var(--text-faint)' }} title={figuresLine(e) ?? undefined}>({figuresLine(e, true)})</span>}
                       <button type="button" onClick={() => remove(e)} className="ml-1 opacity-0 group-hover:opacity-100" aria-label="Remove" style={{ color: 'var(--text-faint)' }}>✕</button>
                     </li>
                   ))}

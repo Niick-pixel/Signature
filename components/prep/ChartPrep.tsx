@@ -13,6 +13,7 @@ import type { DailyReview } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
+import { figuresLine } from '@/lib/news';
 
 export const PREP_SAVED = 'signature:prep';
 
@@ -370,7 +371,7 @@ export function usePrepProgress(): { answered: number; total: number } | null {
   return { answered: p.answered, total: p.total };
 }
 
-interface SessionNewsData { events: Array<{ id: string; at: string; title: string; impact: string; currency: string }>; answer: string; window: { from: string; to: string }; currencies: string[]; auto: boolean; syncedAt: string | null; error?: string }
+interface SessionNewsData { events: Array<{ id: string; at: string; title: string; impact: string; currency: string; forecast?: string | null; previous?: string | null }>; answer: string; window: { from: string; to: string }; currencies: string[]; auto: boolean; syncedAt: string | null; error?: string }
 
 /**
  * Step 6's news: the red and orange releases inside your session (New York
@@ -401,6 +402,7 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
               <span className="size-2 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
               <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.at.slice(11, 16)} <span className="text-[10.5px]">({ny(e.at)})</span></span>
               <b className="font-medium">{e.title}</b>
+              {figuresLine(e) && <span className="ml-auto shrink-0 tabular-nums text-[11px]" style={{ color: 'var(--text-dim)' }} data-news-figures>{figuresLine(e)}</span>}
             </li>
           ))}
         </ul>

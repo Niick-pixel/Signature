@@ -81,3 +81,35 @@ test('sync: a stale pull fetches, a fresh one waits, a failure changes nothing',
   assert.match(r3.error!, /Could not reach/);
   assert.equal(D2.listNews('2026-10-30', '2026-10-30').length, 1);
 });
+
+test('forecast and previous: read from the feed, kept, updated on a re-sync, never invented, carried through a backup', async () => {
+  const N = await import('../lib/news');
+  const feed = (forecast: unknown, previous: unknown) => JSON.stringify([
+    { title: 'Non-Farm Employment Change', country: 'USD', date: '2026-12-04T08:30:00-05:00', impact: 'High', forecast, previous },
+  ]);
+  const first = N.parseFfFeed(feed('150K', '142K'), -6).events[0];
+  assert.deepEqual([first.forecast, first.previous], ['150K', '142K']);
+  assert.deepEqual([N.parseFfFeed(feed('', null), -6).events[0].forecast, N.parseFfFeed(feed('', null), -6).events[0].previous], [null, null], 'empty is "not given"');
+
+  assert.equal(N.figuresLine(first), 'Forecast 150K · Previous 142K');
+  assert.equal(N.figuresLine(first, true), 'f 150K · p 142K');
+  assert.equal(N.figuresLine({ forecast: null, previous: '0.3%' }), 'Previous 0.3%');
+  assert.equal(N.figuresLine({ forecast: null, previous: null }), null);
+
+  assert.deepEqual(D.addNews([first], 'forexfactory'), { added: 1, already: 0 });
+  const stored = () => D.listNews('2026-12-04', '2026-12-04').find((e) => e.title === 'Non-Farm Employment Change')!;
+  assert.deepEqual([stored().forecast, stored().previous], ['150K', '142K']);
+  // The forecast is revised during the week: a re-sync takes the new figure, adds nothing.
+  assert.deepEqual(D.addNews(N.parseFfFeed(feed('165K', '142K'), -6).events, 'forexfactory'), { added: 0, already: 1 });
+  assert.equal(stored().forecast, '165K');
+  // A copy without figures never wipes the ones already stored.
+  D.addNews(N.parseFfFeed(feed('', ''), -6).events, 'forexfactory');
+  assert.deepEqual([stored().forecast, stored().previous], ['165K', '142K']);
+
+  // Through an export and back.
+  const dump = D.exportNews();
+  const id = stored().id;
+  D.deleteNews(id);
+  assert.ok(D.restoreNews(dump) >= 1);
+  assert.deepEqual([stored().forecast, stored().previous], ['165K', '142K']);
+});
