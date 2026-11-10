@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
-import { activeWork, drillFor, setDrill, setStatus, settledCount, snooze, startFlaw } from '@/db/flaws';
+import { activeWork, drillFor, listWork, setDrill, setStatus, settledCount, snooze, startFlaw } from '@/db/flaws';
 
 /**
  * GET — the active drill, for the trade form's chip: { key, drill } or null.
+ *   ?key=… — that drill's words instead (editing a trade logged under an older drill).
  * POST — what the Flaw Deck's buttons do:
  *   { action: 'start', key, drill? }   work on this flaw (pauses the current one)
  *   { action: 'snooze', key }          not now: back after 20 more trades
  *   { action: 'drill', key, text }     save the drill rewritten on its card ('' restores the library's)
  *   { action: 'status', id, status }   pause, resume (active) or retire a drill by hand
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const asked = new URL(request.url).searchParams.get('key');
+  if (asked) {
+    const last = listWork().filter((w) => w.flaw_key === asked).pop();
+    return NextResponse.json({ key: asked, drill: last?.drill_text ?? drillFor(asked) });
+  }
   const w = activeWork();
   return NextResponse.json(w ? { key: w.flaw_key, drill: w.drill_text } : null);
 }

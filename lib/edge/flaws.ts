@@ -24,6 +24,7 @@ import type { TradeState } from './state';
 import { sourceOf } from './fields';
 import { FLAW_TEXT, ruleText, themeText, type FlawType } from './flawText';
 import { THEMES } from '../insights';
+import { RULES } from '../ruleBook';
 import type { Trade } from '../types';
 
 export const MAX_FLAWS = 5;
@@ -373,4 +374,27 @@ export function coverSplit(settled: readonly Trade[]): CoverSplit {
   const line = !mostlyReplay ? null
     : `Mostly replay: ${backtest} of ${total} trades are backtests. Live + demo: ${real} trade${real === 1 ? '' : 's'}${real < 30 ? ' — too early to know.' : '.'}`;
   return { real, backtest, total, mostlyReplay, line };
+}
+
+const FIXED_TITLES: Record<string, string> = {
+  'exec:early-be': 'Breakeven too early', 'exec:never-positive': 'Losers never in profit',
+  'tilt:after-loss': 'Trading right after a loss', 'tilt:second-plus': 'A 2nd or later trade of the day',
+  filter: 'A filter that does not filter', hesitation: 'Hesitation', data: 'Fix your data',
+};
+
+/**
+ * A flaw's name and library drill from its key alone, for flaws that are not
+ * in today's ranking (a paused drill, a snoozed card, the trade form's chip).
+ * theme:<id> reads lib/insights' THEMES; rule:<id> reads lib/ruleBook.
+ */
+export function describeKey(key: string): { title: string; drill: string } {
+  if (key.startsWith('theme:')) {
+    const id = key.slice(6); const def = THEMES.find((d) => d.id === id);
+    return { title: def?.title ?? id, drill: FLAW_TEXT[id]?.drill ?? def?.rule ?? '' };
+  }
+  if (key.startsWith('rule:')) {
+    const id = key.slice(5); const short = RULES.find((r) => r.id === id)?.short ?? id;
+    return { title: `Breaking: ${short}`, drill: (FLAW_TEXT[key] ?? ruleText(short)).drill };
+  }
+  return { title: FIXED_TITLES[key] ?? key, drill: FLAW_TEXT[key]?.drill ?? '' };
 }

@@ -167,3 +167,14 @@ test('storage: one active drill, the old one paused; snooze for 20 trades; rewri
   assert.ok(!cols.includes('drill_key') && !cols.includes('drill_kept') && cols.includes('stop_placement'));
   assert.equal((getDb().prepare("SELECT count(*) n FROM sqlite_master WHERE name IN ('flaw_work','flaw_drills')").get() as { n: number }).n, 0);
 });
+
+test('any key names itself and has a drill, even when it is not ranked today', () => {
+  const early = F.describeKey('theme:early');
+  assert.equal(early.drill, FLAW_TEXT.early.drill);
+  assert.notEqual(early.title, 'early', 'a theme reads its title, not its id');
+  assert.equal(F.describeKey('rule:pd').title, 'Breaking: Right side of the range');
+  assert.match(F.describeKey('rule:pd').drill, /right side of the range/);
+  assert.equal(F.describeKey('exec:early-be').title, 'Breakeven too early');
+  assert.ok(F.describeKey('exec:early-be').drill.length > 0);
+  for (const k of ['tilt:after-loss', 'filter', 'hesitation', 'data']) assert.ok(F.describeKey(k).drill, `${k} has a drill`);
+});

@@ -1,5 +1,6 @@
 'use client';
 
+import { DrillChip, type DrillKept } from './DrillChip';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InCaptureSheet } from './CaptureSheet';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
@@ -174,6 +175,9 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   // trade ever saved claimed full rule adherence whether or not the question
   // had been looked at. Nothing on this form starts in the affirmative now.
   const [followedRules, setFollowedRules] = useState<Tri>(trade?.followed_rules ?? null);
+  // The active drill from Work on (components/capture/DrillChip): its key, and the answer, empty by default.
+  const [drillKey, setDrillKey] = useState<string | null>(trade?.drill_key ?? null);
+  const [drillKept, setDrillKept] = useState<DrillKept | null>(trade?.drill_kept ?? null);
   const [regrade, setRegrade] = useState<Regrade | null>(trade?.regrade ?? null);
   const [mistakeTags, setMistakeTags] = useState<MistakeTag[]>(trade?.mistake_tags ?? []);
   const [marketTags, setMarketTags] = useState<MarketTag[]>(trade?.market_tags ?? []);
@@ -673,6 +677,8 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       // an old trade that never answered the tier keeps what it had.
       chk_sweep: trade?.chk_sweep ?? null,
       followed_rules: followedRules,
+      drill_key: drillKey,
+      drill_kept: drillKey ? drillKept : null,
       regrade,
       // The legacy single tag is carried through untouched so an edit never
       // erases a value written under the old taxonomy.
@@ -1498,6 +1504,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
             hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
           />
         </div>
+        <DrillChip drillKey={trade?.drill_key ?? null} value={drillKept} onChange={(k, v) => { setDrillKey(k); setDrillKept(v); }} />
         <PostAnatomy a={anat} set={setA} broke={followedRules === false} />
         </div>
         )}

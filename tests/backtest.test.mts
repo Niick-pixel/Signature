@@ -13,7 +13,7 @@ process.env.SIGNATURE_DATA_DIR = DIR;
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
 const { getDb } = await import('../db/index');
-const { createTrade, updateTrade, listTrades } = await import('../db/trades');
+const { createTrade, updateTrade, listTrades, getTrade } = await import('../db/trades');
 const { parseTradeInput } = await import('../lib/validate');
 const { forAccount, streaks, whenHeatmap, byMacroTime } = await import('../lib/stats');
 const { BACKTEST, BACKTEST_REASON, ACCOUNTS, MONEY_ACCOUNTS, isReal, isDated } = await import('../lib/domain');
@@ -118,4 +118,18 @@ test('the journal export leaves backtests out — they are not days lived', () =
   const out = journalExport({ range: '30', pages: [], trades: [bt as never], reviews: [], preps: [] });
   assert.equal(out.days, 0);
   assert.ok(!out.markdown.includes(BACKTEST_REASON));
+});
+
+test('migration 042: the drill answer round-trips; an unknown answer reads as unanswered, never blocks', () => {
+  getDb();
+  const ok = input({ account: BACKTEST, undated: true, reason: BACKTEST_REASON, drill_key: 'theme:early', drill_kept: 'kept' });
+  assert.ok(ok.ok);
+  if (!ok.ok) return;
+  const back = getTrade(createTrade(ok.value).id)!;
+  assert.equal(back.drill_key, 'theme:early');
+  assert.equal(back.drill_kept, 'kept');
+  const empty = input({ account: BACKTEST, undated: true, reason: BACKTEST_REASON });
+  assert.ok(empty.ok && empty.value.drill_kept == null, 'empty by default');
+  const odd = input({ account: BACKTEST, undated: true, reason: BACKTEST_REASON, drill_kept: 'mostly' });
+  assert.ok(odd.ok && odd.value.drill_kept === null);
 });

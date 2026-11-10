@@ -13,10 +13,9 @@ import { missedStats } from '../lib/edge/missed';
 import { themesWith } from '../lib/edge/text';
 import { edgeMetrics } from '../lib/edge/metrics';
 import {
-  baseline, coverSplit, findFlaws, hitTest, progress, relapsed, snoozeUntil,
+  baseline, coverSplit, describeKey, findFlaws, hitTest, progress, relapsed, snoozeUntil,
   type Flaw, type FlawWork, type Progress, type WorkStatus,
 } from '../lib/edge/flaws';
-import { FLAW_TEXT } from '../lib/edge/flawText';
 import type { Trade } from '../lib/types';
 
 /* ───────────────────────── storage ───────────────────────── */
@@ -208,13 +207,10 @@ export function settledCount(): number {
 }
 
 function titleOf(key: string): string {
-  if (key.startsWith('theme:')) return key.slice(6);
-  if (key.startsWith('rule:')) return `Breaking: ${key.slice(5)}`;
-  return ({ 'exec:early-be': 'Breakeven too early', 'exec:never-positive': 'Losers never in profit', 'tilt:after-loss': 'Trading right after a loss',
-    'tilt:second-plus': 'A 2nd or later trade of the day', filter: 'A filter that does not filter', hesitation: 'Hesitation', data: 'Fix your data' } as Record<string, string>)[key] ?? key;
+  return describeKey(key).title;
 }
 
 /** The drill text for a key: your rewrite, else the library's. */
 export function drillFor(key: string): string {
-  return drillOverrides().get(key) ?? FLAW_TEXT[key]?.drill ?? '';
+  return drillOverrides().get(key) ?? describeKey(key).drill;
 }
