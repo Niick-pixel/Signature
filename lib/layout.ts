@@ -194,7 +194,7 @@ function clusterGrid(count: number, scale: number) {
  * top-left, where you look first. That placement is the entire argument for
  * this screen existing.
  */
-interface BoardGroup { key: string; reason: Reason; accent: string; stats: Aggregate; trades: Trade[] }
+export interface BoardGroup { key: string; reason: Reason; accent: string; stats: Aggregate; trades: Trade[] }
 
 /**
  * Buckets the trades for whichever mode the board is in.
@@ -215,6 +215,9 @@ export const MISSED_GROUP = 'Missed setups';
  * happened never sits in, or moves the total of, a real cluster. Shown on
  * their own (one account), they are grouped like any other trades.
  */
+/** The board's groups for a grouping, backtests and missed setups apart — what the library lists. */
+export function boardGroups(trades: Trade[], mode: GroupMode): BoardGroup[] { return withBacktestsApart(trades, mode); }
+
 function withBacktestsApart(trades: Trade[], mode: GroupMode): BoardGroup[] {
   const backtests = trades.filter((t) => isBacktest(t.account));
   const missed = trades.filter((t) => isHypothetical(t.account));

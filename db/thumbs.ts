@@ -45,3 +45,54 @@ export async function thumbnail(absolute: string, relative: string, width: numbe
     return null;
   }
 }
+
+/*
+  Made ahead, not on first view. A thumbnail used to be made the first time
+  a card asked for it, so the first look at a group of forty charts started
+  forty image resizes at once — seconds of half-drawn cards. Now each new
+  chart gets its copies right after it is saved, and charts saved before
+  this get theirs once, in the background, one at a time.
+*/
+const queue: Array<{ absolute: string; relative: string }> = [];
+let draining = false;
+
+async function drain(): Promise<void> {
+  if (draining) return;
+  draining = true;
+  try {
+    while (queue.length) {
+      const job = queue.shift()!;
+      for (const w of THUMB_WIDTHS) {
+        if (!fs.existsSync(job.absolute)) break;
+        await thumbnail(job.absolute, job.relative, w);
+      }
+      // A breath between charts, so a request that arrives meanwhile is answered first.
+      await new Promise((r) => setTimeout(r, 15));
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+/** Every size of one chart, made in the background (fire and forget). */
+export function warmThumbnails(absolute: string, relative: string): void {
+  if (/\.gif$/i.test(relative)) return;
+  queue.push({ absolute, relative });
+  void drain();
+}
+
+/** True when every size of this chart already exists. */
+export function hasThumbnails(relative: string): boolean {
+  return THUMB_WIDTHS.every((w) => fs.existsSync(path.join(THUMBS_DIR, String(w), `${relative}.webp`)));
+}
+
+let caughtUp = false;
+/** Once per run: queue every chart that is missing a size. Returns how many were queued. */
+export function catchUpThumbnails(charts: Array<{ absolute: string; relative: string }>): number {
+  if (caughtUp) return 0;
+  caughtUp = true;
+  const missing = charts.filter((c) => !/\.gif$/i.test(c.relative) && !hasThumbnails(c.relative) && fs.existsSync(c.absolute));
+  queue.push(...missing);
+  void drain();
+  return missing.length;
+}

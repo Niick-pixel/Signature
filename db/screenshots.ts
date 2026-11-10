@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { SCREENSHOTS_DIR } from '../lib/paths';
 import { localDay } from '../lib/day';
 import { compressChart, getShotCompress } from './shotCompress';
+import { warmThumbnails } from './thumbs';
 
 const EXT_BY_MIME: Record<string, string> = {
   'image/png': '.png',
@@ -57,6 +58,8 @@ export async function saveScreenshot(file: File): Promise<string> {
   const absolute = path.join(SCREENSHOTS_DIR, folder, name);
   fs.mkdirSync(path.dirname(absolute), { recursive: true });
   writeAtomic(absolute, bytes);
+  // Its card and panel copies, made now in the background rather than on first view (db/thumbs).
+  warmThumbnails(absolute, relative);
 
   return relative;
 }

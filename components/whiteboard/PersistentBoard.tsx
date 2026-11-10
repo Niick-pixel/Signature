@@ -7,6 +7,8 @@ import type { Trade } from '@/lib/types';
 import { boardUnderneath } from '@/lib/nav';
 import { BOARD_NOW, BOARD_SHOWN } from '@/lib/keys';
 import { Whiteboard, type BoardStart } from './Whiteboard';
+import { Library } from './Library';
+import { usePreferences } from '@/components/shell/PreferencesProvider';
 
 /**
  * The whiteboard, kept alive across every screen.
@@ -65,6 +67,26 @@ export function PersistentBoard({ start }: { start: BoardStart }) {
     return () => { cancelled = true; clearTimeout(id); };
   }, [visible, trades]);
   useEffect(() => { if (visible && trades) window.dispatchEvent(new Event(BOARD_SHOWN)); }, [visible, trades]);
+  /*
+    The tab opens on the trade library; the free-form canvas is one switch
+    away. Only the chosen one is built — the canvas, with its React Flow
+    and every animated card, is not kept alive behind the library.
+  */
+  const { prefs, update } = usePreferences();
+  const canvas = prefs.boardView === 'canvas';
+  const viewSwitch = (
+    <div role="group" aria-label="Whiteboard view" data-board-view={prefs.boardView}
+      className="glass inline-flex rounded-full p-0.5 text-[11.5px] font-medium">
+      {(['library', 'canvas'] as const).map((v) => (
+        <button key={v} type="button" aria-pressed={prefs.boardView === v} onClick={() => update({ boardView: v })} data-board-view-option={v}
+          title={v === 'library' ? 'Every trade as a fast, searchable wall of charts' : 'The free-form canvas: drag cards, notes, regions and lines'}
+          className="rounded-full px-3 py-1"
+          style={prefs.boardView === v ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
+          {v === 'library' ? 'Library' : 'Board view'}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <div
       data-board-layer
@@ -73,7 +95,9 @@ export function PersistentBoard({ start }: { start: BoardStart }) {
       className="fixed inset-x-0 bottom-0 top-16 sm:top-11"
       style={visible ? undefined : { contentVisibility: 'hidden', pointerEvents: 'none' }}
     >
-      {trades && <Whiteboard trades={trades} start={start} />}
+      {trades && (canvas
+        ? <><Whiteboard trades={trades} start={start} /><div className="pointer-events-auto absolute left-4 top-3 z-30">{viewSwitch}</div></>
+        : <Library trades={trades} boardSwitch={viewSwitch} />)}
     </div>
   );
 }

@@ -96,6 +96,8 @@ export interface Preferences {
   propTab: boolean;
   /** Set once the Prop tab has been moved off the title bar for everyone (it was on by default). */
   propTabMoved: boolean;
+  /** The Whiteboard tab: the fast trade library (default), or the free-form canvas. */
+  boardView: 'library' | 'canvas';
   /** Which day a trade counts on for firm rules: its calendar date, or the futures session (6pm New York). */
   propDayBoundary: 'calendar' | 'cme';
   /** Warn when this share (%) of the drawdown or daily limit is all that is left. */
@@ -286,6 +288,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   importAutoLink: true,
   propTab: false,
   propTabMoved: true,
+  boardView: 'library',
   propDayBoundary: 'cme',
   propWarnPct: 25,
   propShowEnded: false,
