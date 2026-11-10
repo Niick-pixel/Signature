@@ -72,22 +72,38 @@ function Section({ title, hint, children }: {
   );
 }
 
+/*
+  One topic per category, in three groups. Every option the panel had is
+  still here; what changed is where it lives — Updates, Export & import,
+  Keyboard, Personalization and the morning used to share pages with
+  things they had nothing to do with. The ids are kept (a page's Customize
+  and the reminders open a category by id); "general" is Rules & path.
+  `words` feed the search box, so a setting is found by what it is called.
+*/
 const CATEGORIES = [
-  { id: 'general', label: 'General', hint: 'Path, rules, the morning, keys' },
-  { id: 'appearance', label: 'Appearance', hint: 'Themes, size, background, type' },
-  { id: 'dashboard', label: 'Dashboard & Today', hint: 'Blocks, accounts, the panel' },
-  { id: 'trades', label: 'Trades & import', hint: 'Trade page, executions' },
-  { id: 'board', label: 'Whiteboard', hint: 'Density, lines, grid' },
-  { id: 'prop', label: 'Prop firms', hint: 'Trading day, warnings' },
-  { id: 'analytics', label: 'Analytics', hint: 'Reading, words, news' },
-  { id: 'study', label: 'Study room', hint: 'Your timer, the streak' },
-  { id: 'notifications', label: 'Notifications', hint: 'Reminders, quiet hours' },
-  { id: 'data', label: 'Journal & data', hint: 'Folder, backups, updates' },
+  { id: 'general', group: 'Trading', label: 'Rules & path', hint: 'The path to funded, minimum confidence, when the day stops.', words: 'path steps commitments budget rules confidence stop losses limit' },
+  { id: 'morning', group: 'Trading', label: 'Morning & prep', hint: 'The check-in before the session and the chart prep.', words: 'check-in checkin morning prep chart heatmap sleep bias news' },
+  { id: 'trades', group: 'Trading', label: 'Trades & import', hint: 'What the trade page shows, and executions from your broker.', words: 'trade page sections executions import csv fees broker' },
+  { id: 'prop', group: 'Trading', label: 'Prop firms', hint: 'The trading day, warnings, and where the prop hub shows.', words: 'prop eval funded drawdown tab hub warnings day' },
+  { id: 'appearance', group: 'Screens', label: 'Appearance', hint: 'Theme, size, motion and the logo.', words: 'theme dark light size text zoom fit screen motion animation logo watermark' },
+  { id: 'personal', group: 'Screens', label: 'Personalization', hint: 'Background, accent, type, saved looks, the quote of the day.', words: 'background photo video accent colour color font type looks quote' },
+  { id: 'dashboard', group: 'Screens', label: 'Dashboard & Today', hint: 'Which blocks show, which accounts, and the Today panel.', words: 'dashboard blocks cards today panel accounts phrases' },
+  { id: 'board', group: 'Screens', label: 'Whiteboard', hint: 'Card size, the lines between trades, the grid.', words: 'whiteboard board density cards lines leak reason grid passed' },
+  { id: 'analytics', group: 'Screens', label: 'Analytics', hint: 'How analytics read your trades, words and news.', words: 'analytics words emotions news reading theme dictionary' },
+  { id: 'study', group: 'Screens', label: 'Study room', hint: 'Your timer, the daily range, the streak.', words: 'study timer cube streak flashcards focus hours' },
+  { id: 'notifications', group: 'App', label: 'Notifications', hint: 'Reminders, sounds, quiet hours and timing.', words: 'notifications reminders sounds volume quiet hours bell' },
+  { id: 'keys', group: 'App', label: 'Keyboard', hint: 'Single-key shortcuts for everything.', words: 'keyboard shortcuts keys hotkeys' },
+  { id: 'data', group: 'App', label: 'Journal & data', hint: 'Where the journal lives, how charts are stored, backups.', words: 'folder journal data path move backup restore second copy chart storage compress webp onedrive' },
+  { id: 'export', group: 'App', label: 'Export & import', hint: 'Take everything out, bring an export back in, the trash, reset.', words: 'export zip csv json import trash deleted reset defaults' },
+  { id: 'updates', group: 'App', label: 'Updates', hint: 'The version you have, and new ones.', words: 'update version upgrade release install check' },
 ] as const;
 type Category = (typeof CATEGORIES)[number]['id'];
+const GROUPS = ['Trading', 'Screens', 'App'] as const;
 
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { prefs, update, reset } = usePreferences();
+  const [q, setQ] = useState('');
+  const shown = CATEGORIES.filter((c) => !q.trim() || `${c.label} ${c.hint} ${c.words}`.toLowerCase().includes(q.trim().toLowerCase()));
   const [cat, setCat] = useState<Category>(() => {
     try { const v = window.sessionStorage.getItem('signature:settings-cat'); return (CATEGORIES.some((c) => c.id === v) ? v : 'general') as Category; } catch { return 'general'; }
   });
@@ -253,19 +269,37 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             style={{ background: 'var(--bg-raised)', borderColor: 'var(--glass-stroke)', boxShadow: 'var(--shadow-panel)' }}
             className="fixed inset-0 z-[70] m-auto flex h-[min(46rem,90vh)] w-[min(64rem,94vw)] overflow-hidden rounded-[calc(24px*var(--rk))] border"
           >
-            <nav className="flex w-[13.5rem] shrink-0 flex-col gap-0.5 border-r p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} aria-label="Settings categories">
+            <nav className="flex w-[13.5rem] shrink-0 flex-col gap-0.5 overflow-y-auto border-r p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} aria-label="Settings categories">
               <h2 className="px-2.5 pb-2 pt-1 text-[15px] font-semibold tracking-tight">Settings</h2>
-              {CATEGORIES.map((c) => (
-                <button key={c.id} type="button" onClick={() => setCat(c.id)} data-settings-cat={c.id} aria-current={cat === c.id}
-                  className="rounded-[10px] px-2.5 py-1.5 text-left text-[12.5px] font-medium"
-                  style={cat === c.id ? { background: 'rgb(var(--accent) / 0.13)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
-                  {c.label}
-                </button>
-              ))}
+              {/* Find a setting by what it is called: "backup", "sound", "font"… Enter opens the first match. */}
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search settings" aria-label="Search settings" data-settings-search
+                onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) { setCat(shown[0].id); } if (e.key === 'Escape' && q) { e.stopPropagation(); setQ(''); } }}
+                className="mb-2 w-full rounded-[10px] border px-2.5 py-1.5 text-[12px] outline-none"
+                style={{ borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)', color: 'var(--text)' }} />
+              {GROUPS.map((g) => {
+                const items = shown.filter((c) => c.group === g);
+                if (!items.length) return null;
+                return (
+                  <div key={g} className="mb-1.5">
+                    <div className="px-2.5 pb-0.5 pt-1.5 text-[9.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>{g}</div>
+                    {items.map((c) => (
+                      <button key={c.id} type="button" onClick={() => setCat(c.id)} data-settings-cat={c.id} aria-current={cat === c.id}
+                        className="block w-full rounded-[10px] px-2.5 py-1.5 text-left text-[12.5px] font-medium"
+                        style={cat === c.id ? { background: 'rgb(var(--accent) / 0.13)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+              {!shown.length && <p className="px-2.5 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Nothing called that.</p>}
             </nav>
             <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center justify-between border-b px-6 py-3" style={{ borderColor: 'var(--glass-stroke)' }}>
-              <h3 className="text-[15px] font-semibold">{CATEGORIES.find((c) => c.id === cat)?.label}</h3>
+              <div className="min-w-0">
+                <h3 className="text-[15px] font-semibold">{CATEGORIES.find((c) => c.id === cat)?.label}</h3>
+                <p className="truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>{CATEGORIES.find((c) => c.id === cat)?.hint}</p>
+              </div>
               <div className="flex items-center gap-2">
                 <Button onClick={onClose} title="Every setting saved the moment you changed it (Esc)">Done</Button>
               </div>
@@ -333,7 +367,6 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </>)}
             {cat === 'trades' && (<>
             <TradeSettings Section={Section} />
-            <ChartStorage Section={Section} />
             </>)}
             {cat === 'prop' && (<>
             <PropSettings Section={Section} />
@@ -347,7 +380,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             {cat === 'notifications' && (<>
             <NotificationSettings Section={Section} />
             </>)}
-            {cat === 'appearance' && (<>
+            {cat === 'personal' && (<>
             <PersonalSettings Section={Section} />
 
             </>)}
@@ -397,7 +430,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </Section>
 
             </>)}
-            {cat === 'general' && (<>
+            {cat === 'morning' && (<>
             <Section
               title="Morning check-in"
               hint="Four questions before the session: sleep, state of mind, bias and news. Asked once on the first screen of a trading day, never while a trade is being written, and never again once the day has trades in it."
@@ -428,6 +461,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </label>
             </Section>
 
+            </>)}
+            {cat === 'keys' && (<>
             <Section
               title="Keyboard"
               hint="Single keys move you around: N new trade, M the morning, 0 the Dashboard, 1–7 the tabs, J and K through the board's trades."
@@ -467,16 +502,40 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                 {info?.dataDir ?? 'Loading…'}
               </p>
               {info && <p className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>{info.trades} trade{info.trades === 1 ? '' : 's'}</p>}
-              {desk?.canMove && (
-                <div className="mt-2.5">
+              {/* A journal inside a synced folder: the sync client can hold the database or a chart while
+                  it uploads (or fetch a chart it freed from disk), which shows up as pauses in the app. */}
+              {info?.dataDir && /onedrive|dropbox|google drive|icloud/i.test(info.dataDir) && (
+                <p data-synced-folder className="mt-2 rounded-[calc(10px*var(--rk))] px-3 py-2 text-[11.5px] leading-snug"
+                  style={{ color: 'rgb(var(--amber))', background: 'rgb(var(--amber) / 0.08)', border: '1px solid rgb(var(--amber) / 0.3)' }}>
+                  This folder is inside {/onedrive/i.test(info.dataDir) ? 'OneDrive' : 'a synced folder'}. While it syncs it can hold the database or a chart for a moment, which shows up as pauses. Faster and safer: move the journal to a plain folder (Move journal…), and choose the synced folder as the second copy under Backups.
+                </p>
+              )}
+              {/* What acts on the folder sits with it. */}
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {typeof window !== 'undefined' && window.signature?.isDesktop && (
+                  <Button title="Opens the folder above in your file manager — the database and every screenshot are in there"
+                    onClick={() => window.signature?.openDataFolder()}>Open folder</Button>
+                )}
+                <Button title="Copies the folder path above to the clipboard"
+                  onClick={async () => {
+                    if (!info?.dataDir) return;
+                    try {
+                      await navigator.clipboard.writeText(info.dataDir);
+                      setCopied(true);
+                      window.setTimeout(() => setCopied(false), 1600);
+                    } catch { /* clipboard blocked; the path is on screen anyway */ }
+                  }}>{copied ? 'Copied' : 'Copy path'}</Button>
+                {desk?.canMove && (
                   <Button onClick={moveJournal}
                     title="Copies your journal to a folder you choose — or switches to a journal already there — and restarts on it. The current folder is left as it is.">
                     Move journal…
                   </Button>
-                  {moveError && <p className="mt-2 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{moveError}</p>}
-                </div>
-              )}
+                )}
+              </div>
+              {moveError && <p className="mt-2 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{moveError}</p>}
             </Section>
+
+            <ChartStorage Section={Section} />
 
             <Section
               title="Backups"
@@ -541,7 +600,9 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </div>
             </Section>
 
-            {upd && (
+            </>)}
+            {cat === 'updates' && (<>
+            {upd ? (
               <Section
                 title="Updates"
                 hint="The installed app asks this project's GitHub releases whether a newer version exists — nothing about your journal is sent. A new version downloads in the background and installs when you close Signature."
@@ -572,78 +633,36 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                   </div>
                 )}
               </Section>
+            ) : (
+              <Section title="Updates" hint="Updates come with the desktop app: it checks this project's releases and installs new versions when you close it.">
+                <p className="text-[11.5px] leading-snug" style={{ color: 'var(--text-dim)' }} data-update-line>
+                  {desk ? <>Signature {desk.version} · checking is not available in this window.</> : 'Open Signature from the desktop app to check for updates.'}
+                </p>
+              </Section>
             )}
-
-            {importResult && (
-              <p className="mt-3 text-[11px] leading-snug" style={{ color: 'var(--text-dim)' }}>
-                {importResult}
-              </p>
-            )}
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              {typeof window !== 'undefined' && window.signature?.isDesktop && (
-                <Button
-                  title="Opens the folder above in your file manager — the database and every screenshot are in there"
-                  onClick={() => window.signature?.openDataFolder()}
-                >
-                  Open folder
-                </Button>
-              )}
-              {/* One zip: trades.json, trades.csv, and every screenshot. */}
+            </>)}
+            {cat === 'export' && (<>
+            <Section title="Export" hint="One zip: every trade as JSON and as a spreadsheet, your money movements, the journal as a readable document, and every chart screenshot.">
               <a href="/api/export" download className="outline-none">
-                <Button
-                  tabIndex={-1}
-                  title="Downloads one zip: every trade as JSON and as a spreadsheet, your money movements, the journal as a readable document, and every chart screenshot"
-                >
-                  Export everything
-                </Button>
+                <Button tabIndex={-1} title="Downloads one zip with everything in the journal">Export everything</Button>
               </a>
-              <Button
-                onClick={() => importRef.current?.click()}
-                disabled={importing}
-                title="Restores from an export: the .zip (charts included) or its trades.json. Matched on id, so importing the same file twice changes nothing the second time"
-              >
+            </Section>
+            <Section title="Import" hint="Restores from an export: the .zip (charts included) or its trades.json. Matched on id, so importing the same file twice changes nothing the second time.">
+              <Button onClick={() => importRef.current?.click()} disabled={importing} title="Choose an export to bring back in">
                 {importing ? 'Importing…' : 'Import…'}
               </Button>
-              <Link href="/trash" className="outline-none">
-                <Button
-                  tabIndex={-1}
-                  title="Trades you deleted. Nothing is destroyed until you purge it there"
-                >
-                  Trash
-                </Button>
+              <input ref={importRef} type="file" accept="application/json,.json,application/zip,.zip" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) runImport(f); e.target.value = ''; }} />
+              {importResult && <p className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--text-dim)' }}>{importResult}</p>}
+            </Section>
+            <Section title="Trash" hint="Trades you deleted. Nothing is destroyed until you purge it there.">
+              <Link href="/trash" className="outline-none" onClick={onClose}>
+                <Button tabIndex={-1} title="Open the trash">Open the trash</Button>
               </Link>
-              <input
-                ref={importRef}
-                type="file"
-                accept="application/json,.json,application/zip,.zip"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) runImport(f);
-                  e.target.value = '';
-                }}
-              />
-              <Button
-                title="Copies the folder path above to the clipboard"
-                onClick={async () => {
-                  if (!info?.dataDir) return;
-                  try {
-                    await navigator.clipboard.writeText(info.dataDir);
-                    setCopied(true);
-                    window.setTimeout(() => setCopied(false), 1600);
-                  } catch { /* clipboard blocked; the path is on screen anyway */ }
-                }}
-              >
-                {copied ? 'Copied' : 'Copy path'}
-              </Button>
-              <Button
-                onClick={reset}
-                title="Puts the settings on this panel back to their defaults. Touches no trade, no page and no money"
-              >
-                Reset
-              </Button>
-            </div>
+            </Section>
+            <Section title="Reset settings" hint="Puts every setting in this window back to its default. Touches no trade, no page and no money.">
+              <Button onClick={reset} title="Every setting back to its default — your journal is not touched">Reset settings</Button>
+            </Section>
             </>)}
         </SwapIn>
       </div>

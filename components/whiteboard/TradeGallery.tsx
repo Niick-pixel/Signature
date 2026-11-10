@@ -126,7 +126,7 @@ export function TradeGallery({ trade, index, onIndex, onClose, onTrade, prevLabe
                 ›<span className="hidden max-w-[5rem] text-[9.5px] leading-tight sm:block" style={{ color: 'var(--text-faint)' }}>{nextLabel}</span>
               </button>
             )}
-            <button type="button" aria-label="Close" onClick={(e) => { e.stopPropagation(); close(); }}
+            <button type="button" aria-label="Close" onClick={(e) => { e.stopPropagation(); close(); }} data-wco-below
               className="glass absolute right-3 top-3 grid size-9 place-items-center rounded-full text-[14px] sm:right-5 sm:top-5" style={{ color: 'var(--text)' }}>✕</button>
           </div>
           </div>

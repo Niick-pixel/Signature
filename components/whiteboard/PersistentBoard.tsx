@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { usePathname } from 'next/navigation';
 import type { Trade } from '@/lib/types';
 import { boardUnderneath } from '@/lib/nav';
-import { BOARD_SHOWN } from '@/lib/keys';
+import { BOARD_NOW, BOARD_SHOWN } from '@/lib/keys';
 import { Whiteboard, type BoardStart } from './Whiteboard';
 
 /**
@@ -30,7 +31,26 @@ import { Whiteboard, type BoardStart } from './Whiteboard';
 export function PersistentBoard({ start }: { start: BoardStart }) {
   const pathname = usePathname();
   // Visible on the board, and behind New trade when that was opened over it.
-  const visible = pathname === '/' || (pathname === '/new' && boardUnderneath());
+  /*
+    Shown on the click (lib/nav sends BOARD_NOW), not when the router lands:
+    the board is already built, so nothing makes it wait on the server. The
+    flag goes once the path changes; a move that never lands lets go of it.
+  */
+  const [early, setEarly] = useState(false);
+  useEffect(() => {
+    const now = () => flushSync(() => setEarly(true));
+    window.addEventListener(BOARD_NOW, now);
+    return () => window.removeEventListener(BOARD_NOW, now);
+  }, []);
+  useEffect(() => {
+    if (!early) return;
+    const id = window.setTimeout(() => setEarly(false), 5000);
+    return () => window.clearTimeout(id);
+  }, [early]);
+  // The path moved on: the router has caught up, the flag has done its job.
+  const [seenPath, setSeenPath] = useState(pathname);
+  if (seenPath !== pathname) { setSeenPath(pathname); setEarly(false); }
+  const visible = early || pathname === '/' || (pathname === '/new' && boardUnderneath());
   const [trades, setTrades] = useState<Trade[] | null>(null);
   useEffect(() => {
     if (trades) return;

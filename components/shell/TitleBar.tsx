@@ -73,6 +73,8 @@ export function TitleBar() {
 
   useEffect(() => {
     setPlatform(window.signature?.platform ?? null);
+    // For full-screen views drawn over the title strip: Windows paints its window buttons there (globals.css, data-wco-*).
+    if (window.signature?.platform) document.documentElement.dataset.platform = window.signature.platform;
     // Menu items (Cmd+N and friends) and clicked notifications navigate through the preload bridge.
     return window.signature?.onNavigate((route) => openReminderRoute(route));
   }, []);

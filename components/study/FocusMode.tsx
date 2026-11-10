@@ -57,7 +57,7 @@ export function FocusMode() {
       {open && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: exitQuick }} transition={springSoft}
           className="fixed inset-0 z-[90] flex flex-col" style={{ background: 'var(--bg)' }} role="dialog" aria-label="Focus mode" data-focus-mode>
-          <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center justify-between px-6 py-4" data-wco-pad>
             <span className="text-[11px] uppercase tracking-[0.12em]" style={{ color: 'var(--text-faint)' }}>The door is closed</span>
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => setOpen(false)} className="rounded-full border px-3.5 py-1.5 text-[12px] font-medium"

@@ -92,8 +92,10 @@ export interface Preferences {
   importFeePerContract: number;
   /** Link stored, unlinked executions to trades logged later (the "Log it" path), on its own. */
   importAutoLink: boolean;
-  /** Phase 3. The Prop tab in the title bar. */
+  /** Phase 3. The Prop tab in the title bar. Off by default: the hub is on the Path page and key 6. */
   propTab: boolean;
+  /** Set once the Prop tab has been moved off the title bar for everyone (it was on by default). */
+  propTabMoved: boolean;
   /** Which day a trade counts on for firm rules: its calendar date, or the futures session (6pm New York). */
   propDayBoundary: 'calendar' | 'cme';
   /** Warn when this share (%) of the drawdown or daily limit is all that is left. */
@@ -282,7 +284,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   importPnlAfterFees: true,
   importFeePerContract: 0,
   importAutoLink: true,
-  propTab: true,
+  propTab: false,
+  propTabMoved: true,
   propDayBoundary: 'cme',
   propWarnPct: 25,
   propShowEnded: false,
@@ -359,6 +362,8 @@ export function readPreferences(): Preferences {
     const saved = JSON.parse(raw) as Partial<Preferences>;
     return {
       ...DEFAULT_PREFERENCES, ...saved,
+      // The Prop tab moved off the title bar: once, for everyone who had it on by default. Turned back on, it stays.
+      ...(saved.propTabMoved ? {} : { propTab: false, propTabMoved: true }),
       // One level deeper for the on/off maps, so a block added later is on, not undefined.
       dashBlocks: { ...DEFAULT_PREFERENCES.dashBlocks, ...(saved.dashBlocks ?? {}) },
       dashRow: parseDashRow(saved.dashRow, saved.dashBlocks),

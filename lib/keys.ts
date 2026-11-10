@@ -76,6 +76,8 @@ export function typing(): boolean {
  */
 /** Fired when the kept-alive whiteboard is shown again (PersistentBoard). */
 export const BOARD_SHOWN = 'signature:board-shown';
+/** Show the board now, on the click — before the router has the new page (lib/nav, PersistentBoard). */
+export const BOARD_NOW = 'signature:board-now';
 
 /** Whether the whiteboard is on screen — it stays mounted, hidden, behind every other screen. */
 export function boardShown(): boolean {

@@ -144,10 +144,22 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
 
   useEffect(() => {
     // A dialog over the panel (the delete steps) owns Escape first.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !dialogIsOpen() && !captureOpen() && boardShown()) onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (dialogIsOpen() || captureOpen() || !boardShown()) return;
+      if (e.key === 'Escape') { onClose(); return; }
+      // ← / →: the trade before or after, while reading — not while typing, and not over the charts (they page those).
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && onStep && galleryAt == null && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        const el = e.target as HTMLElement | null;
+        if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+        if (dir < 0 ? prevLabel == null : nextLabel == null) return;
+        e.preventDefault();
+        onStep(dir);
+      }
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, onStep, galleryAt, prevLabel, nextLabel]);
 
   async function settle() {
     if (!trade) return;
@@ -198,7 +210,22 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
             style={{ background: 'rgba(0,0,0,0.72)' /* no backdrop blur: see Overlay */ }}
           />
 
-          <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-6">
+          <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-6 sm:px-24">
+            {/* The trade before and after (← →): the same order as the charts' own arrows. */}
+            {onStep && prevLabel != null && (
+              <button type="button" aria-label="Previous trade" title="Previous trade (←)" onClick={() => onStep(-1)} data-detail-prev
+                className="glass pointer-events-auto fixed left-3 top-1/2 z-[51] flex -translate-y-1/2 flex-col items-center gap-0.5 rounded-[18px] px-2.5 py-3 text-[22px] leading-none transition-transform hover:-translate-x-0.5 sm:left-6"
+                style={{ color: 'var(--text)', background: 'color-mix(in srgb, var(--bg-raised) 88%, transparent)' }}>
+                ‹<span className="hidden max-w-[5.5rem] text-[10px] leading-tight sm:block" style={{ color: 'var(--text-faint)' }}>{prevLabel}</span>
+              </button>
+            )}
+            {onStep && nextLabel != null && (
+              <button type="button" aria-label="Next trade" title="Next trade (→)" onClick={() => onStep(1)} data-detail-next
+                className="glass pointer-events-auto fixed right-3 top-1/2 z-[51] flex -translate-y-1/2 flex-col items-center gap-0.5 rounded-[18px] px-2.5 py-3 text-[22px] leading-none transition-transform hover:translate-x-0.5 sm:right-6"
+                style={{ color: 'var(--text)', background: 'color-mix(in srgb, var(--bg-raised) 88%, transparent)' }}>
+                ›<span className="hidden max-w-[5.5rem] text-[10px] leading-tight sm:block" style={{ color: 'var(--text-faint)' }}>{nextLabel}</span>
+              </button>
+            )}
             <motion.div
               layoutId={`trade-${trade.id}`}
               transition={springSoft}
@@ -302,6 +329,25 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                   >
                     Phase 3 never fired on this one. By the plan, this entry does not exist.
                   </p>
+                )}
+
+                {/* What went wrong, at reading size, where the trade is read
+                    (it used to be a 9px chip on the board card). */}
+                {trade.mistake_tags.length > 0 && (
+                  <div data-detail-mistakes className="mb-5 rounded-[calc(14px*var(--rk))] px-4 py-3"
+                    style={{ background: 'rgb(var(--outcome-loss) / 0.08)', border: '1px solid rgb(var(--outcome-loss) / 0.30)' }}>
+                    <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--outcome-loss))' }}>
+                      What went wrong
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {trade.mistake_tags.map((m) => (
+                        <span key={m} className="rounded-full px-3 py-1 text-[12.5px] font-medium"
+                          style={{ color: 'rgb(var(--outcome-loss))', background: 'rgb(var(--outcome-loss) / 0.10)', border: '1px solid rgb(var(--outcome-loss) / 0.35)' }}>
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <p className="mb-6 whitespace-pre-wrap text-[13px] leading-relaxed [overflow-wrap:anywhere]">{trade.explanation}</p>

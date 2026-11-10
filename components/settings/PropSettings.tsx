@@ -26,7 +26,7 @@ export function PropSettings({ Section }: { Section: SectionComp }) {
             options={['10', '20', '25', '33', '50']} labelFor={(v) => `${v}%`} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <TogglePill checked={prefs.propTab} onChange={(propTab) => update({ propTab })} label="Prop tab in the title bar" hint="Off: the hub is still at key 6 and from here." />
+          <TogglePill checked={prefs.propTab} onChange={(propTab) => update({ propTab })} label="Prop tab in the title bar" hint="Off (the default): the hub opens from the Path page (Prop accounts), with key 6, and from here." />
           <TogglePill checked={prefs.propShowEnded} onChange={(propShowEnded) => update({ propShowEnded })} label="Show passed, failed and archived accounts" />
           <TogglePill checked={prefs.sidebarSections.prop} onChange={(on) => update({ sidebarSections: { ...prefs.sidebarSections, prop: on } })} label="Room left in the Today panel" />
           <TogglePill checked={prefs.dashBlocks.prop} onChange={(on) => update({ dashBlocks: { ...prefs.dashBlocks, prop: on } })} label="Prop accounts on the Dashboard" />

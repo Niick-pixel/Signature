@@ -5,6 +5,7 @@ import { openGoals } from '@/components/goals/GoalsSheet';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
+import { navigate } from '@/lib/nav';
 import { Input } from '@/components/ui/Field';
 import { CommitmentSheet } from './CommitmentSheet';
 import { PathEditor } from './PathEditor';
@@ -56,6 +57,8 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
         </div>
         <div className="flex gap-2">
           <Button onClick={openGoals} data-path-goals title="Goals (G)">Goals</Button>
+          {/* The prop hub's home now the tab is off by default: evals are a step of the path. */}
+          <Button onClick={() => navigate('/prop')} data-path-prop title="Your prop and eval accounts (6)">Prop accounts</Button>
           <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
         </div>
       </header>

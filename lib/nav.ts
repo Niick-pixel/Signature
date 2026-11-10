@@ -26,6 +26,7 @@
 
 import { EASE_BOUNCE, EASE_SOFT as EASE_OUT } from './motion';
 import { JOURNAL_CHANGED, peekStale } from './freshness';
+import { BOARD_NOW } from './keys';
 
 const EASE_IN = 'cubic-bezier(0.4, 0, 1, 1)';
 
@@ -90,6 +91,9 @@ export function boardUnderneath(): boolean { return underneath === '/'; }
  */
 export function closeCapture(): void { navigate(underneath && underneath !== '/new' ? underneath : '/'); }
 
+/** The board's entrance already played on the click (navigate), not on arrival. */
+let enteredEarly = false;
+
 /** Wired once by <NavTransitions/> with the router. */
 export function registerNavigator(p: Push) { push = p; }
 
@@ -97,7 +101,8 @@ export function registerNavigator(p: Push) { push = p; }
 export function arrived() {
   arrive?.(); arrive = null;
   if (entering) {
-    enter(entering, enterDir); entering = null;
+    if (!enteredEarly) enter(entering, enterDir);
+    entering = null; enteredEarly = false;
     // The board layer stays mounted and hides itself; let go of its exit only after the entrance has started.
     leaving?.cancel(); leaving = null;
   }
@@ -153,6 +158,17 @@ export function navigate(href: string): void {
     const dir = direction(from, to);
     entering = to; enterDir = dir;
     exit(from, dir);
+    /*
+      The whiteboard is always loaded (PersistentBoard), so it does not wait
+      for the router: it is shown on the click and fades in at once, and the
+      page catches up behind it. Waiting for the server's answer first left
+      the old screen faded out and nothing in its place for as long as that
+      answer took — on a busy disk, the "lag" going to the board.
+    */
+    if (to === '/') {
+      window.dispatchEvent(new Event(BOARD_NOW));
+      if (document.querySelector('[data-board-layer]:not([data-hidden])')) { enter(to, dir); enteredEarly = true; }
+    }
     push(href);
     return;
   }
@@ -191,8 +207,9 @@ function enter(to: string, dir = 0) {
   const content = contentOf(to);
   if (!content) return;
   content.animate(board
-    // The whiteboard does not slide: it is a canvas, never seen to move. It fades up, a touch of scale.
-    ? [{ opacity: 0, transform: 'scale(0.992)' }, { opacity: 1, transform: 'none' }]
+    // The whiteboard does not slide or scale: it is a canvas, never seen to move — and scaling a
+    // layer of every card and chart costs a redraw per frame. Opacity alone stays on the compositor.
+    ? [{ opacity: 0 }, { opacity: 1 }]
     : [{ opacity: 0, transform: dir ? `translateX(${dir * 26}px)` : 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
   { duration: board ? 260 : 380, easing: board ? EASE_OUT : EASE_BOUNCE });
 }

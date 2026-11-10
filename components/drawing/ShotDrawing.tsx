@@ -121,7 +121,7 @@ export function ShotDrawingEditor({ path, src, initial, onClose, onSaved }: {
 
   return createPortal(
     <div className="fixed inset-0 z-[85] flex flex-col" style={{ background: 'rgba(10,10,12,0.97)' }} role="dialog" aria-label="Draw on the chart" data-drawing-editor>
-      <div className="flex flex-wrap items-center gap-2 px-5 py-3" style={{ color: '#f3f3f3' }}>
+      <div className="flex flex-wrap items-center gap-2 px-5 py-3" style={{ color: '#f3f3f3' }} data-wco-pad>
         <div className="flex flex-wrap gap-1">
           {TOOLS.map((t) => (
             <button key={t.id} type="button" onClick={() => setTool(t.id)} title={`${t.label} (${t.key})`} data-tool={t.id}

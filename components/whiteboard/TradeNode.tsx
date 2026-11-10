@@ -213,21 +213,15 @@ function TradeNodeInner({ data }: NodeProps) {
         {trade.grade_letter}
       </div>
 
-      {/* The first mistake tag, on the card. Which error repeats is the thing
-          the board is for, and it should be readable without opening anything. */}
+      {/* What went wrong used to sit here as a 9px chip, too small to read
+          over a chart. It is said in full, at reading size, in the trade's
+          detail panel instead; the card keeps only a small red mark that
+          there is something to read there. */}
       {trade.mistake_tags.length > 0 && (
-        <span
-          className="absolute left-2 top-[52px] max-w-[85%] truncate rounded-full px-2 py-0.5 text-[9px] font-medium"
-          style={{
-            color: 'rgb(var(--outcome-loss))',
-            background: 'rgba(10,10,12,0.62)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid rgb(var(--outcome-loss) / 0.4)',
-          }}
-        >
-          {trade.mistake_tags[0]}
-          {trade.mistake_tags.length > 1 && ` +${trade.mistake_tags.length - 1}`}
-        </span>
+        <span aria-label={`${trade.mistake_tags.length} mistake${trade.mistake_tags.length === 1 ? '' : 's'} — open the trade to read`} data-card-mistakes
+          title={trade.mistake_tags.join(' · ')}
+          className="absolute left-2.5 top-[54px] size-2 rounded-full"
+          style={{ background: 'rgb(var(--outcome-loss))', boxShadow: '0 0 0 2px rgba(10,10,12,0.55), 0 0 8px rgb(var(--outcome-loss) / 0.7)' }} />
       )}
 
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">

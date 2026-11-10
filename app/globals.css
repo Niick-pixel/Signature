@@ -1032,3 +1032,13 @@ html[data-today-open='true'] .signature-enter { padding-right: calc(19rem + 1rem
 .need-flash { animation: need-flash 1.5s ease-in-out 1 forwards; }
 html[data-reduce-motion='true'] .need-pulse { animation: none; box-shadow: 0 0 0 2px rgb(var(--amber) / 0.85); }
 html[data-reduce-motion='true'] .need-flash { animation: none; box-shadow: 0 0 0 2.5px rgb(var(--outcome-loss) / 0.95); }
+
+/*
+  Full-screen views cover the title strip, and on Windows the window's own
+  minimise / maximise / close buttons are painted over that strip, above
+  everything the app draws (about 140 × 32 px, top right). What a view puts
+  in that corner moves out of their way: a lone button drops below them, a
+  toolbar row stops short of them.
+*/
+html[data-platform='win32'] [data-wco-below] { margin-top: 34px; }
+html[data-platform='win32'] [data-wco-pad] { padding-right: 152px; }

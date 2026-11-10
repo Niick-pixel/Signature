@@ -270,9 +270,9 @@ export default async function StatsPage(
             <div className="flex flex-wrap items-center gap-2 text-[12px]">
               <a href={toggle(preOnly, 'pregraded')} className="rounded-full border px-3 py-1 font-medium" style={pill(preOnly)} title="Only trades graded before the outcome was known">Pre-graded only</a>
               {quickCount > 0 && <a href={toggle(noQuick, 'quick')} className="rounded-full border px-3 py-1 font-medium" style={pill(noQuick)} title="Leave out trades saved with Log it fast">No quick logs</a>}
-              <Link href="/blind" className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Grade past setups with the outcome hidden" data-blind-link>Blind re-grade · {listBlindGrades().length ? blindCounter(listBlindGrades(), localDay()).thisWeek : 0} this week</Link>
-              <Link href="/reports" className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Compare, breakdowns, fees, the rules heatmap, your tags (R)">Reports →</Link>
-              <Link href="/analytics" className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Time, confluences, psychology, mistake cost, what if, tilt, news (A)" data-analytics-link>Analytics →</Link>
+              <Link href="/blind" prefetch={false} className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Grade past setups with the outcome hidden" data-blind-link>Blind re-grade · {listBlindGrades().length ? blindCounter(listBlindGrades(), localDay()).thisWeek : 0} this week</Link>
+              <Link href="/reports" prefetch={false} className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Compare, breakdowns, fees, the rules heatmap, your tags (R)">Reports →</Link>
+              <Link href="/analytics" prefetch={false} className="rounded-full border px-3 py-1 font-medium" style={pill(false)} title="Time, confluences, psychology, mistake cost, what if, tilt, news (A)" data-analytics-link>Analytics →</Link>
             </div>
           </header>
 
