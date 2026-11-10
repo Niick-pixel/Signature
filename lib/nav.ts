@@ -43,7 +43,7 @@ let enterDir = 0;
 let leaving: Animation | null = null;
 
 /** The tabs, left to right — a screen's sub-pages count as their tab. */
-const TAB_ORDER = ['/dashboard', '/', '/stats', '/calendar', '/journal', '/path', '/prop', '/study'];
+const TAB_ORDER = ['/dashboard', '/', '/work', '/stats', '/calendar', '/journal', '/path', '/prop', '/study'];
 const tabIndex = (path: string) => {
   if (path === '/') return 1;
   return TAB_ORDER.findIndex((t) => t !== '/' && (path === t || path.startsWith(`${t}/`)));

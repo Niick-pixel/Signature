@@ -1,4 +1,5 @@
 import type { KeyPoint, Summary, Tone } from '@/lib/edge/summary';
+import Link from 'next/link';
 
 const TONE: Record<Tone, { dot: string; ring: string; bg: string }> = {
   good: { dot: 'rgb(var(--outcome-win))', ring: 'rgb(var(--outcome-win) / 0.35)', bg: 'rgb(var(--outcome-win) / 0.06)' },
@@ -50,6 +51,7 @@ export function KeyPoints({ s }: { s: Summary }) {
       <div className="mb-3 rounded-[calc(18px*var(--rk))] px-1">
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>In one line</div>
         <p className="mt-0.5 text-[17px] font-medium leading-snug tracking-tight" data-key-line>{s.line}</p>
+        <Link href="/work" className="mt-1 inline-block text-[12.5px] font-medium" style={{ color: 'rgb(var(--accent))' }} data-key-work>What to work on →</Link>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {s.points.map((p) => {

@@ -21,7 +21,8 @@ import type { Trade } from '../lib/types';
 
 /* ───────────────────────── storage ───────────────────────── */
 
-const row = (r: Record<string, unknown>): FlawWork => r as unknown as FlawWork;
+// node:sqlite rows have a null prototype; React will only hand plain objects to a client component.
+const row = (r: Record<string, unknown>): FlawWork => ({ ...r }) as unknown as FlawWork;
 
 export function listWork(): FlawWork[] {
   return (getDb().prepare('SELECT * FROM flaw_work ORDER BY started_at').all() as Record<string, unknown>[]).map(row);
