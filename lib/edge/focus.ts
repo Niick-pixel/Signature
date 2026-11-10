@@ -16,6 +16,7 @@
  * outcome ("what worked" tags, lesson text): those are ticked on winners,
  * so they would always look like they pay.
  */
+import { MAX_TESTABLE } from './ruleLab';
 import { compare, type Comparison } from './compare';
 import { nPerGroup } from './power';
 import type { TradeState } from './state';
@@ -102,8 +103,10 @@ function weeklyFocusUncached(trades: readonly Trade[], breaks: (t: Trade) => Bre
   const mirror = (x: FocusItem) => Boolean(leak) && x.n + leak!.n === n && !x.tradeIds.some((id) => leakIds.has(id));
   const strength = strengths.find((x) => x.priority > 0 && !mirror(x)) ?? null;
   const sd = opts.sd ?? null;
-  const experiment = leak?.experiment
-    ? { text: leak.experiment, from: leak.label, n: sd ? Math.min(400, Math.max(10, nPerGroup(sd, Math.max(0.25, Math.abs(leak.cmp.diff))))) : 30 }
+  // Only an experiment you could finish: one that needs more than MAX_TESTABLE trades is not proposed.
+  const testN = sd ? Math.max(10, nPerGroup(sd, Math.max(0.25, Math.abs(leak?.cmp.diff ?? 0)))) : 30;
+  const experiment = leak?.experiment && testN <= MAX_TESTABLE
+    ? { text: leak.experiment, from: leak.label, n: testN }
     : null;
   return { leak, leakClear: Boolean(leak && leak.cmp.verdict.level !== 'too-early'), strength, experiment, candidates: leaks.slice(0, 5) };
 }

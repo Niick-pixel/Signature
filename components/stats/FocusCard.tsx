@@ -40,13 +40,11 @@ export function FocusCard({ f, thumbs }: { f: Focus; thumbs: Record<string, Thum
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--accent))' }}>Experiment</div>
             <div className="text-[13.5px] font-medium leading-snug">{f.experiment.text}</div>
             <p className="mt-1 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
-              {f.experiment.n <= 100
-                ? <>Experiment — test it on the next <b className="tabular-nums" style={{ color: 'var(--text)' }}>{f.experiment.n}</b> trades, then compare.</>
-                : <>Experiment — test it for <b style={{ color: 'var(--text)' }}>50</b> trades, then look again; telling a gap this small apart takes about {f.experiment.n}.</>}
+              Experiment — test it on the next <b className="tabular-nums" style={{ color: 'var(--text)' }}>{f.experiment.n}</b> trades, then compare.
               {' '}From: {f.experiment.from.toLowerCase()}.
             </p>
           </div>
-        ) : <Empty kind="Experiment" text="Nothing to test yet." />}
+        ) : <Empty kind="Experiment" text="No experiment is testable at your sample size yet." />}
       </div>
     </Card>
   );

@@ -27,3 +27,11 @@ test('a proven edge reads as real; an unclear leak is offered as a candidate, no
   assert.ok(s.points[1].body.includes('Not proven yet'));
   assert.equal(s.points[1].tone, 'watch');
 });
+
+test('mostly replay: the line leads with the real result, never the blend', () => {
+  const blend = edgeMetrics(Array.from({ length: 30 }, (_, i) => ({ r: i % 2 ? 2 : -1 })));
+  const real = edgeMetrics(Array.from({ length: 9 }, (_, i) => ({ r: i % 3 ? -1 : 1.5 })));
+  const s = summarize({ m: blend, focus: mkFocus(null), split: null, adherence: { kept: 0, n: 0, rate: null }, cone: null, mat: maturity(30), missingCore: [], replay: { line: 'Mostly replay: 21 of 30 trades are backtests.', real } });
+  assert.match(s.line, /^Mostly replay — on 9 real trades you lose 0\.17R a trade, too early to know/);
+  assert.ok(!/edge looks real|to be sure/.test(s.line), 'nothing from the blend in the lead');
+});

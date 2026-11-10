@@ -13,7 +13,7 @@ import { missedStats } from '../lib/edge/missed';
 import { themesWith } from '../lib/edge/text';
 import { edgeMetrics } from '../lib/edge/metrics';
 import {
-  baseline, coverSplit, describeKey, findFlaws, hitTest, progress, relapsed, snoozeUntil,
+  baseline, coverSplit, DATA_GROUPS, describeKey, fills, findFlaws, hitTest, progress, relapsed, snoozeUntil,
   type Flaw, type FlawWork, type Progress, type WorkStatus,
 } from '../lib/edge/flaws';
 import type { Trade } from '../lib/types';
@@ -98,12 +98,6 @@ export interface Deck {
   thumbs: Record<string, { shot: string | null; r: number | null; day: string }>;
 }
 
-/** The setup-detail groups the engine reads, and how many recent trades have them. */
-const GAP_GROUPS: Array<{ key: string; label: string; fields: Array<keyof Trade> }> = [
-  { key: 'setup', label: 'Setup detail', fields: ['liquidity_event', 'entry_method', 'candle_strength', 'planned_rr'] },
-  { key: 'outcome', label: 'Outcome detail', fields: ['exit_reason', 'mfe_bucket', 'moved_to_be'] },
-  { key: 'stop', label: 'Stop and gap', fields: ['stop_placement', 'opposing_htf_gap'] },
-];
 
 export function flawDeck(source: DeckSource = 'all'): Deck {
   const ei = edgeInputs();
@@ -165,9 +159,9 @@ export function flawDeck(source: DeckSource = 'all'): Deck {
   }
 
   const recent = settled.slice(-30);
-  const gaps = GAP_GROUPS.map((g) => ({
+  const gaps = DATA_GROUPS.map((g) => ({
     key: g.key, label: g.label, total: recent.length,
-    filled: recent.filter((t) => g.fields.every((k) => t[k] != null && (t[k] as unknown) !== '')).length,
+    filled: recent.filter((t) => fills(t, g.fields)).length,
   })).filter((g) => g.total >= 5 && g.filled / g.total < 0.5);
 
   const done = work.filter((w) => w.status === 'fixed' || w.status === 'relapsed' || w.status === 'paused' || (w.status === 'snoozed' && (w.snooze_until ?? 0) > settled.length))

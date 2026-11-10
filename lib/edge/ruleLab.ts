@@ -27,6 +27,13 @@ import { closureScore } from '../anatomy';
 import type { Trade } from '../types';
 
 type Break = { id: string };
+/**
+ * The largest test we will propose. An experiment that needs more trades than
+ * this to tell the difference is not an experiment at your sample size; the
+ * page says so instead of suggesting one.
+ */
+export const MAX_TESTABLE = 200;
+
 export interface LabFilter { id: string; label: string; help: string; test: (t: Trade, s: TradeState | undefined, ctx: { breaks: Break[]; sinceFirstLoss: number | null }) => boolean | null }
 
 const st = (t: Trade) => (t as Trade & { __state?: TradeState }).__state;

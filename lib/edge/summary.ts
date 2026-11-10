@@ -27,6 +27,8 @@ const P = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v
 export function summarize(i: {
   m: EdgeMetrics; focus: Focus; split: Comparison | null; adherence: { kept: number; n: number; rate: number | null };
   cone: Cone | null; mat: Maturity; missingCore: string[];
+  /** Set when most of the sample is backtests: the line leads with the real result, not the blend. */
+  replay?: { line: string; real: EdgeMetrics } | null;
 }): Summary {
   const { m, focus, split, adherence, cone, mat } = i;
   const ci = m.expectancyCI; const p = ci?.pPositive ?? null; const e = m.expectancy;
@@ -85,8 +87,12 @@ export function summarize(i: {
     meter: { kind: 'share', value: mat.progress },
   });
 
-  const lead = edgeTone === 'good' ? 'Your edge looks real' : edgeTone === 'watch' ? 'You are slightly positive but it is not proven' : e == null ? 'Nothing to measure yet' : 'You are not profitable yet';
+  const blendLead = edgeTone === 'good' ? 'Your edge looks real' : edgeTone === 'watch' ? 'You are slightly positive but it is not proven' : e == null ? 'Nothing to measure yet' : 'You are not profitable yet';
+  const rm = i.replay?.real;
+  const lead = !rm ? blendLead
+    : rm.expectancy == null ? 'Mostly replay, and no real trades settled yet'
+    : `Mostly replay — on ${rm.n} real trade${rm.n === 1 ? '' : 's'} you ${rm.expectancy >= 0 ? 'make' : 'lose'} ${A(rm.expectancy)} a trade${rm.n < 30 ? ', too early to know' : ''}`;
   const fix = leak ? `; fix first: ${points[1].headline.toLowerCase()}` : '';
-  const need = e != null && e > 0 && more ? `; about ${more} more trades to be sure` : mat.toNext != null ? `; ${mat.toNext} more trades unlock the next tier` : '';
+  const need = !rm && e != null && e > 0 && more ? `; about ${more} more trades to be sure` : mat.toNext != null ? `; ${mat.toNext} more trades unlock the next tier` : '';
   return { line: `${lead}${fix}${need}.`, points };
 }

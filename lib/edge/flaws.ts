@@ -18,7 +18,7 @@ import { compare, type Comparison } from './compare';
 import { VERDICT_LABEL, type VerdictLevel } from './verdict';
 import type { LedgerV2 } from './ledger';
 import type { Execution } from './execution';
-import type { Spread } from './quality';
+import { setupQuality, type Spread } from './quality';
 import type { MissedStats } from './missed';
 import type { TradeState } from './state';
 import { sourceOf } from './fields';
@@ -325,7 +325,11 @@ export function progress(work: Pick<FlawWork, 'started_at' | 'baseline_rate' | '
   const broken = mine.filter((t) => t.drill_kept === 'broken').length;
   const na = mine.filter((t) => t.drill_kept === 'n/a').length;
   const counted = window.length - na;
-  const graduated = clean >= GRADUATE_AFTER && counted > 0 && kept / counted >= GRADUATE_KEPT;
+  const group = groupTest(work.flaw_key);
+  // A group flaw has no clean run: the last 20 trades, together, must pass instead.
+  const passes = group ? since.length >= GRADUATE_AFTER && group(window) : clean >= GRADUATE_AFTER;
+  if (group) clean = group(window) ? Math.min(since.length, GRADUATE_AFTER) : 0;
+  const graduated = passes && counted > 0 && kept / counted >= GRADUATE_KEPT;
   return {
     since: since.length, hitsSince,
     rateBefore: work.baseline_rate == null ? null : work.baseline_rate * 10,
@@ -335,9 +339,11 @@ export function progress(work: Pick<FlawWork, 'started_at' | 'baseline_rate' | '
 }
 
 /** A fixed flaw that shows up twice within the 20 trades after it was fixed is back. */
-export function relapsed(work: Pick<FlawWork, 'ended_at'>, trades: readonly Trade[], hit: (t: Trade) => boolean): boolean {
+export function relapsed(work: Pick<FlawWork, 'ended_at'> & { flaw_key?: string }, trades: readonly Trade[], hit: (t: Trade) => boolean): boolean {
   if (!work.ended_at) return false;
   const after = trades.filter((t) => t.created_at > work.ended_at!).slice(0, GRADUATE_AFTER);
+  const group = work.flaw_key ? groupTest(work.flaw_key) : null;
+  if (group) return after.length >= GRADUATE_AFTER && !group(after);
   return after.filter(hit).length >= RELAPSE_HITS;
 }
 
@@ -358,7 +364,28 @@ export function hitTest(key: string, i: Pick<FlawInputs, 'themesOf' | 'breaksOf'
   if (key === 'tilt:second-plus') return (t) => (i.states.get(t.id)?.tradeNo ?? 0) >= 2;
   if (key === 'exec:early-be') { const s = new Set(i.exec.earlyBe.ids); return (t) => s.has(t.id) || (t.moved_to_be != null && t.moved_to_be !== 'No' && t.exit_reason === 'BE stop' && t.target_hit_later === 'Yes'); }
   if (key === 'exec:never-positive') return (t) => (t.r_multiple ?? 0) < -0.1 && t.mfe_bucket === '0';
+  if (key === 'data') return (t) => !logsAll(t);
   return () => false;
+}
+
+/** The fields the engine reads, by group: the Fix your data card counts these. */
+export const DATA_GROUPS: ReadonlyArray<{ key: string; label: string; fields: ReadonlyArray<keyof Trade> }> = [
+  { key: 'setup', label: 'Setup detail', fields: ['liquidity_event', 'entry_method', 'candle_strength', 'planned_rr'] },
+  { key: 'outcome', label: 'Outcome detail', fields: ['exit_reason', 'mfe_bucket', 'moved_to_be'] },
+  { key: 'stop', label: 'Stop and gap', fields: ['stop_placement', 'opposing_htf_gap'] },
+];
+export const fills = (t: Trade, fields: ReadonlyArray<keyof Trade>) => fields.every((k) => t[k] != null && (t[k] as unknown) !== '');
+const logsAll = (t: Trade) => DATA_GROUPS.every((g) => fills(t, g.fields));
+
+/**
+ * Some flaws are not in any one trade: a filter that says yes to everything is
+ * only visible over many. For those, graduation and relapse ask the group
+ * instead — over the last 20 trades, does the grade still separate setups?
+ * Null for flaws measured trade by trade.
+ */
+export function groupTest(key: string): ((window: readonly Trade[]) => boolean) | null {
+  if (key === 'filter') return (w) => { const sp = setupQuality([...w]).spread; return !sp.oneGrade && !sp.items.some((x) => x.notFiltering); };
+  return null;
 }
 
 /* ───────────────────────── the cover ───────────────────────── */

@@ -62,7 +62,9 @@ test('focus: the leak is controllable and costly, the strength is never its mirr
   assert.equal(f.leak?.key, 'second-plus');
   assert.ok(f.leak!.cmp.diff < 0);
   assert.notEqual(f.strength?.key, 'first');         // the first trade is the same split, not a second finding
-  assert.ok(f.experiment && f.experiment.n >= 10);
+  assert.ok(f.experiment && f.experiment.n >= 10 && f.experiment.n <= 200);
+  // A gap this noisy would take more than 200 trades to tell apart: no experiment is proposed.
+  assert.equal(weeklyFocus(s, () => [], { sd: 8 }).experiment, null);
   const few = weeklyFocus(withState(trades.slice(0, 6), tradeStates(trades.slice(0, 6))), () => [], { sd: 1 });
   assert.equal(few.leakClear, false);
 });

@@ -978,6 +978,19 @@ export function deliveryOnlyVerdict(trades: Trade[], missed: Trade[] = []): {
 }
 
 /**
+ * The trial in one line. Past the sample it says "30/30 reached · 43 logged"
+ * rather than "43/30", and the verdict is on every setup logged, not on the
+ * first 30 — and says so.
+ */
+export function trialLine(rubric: number, v: { n: number; avgR: number | null; ready: boolean; positive: boolean | null }): string {
+  const sR = (x: number) => `${x < 0 ? '−' : x > 0 ? '+' : ''}${Math.abs(x).toFixed(2)}R`;
+  const count = v.ready ? `${TRIAL_SAMPLE}/${TRIAL_SAMPLE} reached · ${v.n} logged` : `${v.n}/${TRIAL_SAMPLE} setups`;
+  const avg = v.avgR != null ? `, ${sR(v.avgR)} avg` : '';
+  const verdict = v.ready ? ` — verdict on all ${v.n} setups: ${v.positive ? 'promote' : 'drop'}.` : '.';
+  return `Rubric ${rubric} trial: ${count}${avg}${verdict}`;
+}
+
+/**
  * `trades` is the stats page's selection (one account, filters applied);
  * `everyAccount` is the same selection before the account was chosen, for
  * the one table that compares accounts.

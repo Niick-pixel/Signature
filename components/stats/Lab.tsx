@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useMemo, useState } from 'react';
-import { LAB_FILTERS, labResult, tradesPerDay, unpackRows, type LabRow, type LabResult, type PackedRow } from '@/lib/edge/ruleLab';
+import { LAB_FILTERS, MAX_TESTABLE, labResult, tradesPerDay, unpackRows, type LabRow, type LabResult, type PackedRow } from '@/lib/edge/ruleLab';
 import { evalSim, type EvalRules } from '@/lib/edge/montecarlo';
 import { sR, pct } from './EdgeUI';
 import { Help } from '@/components/ui/Help';
@@ -87,9 +87,9 @@ export function RuleLabPanel({ each }: { each: Record<string, LabResult> }) {
             </p>
             <Curve actual={actual} kept={combo.curve} />
             <p className="mt-1 text-[11.5px]" style={{ color: 'rgb(var(--accent))' }} data-lab-experiment>
-              {combo.testN != null && combo.testN <= 100
+              {combo.testN != null && combo.testN <= MAX_TESTABLE
                 ? `Experiment — test it on the next ${combo.testN} trades.`
-                : `Experiment — test it for 50 trades, then look again${combo.testN != null ? `; telling a gap this size apart takes about ${combo.testN >= 999 ? '1,000 or more' : combo.testN}` : ''}.`}
+                : `No experiment is testable at your sample size yet: telling a gap this size apart takes more than ${MAX_TESTABLE} trades.`}
               {' '}A filter judged on the same trades it was found on always looks better than it will.
             </p>
           </>

@@ -17,7 +17,7 @@ const {
 } = await import('../lib/rubric');
 const { createTrade, getTrade, updateTrade } = await import('../db/trades');
 const { parseTradeInput } = await import('../lib/validate');
-const { deliveryOnlyVerdict, modelBreakdowns } = await import('../lib/stats');
+const { deliveryOnlyVerdict, modelBreakdowns, trialLine } = await import('../lib/stats');
 
 type Answers = Parameters<typeof gradeUnder>[1];
 const perfect: Answers = {
@@ -160,4 +160,10 @@ test('skipped setups logged in Missed fill the trial sample, and say so', () => 
   assert.equal(v.ready, false);
   // Without the Missed setups, only the real one counts.
   assert.equal(deliveryOnlyVerdict([real]).n, 1);
+});
+
+test('the trial line: "30/30 reached · 43 logged", the verdict on all of them', () => {
+  assert.equal(trialLine(4, { n: 12, avgR: 0.25, ready: false, positive: true }), 'Rubric 4 trial: 12/30 setups, +0.25R avg.');
+  assert.equal(trialLine(4, { n: 43, avgR: 0.31, ready: true, positive: true }), 'Rubric 4 trial: 30/30 reached · 43 logged, +0.31R avg — verdict on all 43 setups: promote.');
+  assert.match(trialLine(4, { n: 30, avgR: -0.1, ready: true, positive: false }), /verdict on all 30 setups: drop\.$/);
 });

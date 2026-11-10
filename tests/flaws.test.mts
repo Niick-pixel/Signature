@@ -178,3 +178,26 @@ test('any key names itself and has a drill, even when it is not ranked today', (
   assert.ok(F.describeKey('exec:early-be').drill.length > 0);
   for (const k of ['tilt:after-loss', 'filter', 'hesitation', 'data']) assert.ok(F.describeKey(k).drill, `${k} has a drill`);
 });
+
+test('data and filter flaws graduate too: a trade logs every field; a filter is judged on the last 20 together', () => {
+  const work = (key: string) => ({ started_at: '2026-10-01T00:00:00.000Z', baseline_rate: 0.5, flaw_key: key });
+  const full = { liquidity_event: 'PDH/PDL', entry_method: 'Inversion close', candle_strength: 'Strong', planned_rr: 2, exit_reason: 'TP', mfe_bucket: '2R+', moved_to_be: 'No', stop_placement: 'Beyond the FVG', opposing_htf_gap: 'None' };
+  const hit = F.hitTest('data', { themesOf: () => [], breaksOf: () => [], states: new Map(), exec: emptyExec as never });
+  assert.equal(hit(tr(1, full)), false);
+  assert.equal(hit(tr(1, { ...full, entry_method: null })), true, 'one missing field is a hit');
+  const logged = Array.from({ length: 20 }, () => tr(1, { ...full, drill_key: 'data', drill_kept: 'kept' }));
+  assert.equal(F.progress(work('data'), logged, hit).graduated, true);
+
+  // Every setup an A: not fixed. A spread of grades over the last 20: fixed.
+  const graded = (g: string) => tr(1, { grade_letter: g, graded_post_hoc: false, drill_key: 'filter', drill_kept: 'kept' });
+  const allA = Array.from({ length: 20 }, () => graded('A'));
+  assert.equal(F.progress(work('filter'), allA, () => false).graduated, false);
+  const spread = Array.from({ length: 20 }, (_, i) => graded(['A', 'B', 'C'][i % 3]));
+  const p = F.progress(work('filter'), spread, () => false);
+  assert.equal(p.graduated, true);
+  // Relapse: the next 20 are all A again.
+  const ended = spread[spread.length - 1].created_at;
+  const after = Array.from({ length: 20 }, () => graded('A'));
+  assert.equal(F.relapsed({ ended_at: ended, flaw_key: 'filter' }, [...spread, ...after], () => false), true);
+  assert.equal(F.relapsed({ ended_at: ended, flaw_key: 'filter' }, [...spread, ...after.slice(0, 10)], () => false), false, 'judged only on a full 20');
+});

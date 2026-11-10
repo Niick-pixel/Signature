@@ -2,10 +2,11 @@ import { cookies } from 'next/headers';
 import { listTrades } from '@/db/trades';
 import { accountCookie } from '@/lib/account-pref';
 import { countsInStats, isBacktest, isDated, isHypothetical, isReal, isSeparate } from '@/lib/domain';
-import { accountsInUse, aggregate, deliveryOnlyVerdict, equityCurves, pnlOf, preGradedOnly } from '@/lib/stats';
+import { accountsInUse, aggregate, deliveryOnlyVerdict, trialLine, equityCurves, pnlOf, preGradedOnly } from '@/lib/stats';
 import { edgeInputs } from '@/db/edgeInputs';
 import { planBreaks } from '@/lib/review';
 import { edgeMetrics } from '@/lib/edge/metrics';
+import { coverSplit } from '@/lib/edge/flaws';
 import { EdgeHero } from '@/components/stats/EdgeHero';
 import { BEHAVIOUR_HELP, BehaviourCard, behaviourSummary } from '@/components/stats/BehaviourCard';
 import { hesitations, tradeStates, withState } from '@/lib/edge/state';
@@ -28,7 +29,7 @@ import { AnatomyExplorer } from '@/components/stats/AnatomyExplorer';
 import { LedgerView } from '@/components/stats/LedgerView';
 import { EvalPanel, LabProvider, RuleLabPanel, type EvalPreset } from '@/components/stats/Lab';
 import { packRows } from '@/lib/edge/ruleLab';
-import { LAB_FILTERS, labResult, labRows } from '@/lib/edge/ruleLab';
+import { LAB_FILTERS, MAX_TESTABLE, labResult, labRows } from '@/lib/edge/ruleLab';
 import { listPropAccounts } from '@/db/prop';
 import { scoreModel } from '@/lib/edge/scoreModel';
 import { setupQuality } from '@/lib/edge/quality';
@@ -61,7 +62,7 @@ import { sourceOf } from '@/lib/edge/fields';
 import { Panel } from '@/components/stats/Bars';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { MissedPatternsView } from '@/components/stats/MissedPatterns';
-import { TRIAL_RUBRIC, TRIAL_SAMPLE } from '@/lib/rubric';
+import { TRIAL_RUBRIC } from '@/lib/rubric';
 import { missedPatterns } from '@/lib/missed';
 import { listDailyReviews } from '@/db/reviews';
 import { BacktestNote } from '@/components/money/BacktestCard';
@@ -148,6 +149,10 @@ export default async function StatsPage(
   // The canonical metrics (lib/edge/metrics), over settled trades in the order they happened.
   const settled = trades.filter((t) => t.outcome !== 'Not taken' && t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date));
   const metrics = edgeMetrics(settled.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) })));
+  // Mostly replay? Then the real result leads, the hero and the one-liner both (lib/edge/flaws coverSplit).
+  const replay = coverSplit(settled);
+  const realSettled = replay.mostlyReplay ? settled.filter((t) => sourceOf(t.account) !== 'backtest') : [];
+  const realMetrics = replay.mostlyReplay ? edgeMetrics(realSettled.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) }))) : null;
   const breaksOf = ei.breaksOf;
   // Behaviour and state: computed from the order of the trades (lib/edge/state, tilt).
   const states = tradeStates(settled, ctxFor);
@@ -214,8 +219,8 @@ export default async function StatsPage(
   const lab = labRows(stateful, breaksOf);
   const labEach = Object.fromEntries(LAB_FILTERS.map((f) => [f.id, labResult(lab, [f.id], { resamples: 1000 })]));
   const bestLab = LAB_FILTERS.map((f) => ({ f, r: labEach[f.id] }))
-    .filter((x) => x.r.pImprove != null && x.r.pImprove >= 0.75 && x.r.kept >= lab.length / 2).sort((a, b) => (b.r.pImprove ?? 0) - (a.r.pImprove ?? 0))[0];
-  if (bestLab) focus.experiment = { text: `Rule Lab: ${bestLab.f.label.toLowerCase()}.`, from: `the Rule Lab (P(better) ${Math.round((bestLab.r.pImprove ?? 0) * 100)}%)`, n: bestLab.r.testN ?? 30 };
+    .filter((x) => x.r.pImprove != null && x.r.pImprove >= 0.75 && x.r.kept >= lab.length / 2 && x.r.testN != null && x.r.testN <= MAX_TESTABLE).sort((a, b) => (b.r.pImprove ?? 0) - (a.r.pImprove ?? 0))[0];
+  if (bestLab) focus.experiment = { text: `Rule Lab: ${bestLab.f.label.toLowerCase()}.`, from: `the Rule Lab (P(better) ${Math.round((bestLab.r.pImprove ?? 0) * 100)}%)`, n: bestLab.r.testN! };
   // Eval presets: your prop accounts first, then the common evaluations.
   const evalRules = (r: PropRules) => ({ start: r.start_balance, target: r.profit_target ?? 0, maxDrawdown: r.max_drawdown, drawdown: r.drawdown_type, trailLock: r.trail_lock, dailyLoss: r.daily_loss, minDays: r.min_days });
   const evalPresets: EvalPreset[] = [
@@ -234,7 +239,7 @@ export default async function StatsPage(
   // The top of the page, in plain words (lib/edge/summary).
   const fill = (k: string) => { const c = engine.completeness.find((x) => x.key === k); return c && c.n ? c.filled / c.n : 0; };
   const missingCore = [['entry_method', 'entry method'], ['candle_strength', 'inversion candle'], ['planned_rr', 'planned R:R']].filter(([k]) => fill(k) < 0.5).map(([, l]) => l);
-  const summary = summarize({ m: metrics, focus, split, adherence: adh, cone, mat, missingCore });
+  const summary = summarize({ m: metrics, focus, split, adherence: adh, cone, mat, missingCore, replay: realMetrics ? { line: replay.line!, real: realMetrics } : null });
   // What goes to the browser: each row shows at most 12 charts, so only those ids travel, with
   // only their thumbnails — not every trade's id and thumbnail in every row.
   const SHOWN = 12;
@@ -317,7 +322,8 @@ export default async function StatsPage(
                 <span className="h-px flex-1" style={{ background: 'var(--glass-stroke)' }} />
               </div>
               <IntegrityBanner issues={issues} />
-              <EdgeHero m={metrics} scopeLabel={scopeLabel} maturity={<MaturityRing m={mat} />} thresholds={thresholds} />
+              <EdgeHero m={realMetrics ?? metrics} scopeLabel={realMetrics ? 'real trades (live, demo, eval)' : scopeLabel} maturity={<MaturityRing m={mat} />} thresholds={thresholds}
+                note={realMetrics ? `${replay.line} With the backtests: ${r2(metrics.expectancy)} a trade over ${metrics.n}.` : undefined} />
               <div id="focus" className="scroll-mt-4"><FocusCard f={focus} thumbs={thumbs} /></div>
               <EquityRisk curves={curves} rs={rs} m={metrics} split={split} adherence={adh} cone={cone} />
 
@@ -427,7 +433,7 @@ export default async function StatsPage(
               <p className="pt-1 text-center text-[11px]" style={{ color: 'var(--text-faint)' }}>
                 {preOnly ? `Only trades graded before the outcome — ${trades.length} of ${scoped.length}. ` : ''}
                 {agg.passed > 0 ? `${agg.passed} passed setup${agg.passed === 1 ? '' : 's'} journalled, never counted. ` : ''}
-                {trial ? `Rubric ${TRIAL_RUBRIC} trial: ${trial.n}/${TRIAL_SAMPLE} setups${trial.avgR != null ? `, ${signed(trial.avgR, 2)} avg` : ''}${trial.ready ? (trial.positive ? ' — verdict: promote.' : ' — verdict: drop.') : '.'}` : ''}
+                {trial ? trialLine(TRIAL_RUBRIC!, trial) : ''}
               </p>
             </div>
             </LabProvider>

@@ -687,3 +687,61 @@ Colours are only for the plain-language cards: green for good, amber for watch, 
 4. **The rubric scale has a prior.** The scale that turns your points into R starts at 30 points ≈ 0.3R (SD 0.2R per 30 points) and moves with the data like any Normal mean (`scoreModel.ts scalePosterior`). Fitted freely, a noisy sample sent it to 0 and the prior said nothing. Checklist items ticked yes/no on exactly the same trades are shown as one row ("A + B") with their combined effect — ridge splits such an effect evenly, so each alone would show the same made-up number.
 5. **One target per trade.** The engine reads target type only from the current, mutually exclusive list. A retired value (e.g. "Horizontal liquidity pool", which overlaps EQH/EQL, PDH/PDL and session levels) reads as unanswered; the integrity banner lists those trades, with links, to re-tag.
 6. **Does your filter filter?** Setup quality shows the spread of grades given before the outcome and of each checklist item. An item yes on more than 90% of 10+ trades is marked *not filtering*; every pre-graded trade on one letter is called out. Neither can be learned from.
+
+# The Flaw Deck (`/work`, tab "Work on", key F)
+
+## 49. What it is
+
+Stats answers *how am I doing*. Work on answers *what do I change next*. It reads the same engine (`db/edgeInputs.ts` feeds both pages, so they can't disagree) and shows the few things costing you most as a deck of full cards, one at a time. The page never scrolls: each card is 1100×640, scaled to fit the window, and text is cut rather than scrolled.
+
+**Order:** Where you stand → the active drill → up to five flaws, worst first → Fix your data → Fixed & snoozed.
+
+**Moving:** a wheel or trackpad flick, ↑/↓, j/k, PageUp/PageDown, a swipe, or a click on a peeking card moves exactly one card. The wheel accumulates 60px, then locks for 450ms (`components/work/deckReducer.ts`, tested), so a free-spinning wheel can't skip three cards. Past either end the card bounces. The rail on the right jumps anywhere. With reduce motion, cards cross-fade.
+
+**Real / Backtest / All** picks which trades the deck reads. It is remembered (cookie `work-src`) and defaults to All.
+
+## 50. Where you stand
+
+Two numbers side by side, never blended: **edge on real trades** (live, demo, eval) and **edge in backtests**, each with its 80% interval and n. Below are the two equity curves on one R axis. When more than half the sample is backtests, the card says so plainly ("Mostly replay: 21 of 30 trades are backtests. Live + demo: 9 trades — too early to know"). The same rule now drives the Stats hero and "In one line" (section 52).
+
+## 51. A flaw, and how it is ranked
+
+`lib/edge/findFlaws` collects candidates from the engine's existing findings, so nothing is computed twice:
+
+| Source | Becomes | Chart |
+|---|---|---|
+| Ledger themes with an R comparison | *theme* | with it / without it |
+| A lesson you keep writing (≥3 times in 30) | *repeat* (process-only) | your own quotes, dated |
+| Rule breaks with an R comparison | *rule* | with it / without it |
+| Breakeven too early | *early-be* | kept vs what the target paid |
+| Losers never in profit | *never-positive* | how far losers went your way |
+| Trade after a loss / 2nd+ trade of the day | *tilt* | expectancy by trade number |
+| A checklist or grade that says yes to everything | *filter* (process-only) | share ticked yes; grades given |
+| Skipped setups that score like taken ones | *hesitation* | checklist score, skipped vs taken |
+
+**Priority = P(real) × |cost per occurrence| × how often it happened in your last 20 trades.** P(real) is the verdict level (Too early 0.5, Hint 0.75, Likely 0.9, Confirmed 0.975). Cost is the shrunk difference from `compare`, the same partial pooling as section 9. Only costs make the deck (cost < 0, or process-only). A strength is never a flaw card, and a flaw whose fix would loosen a rule is dropped (`loosensRule`). At most five flaws are shown.
+
+A process-only flaw (a pattern in your words, a filter that doesn't filter) can't be priced in R yet. Its chip says so ("Pattern in your writing · R impact too early") and it ranks with a nominal cost of 0.25R, so it is neither hidden nor overstated.
+
+**Each card:**
+- **Left:** the one chart, the last 30 trades as dots (filled where it happened: is it getting rarer?), and three example charts.
+- **Right:** What's happening (with a quote of yours where there is one), Why it costs you, The drill (editable; your words are saved per flaw in `flaw_drills`), and Proof: n, cost per occurrence with its 80% bar, the verdict chip, live · demo · backtest counts, and the pressure/skill line. "Only in backtests so far" means a skill gap, not pressure; "only live" means pressure.
+
+The why and drill text lives in `lib/edge/flawText.ts`. A theme without library text uses its own if-then rule from `lib/insights`. A flaw not ranked today (paused, snoozed, on the trade form) names itself through `describeKey`.
+
+## 52. The learning loop
+
+- **One drill at a time.** "Work on this" starts it (table `flaw_work`, status `active`). A unique index makes a second active drill impossible. Starting another asks first, then pauses the current one with its progress kept.
+- **Asked on every trade.** While a drill is active, the trade form shows "Drill: ‹text›" with Kept / Broken / N/A under "Followed ALL rules" (`components/capture/DrillChip.tsx`). It is empty by default and never blocks a save. The answer is stored in `trades.drill_key` and `trades.drill_kept`.
+- **Graduation:** 20 clean trades in a row since starting, with the drill kept on at least 90% of the answered ones (N/A doesn't count against you). The drill is then marked *fixed* automatically.
+- **Relapse:** a fixed flaw that appears twice within the next 20 trades is marked *relapsed* and returns to the deck.
+- **Not now** hides a flaw for 20 trades.
+- **Group flaws.** A filter that says yes to everything can't be seen in one trade. For it, graduation asks the last 20 trades together: does the grade still separate setups (no single grade, no item yes on >90%)? Relapse asks the 20 after it was fixed. Fix your data counts per trade: a trade missing any field the engine reads is a hit.
+
+Rates are shown per 10 trades: before (the 30 trades before you started) and since.
+
+## 53. Stats changes that came with it
+
+1. **Mostly replay leads with the real result.** When more than half the trades in scope are backtests, the Stats hero shows the real-trade expectancy, with the blend as an amber footnote. "In one line" starts with "Mostly replay — on 9 real trades you make 0.21R a trade, too early to know".
+2. **The trial footer** reads "Rubric 4 trial: 30/30 reached · 43 logged, … — verdict on all 43 setups", never "43/30". The verdict uses every setup logged, not the first 30 (`lib/stats.ts trialLine`).
+3. **No experiment longer than 200 trades.** An experiment that would need more than 200 trades to tell the gap apart is not proposed (`MAX_TESTABLE` in `lib/edge/ruleLab.ts`). Focus and the Rule Lab say "No experiment is testable at your sample size yet" instead.

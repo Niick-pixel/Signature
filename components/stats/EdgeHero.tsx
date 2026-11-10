@@ -44,7 +44,7 @@ function Cell({ label, help, value, sub, tone }: { label: string; help: string; 
  * zero, the evidence level, and the numbers that make it up — every one with
  * its n and formula (lib/edge/metrics).
  */
-export function EdgeHero({ m, scopeLabel, maturity, thresholds }: { m: EdgeMetrics; scopeLabel: string; maturity?: React.ReactNode; thresholds?: Thresholds }) {
+export function EdgeHero({ m, scopeLabel, maturity, thresholds, note }: { m: EdgeMetrics; scopeLabel: string; maturity?: React.ReactNode; thresholds?: Thresholds; note?: string }) {
   const ci = m.expectancyCI;
   const v = ci ? verdict({ n: m.n, pPositive: ci.pPositive, lo80: ci.lo80, hi80: ci.hi80 }, thresholds) : null;
   const more = m.tradesFor95 != null ? Math.max(0, m.tradesFor95 - m.n) : null;
@@ -64,6 +64,7 @@ export function EdgeHero({ m, scopeLabel, maturity, thresholds }: { m: EdgeMetri
             <span className="text-[40px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: !v || v.level === 'too-early' ? 'var(--text)' : (m.expectancy ?? 0) > 0 ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }} data-edge-expectancy>{sR(m.expectancy)}</span>
             <span className="text-[12.5px]" style={{ color: 'var(--text-dim)' }}>per trade · n = {m.n}</span>
           </div>
+          {note && <p className="mt-1.5 text-[12px] font-medium" style={{ color: 'rgb(var(--amber))' }} data-edge-replay>{note}</p>}
           {ci && (
             <>
               <IntervalBar m={ci} />
