@@ -88,7 +88,7 @@ const CATEGORIES = [
   { id: 'appearance', group: 'Screens', label: 'Appearance', hint: 'Theme, size, motion and the logo.', words: 'theme dark light size text zoom fit screen motion animation logo watermark' },
   { id: 'personal', group: 'Screens', label: 'Personalization', hint: 'Background, accent, type, saved looks, the quote of the day.', words: 'background photo video accent colour color font type looks quote' },
   { id: 'dashboard', group: 'Screens', label: 'Dashboard & Today', hint: 'Which blocks show, which accounts, and the Today panel.', words: 'dashboard blocks cards today panel accounts phrases' },
-  { id: 'board', group: 'Screens', label: 'Whiteboard', hint: 'Library or canvas, card size, the lines between trades, the grid.', words: 'whiteboard board library canvas density cards lines leak reason grid passed' },
+  { id: 'board', group: 'Screens', label: 'Trades tab', hint: 'Rows, cards or the board view; the board\'s card size, lines and grid.', words: 'trades tab whiteboard board library rows cards charts screenshots canvas density lines leak reason grid passed' },
   { id: 'analytics', group: 'Screens', label: 'Analytics', hint: 'How analytics read your trades, words and news.', words: 'analytics words emotions news reading theme dictionary' },
   { id: 'study', group: 'Screens', label: 'Study room', hint: 'Your timer, the daily range, the streak.', words: 'study timer cube streak flashcards focus hours' },
   { id: 'notifications', group: 'App', label: 'Notifications', hint: 'Reminders, sounds, quiet hours and timing.', words: 'notifications reminders sounds volume quiet hours bell' },
@@ -385,12 +385,12 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
             </>)}
             {cat === 'board' && (<>
-            <Section title="Opens on" hint="Library: every trade as a fast wall of charts, grouped with the board's numbers, filtered and searchable. Board view: the free-form canvas — drag cards, notes, regions, lines. Only the one you choose is built; switch any time from the top of the tab.">
-              <Segmented value={prefs.boardView} onChange={(boardView) => update({ boardView })} options={['library', 'canvas'] as const}
-                labelFor={(v) => (v === 'library' ? 'Library' : 'Board view')} />
+            <Section title="Opens on" hint="Rows: one line per trade, no charts drawn — hover a row to see its chart. Cards: every trade with a small chart. Board: the free-form canvas — drag cards, notes, regions, lines. Only the one you choose is built; switch any time from the top of the tab.">
+              <Segmented value={prefs.boardView === 'canvas' ? 'board' : prefs.tradesLayout} onChange={(v) => update(v === 'board' ? { boardView: 'canvas' } : { boardView: 'library', tradesLayout: v })}
+                options={['rows', 'cards', 'board'] as const} labelFor={(v) => ({ rows: 'Rows', cards: 'Cards', board: 'Board' }[v])} />
             </Section>
             <Section
-              title="Whiteboard"
+              title="Board view"
               hint="How tightly the board packs its cards. Compact fits more on screen; roomy is easier to read."
             >
               <Segmented

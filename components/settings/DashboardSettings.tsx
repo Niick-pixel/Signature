@@ -22,7 +22,7 @@ export function DashboardSettings({ Section }: { Section: (p: { title: string; h
         <div className="space-y-3" data-settings="dashboard">
           <Labeled label="Open the app on">
             <Segmented<Preferences['startScreen']> value={prefs.startScreen} onChange={(startScreen) => update({ startScreen })}
-              options={['board', 'dashboard']} labelFor={(v) => (v === 'board' ? 'Whiteboard' : 'Dashboard')} />
+              options={['board', 'dashboard']} labelFor={(v) => (v === 'board' ? 'Trades' : 'Dashboard')} />
           </Labeled>
           <Labeled label="Counts">
             <Segmented<Preferences['dashWorld']> value={prefs.dashWorld} onChange={(dashWorld) => update({ dashWorld })}

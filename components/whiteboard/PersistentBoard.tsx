@@ -74,15 +74,21 @@ export function PersistentBoard({ start }: { start: BoardStart }) {
   */
   const { prefs, update } = usePreferences();
   const canvas = prefs.boardView === 'canvas';
+  // Rows (the default: no charts drawn), Cards (small charts), or the Board (the canvas).
+  const current = canvas ? 'board' : prefs.tradesLayout;
+  const VIEWS = [
+    { id: 'rows', label: 'Rows', title: 'One line per trade — no charts drawn; hover a row to see its chart', set: { boardView: 'library', tradesLayout: 'rows' } },
+    { id: 'cards', label: 'Cards', title: 'Every trade with a small chart', set: { boardView: 'library', tradesLayout: 'cards' } },
+    { id: 'board', label: 'Board', title: 'The free-form canvas: drag cards, notes, regions and lines', set: { boardView: 'canvas' } },
+  ] as const;
   const viewSwitch = (
-    <div role="group" aria-label="Whiteboard view" data-board-view={prefs.boardView}
+    <div role="group" aria-label="Trades view" data-board-view={current}
       className="glass inline-flex rounded-full p-0.5 text-[11.5px] font-medium">
-      {(['library', 'canvas'] as const).map((v) => (
-        <button key={v} type="button" aria-pressed={prefs.boardView === v} onClick={() => update({ boardView: v })} data-board-view-option={v}
-          title={v === 'library' ? 'Every trade as a fast, searchable wall of charts' : 'The free-form canvas: drag cards, notes, regions and lines'}
-          className="rounded-full px-3 py-1"
-          style={prefs.boardView === v ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
-          {v === 'library' ? 'Library' : 'Board view'}
+      {VIEWS.map((v) => (
+        <button key={v.id} type="button" aria-pressed={current === v.id} onClick={() => update(v.set)} data-board-view-option={v.id}
+          title={v.title} className="rounded-full px-3 py-1"
+          style={current === v.id ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
+          {v.label}
         </button>
       ))}
     </div>

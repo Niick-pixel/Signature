@@ -203,6 +203,8 @@ function startNext(port) {
       // process.cwd() means nothing in a packaged app, so hand the server its
       // paths explicitly rather than letting it guess.
       SIGNATURE_DATA_DIR: DATA_DIR,
+      // A journal in a synced folder keeps its chart thumbnails (a cache) on this computer instead.
+      ...(/onedrive|dropbox|google drive|icloud/i.test(DATA_DIR) ? { SIGNATURE_CACHE_DIR: path.join(app.getPath('userData'), 'cache') } : {}),
       SIGNATURE_MIGRATIONS_DIR: path.join(APP_DIR, 'db', 'migrations'),
       PORT: String(port),
       HOSTNAME: '127.0.0.1',

@@ -18,12 +18,12 @@ const chart = async (rel: string) => {
 };
 const until = async (ok: () => boolean) => { for (let i = 0; i < 200 && !ok(); i++) await new Promise((r) => setTimeout(r, 25)); };
 
-test('a new chart gets every size in the background', async () => {
+test('a new chart gets its small sizes in the background', async () => {
   const c = await chart('2026-11/a.png');
   assert.equal(T.hasThumbnails(c.relative), false);
   T.warmThumbnails(c.absolute, c.relative);
   await until(() => T.hasThumbnails(c.relative));
-  for (const w of T.THUMB_WIDTHS) {
+  for (const w of T.AHEAD_WIDTHS) {
     const meta = await sharp(path.join(THUMBS_DIR, String(w), `${c.relative}.webp`)).metadata();
     assert.equal(meta.width, w, `the ${w} copy`);
   }

@@ -4,15 +4,18 @@ import path from 'node:path';
 import { THUMBS_DIR } from '../lib/paths';
 
 /** The widths a card may ask for. Anything else gets the original. */
-/** 480/720 for cards and the group viewer, 1600 for the trade panel. */
-export const THUMB_WIDTHS = [480, 720, 1600] as const;
+/** 320 for the trade cards (light, quality 60), 480/720 for the group viewer and board, 1600 for the trade panel. */
+export const THUMB_WIDTHS = [320, 480, 720, 1600] as const;
 
-type Sharp = (input: string) => {
+/** What is made ahead (background): the list's small sizes. 720 and 1600 are made when first asked for. */
+export const AHEAD_WIDTHS = [320, 480] as const;
+
+type Sharp = ((input: string) => {
   rotate: () => ReturnType<Sharp>;
   resize: (o: { width: number; withoutEnlargement: boolean }) => ReturnType<Sharp>;
   webp: (o: { quality: number }) => ReturnType<Sharp>;
   toBuffer: () => Promise<Buffer>;
-};
+}) & { concurrency?: (n: number) => number };
 let sharp: Sharp | null | undefined;
 
 /**
@@ -33,11 +36,15 @@ export async function thumbnail(absolute: string, relative: string, width: numbe
   } catch { /* fall through and rebuild */ }
 
   if (sharp === undefined) {
-    try { sharp = (await import('sharp')).default as unknown as Sharp; } catch { sharp = null; }
+    try {
+      sharp = (await import('sharp')).default as unknown as Sharp;
+      // Two threads, not every core: resizing runs beside the app, never instead of it.
+      sharp.concurrency?.(2);
+    } catch { sharp = null; }
   }
   if (!sharp) return null;
   try {
-    const buf = await sharp(absolute).rotate().resize({ width, withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
+    const buf = await sharp(absolute).rotate().resize({ width, withoutEnlargement: true }).webp({ quality: width <= 320 ? 60 : 78 }).toBuffer();
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, buf);
     return buf;
@@ -62,7 +69,7 @@ async function drain(): Promise<void> {
   try {
     while (queue.length) {
       const job = queue.shift()!;
-      for (const w of THUMB_WIDTHS) {
+      for (const w of AHEAD_WIDTHS) {
         if (!fs.existsSync(job.absolute)) break;
         await thumbnail(job.absolute, job.relative, w);
       }
@@ -74,16 +81,16 @@ async function drain(): Promise<void> {
   }
 }
 
-/** Every size of one chart, made in the background (fire and forget). */
+/** The small sizes of one chart, made in the background (fire and forget). */
 export function warmThumbnails(absolute: string, relative: string): void {
   if (/\.gif$/i.test(relative)) return;
   queue.push({ absolute, relative });
   void drain();
 }
 
-/** True when every size of this chart already exists. */
+/** True when the sizes made ahead already exist for this chart. */
 export function hasThumbnails(relative: string): boolean {
-  return THUMB_WIDTHS.every((w) => fs.existsSync(path.join(THUMBS_DIR, String(w), `${relative}.webp`)));
+  return AHEAD_WIDTHS.every((w) => fs.existsSync(path.join(THUMBS_DIR, String(w), `${relative}.webp`)));
 }
 
 let caughtUp = false;

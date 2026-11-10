@@ -15,6 +15,7 @@ import { DetailPanel } from './DetailPanel';
 import { EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
 import { OUTCOME_COLOR } from './TradeNode';
 import { RiskBanner } from './RiskBanner';
+import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { isReal } from '@/lib/domain';
 
 /**
@@ -150,6 +151,27 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
   }, [openId]);
 
   const active = filtersActive(filters) || q.trim() !== '';
+  const { prefs } = usePreferences();
+  const layout = prefs.tradesLayout;
+
+  /*
+    Rows draw no chart at all. Hovering one shows its chart — one small
+    image, after a short pause so sweeping the mouse down the list fetches
+    nothing — beside the row. Opening the trade shows it in full.
+  */
+  const [peek, setPeek] = useState<{ path: string; top: number; left: number } | null>(null);
+  const peekTimer = useRef<number | null>(null);
+  const onPeek = useCallback((t: Trade | null, row?: DOMRect) => {
+    if (peekTimer.current) { window.clearTimeout(peekTimer.current); peekTimer.current = null; }
+    if (!t || !t.screenshot_path || !row) { setPeek(null); return; }
+    const path = t.screenshot_path;
+    peekTimer.current = window.setTimeout(() => {
+      const w = 340; const h = 213;
+      const left = Math.min(window.innerWidth - w - 16, row.right - w - 12);
+      const top = row.bottom + h + 8 > window.innerHeight ? row.top - h - 6 : row.bottom + 6;
+      setPeek({ path, top, left });
+    }, 220);
+  }, []);
   const flip = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
   return (
@@ -205,11 +227,19 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
         ) : (
           <div className="mt-5 space-y-6">
             {groups.map((g) => (
-              <Group key={g.key} g={g} folded={collapsed.has(g.key)} onToggle={() => toggle(g.key)} onOpen={setOpenId} />
+              <Group key={g.key} g={g} folded={collapsed.has(g.key)} onToggle={() => toggle(g.key)} onOpen={(id) => { onPeek(null); setOpenId(id); }} layout={layout} onPeek={onPeek} />
             ))}
           </div>
         )}
       </div>
+
+      {peek && (
+        <div className="pointer-events-none fixed z-40 overflow-hidden rounded-[12px] border shadow-lg" data-library-peek
+          style={{ top: peek.top, left: peek.left, width: 340, borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/screenshots/${peek.path}?w=480`} alt="" className="aspect-[16/10] w-full object-cover" decoding="async" />
+        </div>
+      )}
 
       <DetailPanel trade={open} onClose={() => setOpenId(null)} onChanged={() => void refresh()}
         onStep={(dir) => { const n = dir < 0 ? prev : next; if (n) setOpenId(n.id); }}
@@ -222,7 +252,10 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
 /** Cards a group draws before "Show more": every group you have today fits; a journal of thousands stays light. */
 const PAGE = 60;
 
-function Group({ g, folded, onToggle, onOpen }: { g: BoardGroup; folded: boolean; onToggle: () => void; onOpen: (id: string) => void }) {
+function Group({ g, folded, onToggle, onOpen, layout, onPeek }: {
+  g: BoardGroup; folded: boolean; onToggle: () => void; onOpen: (id: string) => void;
+  layout: 'rows' | 'cards'; onPeek: (t: Trade | null, row?: DOMRect) => void;
+}) {
   const s = g.stats;
   const [limit, setLimit] = useState(PAGE);
   const tone = s.totalR > 0 ? 'var(--outcome-win)' : s.totalR < 0 ? 'var(--outcome-loss)' : null;
@@ -239,8 +272,14 @@ function Group({ g, folded, onToggle, onOpen }: { g: BoardGroup; folded: boolean
         <Stat label="Total R" value={`${s.totalR > 0 ? '+' : ''}${s.totalR.toFixed(1)}R`} color={tone ? `rgb(${tone})` : undefined} />
         <Stat label="Avg grade" value={s.avgGrade == null ? '—' : gradeLetter(Math.round(s.avgGrade))} />
       </button>
-      {!folded && (
-        <div className="mt-3 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(13.5rem, 1fr))' }}>
+      {!folded && layout === 'rows' && (
+        <div className="mt-2 overflow-hidden rounded-[calc(12px*var(--rk))] border" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)' }}
+          onMouseLeave={() => onPeek(null)}>
+          {g.trades.slice(0, limit).map((t, i) => <Row key={t.id} t={t} first={i === 0} onOpen={onOpen} onPeek={onPeek} />)}
+        </div>
+      )}
+      {!folded && layout === 'cards' && (
+        <div className="mt-3 grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))' }}>
           {g.trades.slice(0, limit).map((t) => <Card key={t.id} t={t} onOpen={onOpen} />)}
         </div>
       )}
@@ -277,14 +316,14 @@ const Card = memo(function Card({ t, onOpen }: { t: Trade; onOpen: (id: string) 
   const out = OUTCOME_COLOR[t.outcome];
   return (
     <button type="button" onClick={() => onOpen(t.id)} data-library-card={t.id}
-      className="group relative overflow-hidden rounded-[calc(16px*var(--rk))] border text-left transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5"
+      className="relative overflow-hidden rounded-[calc(14px*var(--rk))] border text-left hover:brightness-[1.03]"
       style={{
         borderColor: `rgb(${out} / 0.35)`, background: 'var(--bg-raised)',
-        contentVisibility: 'auto', containIntrinsicSize: 'auto 13.5rem auto 12rem',
+        contentVisibility: 'auto', containIntrinsicSize: 'auto 11rem auto 10rem',
       }}>
       {t.screenshot_path ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/api/screenshots/${t.screenshot_path}?w=480`} alt="" loading="lazy" decoding="async"
+        <img src={`/api/screenshots/${t.screenshot_path}?w=320`} alt="" loading="lazy" decoding="async"
           className="aspect-[16/10] w-full object-cover" style={{ background: 'var(--glass-fill-strong)' }} />
       ) : (
         <div className="grid aspect-[16/10] w-full place-items-center text-[11px]" style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-faint)' }}>No chart</div>
@@ -334,3 +373,36 @@ function Chip({ on, color, onClick, children }: { on: boolean; color?: string; o
     </button>
   );
 }
+
+/**
+ * One trade as one line: when, which way, the setup, the account, the target,
+ * the result, the grade and what went wrong — no chart drawn. A camera mark
+ * says there is a chart; hovering the row shows it.
+ */
+const Row = memo(function Row({ t, first, onOpen, onPeek }: { t: Trade; first: boolean; onOpen: (id: string) => void; onPeek: (t: Trade | null, row?: DOMRect) => void }) {
+  const out = OUTCOME_COLOR[t.outcome];
+  return (
+    <button type="button" onClick={() => onOpen(t.id)} data-library-row={t.id}
+      onMouseEnter={(e) => onPeek(t, e.currentTarget.getBoundingClientRect())}
+      className="grid w-full items-center gap-3 px-3 py-2 text-left text-[12px] hover:bg-[rgb(var(--accent)/0.06)]"
+      style={{
+        gridTemplateColumns: '0.5rem 6.5rem 3.2rem minmax(4rem,7rem) minmax(4rem,8rem) minmax(4rem,7rem) 3.6rem 1.7rem minmax(0,1fr) 1rem',
+        borderTop: first ? 'none' : '1px solid var(--glass-stroke)',
+        contentVisibility: 'auto', containIntrinsicSize: 'auto 2.25rem',
+      }}>
+      <span className="size-2 rounded-full" style={{ background: `rgb(${out})` }} />
+      <span className="truncate tabular-nums" style={{ color: 'var(--text-dim)' }}>{tradeDay(t, { day: 'numeric', month: 'short' })}{!t.undated && t.date.length > 11 ? ` · ${t.date.slice(11, 16)}` : ''}</span>
+      <span className="truncate">{t.direction}</span>
+      <span className="truncate font-medium">{t.setup_type}</span>
+      <span className="truncate" style={{ color: 'var(--text-dim)' }}>{accountLabel(t.account)}</span>
+      <span className="truncate" style={{ color: 'var(--text-faint)' }}>{t.target_type}</span>
+      <span className="text-right font-semibold tabular-nums" style={{ color: `rgb(${out})` }}>
+        {t.r_multiple != null ? signedR(t.r_multiple) : t.outcome === 'Not taken' ? 'Passed' : t.outcome}
+      </span>
+      <span className="grid size-6 place-items-center rounded-[7px] text-[10.5px] font-semibold"
+        style={{ color: `rgb(${GRADE_COLOR[t.grade_letter]})`, background: `rgb(${GRADE_COLOR[t.grade_letter]} / 0.14)` }}>{t.grade_letter}</span>
+      <span className="truncate text-[11.5px]" style={{ color: 'rgb(var(--outcome-loss))' }} title={t.mistake_tags.join(' · ') || undefined}>{t.mistake_tags.join(' · ')}</span>
+      <span aria-label={t.screenshot_path ? 'Has a chart' : undefined} className="text-[11px]" style={{ color: 'var(--text-faint)' }}>{t.screenshot_path ? '▣' : ''}</span>
+    </button>
+  );
+});

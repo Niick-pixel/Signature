@@ -23,8 +23,15 @@ export const DATA_DIR = process.env.SIGNATURE_DATA_DIR
 
 export const DB_PATH = path.join(DATA_DIR, 'journal.db');
 export const SCREENSHOTS_DIR = path.join(DATA_DIR, 'screenshots');
-/** Small copies of the screenshots for the board's cards — derived, safe to delete. */
-export const THUMBS_DIR = path.join(DATA_DIR, 'thumbs');
+/**
+ * Small copies of the screenshots for the trade cards — derived, safe to
+ * delete. The desktop app puts them outside the journal when the journal is
+ * in a synced folder (OneDrive and the like): a cache that the sync client
+ * uploads, locks and sometimes evicts is a cache that stalls every card.
+ */
+export const THUMBS_DIR = process.env.SIGNATURE_CACHE_DIR
+  ? path.join(/* turbopackIgnore: true */ path.resolve(process.env.SIGNATURE_CACHE_DIR), 'thumbs')
+  : path.join(DATA_DIR, 'thumbs');
 export const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 /** Your own backgrounds (Settings → Personalization): furniture, like the preferences — not in the backup. */
 export const BACKGROUNDS_DIR = path.join(DATA_DIR, 'backgrounds');

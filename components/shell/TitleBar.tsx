@@ -15,7 +15,7 @@ import { usePreferences } from './PreferencesProvider';
 
 const TABS = [
   { href: '/dashboard', label: 'Dashboard' },
-  { href: '/', label: 'Whiteboard' },
+  { href: '/', label: 'Trades' },
   { href: '/stats', label: 'Stats' },
   { href: '/calendar', label: 'Calendar' },
   { href: '/journal', label: 'Journal' },
