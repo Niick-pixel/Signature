@@ -181,6 +181,8 @@ const WRITABLE = [
   'session_index', 'htf_bias_tf', 'liquidity_event', 'sweep_tf', 'fvg_tf', 'entry_tf', 'fvg_quality', 'candle_strength', 'inversion_speed', 'rr_score', 'cisd', 'smt_state', 'into_eq_pool', 'planned_rr', 'entry_method', 'stop_method', 'pre_state', 'exit_reason', 'mfe_bucket', 'mae_bucket', 'target_hit_later', 'moved_to_be', 'blind_grade', 'entry_line_x', 'rule_breaks_manual', 'emotion_after',
   // The gap in the way and the stop's place (040).
   'opposing_htf_gap', 'stop_placement',
+  // The Flaw Deck (042).
+  'drill_key', 'drill_kept',
 ] as const;
 
 /**

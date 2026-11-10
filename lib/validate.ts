@@ -379,6 +379,9 @@ export function parseTradeInput(
       // The gap in the way and the stop's place (040). Unknown reads as "not recorded"; a key left out keeps the stored value.
       opposing_htf_gap: keep('opposing_htf_gap', oneOf('opposing_htf_gap', HTF_GAPS)),
       stop_placement: keep('stop_placement', oneOf('stop_placement', STOP_PLACEMENTS)),
+      // The Flaw Deck (042): the active drill, and whether it was kept. A key left out keeps the stored value.
+      drill_key: keep('drill_key', typeof t.drill_key === 'string' && t.drill_key.trim() ? t.drill_key.trim().slice(0, 80) : null),
+      drill_kept: keep('drill_kept', oneOf('drill_kept', ['kept', 'broken', 'n/a'] as const)),
   };
 
   /*

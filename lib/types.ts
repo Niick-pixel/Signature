@@ -252,6 +252,11 @@ export interface Trade {
   opposing_htf_gap: HtfGap | null;
   /** Where the stop sat: beyond the sweep, beyond the HTF zone, under/over the iFVG, or inside the zone. */
   stop_placement: StopPlacement | null;
+  /* --- The Flaw Deck (042). Null on every trade logged without an active drill. --- */
+  /** The flaw whose drill was active when this trade was logged. */
+  drill_key: string | null;
+  /** Whether that drill was kept on this trade. Asked, never pre-filled. */
+  drill_kept: 'kept' | 'broken' | 'n/a' | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */

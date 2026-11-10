@@ -3,8 +3,8 @@ import { listTrades } from '@/db/trades';
 import { accountCookie } from '@/lib/account-pref';
 import { countsInStats, isBacktest, isDated, isHypothetical, isReal, isSeparate } from '@/lib/domain';
 import { accountsInUse, aggregate, deliveryOnlyVerdict, equityCurves, pnlOf, preGradedOnly } from '@/lib/stats';
-import { reviewInputs } from '@/db/review';
-import { dayBreaksByTrade, fieldEras, planBreaks } from '@/lib/review';
+import { edgeInputs } from '@/db/edgeInputs';
+import { planBreaks } from '@/lib/review';
 import { edgeMetrics } from '@/lib/edge/metrics';
 import { EdgeHero } from '@/components/stats/EdgeHero';
 import { BEHAVIOUR_HELP, BehaviourCard, behaviourSummary } from '@/components/stats/BehaviourCard';
@@ -39,7 +39,6 @@ import { SimilarLookup } from '@/components/stats/SimilarLookup';
 import { ExecutionPanel } from '@/components/stats/ExecutionPanel';
 import { MissedPanel } from '@/components/stats/MissedPanel';
 import { LanguagePanel } from '@/components/stats/LanguagePanel';
-import { listThemeWords } from '@/db/edge';
 import { language } from '@/lib/edge/text';
 import { missedStats } from '@/lib/edge/missed';
 import { BACKTEST_WEIGHT } from '@/lib/edge/explorer';
@@ -49,7 +48,7 @@ import { WhenOpen } from '@/components/stats/WhenOpen';
 import { summarize } from '@/lib/edge/summary';
 import { addInsight, listBlindGrades, listInsights, settleInsight } from '@/db/edge';
 import { listPredictions } from '@/db/predictions';
-import { adjustedThresholds, brier, hitRates, newClaims, recheck, withConfirmed, type StoredClaim } from '@/lib/edge/claims';
+import { brier, hitRates, newClaims, recheck, withConfirmed, type StoredClaim } from '@/lib/edge/claims';
 import { blindCounter, retestPairs, weightedKappa } from '@/lib/edge/blind';
 import { DEFAULT_THRESHOLDS } from '@/lib/edge/verdict';
 import { PREDICTORS, field as fieldDef } from '@/lib/edge/fields';
@@ -142,14 +141,14 @@ export default async function StatsPage(
   const pageQuery = new URLSearchParams({ account, ...filterParams }).toString();
 
   // One definition of adherence: nothing broken in the rule book, trade and day rules (lib/review planBreaks).
-  const { trades: allTrades, ctxFor, cfg } = reviewInputs();
-  const breaks = dayBreaksByTrade(allTrades, ctxFor, cfg);
-  const eras = fieldEras(allTrades);
+  // The engine's inputs, shared with the Flaw Deck (db/edgeInputs), so both read every trade the same way.
+  const ei = edgeInputs();
+  const { ctxFor, cfg, breaks, eras } = ei;
   const curves = equityCurves(trades, (t) => planBreaks(t, breaks, cfg, eras).length === 0);
   // The canonical metrics (lib/edge/metrics), over settled trades in the order they happened.
   const settled = trades.filter((t) => t.outcome !== 'Not taken' && t.r_multiple != null).sort((a, b) => a.date.localeCompare(b.date));
   const metrics = edgeMetrics(settled.map((t) => ({ r: t.r_multiple as number, money: pnlOf(t) })));
-  const breaksOf = (t: (typeof settled)[number]) => planBreaks(t, breaks, cfg, eras);
+  const breaksOf = ei.breaksOf;
   // Behaviour and state: computed from the order of the trades (lib/edge/state, tilt).
   const states = tradeStates(settled, ctxFor);
   const stateful = withState(settled, states);
@@ -172,8 +171,7 @@ export default async function StatsPage(
   const btWeight = Number(one(params.btw)) || BACKTEST_WEIGHT;
   const btPrior = btEligible && one(params.prior) === 'backtest';
   // The insight ledger (lib/edge/claims): its record sets the thresholds every verdict uses.
-  const claimsBefore = listInsights() as StoredClaim[];
-  const { thresholds, changes: thresholdChanges } = adjustedThresholds(claimsBefore);
+  const { claimsBefore, thresholds, thresholdChanges } = ei;
   const engine = runEngine(settled, { window, rubric: latestRubric, thresholds, backtest: btPrior ? { trades: backtests, weight: btWeight } : undefined });
   const scopeKey = `${account}|${new URLSearchParams(filterParams).toString()}|${window}${btPrior ? `|bt${btWeight}` : ''}`;
   const explorerRows = withConfirmed(engine.explorer.rows, scopeKey, claimsBefore, thresholds);
@@ -193,7 +191,7 @@ export default async function StatsPage(
     return b ? [{ label: `${r.label} = ${r.level}`, live: r.shrunk, liveN: r.n, bt: b.shrunk, btN: b.n, gap: r.shrunk - b.shrunk }] : [];
   }).sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, 8) : [];
   const issues = integrity(settled, metrics, { noR: trades.filter((t) => t.outcome !== 'Not taken' && t.status === 'Settled' && t.r_multiple == null).length });
-  const themeWords = listThemeWords();
+  const themeWords = ei.themeWords;
   const focus = weeklyFocus(stateful, breaksOf, { sd: metrics.sd, words: themeWords, thresholds });
   const ledger = ledgerV2(settled, breaksOf, { words: themeWords, thresholds });
   // Engine health: Brier score of stored predictions, blind re-grade counter and consistency.
