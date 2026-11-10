@@ -30,15 +30,11 @@ export const SHORTCUTS: ShortcutGroup[] = [
     ],
   },
   {
-    title: 'Trades (Board view)',
+    title: 'Trades',
     items: [
-      { keys: ['J', 'K'], label: 'Next / previous trade, in date order' },
-      { keys: ['/'], label: 'Search' },
-      { keys: ['F'], label: 'Fit everything' },
-      { keys: ['0'], label: 'Back to 100%' },
-      { keys: ['+', '−'], label: 'Zoom in / out' },
-      { keys: ['←', '↑', '→', '↓'], label: 'Pan' },
-      { keys: ['Esc'], label: 'Close the open trade' },
+      { keys: ['/'], label: 'Search (Enter opens the first)' },
+      { keys: ['←', '→'], label: 'Previous / next trade, in an open trade' },
+      { keys: ['Esc'], label: 'Close the trade' },
     ],
   },
   {

@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Trade } from '@/lib/types';
 import { ACCOUNT_VALUES, OUTCOMES, SESSIONS, accountLabel, type Outcome, type Session } from '@/lib/domain';
 import { ACCOUNT_EVENT, readAccountCookie, writeAccountCookie, type AccountChange } from '@/lib/account-pref';
-import { GROUP_LABELS, boardGroups, type BoardGroup, type GroupMode } from '@/lib/layout';
+import { boardGroups, type BoardGroup } from '@/lib/layout';
 import { GRADE_COLOR, gradeLetter } from '@/lib/grade';
 import { JOURNAL_CHANGED } from '@/lib/freshness';
 import { BOARD_SHOWN, boardShown, captureOpen } from '@/lib/keys';
@@ -15,7 +15,6 @@ import { DetailPanel } from './DetailPanel';
 import { EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
 import { OUTCOME_COLOR } from './TradeNode';
 import { RiskBanner } from './RiskBanner';
-import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { isReal } from '@/lib/domain';
 
 /**
@@ -32,19 +31,16 @@ import { isReal } from '@/lib/domain';
  * The canvas is still there, one switch away, and only built when chosen.
  */
 
-const MODES = ['reason', 'mistake', 'grade', 'setup', 'target', 'month'] as const satisfies readonly GroupMode[];
-type Mode = (typeof MODES)[number];
 const KEY = 'signature.library';
 
-interface Saved { mode: Mode; filters: Omit<Filters, 'account'>; collapsed: string[] }
+interface Saved { filters: Omit<Filters, 'account'>; collapsed: string[] }
 
 function readSaved(): Saved {
-  const base: Saved = { mode: 'reason', filters: { ...EMPTY_FILTERS }, collapsed: [] };
+  const base: Saved = { filters: { ...EMPTY_FILTERS }, collapsed: [] };
   try {
     const v = JSON.parse(window.localStorage.getItem(KEY) ?? 'null') as Partial<Saved> | null;
     if (!v) return base;
     return {
-      mode: (MODES as readonly string[]).includes(v.mode ?? '') ? v.mode as Mode : base.mode,
       filters: { ...base.filters, ...(v.filters ?? {}) },
       collapsed: Array.isArray(v.collapsed) ? v.collapsed.filter((x) => typeof x === 'string') : [],
     };
@@ -59,7 +55,7 @@ const haystack = (t: Trade) => [
 
 const signedR = (r: number) => `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(r % 1 === 0 ? 0 : 1)}R`;
 
-export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boardSwitch: React.ReactNode }) {
+export function Library({ trades: initial }: { trades: Trade[] }) {
   const [trades, setTrades] = useState(initial);
   // New trades from the board layer replace the list (render-time, not an effect).
   const [seen, setSeen] = useState(initial);
@@ -77,9 +73,8 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
   // Charts saved before thumbnails were made ahead get theirs, once, in the background (db/thumbs).
   useEffect(() => { void fetch('/api/thumbs', { method: 'POST' }).catch(() => {}); }, []);
 
-  const [saved, setSaved] = useState<Saved>(() => (typeof window === 'undefined' ? { mode: 'reason', filters: { ...EMPTY_FILTERS }, collapsed: [] } : readSaved()));
+  const [saved, setSaved] = useState<Saved>(() => (typeof window === 'undefined' ? { filters: { ...EMPTY_FILTERS }, collapsed: [] } : readSaved()));
   useEffect(() => { try { window.localStorage.setItem(KEY, JSON.stringify(saved)); } catch { /* a convenience */ } }, [saved]);
-  const mode = saved.mode;
 
   // The account is the board's own (the title bar's picker sets it while you are here).
   const [account, setAccount] = useState<Filters['account']>(() => {
@@ -107,9 +102,14 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
     const keep = applyFilters(filters);
     return trades.filter((t) => !t.deleted_at && keep(t) && (!words.length || words.every((w) => haystack(t).includes(w))));
   }, [trades, filters, q]);
-  const groups = useMemo(() => boardGroups(visible, mode).map((g) => ({
-    ...g, trades: [...g.trades].sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at)),
-  })), [visible, mode]);
+  /*
+    Grouped by reason (the board's groups, the same totals), and the group
+    with the most recently added trade comes first — what you just logged is
+    at the top, not wherever its group's R put it.
+  */
+  const groups = useMemo(() => boardGroups(visible, 'reason')
+    .map((g) => ({ ...g, trades: [...g.trades].sort((a, b) => b.created_at.localeCompare(a.created_at)) }))
+    .sort((a, b) => (b.trades[0]?.created_at ?? '').localeCompare(a.trades[0]?.created_at ?? '')), [visible]);
   const collapsed = useMemo(() => new Set(saved.collapsed), [saved.collapsed]);
   const toggle = (key: string) => setSaved((s) => ({ ...s, collapsed: s.collapsed.includes(key) ? s.collapsed.filter((k) => k !== key) : [...s.collapsed, key] }));
 
@@ -151,8 +151,6 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
   }, [openId]);
 
   const active = filtersActive(filters) || q.trim() !== '';
-  const { prefs } = usePreferences();
-  const layout = prefs.tradesLayout;
 
   /*
     Rows draw no chart at all. Hovering one shows its chart — one small
@@ -181,9 +179,6 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
         <div className="mb-2 flex justify-center empty:hidden"><RiskBanner trades={realTrades} /></div>
         {/* One bar: the view, the grouping, the filters, the search. */}
         <div className="flex flex-wrap items-center gap-2" data-library-bar>
-          {boardSwitch}
-          <span className="mx-1 h-5 w-px" style={{ background: 'var(--glass-stroke)' }} aria-hidden />
-          <Pick label="Group" value={mode} options={MODES} labelFor={(m) => GROUP_LABELS[m]} onChange={(m) => setSaved((s) => ({ ...s, mode: m }))} data="group" />
           <Pick label="Account" value={filters.account} options={['All', ...ACCOUNT_VALUES] as const} labelFor={(a) => (a === 'All' ? 'All accounts' : accountLabel(a))}
             onChange={(a) => setFilters({ ...filters, account: a })} data="account" />
           <div className="flex flex-wrap gap-1" data-library-outcomes>
@@ -227,7 +222,7 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
         ) : (
           <div className="mt-5 space-y-6">
             {groups.map((g) => (
-              <Group key={g.key} g={g} folded={collapsed.has(g.key)} onToggle={() => toggle(g.key)} onOpen={(id) => { onPeek(null); setOpenId(id); }} layout={layout} onPeek={onPeek} />
+              <Group key={g.key} g={g} folded={collapsed.has(g.key)} onToggle={() => toggle(g.key)} onOpen={(id) => { onPeek(null); setOpenId(id); }} onPeek={onPeek} />
             ))}
           </div>
         )}
@@ -252,9 +247,9 @@ export function Library({ trades: initial, boardSwitch }: { trades: Trade[]; boa
 /** Cards a group draws before "Show more": every group you have today fits; a journal of thousands stays light. */
 const PAGE = 60;
 
-function Group({ g, folded, onToggle, onOpen, layout, onPeek }: {
+function Group({ g, folded, onToggle, onOpen, onPeek }: {
   g: BoardGroup; folded: boolean; onToggle: () => void; onOpen: (id: string) => void;
-  layout: 'rows' | 'cards'; onPeek: (t: Trade | null, row?: DOMRect) => void;
+  onPeek: (t: Trade | null, row?: DOMRect) => void;
 }) {
   const s = g.stats;
   const [limit, setLimit] = useState(PAGE);
@@ -272,15 +267,10 @@ function Group({ g, folded, onToggle, onOpen, layout, onPeek }: {
         <Stat label="Total R" value={`${s.totalR > 0 ? '+' : ''}${s.totalR.toFixed(1)}R`} color={tone ? `rgb(${tone})` : undefined} />
         <Stat label="Avg grade" value={s.avgGrade == null ? '—' : gradeLetter(Math.round(s.avgGrade))} />
       </button>
-      {!folded && layout === 'rows' && (
+      {!folded && (
         <div className="mt-2 overflow-hidden rounded-[calc(12px*var(--rk))] border" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)' }}
           onMouseLeave={() => onPeek(null)}>
           {g.trades.slice(0, limit).map((t, i) => <Row key={t.id} t={t} first={i === 0} onOpen={onOpen} onPeek={onPeek} />)}
-        </div>
-      )}
-      {!folded && layout === 'cards' && (
-        <div className="mt-3 grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(11rem, 1fr))' }}>
-          {g.trades.slice(0, limit).map((t) => <Card key={t.id} t={t} onOpen={onOpen} />)}
         </div>
       )}
       {!folded && g.trades.length > limit && (
@@ -307,45 +297,6 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
   );
 }
 
-/**
- * One trade. Plain on purpose: no spring, no glow, no blur — a hover is a
- * CSS transition. Off screen it is not drawn at all, and its chart is only
- * fetched when it comes near the screen.
- */
-const Card = memo(function Card({ t, onOpen }: { t: Trade; onOpen: (id: string) => void }) {
-  const out = OUTCOME_COLOR[t.outcome];
-  return (
-    <button type="button" onClick={() => onOpen(t.id)} data-library-card={t.id}
-      className="relative overflow-hidden rounded-[calc(14px*var(--rk))] border text-left hover:brightness-[1.03]"
-      style={{
-        borderColor: `rgb(${out} / 0.35)`, background: 'var(--bg-raised)',
-        contentVisibility: 'auto', containIntrinsicSize: 'auto 11rem auto 10rem',
-      }}>
-      {t.screenshot_path ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/api/screenshots/${t.screenshot_path}?w=320`} alt="" loading="lazy" decoding="async"
-          className="aspect-[16/10] w-full object-cover" style={{ background: 'var(--glass-fill-strong)' }} />
-      ) : (
-        <div className="grid aspect-[16/10] w-full place-items-center text-[11px]" style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-faint)' }}>No chart</div>
-      )}
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <span className="min-w-0">
-          <span className="block truncate text-[12px] font-medium">{tradeDay(t, { day: 'numeric', month: 'short' })} · {t.direction} · {t.setup_type}</span>
-          <span className="block truncate text-[10.5px]" style={{ color: t.mistake_tags.length ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
-            {t.mistake_tags.length ? t.mistake_tags.join(' · ') : accountLabel(t.account)}
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          <span className="text-[12px] font-semibold tabular-nums" style={{ color: `rgb(${out})` }}>
-            {t.r_multiple != null ? signedR(t.r_multiple) : t.outcome === 'Not taken' ? 'Passed' : t.outcome}
-          </span>
-          <span className="grid size-6 place-items-center rounded-[8px] text-[10.5px] font-semibold"
-            style={{ color: `rgb(${GRADE_COLOR[t.grade_letter]})`, background: `rgb(${GRADE_COLOR[t.grade_letter]} / 0.14)` }}>{t.grade_letter}</span>
-        </span>
-      </div>
-    </button>
-  );
-});
 
 /** A small native select dressed as a pill: light, keyboard-friendly, no menu to animate. */
 function Pick<T extends string>({ label, value, options, labelFor, onChange, data }: {

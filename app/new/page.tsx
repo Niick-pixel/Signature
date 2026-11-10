@@ -1,9 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getTrade, listTrades } from '@/db/trades';
-import { boardStart } from '@/db/boardlayout';
 import { NewTradeForm } from '@/components/capture/NewTradeForm';
 import { lessonsBySetup } from '@/lib/lessons';
-import { Whiteboard } from '@/components/whiteboard/Whiteboard';
 import { TitleBar } from '@/components/shell/TitleBar';
 import { isBacktest } from '@/lib/domain';
 
@@ -20,27 +18,9 @@ export default async function NewTradePage({
   if (edit && !trade) notFound();
 
   const trades = listTrades();
-  // The blurred board behind the form is decoration: the most recent cards are enough to read as the board.
-  const backdrop = [...trades].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
 
   return (
     <div className="relative h-dvh overflow-hidden">
-      {/*
-        The board stays behind the capture form, blurred and inert. Replacing it
-        with a blank page made logging a trade feel like leaving the app; this
-        way the thing you are adding to is still visibly there.
-      */}
-      {trades.length > 0 && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 select-none"
-          style={{ filter: 'blur(18px) saturate(0.85)', opacity: 0.5, transform: 'scale(1.04)' }}
-        >
-          <div className="h-dvh pt-11">
-            <Whiteboard trades={backdrop} readOnly start={boardStart()} />
-          </div>
-        </div>
-      )}
 
       <div className="relative flex h-dvh flex-col">
         <TitleBar />

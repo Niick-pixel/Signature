@@ -6,9 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { Trade } from '@/lib/types';
 import { boardUnderneath } from '@/lib/nav';
 import { BOARD_NOW, BOARD_SHOWN } from '@/lib/keys';
-import { Whiteboard, type BoardStart } from './Whiteboard';
 import { Library } from './Library';
-import { usePreferences } from '@/components/shell/PreferencesProvider';
 
 /**
  * The whiteboard, kept alive across every screen.
@@ -30,7 +28,7 @@ import { usePreferences } from '@/components/shell/PreferencesProvider';
  * the board is the screen, otherwise once the browser is idle — so it is
  * ready by the time you switch to it, and no other screen waits for it.
  */
-export function PersistentBoard({ start }: { start: BoardStart }) {
+export function PersistentBoard() {
   const pathname = usePathname();
   // Visible on the board, and behind New trade when that was opened over it.
   /*
@@ -67,32 +65,6 @@ export function PersistentBoard({ start }: { start: BoardStart }) {
     return () => { cancelled = true; clearTimeout(id); };
   }, [visible, trades]);
   useEffect(() => { if (visible && trades) window.dispatchEvent(new Event(BOARD_SHOWN)); }, [visible, trades]);
-  /*
-    The tab opens on the trade library; the free-form canvas is one switch
-    away. Only the chosen one is built — the canvas, with its React Flow
-    and every animated card, is not kept alive behind the library.
-  */
-  const { prefs, update } = usePreferences();
-  const canvas = prefs.boardView === 'canvas';
-  // Rows (the default: no charts drawn), Cards (small charts), or the Board (the canvas).
-  const current = canvas ? 'board' : prefs.tradesLayout;
-  const VIEWS = [
-    { id: 'rows', label: 'Rows', title: 'One line per trade — no charts drawn; hover a row to see its chart', set: { boardView: 'library', tradesLayout: 'rows' } },
-    { id: 'cards', label: 'Cards', title: 'Every trade with a small chart', set: { boardView: 'library', tradesLayout: 'cards' } },
-    { id: 'board', label: 'Board', title: 'The free-form canvas: drag cards, notes, regions and lines', set: { boardView: 'canvas' } },
-  ] as const;
-  const viewSwitch = (
-    <div role="group" aria-label="Trades view" data-board-view={current}
-      className="glass inline-flex rounded-full p-0.5 text-[11.5px] font-medium">
-      {VIEWS.map((v) => (
-        <button key={v.id} type="button" aria-pressed={current === v.id} onClick={() => update(v.set)} data-board-view-option={v.id}
-          title={v.title} className="rounded-full px-3 py-1"
-          style={current === v.id ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-dim)' }}>
-          {v.label}
-        </button>
-      ))}
-    </div>
-  );
   return (
     <div
       data-board-layer
@@ -101,9 +73,8 @@ export function PersistentBoard({ start }: { start: BoardStart }) {
       className="fixed inset-x-0 bottom-0 top-16 sm:top-11"
       style={visible ? undefined : { contentVisibility: 'hidden', pointerEvents: 'none' }}
     >
-      {trades && (canvas
-        ? <><Whiteboard trades={trades} start={start} /><div className="pointer-events-auto absolute left-4 top-3 z-30">{viewSwitch}</div></>
-        : <Library trades={trades} boardSwitch={viewSwitch} />)}
+      {/* The trade list. The free-form canvas is gone from here: the list is the whole tab. */}
+      {trades && <Library trades={trades} />}
     </div>
   );
 }
