@@ -9,7 +9,7 @@
  * as well as it can be and flagged read-only, so this version never saves
  * over it.
  */
-import { compact, collides, tileSizes, type Supports } from './layout';
+import { compact, collides, tileSizes, MAX_STACK, type Supports } from './layout';
 import { COLS, SIZES, SIZE_KEYS, type BoardLayout, type BoardSettings, type SizeKey, type Source, type Tile, type WidgetInstance } from './types';
 
 export const LAYOUT_SCHEMA = 1;
@@ -65,6 +65,12 @@ export function migrateLayout(raw: unknown, version: number, supports: Supports,
         items.filter((it) => !keep.includes(it)).forEach((it, k) => tiles.push({ id: `${id}-split${k}`, x: 0, y: 9999, size: supports(it.widget)[0], items: [it], active: 0, smartRotate: false }));
       }
     }
+    // A stack past the limit (saved before there was one) keeps its first five; the rest get their own tiles.
+    if (keep.length > MAX_STACK) {
+      repaired = true;
+      keep.slice(MAX_STACK).forEach((it, k) => tiles.push({ id: `${id}-over${k}`, x: 0, y: 9999, size: size!, items: [it], active: 0, smartRotate: false }));
+      keep = keep.slice(0, MAX_STACK);
+    }
     const x = int(rt.x, 0); const y = int(rt.y, 9999);
     const cx = Math.max(0, Math.min(COLS - SIZES[size!].w, x));
     if (cx !== x || y < 0) repaired = true;
@@ -89,7 +95,7 @@ export const SEMANTIC_DEFAULT = { good: 'outcome-win', bad: 'outcome-loss', watc
 export function defaultSettings(source: Source = 'real'): BoardSettings {
   return {
     source, fit: true, theme: 'system', accent: null, colorBlind: false, background: 'plain', gap: 12, rowHeight: 96,
-    fontScale: 1, animations: 'full', semantic: { ...SEMANTIC_DEFAULT },
+    fontScale: 1, animations: 'full', semantic: { ...SEMANTIC_DEFAULT }, tint: true, width: 'app',
   };
 }
 
@@ -113,5 +119,7 @@ export function migrateSettings(raw: unknown, source: Source = 'real'): BoardSet
     fontScale: num(raw.fontScale, 0.8, 1.4, d.fontScale),
     animations: pick(raw.animations, ['full', 'reduced', 'off'] as const, d.animations),
     semantic: { good: color(sem.good, d.semantic.good), bad: color(sem.bad, d.semantic.bad), watch: color(sem.watch, d.semantic.watch) },
+    tint: typeof raw.tint === 'boolean' ? raw.tint : d.tint,
+    width: pick(raw.width, ['app', 'full'] as const, d.width),
   };
 }

@@ -104,3 +104,33 @@ export function importBoard(file: unknown, cat: Catalog): { id: string; dropped:
   const id = createBoard(name, m.layout, migrateSettings(f.settings));
   return { id, dropped: m.dropped };
 }
+
+/**
+ * Once: Stats became one board. A journal that already has boards gets the
+ * new "Stats" board in front, and each board of the first version that is
+ * still exactly as shipped is removed. One you changed is yours and stays.
+ * Marked done in app_settings, so deleting "Stats" later is never undone.
+ */
+const SINGLE_KEY = 'stats_single_board';
+const shape = (l: BoardLayout) => JSON.stringify([...l.tiles].sort((a, b) => a.id.localeCompare(b.id))
+  .map((t) => [t.id, t.x, t.y, t.size, t.smartRotate, t.items.map((i) => [i.widget, i.cfg])]));
+
+export function consolidateBoards(single: { id: string; name: string; source: Source; layout: BoardLayout },
+  legacy: ReadonlyArray<{ id: string; layout: BoardLayout }>, cat: Catalog, defaultSettings: (s: Source) => BoardSettings): boolean {
+  const db = getDb();
+  if (db.prepare('SELECT 1 FROM app_settings WHERE key = ?').get(SINGLE_KEY)) return false;
+  const boards = listBoards(cat);
+  if (boards.length && !boards.some((b) => b.id === single.id)) {
+    db.exec('BEGIN');
+    try {
+      saveBoard({ id: single.id, name: single.name, position: -1, layout: single.layout, settings: defaultSettings(single.source) });
+      for (const l of legacy) {
+        const b = boards.find((x) => x.id === l.id);
+        if (b && !b.readOnly && shape(b.layout) === shape(l.layout)) deleteBoard(b.id);
+      }
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(SINGLE_KEY, now());
+  return true;
+}

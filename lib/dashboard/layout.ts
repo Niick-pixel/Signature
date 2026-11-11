@@ -104,6 +104,9 @@ export function freeSpot(l: BoardLayout, size: SizeKey): { x: number; y: number 
 }
 
 /** Add a widget as a new tile, in the first free spot. */
+/** The most widgets one stack holds: past that, one flick at a time stops being quick. */
+export const MAX_STACK = 5;
+
 export function addWidget(l: BoardLayout, inst: WidgetInstance, size: SizeKey, tileId: string, supports: Supports): Result {
   if (!supports(inst.widget).includes(size)) return no(l, `This widget has no ${SIZES[size].label.toLowerCase()} layout.`);
   const at = freeSpot(l, size);
@@ -115,6 +118,7 @@ export function stackOnto(l: BoardLayout, srcId: string, dstId: string, supports
   const src = find(l, srcId); const dst = find(l, dstId);
   if (!src || !dst || src.id === dst.id) return no(l, 'Nothing to stack.');
   if (!src.items.every((i) => supports(i.widget).includes(dst.size))) return no(l, `Stacks hold widgets of one size: this one has no ${SIZES[dst.size].label.toLowerCase()} layout.`);
+  if (dst.items.length + src.items.length > MAX_STACK) return no(l, `A stack holds up to ${MAX_STACK} widgets.`);
   const merged: Tile = { ...dst, items: [...dst.items, ...src.items], active: dst.items.length };
   return ok(withTiles(l, compact(l.tiles.filter((t) => t.id !== srcId).map((t) => (t.id === dstId ? merged : t)))));
 }
@@ -175,6 +179,7 @@ export function problems(l: BoardLayout, supports: Supports): string[] {
     if (t.x < 0 || t.y < 0 || t.x + SIZES[t.size].w > COLS) out.push(`Tile ${t.id} is outside the grid.`);
     if (!t.items.length) out.push(`Tile ${t.id} is empty.`);
     if (t.active < 0 || t.active >= t.items.length) out.push(`Tile ${t.id} shows a widget it doesn't hold.`);
+    if (t.items.length > MAX_STACK) out.push(`Tile ${t.id} stacks more than ${MAX_STACK} widgets.`);
     for (const it of t.items) if (!supports(it.widget).includes(t.size)) out.push(`${it.widget} has no ${t.size} layout (tile ${t.id}).`);
     for (const o of l.tiles.slice(i + 1)) if (SIZES[o.size] && collides(t, o)) out.push(`Tiles ${t.id} and ${o.id} overlap.`);
   });
@@ -185,8 +190,9 @@ export function problems(l: BoardLayout, supports: Supports): string[] {
  * Fit to screen: the row height that fits `rows` rows in `height` px. Below
  * `min` the board can't fit, so it keeps `min` and reports the overflow.
  */
-export function fitRows(height: number, rows: number, gap: number, min = 56): { rowH: number; overflow: boolean } {
+export function fitRows(height: number, rows: number, gap: number, min = 56, max = Infinity): { rowH: number; overflow: boolean } {
   if (rows <= 0) return { rowH: min, overflow: false };
   const rowH = Math.floor((height - gap * (rows - 1)) / rows);
-  return rowH < min ? { rowH: min, overflow: true } : { rowH, overflow: false };
+  // A cap keeps tiles in proportion on a very tall window: the board then ends above the bottom, like every other page.
+  return rowH < min ? { rowH: min, overflow: true } : { rowH: Math.min(rowH, max), overflow: false };
 }

@@ -37,6 +37,8 @@ const SOURCES: Array<{ v: Source; label: string; title: string }> = [
   { v: 'all', label: 'All', title: 'Real and replay together (every number then says "mixed")' },
 ];
 const MIN_ROW = 56;
+/** In the app's column, the tallest a row grows (an S tile then stays about as tall as it is wide). */
+const MAX_ROW = 150;
 const semVar = (v: string) => (v.startsWith('#') ? triple(v) : `var(--${v})`);
 const newId = () => `t-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -107,7 +109,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
       : base;
   const layout = preview;
   const rows = Math.max(1, rowsUsed(layout));
-  const fitted = s.fit ? fitRows(height || 700, rows, s.gap, MIN_ROW) : { rowH: s.rowHeight, overflow: false };
+  // In the app's column a row stops growing at MAX_ROW, so a tall window doesn't stretch tiles into towers.
+  const fitted = s.fit ? fitRows(height || 700, rows, s.gap, MIN_ROW, s.width === 'app' ? MAX_ROW : Infinity) : { rowH: s.rowHeight, overflow: false };
   // While a tile is being dragged the rows keep their height: the reflow it causes must not move the cells under the pointer.
   const [frozen, setFrozen] = useState<number | null>(null);
   if (drag && frozen === null) setFrozen(fitted.rowH);
@@ -287,6 +290,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
       : op === 'out' ? unstack(l, selTile.id, uid, newId()) : removeWidget(l, selTile.id, uid));
   };
 
+  /** The same column as the Dashboard tab (max-w-[80rem]), unless the board is set to full width. */
+  const col = s.width === 'app' ? 'mx-auto max-w-[80rem]' : '';
   const pill = (on: boolean) => ({ borderColor: on ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: on ? 'rgb(var(--accent) / 0.12)' : 'transparent', color: on ? 'rgb(var(--accent))' : 'var(--text-dim)' });
   const bg = s.background === 'gradient' ? 'radial-gradient(1200px 600px at 15% -10%, rgb(var(--accent) / 0.10), transparent 60%), radial-gradient(900px 500px at 100% 110%, rgb(var(--accent) / 0.07), transparent 60%)'
     : s.background === 'blurred' ? 'radial-gradient(500px 360px at 20% 20%, rgb(var(--accent) / 0.16), transparent 70%), radial-gradient(520px 380px at 80% 75%, rgb(var(--sem-good) / 0.10), transparent 70%)' : undefined;
@@ -298,10 +303,11 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
         ...(s.accent ? { ['--accent' as string]: triple(s.accent) } : {}),
         fontSize: `${s.fontScale}rem`, backgroundImage: bg,
       }}>
-      <header ref={head} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-6 pb-2 pt-3">
+      <header ref={head} className={`flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-6 pb-2 pt-3 ${col}`}>
         <h1 className="text-[18px] font-semibold tracking-tight">Stats</h1>
         {!editing && <Link href="/new" prefetch={false} className="rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-stats-new>+ New trade</Link>}
-        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Boards" data-board-tabs>
+        {/* One board needs no tabs: they show once there is a second one, or while editing (to add or rename). */}
+        {(page.boards.length > 1 || editing) && <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Boards" data-board-tabs>
           {page.boards.map((b) => renaming === b.id ? (
             <input key={b.id} autoFocus defaultValue={b.name} aria-label="Board name" data-rename
               onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -316,7 +322,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
           <button type="button" aria-label="New board" title="New board" data-new-board
             onClick={async () => { const r = await ed.boardAction({ action: 'create', name: 'New board' }); if (r.ok) go(String(r.json.id), true); }}
             className="grid size-7 place-items-center rounded-full text-[15px]" style={{ color: 'var(--text-dim)' }}>+</button>
-        </nav>
+        </nav>}
         <div className="ml-auto flex flex-wrap items-center gap-2 text-[12px]">
           {editing ? (
             <>
@@ -356,12 +362,12 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
         </div>
       </header>
       {board.dropped.length > 0 && <p className="px-6 pb-1 text-[11.5px]" style={{ color: 'rgb(var(--amber))' }}>Removed from this board because they no longer exist: {board.dropped.join(', ')}.</p>}
-      <div ref={gridBox} className={`relative min-h-0 flex-1 px-6 pb-4 transition-[padding] duration-300 ${overflow || !s.fit ? 'overflow-y-auto' : 'overflow-hidden'}`} data-grid
+      <div ref={gridBox} className={`relative min-h-0 w-full flex-1 px-6 pb-4 transition-[padding] duration-300 ${col} ${overflow || !s.fit ? 'overflow-y-auto' : 'overflow-hidden'}`} data-grid
         style={{ paddingRight: editing && panel ? (panel === 'gallery' ? 404 : 384) : undefined }}
         onPointerDown={(e) => { if (editing && e.target === e.currentTarget) setSelected(null); }}>
         <div ref={grid} className="grid" style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gridAutoRows: `${rowH}px`, gap: s.gap, minHeight: editing ? '100%' : undefined }}>
           {layout.tiles.map((t, i) => (
-            <Tile key={t.id} tile={t} widgets={page.widgets} states={page.states} reduce={reduce} index={i}
+            <Tile key={t.id} tile={t} widgets={page.widgets} states={page.states} reduce={reduce} index={i} tint={s.tint}
               rotate={page.rotate[t.id] && t.items[page.rotate[t.id].index] ? { uid: t.items[page.rotate[t.id].index].uid, reason: page.rotate[t.id].reason } : undefined}
               edit={editing ? {
                 selected: selected === t.id, dragging: (drag?.kind === 'move' || drag?.kind === 'resize') && drag.id === t.id,

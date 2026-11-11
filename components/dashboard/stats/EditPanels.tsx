@@ -15,6 +15,11 @@ import { PERIODS } from '@/lib/statsScope';
 import { WidgetBody } from './renderers';
 
 export const CATEGORY_LABEL: Record<string, string> = { kpi: 'Numbers', chart: 'Charts', insight: 'In plain words', flaw: 'Flaws and drills', list: 'Lists', data: 'Data' };
+export const TIER_LABEL: Record<1 | 2 | 3, { title: string; hint: string }> = {
+  1: { title: 'Most useful', hint: 'What to look at every day. These are on the default board.' },
+  2: { title: 'Useful', hint: 'Worth a flick: most sit in a stack behind the essentials.' },
+  3: { title: 'Deep dives', hint: 'For when you want to dig: add the ones you need.' },
+};
 export const ACCENTS = ['#b5792f', '#4f7cff', '#7c5cff', '#e0567b', '#0ea5a4', '#5f6b7a', '#d97706', '#3f9d5d'];
 /** Blue for good, orange for bad: tells the two apart without red and green. */
 export const COLOR_BLIND = { good: '#2b7bb9', bad: '#e08b2b', watch: '#8e6cc4' };
@@ -100,18 +105,22 @@ export function Gallery({ open, onClose, widgets, previews, onAdd, onDragStart }
   const groups = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     const hit = (w: WidgetInfo) => words.every((x) => `${w.title} ${w.help} ${CATEGORY_LABEL[w.category]}`.toLowerCase().includes(x));
-    const out = new Map<string, WidgetInfo[]>();
-    for (const w of Object.values(widgets)) if (hit(w)) out.set(w.category, [...(out.get(w.category) ?? []), w]);
-    return Object.keys(CATEGORY_LABEL).filter((c) => out.has(c)).map((c) => [c, out.get(c)!] as const);
+    // Most useful first (lib/dashboard/catalog TIER); inside a tier, by category, then as the catalog lists them.
+    const cats = Object.keys(CATEGORY_LABEL);
+    const out = new Map<number, WidgetInfo[]>();
+    for (const w of Object.values(widgets)) if (hit(w)) out.set(w.tier, [...(out.get(w.tier) ?? []), w]);
+    return ([1, 2, 3] as const).filter((t) => out.has(t))
+      .map((t) => [t, out.get(t)!.sort((a, b) => cats.indexOf(a.category) - cats.indexOf(b.category))] as const);
   }, [q, widgets]);
   return (
     <Drawer open={open} title="Add a widget" onClose={onClose} width={380}>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search widgets" aria-label="Search widgets" autoFocus
         className="mb-2 w-full rounded-full border bg-transparent px-3 py-1.5 text-[13px]" style={{ borderColor: 'var(--glass-stroke)' }} data-gallery-search />
       <p className="mb-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Drag one onto the board, or click to add it in the first free spot.</p>
-      {groups.map(([cat, list]) => (
-        <section key={cat} className="mb-4">
-          <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>{CATEGORY_LABEL[cat]}</h3>
+      {groups.map(([tier, list]) => (
+        <section key={tier} className="mb-4" data-gallery-tier={tier}>
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>{TIER_LABEL[tier].title}</h3>
+          <p className="mb-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>{TIER_LABEL[tier].hint}</p>
           <div className="flex flex-col gap-2">
             {list.map((w) => {
               const size = (w.sizes.includes('S') ? 'S' : w.sizes[0]) as SizeKey;
@@ -120,8 +129,11 @@ export function Gallery({ open, onClose, widgets, previews, onAdd, onDragStart }
                 <div key={w.id} role="button" tabIndex={0} onPointerDown={(e) => onDragStart(w.id, e)} onKeyDown={(e) => { if (e.key === 'Enter') onAdd(w.id); }}
                   className="cursor-grab select-none rounded-[14px] border p-2.5 active:cursor-grabbing" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-gallery-item={w.id}>
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-[12.5px] font-semibold">{w.title}</span>
-                    <span className="shrink-0 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{w.sizes.join(' · ')}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {w.lean && <span className="size-1.5 shrink-0 rounded-full" style={{ background: w.lean === 'fix' ? 'rgb(var(--amber))' : 'rgb(var(--outcome-win))' }} title={w.lean === 'fix' ? 'About a flaw to fix' : 'About a strength to keep'} />}
+                      <span className="truncate text-[12.5px] font-semibold">{w.title}</span>
+                    </span>
+                    <span className="shrink-0 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{CATEGORY_LABEL[w.category]} · {w.sizes.join(' ')}</span>
                   </div>
                   {/* A live preview from your own trades, drawn small. */}
                   <div className="pointer-events-none mt-1.5 overflow-hidden rounded-[10px] p-2" style={{ background: 'var(--bg-raised)', height: size === 'S' || size === 'M' || size === 'W' ? 96 : 150 }} aria-hidden>
@@ -242,11 +254,15 @@ export function BoardSettingsPanel({ open, onClose, s, onChange }: { open: boole
       </Row>
       <Row label="Accent colour"><Swatches value={s.accent} onChange={(v) => onChange({ accent: v })} allowNone /></Row>
       <Row label="Background"><Pills value={s.background} options={['plain', 'gradient', 'blurred'] as const} onChange={(v) => onChange({ background: v })} labels={{ plain: 'Plain', gradient: 'Soft gradient', blurred: 'Blurred' }} /></Row>
+      <Row label="Width" hint="The app's column lines Stats up with the Dashboard and every other tab.">
+        <Pills value={s.width} options={['app', 'full'] as const} onChange={(v) => onChange({ width: v })} labels={{ app: "The app's column", full: 'Edge to edge' }} />
+      </Row>
       <Toggle label="Fit the board to the window" on={s.fit} onChange={(v) => onChange({ fit: v })} />
       {!s.fit && <Row label="Row height"><Slider value={s.rowHeight} min={56} max={240} step={4} onChange={(v) => onChange({ rowHeight: v })} fmt={(v) => `${v}px`} /></Row>}
       <Row label="Space between tiles"><Slider value={s.gap} min={4} max={32} step={2} onChange={(v) => onChange({ gap: v })} fmt={(v) => `${v}px`} /></Row>
       <Row label="Text size"><Slider value={s.fontScale} min={0.85} max={1.25} step={0.05} onChange={(v) => onChange({ fontScale: v })} fmt={(v) => `${Math.round(v * 100)}%`} /></Row>
       <Row label="Animations"><Pills value={s.animations} options={['full', 'reduced', 'off'] as const} onChange={(v) => onChange({ animations: v })} labels={{ full: 'Full', reduced: 'Reduced', off: 'Off' }} /></Row>
+      <Toggle label="Tint flaws and strengths (a faint warm or green wash)" on={s.tint} onChange={(v) => onChange({ tint: v })} />
       <Toggle label="Colour-blind safe (blue for good, orange for bad)" on={blind}
         onChange={(v) => onChange({ semantic: v ? { ...COLOR_BLIND } : { good: 'outcome-win', bad: 'outcome-loss', watch: 'amber' } })} />
       <Row label="What the colours mean" hint="Which colour shows good, bad and watch. What counts as good stays the engine's: breaking a rule is never shown as good.">

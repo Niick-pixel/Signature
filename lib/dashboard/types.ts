@@ -78,6 +78,10 @@ export interface BoardSettings {
   animations: 'full' | 'reduced' | 'off';
   /** Which colour means good, bad and watch. Meaning still comes from the engine. */
   semantic: { good: string; bad: string; watch: string };
+  /** A faint tint on tiles about a flaw (warm) or a strength (green), so the mix reads at a glance. */
+  tint: boolean;
+  /** 'app': the same centred column as the Dashboard and every other tab; 'full': edge to edge. */
+  width: 'app' | 'full';
 }
 
 export interface Board { id: string; name: string; position: number; layout: BoardLayout; settings: BoardSettings }

@@ -64,6 +64,13 @@ export interface WidgetMeta<VM = unknown> {
   minTrades?: number;
   /** Expensive (Monte Carlo, resampling): computed only when it is in front of its stack or next. */
   lazy?: boolean;
+  /**
+   * How useful it is day to day: 1 essential (on the default board, in front), 2 useful (in a stack behind),
+   * 3 a deep dive (in the gallery, to add when you want it). The gallery lists them in this order.
+   */
+  tier?: 1 | 2 | 3;
+  /** What it is about: a flaw to fix, or a strength to keep. Drives the board's faint tint; never the semantic colours. */
+  lean?: 'fix' | 'keep';
   /** Smart Rotate: what this widget has to say for itself when the page opens (lib/dashboard/attention). Pure. */
   attention?: (engine: EngineView, today: string) => Attention | null;
   /** Whether the result makes a claim (an effect, a cost, an expectancy): n and the interval can't be removed. */

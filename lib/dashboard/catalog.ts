@@ -37,9 +37,29 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : /(s|sh|ch|x)
 const LOG = { href: '/new', hrefLabel: 'Log a trade' };
 
 export const registry = new Registry();
+/**
+ * Usefulness, ranked once here so the gallery, the default board and the docs agree.
+ * 1 — what you look at every day; 2 — worth a flick; anything not listed is 3, a deep dive.
+ */
+const TIER: Record<string, 1 | 2> = {
+  verdict: 1, expectancy: 1, 'p-edge': 1, 'win-rate': 1, net: 1, 'max-dd': 1, 'rules-followed': 1, equity: 1,
+  'flaw-1': 1, 'flaw-2': 1, 'flaw-3': 1, 'flaw-4': 1, 'flaw-5': 1, 'point-fix': 1, 'point-keep': 1, 'active-drill': 1,
+  'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
+  'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
+  'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
+  focus: 2, integrity: 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+};
+/** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
+const LEAN: Record<string, 'fix' | 'keep'> = {
+  'flaw-1': 'fix', 'flaw-2': 'fix', 'flaw-3': 'fix', 'flaw-4': 'fix', 'flaw-5': 'fix', 'point-fix': 'fix', 'active-drill': 'fix',
+  'theme-costs': 'fix', 'rule-breaks': 'fix', lessons: 'fix', losses: 'fix', 'fix-data': 'fix', integrity: 'fix',
+  'mfe-losers': 'fix', 'be-cost': 'fix', tilt: 'fix', hesitation: 'fix', missed: 'fix',
+  'point-keep': 'keep',
+};
 const add = (d: Omit<WidgetMeta<ViewModel>, 'select' | 'attention'> & { select: Sel; attention?: Att }) => {
   const att = d.attention;
-  return registry.add({ ...d, select: (e, cfg) => d.select(e as unknown as View, cfg), attention: att ? (e, today) => att(e as unknown as View, today) : undefined });
+  return registry.add({ ...d, tier: TIER[d.id] ?? 3, lean: LEAN[d.id],
+    select: (e, cfg) => d.select(e as unknown as View, cfg), attention: att ? (e, today) => att(e as unknown as View, today) : undefined });
 };
 const ruleTodayOf: Att = (v, today) => ruleToday(v.settled, v.breaksOf, today);
 

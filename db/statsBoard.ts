@@ -1,10 +1,10 @@
 import 'server-only';
 import { listTrades } from './trades';
-import { listBoards, seedBoards, type StoredBoard } from './dashboards';
+import { consolidateBoards, listBoards, seedBoards, type StoredBoard } from './dashboards';
 import { statsEngine, type StatsParams } from './statsEngine';
 import { flawDeck, type Deck } from './flaws';
 import { registry, type View } from '../lib/dashboard/catalog';
-import { DEFAULT_BOARDS } from '../lib/dashboard/defaults';
+import { DEFAULT_BOARDS, LEGACY_BOARDS } from '../lib/dashboard/defaults';
 import { defaultSettings } from '../lib/dashboard/schema';
 import { scopeFor, withDefaults, type WidgetMeta } from '../lib/dashboard/registry';
 import type { Source, Tile } from '../lib/dashboard/types';
@@ -26,7 +26,7 @@ const SOURCES: Source[] = ['real', 'backtest', 'all'];
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 export const catalog = { supports: registry.supports, known: registry.known };
 
-export interface WidgetInfo { id: string; title: string; help: string; kind: Kind; view?: string; sizes: readonly string[]; category: string; claims: boolean; settings: WidgetMeta['settings']; defaultSize: string }
+export interface WidgetInfo { id: string; title: string; help: string; kind: Kind; view?: string; sizes: readonly string[]; category: string; claims: boolean; settings: WidgetMeta['settings']; defaultSize: string; tier: 1 | 2 | 3; lean: 'fix' | 'keep' | null }
 export interface WidgetState { vm: ViewModel; title: string; scope: string | null; mixed: boolean }
 export interface BoardPage {
   boards: Array<{ id: string; name: string }>;
@@ -121,6 +121,7 @@ export function galleryPreviews(params: StatsParams): Record<string, WidgetState
 
 export function boardPage(params: StatsParams): BoardPage {
   seedBoards(DEFAULT_BOARDS, defaultSettings);
+  consolidateBoards(DEFAULT_BOARDS[0], LEGACY_BOARDS, catalog, defaultSettings);
   const boards = listBoards(catalog);
   const asked = one(params.board);
   const board = boards.find((b) => b.id === asked) ?? boards[0];
@@ -147,7 +148,7 @@ export function boardPage(params: StatsParams): BoardPage {
   }
 
   const widgets = Object.fromEntries(registry.all().map((d) => [d.id, {
-    id: d.id, title: d.title, help: d.help, kind: d.kind, view: d.view, sizes: d.sizes, category: d.category, claims: !!d.claims, settings: d.settings, defaultSize: d.defaultSize,
+    id: d.id, title: d.title, help: d.help, kind: d.kind, view: d.view, sizes: d.sizes, category: d.category, claims: !!d.claims, settings: d.settings, defaultSize: d.defaultSize, tier: d.tier ?? 3, lean: d.lean ?? null,
   }]));
   return { boards: boards.map((b) => ({ id: b.id, name: b.name })), board, source, filters, widgets, states, rotate, has };
 }

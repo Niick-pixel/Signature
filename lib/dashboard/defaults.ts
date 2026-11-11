@@ -1,7 +1,12 @@
 /**
- * The boards Stats starts with, and what "Reset board" puts back. Each fits
- * 1440×900 with no page scroll (6–7 rows). Stacks keep a sensible order;
- * Smart Rotate is off everywhere.
+ * The board Stats starts with, and what "Reset board" puts back: one screen
+ * (fits 1440×900 with no page scroll, 7 rows), every stack holding five, most
+ * useful in front (lib/dashboard/catalog TIER), good data and flaws side by
+ * side. Smart Rotate is off. Everything else is one click away in the gallery.
+ *
+ * The five boards Stats shipped with first are kept as LEGACY_BOARDS: the
+ * one-time move to a single board (db/statsBoard consolidate) removes each
+ * one still exactly as shipped, and "Reset board" still knows them.
  */
 import { LAYOUT_SCHEMA } from './schema';
 import type { BoardLayout, SizeKey, Source, Tile, WidgetCfg } from './types';
@@ -17,6 +22,24 @@ const FLAWS = ['flaw-1', 'flaw-2', 'flaw-3', 'flaw-4', 'flaw-5'];
 export interface DefaultBoard { id: string; name: string; source: Source; layout: BoardLayout }
 
 export const DEFAULT_BOARDS: DefaultBoard[] = [
+  {
+    id: 'stats', name: 'Stats', source: 'real',
+    layout: board(
+      tile('st-verdict', 0, 0, 'W', 'verdict'),
+      // Your edge · how you win · what you keep · what to fix: data left, flaws right.
+      tile('st-edge', 0, 1, 'S', 'expectancy', 'p-edge', 'profit-factor', 'by-source', 'tier'),
+      tile('st-wins', 3, 1, 'S', 'win-rate', 'avg-win-loss', 'losing-run', 'be-cost', 'trial'),
+      tile('st-keep', 6, 1, 'S', 'net', 'max-dd', 'point-keep', 'point-rules', 'focus'),
+      tile('st-fix', 9, 1, 'S', 'point-fix', 'rules-followed', 'active-drill', 'fix-data', 'integrity'),
+      tile('st-equity', 0, 3, 'L', 'equity', 'when', 'real-vs-backtest', 'eval-odds', 'losses'),
+      tile('st-flaws', 6, 3, 'M', ...FLAWS),
+      tile('st-trend', 6, 5, 'M', 'rolling', 'theme-costs', 'rule-breaks', 'tilt', 'r-dist'),
+    ),
+  },
+];
+
+/** The boards of the first version: removed once when still as shipped, kept (and resettable) when you changed them. */
+export const LEGACY_BOARDS: DefaultBoard[] = [
   {
     id: 'overview', name: 'Overview', source: 'real',
     layout: board(
@@ -78,4 +101,4 @@ export const DEFAULT_BOARDS: DefaultBoard[] = [
   },
 ];
 
-export const defaultBoard = (id: string) => DEFAULT_BOARDS.find((b) => b.id === id) ?? null;
+export const defaultBoard = (id: string) => DEFAULT_BOARDS.find((b) => b.id === id) ?? LEGACY_BOARDS.find((b) => b.id === id) ?? null;

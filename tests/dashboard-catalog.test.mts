@@ -33,8 +33,26 @@ test('the catalog: every widget has help, sizes, a default size among them; ids 
   for (const d of all) assert.ok(d.help.length > 30 && d.sizes.includes(d.defaultSize), d.id);
 });
 
-test('the default boards are sound and fit 1440×900 (at most 7 rows)', () => {
-  for (const b of DEFAULT_BOARDS) {
+test('the default board: the most useful widget in front of every stack, at most 5 in a stack, flaws and strengths both on it', async () => {
+  const { MAX_STACK } = await import('../lib/dashboard/layout');
+  const [b] = DEFAULT_BOARDS;
+  for (const t of b.layout.tiles) {
+    assert.equal(registry.get(t.items[0].widget)!.tier, 1, `${t.id}: ${t.items[0].widget} in front`);
+    assert.ok(t.items.length <= MAX_STACK, t.id);
+    // Within a stack, never a less useful widget ahead of a more useful one.
+    const tiers = t.items.map((i) => registry.get(i.widget)!.tier!);
+    assert.deepEqual(tiers, [...tiers].sort(), `${t.id}: ${tiers}`);
+  }
+  const leans = b.layout.tiles.map((t) => registry.get(t.items[0].widget)!.lean ?? 'data');
+  assert.ok(leans.includes('fix') && leans.includes('data'), leans.join());
+  // Every tier-1 widget is on it.
+  const on = new Set(b.layout.tiles.flatMap((t) => t.items.map((i) => i.widget)));
+  for (const d of registry.all().filter((x) => x.tier === 1)) assert.ok(on.has(d.id), d.id);
+});
+
+test('the default boards are sound and fit 1440×900 (at most 7 rows)', async () => {
+  const { LEGACY_BOARDS } = await import('../lib/dashboard/defaults');
+  for (const b of [...DEFAULT_BOARDS, ...LEGACY_BOARDS]) {
     assert.deepEqual(problems(b.layout, registry.supports), [], b.id);
     const rows = b.layout.tiles.reduce((m, t) => Math.max(m, t.y + { S: 2, M: 2, T: 4, L: 4, W: 1, XL: 4 }[t.size]), 0);
     assert.ok(rows <= 7, `${b.id}: ${rows} rows`);
@@ -43,7 +61,8 @@ test('the default boards are sound and fit 1440×900 (at most 7 rows)', () => {
 
 test('an empty journal: every board renders, every widget in its too-early state or with nothing to claim', () => {
   const p = boardPage({});
-  assert.equal(p.board.id, 'overview');
+  assert.equal(p.board.id, 'stats');
+  assert.equal(p.boards.length, 1, 'one board to start with');
   assert.equal(p.source, 'real');
   for (const s of Object.values(p.states)) assert.ok(s.vm.tooEarly || s.vm.kind === 'none' || s.vm.kind === 'text' || s.vm.kind === 'list', `${s.title}: ${s.vm.kind}`);
 });
@@ -63,55 +82,72 @@ test('with trades: no widget errors, every view model crosses to the browser, ev
   }
 });
 
+test('every widget in the catalog (the gallery), over every source: no select throws, each crosses to the browser', async () => {
+  const { galleryPreviews } = await import('../db/statsBoard');
+  for (const src of ['real', 'backtest', 'all']) {
+    const all = galleryPreviews({ src });
+    assert.equal(Object.keys(all).length, registry.all().length);
+    for (const [id, st] of Object.entries(all)) {
+      assert.ok(!st.vm.tooEarly?.text.startsWith('This widget could not be drawn'), `${src}/${id}: ${st.vm.tooEarly?.text}`);
+      assert.doesNotThrow(() => JSON.stringify(st.vm), id);
+    }
+  }
+});
+
 test('mixed: an All-sources widget over real and replay trades says so; Real never does', () => {
-  const all = boardPage({ board: 'overview', src: 'all' });
+  const all = boardPage({ board: 'stats', src: 'all' });
   assert.ok(Object.values(all.states).some((s) => s.mixed));
-  const real = boardPage({ board: 'overview', src: 'real' });
+  const real = boardPage({ board: 'stats', src: 'real' });
   assert.ok(Object.values(real.states).every((s) => !s.mixed));
 });
 
-test('a widget override shows its own scope chip; the Backtest lab reads the gap on real trades', () => {
-  const p = boardPage({ board: 'backtest' });
+test('a widget override shows its own scope chip (the old Backtest lab reads the gap on real trades)', async () => {
+  const { createBoard, deleteBoard } = await import('../db/dashboards');
+  const { LEGACY_BOARDS } = await import('../lib/dashboard/defaults');
+  const { defaultSettings } = await import('../lib/dashboard/schema');
+  const id = createBoard('Lab', LEGACY_BOARDS.find((b) => b.id === 'backtest')!.layout, defaultSettings('backtest'));
+  const p = boardPage({ board: id });
   assert.equal(p.source, 'backtest');
   assert.equal(p.states['bt-compare.1'].scope, 'Real');
+  deleteBoard(id);
 });
 
 test('rules-followed never shows breaking a rule in the good colour', () => {
-  const p = boardPage({ board: 'overview', src: 'all' });
-  const vm = p.states['ov-k4.0'].vm;
+  const p = boardPage({ board: 'stats', src: 'all' });
+  const vm = p.states['st-fix.1'].vm;
   assert.equal(vm.kind, 'kpi');
   if (vm.kind === 'kpi' && vm.chart?.kind === 'bars') assert.notEqual(vm.chart.items[1].tone, 'good');
 });
 
 test('drawdown reads as a fall (negative R), and "loss" pluralises', () => {
-  const p = boardPage({ board: 'execution', src: 'all' });
-  const dd = p.states['ex-dd.0'].vm;
+  const p = boardPage({ board: 'stats', src: 'all' });
+  const dd = p.states['st-keep.1'].vm;
   if (dd.kind === 'kpi') assert.match(dd.value, /^(−|0\.0R)/, dd.value);
-  const losses = p.states['ex-losses.0'].vm;
+  const losses = p.states['st-equity.4'].vm;
   if (losses.kind === 'list' && losses.summary) assert.doesNotMatch(losses.summary, /losss/);
 });
 
 test('Smart Rotate: a stack with it on gets a front pick from its widgets; one with it off gets none', async () => {
   const { getBoard, saveBoard } = await import('../db/dashboards');
   const { catalog } = await import('../db/statsBoard');
-  const b = getBoard('overview', catalog)!;
+  const b = getBoard('stats', catalog)!;
   const stacks = b.layout.tiles.filter((t) => t.items.length > 1);
   const on = stacks[0];
   saveBoard({ ...b, layout: { ...b.layout, tiles: b.layout.tiles.map((t) => (t.id === on.id ? { ...t, smartRotate: true } : t)) } });
-  const p = boardPage({ board: 'overview' });
+  const p = boardPage({ board: 'stats' });
   assert.ok(p.rotate[on.id], 'rotated');
   assert.ok(p.rotate[on.id].index >= 0 && p.rotate[on.id].index < on.items.length);
   for (const t of stacks.slice(1)) assert.equal(p.rotate[t.id], undefined, t.id);
   // Every widget that can raise a signal does so without throwing, over every source.
   for (const src of ['real', 'backtest', 'all']) {
-    const page = boardPage({ board: 'flaws', src });
+    const page = boardPage({ board: 'stats', src });
     assert.doesNotThrow(() => JSON.stringify(page.rotate));
   }
   saveBoard(b);
 });
 
 test('§9: the verdict leads with the real result on a replay-heavy All, and on a Backtest board says it is replay', () => {
-  const verdictOf = (src: string) => Object.values(boardPage({ board: 'overview', src }).states).find((s) => s.title === 'In one line')!.vm as Extract<VM, { kind: 'text' }>;
+  const verdictOf = (src: string) => Object.values(boardPage({ board: 'stats', src }).states).find((s) => s.title === 'In one line')!.vm as Extract<VM, { kind: 'text' }>;
   const all = verdictOf('all');
   assert.match(all.headline, /^Mostly replay — on \d+ real trades/);
   const bt = verdictOf('backtest');

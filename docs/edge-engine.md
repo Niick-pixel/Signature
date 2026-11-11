@@ -678,9 +678,9 @@ Colours are only for the plain-language cards: green for good, amber for watch, 
 5. **One target per trade.** The engine reads target type only from the current, mutually exclusive list. A retired value (e.g. "Horizontal liquidity pool", which overlaps EQH/EQL, PDH/PDL and session levels) reads as unanswered; the integrity banner lists those trades, with links, to re-tag.
 6. **Does your filter filter?** Setup quality shows the spread of grades given before the outcome and of each checklist item. An item yes on more than 90% of 10+ trades is marked *not filtering*; every pre-graded trade on one letter is called out. Neither can be learned from.
 
-# The Flaw Deck (now the Flaws board in Stats)
+# The Flaw Deck (now widgets on the Stats board)
 
-> Since the dashboard (section 54), the deck has no page of its own: `/work` redirects to `/stats?board=flaws` and key F opens that board. Each flaw card, the active drill, Fix your data and lessons not yet learned are widgets; the table `flaw_work` and the drill chip on the trade form still feed them. The ranking and the learning loop below are unchanged. Where this section says "card", read "flaw widget"; the full-screen deck, its cookie and its reducer are gone.
+> Since the dashboard (section 54), the deck has no page of its own: `/work` redirects to `/stats` and key F opens it. Each flaw card, the active drill, Fix your data and lessons not yet learned are widgets; the table `flaw_work` and the drill chip on the trade form still feed them. The ranking and the learning loop below are unchanged. Where this section says "card", read "flaw widget"; the full-screen deck, its cookie and its reducer are gone.
 
 ## 49. What it is
 
@@ -740,12 +740,31 @@ Rates are shown per 10 trades: before (the 30 trades before you started) and sin
 
 # The Stats dashboard (`/stats`)
 
-## 54. Boards
+## 54. One board
 
-Stats is a set of boards, tabs across the top: **Overview** (the default, source Real), **Flaws**, **Execution**, **Behaviour**, **Backtest lab** (source Backtest), and any you make. Each board is a 12-column grid of tiles that fills the window.
+Stats opens on one board, **Stats** (source Real): one screen, every stack holding five widgets, the most useful in front, good data and flaws side by side. Everything else is in the gallery, to add when you want it. You can still make more boards (⋯ → New board); the tabs show once there are two, or while editing.
 
-- **Source** (Real / Backtest / All) is per board and remembered. The filters (period, rubric, pre-graded only, blind re-grade) are shared by every widget on the board.
-- **Fit to screen** (on by default): the row height is computed so the whole board fits the window with no page scroll (`fitRows`). If a board holds more than fits, it scrolls and says so in a quiet line; turn Fit off or move widgets to another board.
+```
+┌──────────────────────────── In one line (W) ────────────────────────────┐
+├ Your edge (S) ─┬ How you win (S) ┬ Net · keep (S) ─┬ Fix first (S) ─────┤
+│ expectancy     │ win rate        │ net result      │ fix first          │
+│ P(edge > 0)    │ avg win / loss  │ max drawdown    │ rules followed     │
+│ profit factor  │ losing run      │ keep doing      │ active drill       │
+│ by source      │ breakeven cost  │ following rules │ fix your data      │
+│ maturity tier  │ rubric trial    │ this week       │ data checks        │
+├ Equity (L) ────┴─────────────────┼ Flaws (M): flaw 1 → 5 ──────────────┤
+│ equity · day & hour · real vs     ├ Trend (M) ──────────────────────────┤
+│ backtest · eval odds · losses     │ rolling · theme costs · rule breaks │
+│                                   │ tilt · R distribution               │
+└───────────────────────────────────┴─────────────────────────────────────┘
+```
+
+- **Usefulness.** Every widget has a tier (`TIER` in `lib/dashboard/catalog.ts`): 1 *most useful* (all on the default board, in front of their stacks), 2 *useful* (in a stack behind), 3 *deep dives* (gallery only). The gallery lists them in that order; within a stack a less useful widget never sits ahead of a more useful one (tested).
+- **Flaws and strengths.** A widget about a flaw to fix (flaw cards, fix first, theme costs, rule breaks, losses, data checks…) gives its tile a faint warm wash and a warm top edge; one about a strength (keep doing) a faint green one; plain data none. It follows the front widget of a stack, and is a wash, never the colour of a number. Board settings → "Tint flaws and strengths" turns it off.
+- **Width.** The board sits in the same centred column as the Dashboard tab (80rem), so Stats lines up with every other page. Rows stop growing at 150px there, so on a very tall window the board ends above the bottom instead of stretching tiles into towers. Board settings → Width → "Edge to edge" brings back the full-width board.
+- **Source** (Real / Backtest / All) is per board and remembered. The filters (period, rubric, pre-graded only, blind re-grade) are shared by every widget.
+- **Fit to screen** (on by default): the row height is computed so the board fits the window with no page scroll (`fitRows`). If it holds more than fits, it scrolls and says so in a quiet line.
+- **From five boards to one.** The first version shipped five boards (Overview, Flaws, Execution, Behaviour, Backtest lab; kept as `LEGACY_BOARDS`). Once, on the first open after the update, a journal that has them gets the Stats board in front, and each old board still exactly as shipped is removed (which widget sat in front doesn't count as a change). One you changed is yours and stays, and "Reset board" still knows it. Marked done in `app_settings` (`stats_single_board`), so deleting Stats later is never undone (`db/dashboards.ts consolidateBoards`, tested).
 - The ⋯ menu: new board, rename (or double-click the tab), duplicate, move left/right, board settings, export as a file, import, reset a built-in board, delete (never the last one).
 
 Code: `app/stats/page.tsx` → `db/statsBoard.ts boardPage` (server) → `components/dashboard/stats/StatsBoard.tsx` (client).
@@ -769,7 +788,7 @@ A widget is a definition in `lib/dashboard/catalog.ts` (registered in `lib/dashb
 
 ## 56. Stacks
 
-Any tile can hold several widgets of the same size: a stack. Dots on the right show where you are; hover a dot for its name.
+Any tile can hold up to five widgets of the same size (`MAX_STACK`): a stack. Stacking past five is refused with the reason; a saved stack of more (from before the limit) keeps its first five and the rest get their own tiles, nothing lost. Dots on the right show where you are; hover a dot for its name.
 
 - **One widget per flick.** The wheel accumulates 60px of travel, switches once, then locks for 450ms (`lib/dashboard/stackGesture.ts`, tested), so a spinning wheel can't skip three.
 - **Lists scroll first.** Over a widget whose content scrolls, the wheel scrolls the content. Only a fresh flick at its top or bottom edge (after a 300ms pause) switches the stack. Over the dot rail the wheel always switches.
@@ -849,6 +868,6 @@ add({
 
 3. **Use an existing kind** (`kpi`, `line`, `bars`, `heat`, `text`, `list`, `rings`, `flaw`, `drill`) if you can. A new look is a `custom` kind with a `view` name, drawn in `renderers.tsx` from the chart kit.
 4. **Test the select** in `tests/dashboard-catalog.test.mts`: it runs every widget on every default board over every source and checks no select throws, every view model serializes and every claim keeps its n.
-5. The gallery, the settings panel and saving pick it up by themselves. To ship it on a default board, add it to `lib/dashboard/defaults.ts`; boards already saved keep their own layout.
+5. Rank it: add it to `TIER` (1 or 2; unlisted is 3, a deep dive) and, if it is about a flaw or a strength, to `LEAN`. The gallery, the settings panel and saving pick it up by themselves. To ship it on the default board, add it to `lib/dashboard/defaults.ts` (tier 1 only, and a stack holds five); boards already saved keep their own layout.
 6. Renaming a widget later: add `old-id → new-id` to `WIDGET_RENAMES`.
 

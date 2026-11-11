@@ -62,6 +62,42 @@ test('export / import a board as a file: a new board, migrated; a foreign or new
   assert.throws(() => D.importBoard({ ...file, schema: LAYOUT_SCHEMA + 1 }, cat), /newer version/);
 });
 
+test('once: an install with the old boards gets the single Stats board; untouched old boards go, changed ones stay', async () => {
+  const { DEFAULT_BOARDS, LEGACY_BOARDS } = await import('../lib/dashboard/defaults');
+  const { registry } = await import('../lib/dashboard/catalog');
+  const real = { supports: registry.supports, known: registry.known };
+  const db = getDb();
+  db.exec('DELETE FROM dashboard_boards'); db.prepare("DELETE FROM app_settings WHERE key = 'stats_single_board'").run();
+  LEGACY_BOARDS.forEach((b, i) => D.saveBoard({ id: b.id, name: b.name, position: i, layout: b.layout, settings: defaultSettings(b.source) }));
+  // One you changed: the Flaws board with its first stack moved.
+  const flaws = LEGACY_BOARDS.find((b) => b.id === 'flaws')!;
+  D.saveBoard({ id: 'flaws', name: 'Flaws', position: 1, layout: { ...flaws.layout, tiles: flaws.layout.tiles.map((t, i) => (i === 0 ? { ...t, smartRotate: true } : t)) }, settings: defaultSettings('all') });
+  // Which widget sits in front is not a change.
+  const ov = LEGACY_BOARDS[0];
+  D.saveBoard({ id: 'overview', name: ov.name, position: 0, layout: { ...ov.layout, tiles: ov.layout.tiles.map((t) => ({ ...t, active: t.items.length - 1 })) }, settings: defaultSettings('real') });
+
+  assert.equal(D.consolidateBoards(DEFAULT_BOARDS[0], LEGACY_BOARDS, real, defaultSettings), true);
+  assert.deepEqual(D.listBoards(real).map((b) => b.id), ['stats', 'flaws'], 'Stats first; only the changed board kept');
+  // Never again: deleting Stats later is not undone.
+  D.deleteBoard('stats');
+  assert.equal(D.consolidateBoards(DEFAULT_BOARDS[0], LEGACY_BOARDS, real, defaultSettings), false);
+  assert.deepEqual(D.listBoards(real).map((b) => b.id), ['flaws']);
+});
+
+test('a stack holds at most 5: stacking past it is refused; a bigger saved one is split, nothing lost', async () => {
+  const { stackOnto, MAX_STACK } = await import('../lib/dashboard/layout');
+  const { migrateLayout } = await import('../lib/dashboard/schema');
+  const sup = () => ['S'] as SizeKey[];
+  const mk = (id: string, x: number, n: number) => ({ id, x, y: 0, size: 'S' as const, active: 0, smartRotate: false, items: Array.from({ length: n }, (_, i) => ({ uid: `${id}${i}`, widget: 'kpi', cfg: {} })) });
+  const l = { schema: 1, tiles: [mk('a', 0, 4), mk('b', 3, 2)] };
+  const r = stackOnto(l, 'b', 'a', sup);
+  assert.equal(r.ok, false); assert.match(r.reason!, /up to 5/);
+  assert.equal(stackOnto({ schema: 1, tiles: [mk('a', 0, 4), mk('b', 3, 1)] }, 'b', 'a', sup).ok, true);
+  const m = migrateLayout({ tiles: [mk('big', 0, 7)] }, 1, sup, () => true);
+  assert.equal(m.layout.tiles[0].items.length, MAX_STACK);
+  assert.equal(m.layout.tiles.reduce((n, t) => n + t.items.length, 0), 7, 'the two past the limit get their own tiles');
+});
+
 test('rollback 043 drops only the boards table', async () => {
   const { rollback } = await import('../db/cli-rollback');
   rollback('043', getDb());
