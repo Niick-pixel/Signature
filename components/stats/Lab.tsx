@@ -2,7 +2,9 @@
 
 import { createContext, useContext, useMemo, useState } from 'react';
 import { LAB_FILTERS, MAX_TESTABLE, labResult, tradesPerDay, unpackRows, type LabRow, type LabResult, type PackedRow } from '@/lib/edge/ruleLab';
-import { evalSim, type EvalRules } from '@/lib/edge/montecarlo';
+import { type EvalRules, type EvalResult } from '@/lib/edge/montecarlo';
+import { useEvalSims } from './useEvalSims';
+import type { EvalJob } from '@/lib/edge/evalWorker';
 import { sR, pct } from './EdgeUI';
 import { Help } from '@/components/ui/Help';
 
@@ -103,7 +105,7 @@ export interface EvalPreset { key: string; label: string; rules: Omit<EvalRules,
 
 /** Section E. */
 /** One line of the eval table — a component of its own, not one rebuilt on every render. */
-function Row({ name, r }: { name: string; r: NonNullable<ReturnType<typeof evalSim>> }) {
+function Row({ name, r }: { name: string; r: EvalResult }) {
   return (
     <tr className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}>
       <td className="py-1.5 pr-3">{name}</td>
@@ -123,13 +125,15 @@ export function EvalPanel({ presets }: { presets: EvalPreset[] }) {
   const preset = presets.find((p) => p.key === key) ?? presets[0];
   const risk = typed ?? (preset ? Math.round(preset.rules.maxDrawdown / 10) : 0);
   const keep = useMemo(() => keepOf(rows, on), [rows, on]);
-  const res = useMemo(() => {
+  // 10,000 paths each, in a Web Worker (useEvalSims): the page never freezes while they run.
+  const jobs = useMemo((): EvalJob[] | null => {
     if (!preset || !(risk > 0)) return null;
     const rules = { ...preset.rules, risk };
-    const base = evalSim(rows.map((r) => r.r), rules, { tradesPerDay: tradesPerDay(rows) });
-    const filtered = on.length ? evalSim(rows.filter((_, i) => keep[i]).map((r) => r.r), rules, { tradesPerDay: tradesPerDay(rows, keep), salt: on.join(',') }) : null;
-    return { base, filtered };
+    const base: EvalJob = { rs: rows.map((r) => r.r), rules, opts: { tradesPerDay: [...tradesPerDay(rows)] } };
+    return on.length ? [base, { rs: rows.filter((_, i) => keep[i]).map((r) => r.r), rules, opts: { tradesPerDay: [...tradesPerDay(rows, keep)], salt: on.join(',') } }] : [base];
   }, [preset, risk, rows, keep, on]);
+  const sims = useEvalSims(jobs);
+  const res = sims.results ? { base: sims.results[0] ?? null, filtered: sims.results[1] ?? null } : null;
   if (!presets.length) return <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Add a prop account on the Prop page to simulate it.</p>;
   return (
     <div data-eval>
@@ -144,8 +148,9 @@ export function EvalPanel({ presets }: { presets: EvalPreset[] }) {
         </label>
         {preset && <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Target ${preset.rules.target.toLocaleString()} · drawdown ${preset.rules.maxDrawdown.toLocaleString()} ({preset.rules.drawdown.replace('_', ' ')}){preset.rules.dailyLoss ? ` · daily loss $${preset.rules.dailyLoss.toLocaleString()}` : ''}{preset.rules.minDays ? ` · min ${preset.rules.minDays} days` : ''}</span>}
       </div>
-      {!res?.base ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Needs at least 10 trades with an R.</p> : (
-        <div className="overflow-x-auto">
+      {!res && sims.pending ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }} data-eval-running>Simulating 10,000 futures…</p>
+        : !res?.base ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Needs at least 10 trades with an R.</p> : (
+        <div className="overflow-x-auto transition-opacity" style={{ opacity: sims.pending ? 0.5 : 1 }} aria-busy={sims.pending}>
           <table className="w-full min-w-[28rem] text-[12px]">
             <thead><tr className="text-left text-[10px] uppercase tracking-[0.06em]" style={{ color: 'var(--text-faint)' }}>
               <th className="py-1 font-normal" /><th className="py-1 text-right font-normal">Pass</th><th className="py-1 text-right font-normal">Bust</th><th className="py-1 text-right font-normal">Neither in 60 days</th><th className="py-1 text-right font-normal">Median days to pass</th>

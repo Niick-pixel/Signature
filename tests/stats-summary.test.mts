@@ -35,3 +35,11 @@ test('mostly replay: the line leads with the real result, never the blend', () =
   assert.match(s.line, /^Mostly replay — on 9 real trades you lose 0\.17R a trade, too early to know/);
   assert.ok(!/edge looks real|to be sure/.test(s.line), 'nothing from the blend in the lead');
 });
+
+test('backtests only in view: says so, never "no real trades settled" (a Backtest board on a journal with real trades)', () => {
+  const blend = edgeMetrics(Array.from({ length: 30 }, (_, i) => ({ r: i % 3 === 0 ? -1 : 0.8, money: null })));
+  const none = edgeMetrics([]);
+  const s = summarize({ m: blend, focus: mkFocus(null), split: null, adherence: { kept: 0, n: 0, rate: null }, cone: null, mat: maturity(30), missingCore: [], replay: { line: 'Mostly replay: 30 of 30 trades are backtests.', real: none } });
+  assert.match(s.line, /^Backtests only — in replay you make 0\.\d\dR a trade, not a live result/);
+  assert.doesNotMatch(s.line, /no real trades/);
+});

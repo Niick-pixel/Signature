@@ -287,17 +287,7 @@ Missed setups logged in hindsight are left out, because they are cherry-picked. 
 
 ## 22. Layout
 
-Sections A–D are always open. Everything below them is folded, with a one-line summary in its header, so the page reads top to bottom without opening anything.
-
-| | Section | What it answers |
-|---|---|---|
-| A | Integrity | shown only when something could make the numbers wrong |
-| B | Your edge | expectancy, its interval, P(edge > 0), the maturity tier |
-| C | This week's focus | one leak, one strength, one experiment |
-| D | Equity & risk | the curve, the cone, the drawdown, rules followed vs broken, streaks |
-| G | Setup anatomy | which pre-trade facts go with better or worse R |
-| J | Behaviour & state | tilt grid and the tilt rules the computer caught (section 19) |
-| L | Mistake ledger | what went wrong, what it cost, lessons repeated |
+The letters (A–O) name the engine's findings and stay as section names in this document. On screen they are no longer one long page: each one is one or more widgets on the Stats dashboard (sections 54–62). What each finding computes is unchanged.
 
 ## 23. A — Integrity
 
@@ -688,7 +678,9 @@ Colours are only for the plain-language cards: green for good, amber for watch, 
 5. **One target per trade.** The engine reads target type only from the current, mutually exclusive list. A retired value (e.g. "Horizontal liquidity pool", which overlaps EQH/EQL, PDH/PDL and session levels) reads as unanswered; the integrity banner lists those trades, with links, to re-tag.
 6. **Does your filter filter?** Setup quality shows the spread of grades given before the outcome and of each checklist item. An item yes on more than 90% of 10+ trades is marked *not filtering*; every pre-graded trade on one letter is called out. Neither can be learned from.
 
-# The Flaw Deck (`/work`, tab "Work on", key F)
+# The Flaw Deck (now the Flaws board in Stats)
+
+> Since the dashboard (section 54), the deck has no page of its own: `/work` redirects to `/stats?board=flaws` and key F opens that board. Each flaw card, the active drill, Fix your data and lessons not yet learned are widgets; the table `flaw_work` and the drill chip on the trade form still feed them. The ranking and the learning loop below are unchanged. Where this section says "card", read "flaw widget"; the full-screen deck, its cookie and its reducer are gone.
 
 ## 49. What it is
 
@@ -745,3 +737,118 @@ Rates are shown per 10 trades: before (the 30 trades before you started) and sin
 1. **Mostly replay leads with the real result.** When more than half the trades in scope are backtests, the Stats hero shows the real-trade expectancy, with the blend as an amber footnote. "In one line" starts with "Mostly replay — on 9 real trades you make 0.21R a trade, too early to know".
 2. **The trial footer** reads "Rubric 4 trial: 30/30 reached · 43 logged, … — verdict on all 43 setups", never "43/30". The verdict uses every setup logged, not the first 30 (`lib/stats.ts trialLine`).
 3. **No experiment longer than 200 trades.** An experiment that would need more than 200 trades to tell the gap apart is not proposed (`MAX_TESTABLE` in `lib/edge/ruleLab.ts`). Focus and the Rule Lab say "No experiment is testable at your sample size yet" instead.
+
+# The Stats dashboard (`/stats`)
+
+## 54. Boards
+
+Stats is a set of boards, tabs across the top: **Overview** (the default, source Real), **Flaws**, **Execution**, **Behaviour**, **Backtest lab** (source Backtest), and any you make. Each board is a 12-column grid of tiles that fills the window.
+
+- **Source** (Real / Backtest / All) is per board and remembered. The filters (period, rubric, pre-graded only, blind re-grade) are shared by every widget on the board.
+- **Fit to screen** (on by default): the row height is computed so the whole board fits the window with no page scroll (`fitRows`). If a board holds more than fits, it scrolls and says so in a quiet line; turn Fit off or move widgets to another board.
+- The ⋯ menu: new board, rename (or double-click the tab), duplicate, move left/right, board settings, export as a file, import, reset a built-in board, delete (never the last one).
+
+Code: `app/stats/page.tsx` → `db/statsBoard.ts boardPage` (server) → `components/dashboard/stats/StatsBoard.tsx` (client).
+
+## 55. Widgets and sizes
+
+| Size | Columns × rows | Typical use |
+|---|---|---|
+| S | 3 × 2 | a KPI: number, caption, sparkline |
+| M | 6 × 2 | a wide chart |
+| T | 3 × 4 | a tall list |
+| L | 6 × 4 | a big chart, a full flaw card |
+| W | 12 × 1 | a strip (In one line) |
+| XL | 12 × 4 | full width |
+
+A widget is a definition in `lib/dashboard/catalog.ts` (registered in `lib/dashboard/registry.ts`): the sizes it supports, a pure **`select(view, cfg)`** that turns the engine's outputs into a small serializable view model (`lib/dashboard/vm.ts`), its help text, `minTrades`, and whether it **claims** (an expectancy, a cost, an effect). Selects run on the server; the browser only draws view models (`components/dashboard/stats/renderers.tsx`, one chart kit in `charts.tsx`). Each kind draws a different layout per size: a KPI at S is a number and a sparkline, at M it adds the chart.
+
+**Scopes.** A widget can override the board's source, period, or read only the last N trades; it then shows its scope as a chip. The engine (`db/statsEngine.ts`) runs once per distinct scope on a board, at most 4 (`MAX_SCOPES`); a fifth is refused with a message in the tile instead of slowing the board.
+
+**Too early.** Below `minTrades` settled trades in scope a widget shows its designed too-early state: a ghost of its chart, how many more trades it needs, and a link to log one. A widget whose select throws shows the error in its own tile; the board still draws.
+
+## 56. Stacks
+
+Any tile can hold several widgets of the same size: a stack. Dots on the right show where you are; hover a dot for its name.
+
+- **One widget per flick.** The wheel accumulates 60px of travel, switches once, then locks for 450ms (`lib/dashboard/stackGesture.ts`, tested), so a spinning wheel can't skip three.
+- **Lists scroll first.** Over a widget whose content scrolls, the wheel scrolls the content. Only a fresh flick at its top or bottom edge (after a 300ms pause) switches the stack. Over the dot rail the wheel always switches.
+- A stack shows only widgets with something to show (no empty "Flaw #5") outside edit mode.
+- ↗ opens the front widget large, at the biggest size it has.
+
+## 57. Smart Rotate
+
+Off by default, per stack (edit a widget in the stack → This stack → Smart Rotate). When Stats opens, the stack shows first the widget that needs you, and a "↻ first" chip says why on hover. It only chooses what is shown first; your order is never changed.
+
+The score is deterministic and tested (`lib/dashboard/attention.ts`). A widget raises at most one signal, from the engine's own outputs:
+
+| Signal | Raised by | Weight | Strength (0–9) |
+|---|---|---|---|
+| A rule broken today | Rules followed, Rule breaks | 40 | number of trades today that broke a rule |
+| A new flaw | each flaw widget | 30 | 9 if every hit is in your last 5 trades; 4 if it hit your latest trade |
+| A data problem | Data checks | 20 | 5 + bugs (a number is wrong); warnings 1–4; notes never |
+| A drill milestone | Active drill | 10 | 5 / 10 / 15 clean trades in a row, 9 when it graduates |
+
+Score = weight + strength. The highest score wins; a tie goes to the widget higher in the stack; when nothing scores, the stack keeps the widget you left in front. The weights make the order strict: something you did today outranks something the engine noticed, which outranks bookkeeping, at any strength. Widgets too early to draw raise nothing.
+
+## 58. Edit mode
+
+**Edit** → tiles get a soft outline. Then:
+
+- **Move:** drag a tile; it snaps to the grid and the others reflow up (vertical compaction). Row height is frozen while dragging so the grid can't move under the pointer.
+- **Resize:** drag the corner; it snaps to the widget's allowed sizes only.
+- **Stack:** drop a tile on the middle of another (the inner 22–78%). **Unstack:** select the tile and drag a chip out of the strip at its bottom.
+- **+ Add widget:** the gallery, searchable and grouped, each widget previewed over your own data. Click to put it in the first free spot, or drag it to a place.
+- **⚙ on a tile:** title, size, accent (palette or hex), chart style, number format, source / period / last N, density, corner radius, glass, glow, caption, help, n inline or in a tooltip, and the stack's order and Smart Rotate.
+- **Board:** theme, accent, background, fit, row height, gap, font scale, animations, colour-blind palette (blue good, orange bad), semantic colours.
+- **Undo / redo:** ↶ ↷, Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y, 100 steps (`lib/dashboard/history.ts`).
+- **Keyboard:** arrows move the selected tile, Shift+arrows resize, Delete removes (undoable), Esc deselects.
+
+Every layout change is a pure operation in `lib/dashboard/layout.ts` (move, resize, stack, unstack, reorder, add, remove, settle), each returning the new layout or a reason it was refused. Drag is plain pointer events (no drag library): the grid needs a frozen row height and one gesture that can move, stack or add, which a library would have had to be worked around for.
+
+## 59. Saved boards
+
+Table `dashboard_boards` (migration 043): id, name, position, `layout_json`, `settings_json`, `schema_version`, `updated_at`. Changes save 350ms after the last edit (`/api/stats-board`). The server repairs a layout the way a stored one is repaired, then refuses it if it still has a problem or names an unknown widget.
+
+**Never break a layout.** Every board read goes through `lib/dashboard/schema.ts migrateLayout`: a renamed widget follows `WIDGET_RENAMES`, a widget that no longer exists is dropped and named, overlapping or oversized tiles are repaired, and a board saved by a newer app opens read-only and is never saved over. Bump `LAYOUT_SCHEMA` and add a step when the shape changes.
+
+Boards are in the full export (version 23) and can be exported one at a time as a file and imported as a new board.
+
+## 60. What customization can't change
+
+1. A widget that mixes real and backtest trades always shows a **mixed** chip.
+2. n and the interval can move to a tooltip, never leave a number that claims.
+3. Semantic colours follow meaning whatever the accent; a better result from breaking a rule is never shown in the good colour.
+4. No widget suggests a trade or breaking a written rule.
+5. Evidence chips (Too early / Hint / Likely / Confirmed) show at every size.
+6. **In one line** leads with the real result when most trades in view are backtests; on a backtest-only scope it says "Backtests only … not a live result", its n is the trades it speaks about, and it is never in the good colour.
+
+## 61. Performance
+
+- Only the board on screen is computed, and only the front widget of a stack is drawn.
+- The engine runs once per distinct scope (section 55).
+- **Eval odds** runs its 10,000-path Monte Carlo in a Web Worker (`lib/edge/evalWorker.ts`, `components/stats/useEvalSims.ts`): the page never freezes, the last result stays dimmed while a new one runs, and where a worker can't start the same function runs inline with the same seed, so the numbers are identical.
+
+## 62. How to add a widget
+
+1. **Find the number in the engine.** If `db/statsEngine.ts` doesn't produce it, add it to `lib/edge/` with a test first. A widget never computes statistics.
+2. **Add the definition** in `lib/dashboard/catalog.ts`:
+
+```ts
+add({
+  id: 'my-widget', title: 'My widget', category: 'chart', kind: 'bars',
+  sizes: ['M', 'L'], defaultSize: 'M',
+  claims: true,            // it states an effect, cost or expectancy: n and the interval stay
+  minTrades: 10,           // below this, the too-early state
+  settings: { scope: true },
+  help: 'One plain paragraph: what it shows and how to read it.',
+  select: (v) => ({ kind: 'bars', items: [/* … */], claim: { n: v.settled.length, level: null } }),
+  // optional: attention: (v, today) => …   (Smart Rotate, lib/dashboard/attention.ts)
+});
+```
+
+3. **Use an existing kind** (`kpi`, `line`, `bars`, `heat`, `text`, `list`, `rings`, `flaw`, `drill`) if you can. A new look is a `custom` kind with a `view` name, drawn in `renderers.tsx` from the chart kit.
+4. **Test the select** in `tests/dashboard-catalog.test.mts`: it runs every widget on every default board over every source and checks no select throws, every view model serializes and every claim keeps its n.
+5. The gallery, the settings panel and saving pick it up by themselves. To ship it on a default board, add it to `lib/dashboard/defaults.ts`; boards already saved keep their own layout.
+6. Renaming a widget later: add `old-id → new-id` to `WIDGET_RENAMES`.
+

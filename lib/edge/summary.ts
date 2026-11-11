@@ -90,7 +90,8 @@ export function summarize(i: {
   const blendLead = edgeTone === 'good' ? 'Your edge looks real' : edgeTone === 'watch' ? 'You are slightly positive but it is not proven' : e == null ? 'Nothing to measure yet' : 'You are not profitable yet';
   const rm = i.replay?.real;
   const lead = !rm ? blendLead
-    : rm.expectancy == null ? 'Mostly replay, and no real trades settled yet'
+    // Nothing real in view (a backtest-only scope, or a journal of replays): say what it is, never that real trades are missing elsewhere.
+    : rm.expectancy == null ? (e == null ? 'Backtests only, nothing settled yet' : `Backtests only — in replay you ${e >= 0 ? 'make' : 'lose'} ${A(e)} a trade, not a live result`)
     : `Mostly replay — on ${rm.n} real trade${rm.n === 1 ? '' : 's'} you ${rm.expectancy >= 0 ? 'make' : 'lose'} ${A(rm.expectancy)} a trade${rm.n < 30 ? ', too early to know' : ''}`;
   const fix = leak ? `; fix first: ${points[1].headline.toLowerCase()}` : '';
   const need = !rm && e != null && e > 0 && more ? `; about ${more} more trades to be sure` : mat.toNext != null ? `; ${mat.toNext} more trades unlock the next tier` : '';

@@ -23,7 +23,9 @@ as an Electron desktop app) for one trader: NQ/MNQ, DodgysDD's iFVG model.
    based on a small sample (the Edge Engine's claim tiers decide what is
    Confirmed).
 8. **Design language.** Minimal, Apple-like, liquid glass, soft glowing borders,
-   spring animations. No new visual style.
+   spring animations. No new visual style. Per-widget and per-board customization
+   on the Stats dashboard changes design tokens only (accent, radius, glass,
+   density, glow, theme, font scale) — never the app's visual language.
 9. **Additive migrations only.** Never drop or rename columns. Old trades must
    open, edit and export unchanged. Bump the export `version`
    (`app/api/export/route.ts`) when fields change.
@@ -44,5 +46,15 @@ Also from earlier sessions:
 - Today's date is `localDay()` (lib/day.ts), never `toISOString().slice(0, 10)`.
 - Wall clock ↔ UTC/New York goes through `lib/traderZone.ts` (the computer's own zone). Tests pin UTC−6 (tests/setup.mts).
 - Rows from `node:sqlite` have a null prototype: copy them (`{ ...row }`) before passing to a client component.
-- The Stats page / `lib/edge/` (Edge Engine, `docs/edge-engine.md`) has its own plan;
-  report bugs there rather than redesigning it.
+- Stats is a board-based widget dashboard (`lib/dashboard/`, `components/dashboard/stats/`,
+  `db/statsBoard.ts`; see "Dashboard" in `docs/edge-engine.md`). Widgets are views over
+  `lib/edge/` — never put statistics in a widget. The engine (`lib/edge/`, `db/statsEngine.ts`)
+  is correct and tested: report bugs there rather than rewriting it.
+- New stats ship as widgets in the registry (`lib/dashboard/catalog.ts`), each with a pure,
+  tested `select` and a designed too-early state (`minTrades`).
+- Customization changes tokens, never the honesty rules: the "mixed" chip can't be hidden;
+  n and the interval can move to a tooltip but never leave a number that claims; semantic
+  colours follow meaning whatever the accent; evidence chips appear at every size; no widget
+  suggests a trade or breaking a written rule.
+- Saved boards are versioned (`LAYOUT_SCHEMA`, `lib/dashboard/schema.ts`): never break a
+  user's layout — migrate it (`WIDGET_RENAMES` for a renamed widget).

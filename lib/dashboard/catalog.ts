@@ -20,6 +20,7 @@ import { packRows } from '../edge/ruleLab';
 import { sourceOf } from '../edge/fields';
 import { DATA_GROUPS, fills } from '../edge/flaws';
 import { trialLine } from '../stats';
+import { drillMilestone, flawNews, integrityNews, ruleToday, type Attention } from './attention';
 import { TRIAL_RUBRIC } from '../rubric';
 import type { DeckFlaw } from '../../db/flaws';
 import type { FlawVM, ListRow } from './vm';
@@ -27,6 +28,7 @@ import type { FlawVM, ListRow } from './vm';
 /** What a select reads: the engine for its scope, plus the flaw deck (built only when asked). */
 export interface View extends StatsEngine { source: Source; deck: () => Deck; deckAll: () => Deck }
 type Sel = (v: View, cfg: import('./types').WidgetCfg) => ViewModel;
+type Att = (v: View, today: string) => Attention | null;
 
 export const R = (v: number | null | undefined, dp = 2) => (v == null || Number.isNaN(v) ? '—' : `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(dp)}R`);
 export const P = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v * 100)}%`);
@@ -35,8 +37,11 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : /(s|sh|ch|x)
 const LOG = { href: '/new', hrefLabel: 'Log a trade' };
 
 export const registry = new Registry();
-const add = (d: Omit<WidgetMeta<ViewModel>, 'select'> & { select: Sel }) =>
-  registry.add({ ...d, select: (e, cfg) => d.select(e as unknown as View, cfg) });
+const add = (d: Omit<WidgetMeta<ViewModel>, 'select' | 'attention'> & { select: Sel; attention?: Att }) => {
+  const att = d.attention;
+  return registry.add({ ...d, select: (e, cfg) => d.select(e as unknown as View, cfg), attention: att ? (e, today) => att(e as unknown as View, today) : undefined });
+};
+const ruleTodayOf: Att = (v, today) => ruleToday(v.settled, v.breaksOf, today);
 
 /** The expectancy's own verdict (the same test the hero uses). */
 function edgeLevel(v: View, m = v.metrics): VerdictLevel | null {
@@ -176,7 +181,7 @@ add({
 
 add({
   id: 'rules-followed', title: 'Rules followed', category: 'kpi', kind: 'kpi', sizes: ['S', 'M'], defaultSize: 'S', claims: true, minTrades: 1,
-  settings: { scope: true },
+  settings: { scope: true }, attention: ruleTodayOf,
   help: 'Trades with nothing broken in your rule book (trade and day rules, checked automatically and by you), and what each side made. Breaking a rule is never shown as the better side.',
   select: (v) => {
     const a = v.adh; const s = v.split;
@@ -371,7 +376,7 @@ add({
 
 add({
   id: 'rule-breaks', title: 'Rule breaks', category: 'chart', kind: 'custom', view: 'timeline', sizes: ['M', 'L'], defaultSize: 'M', minTrades: 1,
-  settings: { scope: true },
+  settings: { scope: true }, attention: ruleTodayOf,
   help: 'Each rule you broke over your last 30 trades, one dot per trade: filled where it was broken. Is it getting rarer?',
   select: (v) => {
     const last = v.settled.slice(-30);
@@ -458,8 +463,15 @@ add({
   help: 'Your edge, the one thing to fix first and what it takes to be sure, in one sentence. When most of the trades in view are backtests it leads with the real result, never the blend.',
   select: (v) => {
     const edge = v.summary.points.find((p) => p.id === 'edge');
-    return { kind: 'text', headline: v.summary.line, tone: edge?.tone ?? 'neutral',
-      claim: { n: (v.realMetrics ?? v.metrics).n, level: edgeLevel(v, v.realMetrics ?? v.metrics) } };
+    // The colour follows what the sentence leads with: the real result when most trades are replays, and a replay
+    // result alone is never "good" (it is not money made).
+    const rm = v.realMetrics;
+    const tone: Tone = !rm ? (edge?.tone ?? 'neutral') as Tone
+      : rm.expectancy == null ? ((edge?.tone === 'bad' ? 'bad' : 'watch') as Tone)
+        : rm.expectancy < 0 ? 'bad' : edgeLevel(v, rm) === 'likely' || edgeLevel(v, rm) === 'confirmed' ? 'good' : 'watch';
+    // n is the sample the sentence speaks about: the real trades when it leads with them, else every trade in view.
+    const cm = rm && rm.n > 0 ? rm : v.metrics;
+    return { kind: 'text', headline: v.summary.line, tone, claim: { n: cm.n, level: edgeLevel(v, cm) } };
   },
 });
 
@@ -493,7 +505,7 @@ add({
 
 add({
   id: 'integrity', title: 'Data checks', category: 'insight', kind: 'list', sizes: ['S', 'M', 'T'], defaultSize: 'S', minTrades: 0,
-  settings: { scope: true },
+  settings: { scope: true }, attention: (v) => integrityNews(v.issues),
   help: 'Anything in your data that would make a number wrong: hindsight grades, trades with no R, retired fields. Each with links to fix.',
   select: (v) => ({ kind: 'list', empty: 'Nothing in your data that would make a number wrong.',
     rows: v.issues.map((i) => ({ key: i.id, title: i.text, tone: (i.tone === 'bug' ? 'bad' : i.tone === 'warn' ? 'watch' : 'neutral') as Tone, href: i.links?.[0]?.href })) }),
@@ -542,11 +554,12 @@ for (let k = 1; k <= 5; k++) add({
   settings: {},
   help: 'One of the few things costing you most, ranked by how sure the engine is × what it costs each time × how often it happened in your last 20 trades. Its drill is yours to rewrite; "Work on this" makes it the one drill you track.',
   select: (v) => { const d = v.deck(); const f = d.flaws[k - 1]; return f ? flawVM(v, d, f, k - 1) : { kind: 'none' }; },
+  attention: (v) => flawNews(v.deck().flaws[k - 1], v.settled.map((t) => t.id)),
 });
 
 add({
   id: 'active-drill', title: 'Active drill', category: 'flaw', kind: 'drill', sizes: ['S', 'M', 'L'], defaultSize: 'M', minTrades: 0,
-  settings: {},
+  settings: {}, attention: (v) => drillMilestone(v.deck().active?.progress),
   help: 'The one drill you are working on: how often the flaw happened before and since, how often you kept the drill, and how close it is to graduating (20 clean trades in a row, drill kept on 90%).',
   select: (v) => {
     const a = v.deck().active;

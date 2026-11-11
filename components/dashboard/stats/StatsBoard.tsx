@@ -8,7 +8,7 @@ import type { BoardLayout, SizeKey, Source, Tile as TileT, WidgetCfg } from '@/l
 import { SIZES } from '@/lib/dashboard/types';
 import {
   addWidget, fitRows, moveTile, nudge, removeTile, removeWidget, reorderStack, resizeTile, rowsUsed, snapSize, stackOnto, stepSize,
-  tileSizes, unstack, updateWidget, type Result,
+  setTile, tileSizes, unstack, updateWidget, type Result,
 } from '@/lib/dashboard/layout';
 import { PERIODS } from '@/lib/statsScope';
 import { THEMES } from '@/lib/themes';
@@ -57,6 +57,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
   const s = ed.snap.settings;
   const reduce = prefs.reduceMotion || s.animations !== 'full';
   const gridBox = useRef<HTMLDivElement>(null);
+  const names = useMemo(() => Object.fromEntries(Object.values(page.widgets).map((w) => [w.id, w.title])), [page.widgets]);
   // The side panels start under the header, however many lines its tabs and toolbar wrap to.
   const head = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -361,6 +362,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
         <div ref={grid} className="grid" style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gridAutoRows: `${rowH}px`, gap: s.gap, minHeight: editing ? '100%' : undefined }}>
           {layout.tiles.map((t, i) => (
             <Tile key={t.id} tile={t} widgets={page.widgets} states={page.states} reduce={reduce} index={i}
+              rotate={page.rotate[t.id] && t.items[page.rotate[t.id].index] ? { uid: t.items[page.rotate[t.id].index].uid, reason: page.rotate[t.id].reason } : undefined}
               edit={editing ? {
                 selected: selected === t.id, dragging: (drag?.kind === 'move' || drag?.kind === 'resize') && drag.id === t.id,
                 stackTarget: drag?.kind === 'move' && drag.stackOn === t.id,
@@ -392,7 +394,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
       <Gallery open={editing && panel === 'gallery'} onClose={() => setPanel(null)} widgets={page.widgets} previews={previews} onAdd={(w) => addAt(w, null)} onDragStart={startAdd} />
       <WidgetSettings open={editing && panel === 'widget'} onClose={() => setPanel(null)} tile={selTile} item={selItem} info={selItem ? page.widgets[selItem.widget] ?? null : null}
         schema={selItem ? page.widgets[selItem.widget]?.settings ?? null : null} sizes={selTile ? tileSizes(selTile, supports) : []}
-        onCfg={onCfg} onSize={(sz) => selTile && ed.apply((l) => resizeTile(l, selTile.id, sz, supports))} onStack={onStack} />
+        onCfg={onCfg} onSize={(sz) => selTile && ed.apply((l) => resizeTile(l, selTile.id, sz, supports))} onStack={onStack}
+        onRotate={(on) => selTile && ed.apply((l) => setTile(l, selTile.id, { smartRotate: on }), { refresh: on })} names={names} />
       <BoardSettingsPanel open={editing && panel === 'board'} onClose={() => setPanel(null)} s={s} onChange={ed.setSettings} />
     </div>
   );

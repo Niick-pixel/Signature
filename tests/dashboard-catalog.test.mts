@@ -90,3 +90,33 @@ test('drawdown reads as a fall (negative R), and "loss" pluralises', () => {
   const losses = p.states['ex-losses.0'].vm;
   if (losses.kind === 'list' && losses.summary) assert.doesNotMatch(losses.summary, /losss/);
 });
+
+test('Smart Rotate: a stack with it on gets a front pick from its widgets; one with it off gets none', async () => {
+  const { getBoard, saveBoard } = await import('../db/dashboards');
+  const { catalog } = await import('../db/statsBoard');
+  const b = getBoard('overview', catalog)!;
+  const stacks = b.layout.tiles.filter((t) => t.items.length > 1);
+  const on = stacks[0];
+  saveBoard({ ...b, layout: { ...b.layout, tiles: b.layout.tiles.map((t) => (t.id === on.id ? { ...t, smartRotate: true } : t)) } });
+  const p = boardPage({ board: 'overview' });
+  assert.ok(p.rotate[on.id], 'rotated');
+  assert.ok(p.rotate[on.id].index >= 0 && p.rotate[on.id].index < on.items.length);
+  for (const t of stacks.slice(1)) assert.equal(p.rotate[t.id], undefined, t.id);
+  // Every widget that can raise a signal does so without throwing, over every source.
+  for (const src of ['real', 'backtest', 'all']) {
+    const page = boardPage({ board: 'flaws', src });
+    assert.doesNotThrow(() => JSON.stringify(page.rotate));
+  }
+  saveBoard(b);
+});
+
+test('§9: the verdict leads with the real result on a replay-heavy All, and on a Backtest board says it is replay', () => {
+  const verdictOf = (src: string) => Object.values(boardPage({ board: 'overview', src }).states).find((s) => s.title === 'In one line')!.vm as Extract<VM, { kind: 'text' }>;
+  const all = verdictOf('all');
+  assert.match(all.headline, /^Mostly replay — on \d+ real trades/);
+  const bt = verdictOf('backtest');
+  assert.match(bt.headline, /^Backtests only/);
+  assert.doesNotMatch(bt.headline, /no real trades/);
+  assert.ok((bt.claim?.n ?? 0) > 0, 'n is the trades the sentence is about');
+  assert.notEqual(bt.tone, 'good', 'a replay result is never shown as money made');
+});

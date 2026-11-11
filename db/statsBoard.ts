@@ -12,6 +12,8 @@ import type { Kind, TooEarly, ViewModel } from '../lib/dashboard/vm';
 import { accountsInUse } from '../lib/stats';
 import { BACKTEST, countsInStats, isReal } from '../lib/domain';
 import { sourceOf } from '../lib/edge/fields';
+import { pickFront, type Attention } from '../lib/dashboard/attention';
+import { localDay } from '../lib/day';
 
 /**
  * Everything the Stats board needs, built on the server: the boards, the one
@@ -34,6 +36,8 @@ export interface BoardPage {
   filters: Record<string, string>;
   widgets: Record<string, WidgetInfo>;
   states: Record<string, WidgetState>;
+  /** Smart Rotate: per tile that has it on, the widget shown first and why (null: nothing needed you). */
+  rotate: Record<string, { index: number; reason: string | null }>;
   /** Real / backtest trades that exist at all, for the source toggle. */
   has: { real: boolean; backtest: boolean };
 }
@@ -79,7 +83,7 @@ function makeViews(filters: Record<string, string>) {
 
 /** One widget's state over its scope: the too-early gate, its select, or the error in its own tile. */
 function widgetState(def: WidgetMeta, itCfg: import('../lib/dashboard/types').WidgetCfg, boardScope: { source: Source; period: string },
-  viewFor: ReturnType<typeof makeViews>['viewFor'], has: { real: boolean; backtest: boolean }): WidgetState {
+  viewFor: ReturnType<typeof makeViews>['viewFor'], has: { real: boolean; backtest: boolean }, today?: string): WidgetState & { attention?: Attention | null } {
   const cfg = withDefaults(def, itCfg);
   const scope = scopeFor(boardScope, cfg, def.settings.scope === true, () => false);
   const view = viewFor(scope.source, scope.period === 'all' ? undefined : scope.period, scope.lastN);
@@ -96,7 +100,12 @@ function widgetState(def: WidgetMeta, itCfg: import('../lib/dashboard/types').Wi
       vm = early(def, { text: `This widget could not be drawn: ${(e as Error).message}` });
     }
   }
-  return { vm, title: cfg.title || def.title, scope: scope.override, mixed };
+  // Asked only for a tile with Smart Rotate on; a widget too early to draw has nothing to say.
+  let attention: Attention | null = null;
+  if (today && view && def.attention && vm.kind !== 'none' && !vm.tooEarly) {
+    try { attention = def.attention(view as never, today); } catch { attention = null; }
+  }
+  return { vm, title: cfg.title || def.title, scope: scope.override, mixed, ...(today ? { attention } : {}) };
 }
 
 /** Every widget in the catalog over the board's scope: the gallery's live previews. */
@@ -121,16 +130,24 @@ export function boardPage(params: StatsParams): BoardPage {
 
   const { viewFor, has } = makeViews(filters);
   const states: Record<string, WidgetState> = {};
+  const rotate: BoardPage['rotate'] = {};
   const boardScope = { source, period: filters.period ?? 'all' };
+  const today = localDay();
   for (const t of board.layout.tiles as Tile[]) {
+    const smart = t.smartRotate && t.items.length > 1;
+    const attn: Array<Attention | null> = [];
     for (const it of t.items) {
       const def = registry.get(it.widget);
-      if (def) states[it.uid] = widgetState(def, it.cfg, boardScope, viewFor, has);
+      if (!def) { attn.push(null); continue; }
+      const { attention, ...st } = widgetState(def, it.cfg, boardScope, viewFor, has, smart ? today : undefined);
+      states[it.uid] = st;
+      attn.push(attention ?? null);
     }
+    if (smart) rotate[t.id] = pickFront(attn, t.active);
   }
 
   const widgets = Object.fromEntries(registry.all().map((d) => [d.id, {
     id: d.id, title: d.title, help: d.help, kind: d.kind, view: d.view, sizes: d.sizes, category: d.category, claims: !!d.claims, settings: d.settings, defaultSize: d.defaultSize,
   }]));
-  return { boards: boards.map((b) => ({ id: b.id, name: b.name })), board, source, filters, widgets, states, has };
+  return { boards: boards.map((b) => ({ id: b.id, name: b.name })), board, source, filters, widgets, states, rotate, has };
 }

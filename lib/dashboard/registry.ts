@@ -44,6 +44,8 @@ export interface Scope {
 /** The engine's result for a widget to read (db/statsEngine). Typed loosely here; each select narrows it. */
 export type EngineView = Record<string, unknown>;
 
+import type { Attention } from './attention';
+
 export interface WidgetMeta<VM = unknown> {
   id: string;
   title: string;
@@ -62,6 +64,8 @@ export interface WidgetMeta<VM = unknown> {
   minTrades?: number;
   /** Expensive (Monte Carlo, resampling): computed only when it is in front of its stack or next. */
   lazy?: boolean;
+  /** Smart Rotate: what this widget has to say for itself when the page opens (lib/dashboard/attention). Pure. */
+  attention?: (engine: EngineView, today: string) => Attention | null;
   /** Whether the result makes a claim (an effect, a cost, an expectancy): n and the interval can't be removed. */
   claims?: boolean;
 }

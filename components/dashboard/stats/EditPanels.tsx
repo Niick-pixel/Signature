@@ -140,12 +140,15 @@ export function Gallery({ open, onClose, widgets, previews, onAdd, onDragStart }
 
 /* ───────────────────────── one widget's settings ───────────────────────── */
 
-export function WidgetSettings({ open, onClose, tile, item, info, schema, sizes, onCfg, onSize, onStack }: {
+export function WidgetSettings({ open, onClose, tile, item, info, schema, sizes, onCfg, onSize, onStack, onRotate, names = {} }: {
   open: boolean; onClose: () => void; tile: Tile | null; item: WidgetInstance | null; info: WidgetInfo | null;
   schema: { chartStyles?: readonly string[]; numberFormats?: readonly string[]; scope?: boolean; fields?: ReadonlyArray<{ key: string; label: string; kind: string; options?: ReadonlyArray<{ value: string; label: string }>; min?: number; max?: number; step?: number; default: unknown }> } | null;
   sizes: SizeKey[];
   onCfg: (patch: WidgetCfg, refresh: boolean) => void; onSize: (s: SizeKey) => void;
   onStack: (op: 'up' | 'down' | 'out' | 'remove', uid: string) => void;
+  onRotate?: (on: boolean) => void;
+  /** Each widget's name, for the stack list. */
+  names?: Record<string, string>;
 }) {
   const [title, setTitle] = useState(item?.cfg.title ?? '');
   const last = useRef(item?.uid);
@@ -204,7 +207,7 @@ export function WidgetSettings({ open, onClose, tile, item, info, schema, sizes,
           <ul className="flex flex-col gap-1" data-stack-items>
             {tile.items.map((it, i) => (
               <li key={it.uid} className="flex items-center gap-1 rounded-[10px] px-2 py-1 text-[12.5px]" style={{ background: it.uid === item.uid ? 'rgb(var(--accent) / 0.1)' : 'var(--glass-fill)' }}>
-                <span className="min-w-0 flex-1 truncate">{it.cfg.title || it.widget}</span>
+                <span className="min-w-0 flex-1 truncate">{it.cfg.title || names[it.widget] || it.widget}</span>
                 <button type="button" disabled={i === 0} onClick={() => onStack('up', it.uid)} aria-label="Move up" className="px-1 disabled:opacity-30">↑</button>
                 <button type="button" disabled={i === tile.items.length - 1} onClick={() => onStack('down', it.uid)} aria-label="Move down" className="px-1 disabled:opacity-30">↓</button>
                 <button type="button" onClick={() => onStack('out', it.uid)} className="px-1 text-[11.5px]" title="Take it out of the stack, into its own tile">Take out</button>
@@ -212,6 +215,14 @@ export function WidgetSettings({ open, onClose, tile, item, info, schema, sizes,
               </li>
             ))}
           </ul>
+          {onRotate && (
+            <div className="mt-2" data-smart-rotate>
+              <Toggle label="Smart Rotate" on={tile.smartRotate} onChange={onRotate} />
+              <p className="mt-1 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+                When Stats opens, show first the widget that needs you: a rule broken today, a new flaw, a data problem, a drill milestone. Otherwise the one you left in front. Your order is kept.
+              </p>
+            </div>
+          )}
         </Row>
       )}
     </Drawer>

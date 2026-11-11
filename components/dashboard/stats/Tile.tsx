@@ -46,12 +46,17 @@ export interface TileEdit {
 
 const PENDING: WidgetState = { vm: { kind: 'text', headline: 'Drawing…', tone: 'neutral' }, title: '', scope: null, mixed: false };
 
-export function Tile({ tile, widgets, states, reduce, index, edit }: {
+export function Tile({ tile, widgets, states, reduce, index, edit, rotate }: {
   tile: TileT; widgets: Record<string, WidgetInfo>; states: Record<string, WidgetState>; reduce: boolean; index: number; edit?: TileEdit;
+  /** Smart Rotate's pick for when the page opens (lib/dashboard/attention): which widget, and why. */
+  rotate?: { uid: string; reason: string | null };
 }) {
   // A stack shows only the widgets that have something to show (no empty "Flaw #5") — except while editing, when every one is there to move.
   const items = useMemo(() => tile.items.filter((i) => edit || (states[i.uid] && states[i.uid].vm.kind !== 'none')), [tile.items, states, edit]);
-  const [s, dispatch] = useReducer(stackReducer, null, () => initialStack(items.length, Math.min(tile.active, Math.max(0, items.length - 1))));
+  const [s, dispatch] = useReducer(stackReducer, null, () => {
+    const picked = rotate ? items.findIndex((i) => i.uid === rotate.uid) : -1;
+    return initialStack(items.length, picked >= 0 ? picked : Math.min(tile.active, Math.max(0, items.length - 1)));
+  });
   const sRef = useRef<StackState>(s);
   useEffect(() => { sRef.current = s; }, [s]);
   useEffect(() => { dispatch({ type: 'count', count: items.length }); }, [items.length]);
@@ -91,6 +96,7 @@ export function Tile({ tile, widgets, states, reduce, index, edit }: {
     <div className="flex min-w-0 items-center gap-1.5">
       <span className={`min-w-0 truncate font-semibold ${big ? 'text-[15px]' : 'text-[11.5px] uppercase tracking-[0.06em]'}`} style={{ color: big ? 'var(--text)' : 'var(--text-dim)' }} data-tile-title>{title}</span>
       {st.scope && <Chip text={st.scope} style={{ borderColor: 'rgb(var(--accent) / 0.4)', color: 'rgb(var(--accent))' }} title="This widget reads its own scope, not the board's" />}
+      {rotate?.reason && front?.uid === rotate.uid && !edit && <Chip text="↻ first" style={{ borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' }} title={`Smart Rotate put this in front: ${rotate.reason}`} />}
       {st.mixed && <Chip text="mixed" style={{ borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }} title="Real and backtest trades are counted together here: read it as a blend, not a live result" />}
       {level && !vm.tooEarly && <Chip text={VERDICT_LABEL[level]} style={CHIP[level]} title="How sure the engine is" />}
       {tile.size === 'W' && claim && !vm.tooEarly && cfg.stats !== 'tooltip' && <span className="shrink-0 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{claimText(claim)}</span>}
