@@ -780,6 +780,10 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
 /* The tab strip scrolls sideways on narrow windows, without a scrollbar. */
 header nav[data-tabs]::-webkit-scrollbar { display: none; }
 
+/* Electron hands a click in a drag region to the window, even when another
+   element is drawn on top of it: whatever floats over one opts out. */
+[data-no-drag], [data-no-drag] *, [role='dialog'], [role='dialog'] *, [role='listbox'] { -webkit-app-region: no-drag; }
+
 .titlebar-drag button,
 .titlebar-drag a,
 .titlebar-drag input,

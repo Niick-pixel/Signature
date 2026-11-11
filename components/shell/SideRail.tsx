@@ -40,10 +40,12 @@ export function SideRail() {
   const tabs = TABS.filter((t) => (t.href !== '/prop' || prefs.propTab) && (t.href !== '/study' || prefs.studyTab));
 
   return (
-    <aside className="titlebar-drag fixed inset-y-0 left-0 z-30 flex flex-col border-r" data-side-rail={labels ? 'labels' : 'icons'}
+    <aside className="fixed inset-y-0 left-0 z-30 flex flex-col border-r" data-side-rail={labels ? 'labels' : 'icons'}
       style={{ width: 'var(--rail-w)', borderColor: 'var(--glass-stroke)', background: 'color-mix(in srgb, var(--bg-raised) 72%, transparent)', backdropFilter: 'blur(18px)', paddingTop: mac ? 38 : 10 }}>
-      {/* The mark, where the wordmark sat in the title bar. */}
-      <div className={`flex h-9 items-center ${labels ? 'px-4' : 'justify-center'}`} data-rail-mark>
+      {/* The mark, where the wordmark sat in the title bar. Only this strip
+          moves the window: a drag region over the whole rail swallows clicks
+          on anything drawn above it (the theme and settings buttons). */}
+      <div className={`titlebar-drag flex h-9 items-center ${labels ? 'px-4' : 'justify-center'}`} data-rail-mark>
         <Wordmark markOnly={!labels} />
       </div>
       <nav className="mt-4 flex flex-col gap-1 px-2" aria-label="Tabs" data-rail-tabs>

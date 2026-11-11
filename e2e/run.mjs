@@ -76,6 +76,43 @@ for (const nav of ['side', 'top']) {
   });
 }
 
+/*
+  The desktop app's window moves by its drag regions, and Electron gives a
+  click inside one to the window even when a button is drawn over it. A
+  browser ignores them, so this is the only place that would notice.
+*/
+const undraggable = () => {
+  const drag = []; const free = [];
+  for (const el of document.querySelectorAll('*')) {
+    const v = getComputedStyle(el).getPropertyValue('app-region');
+    if (v === 'drag') drag.push(el.getBoundingClientRect()); else if (v === 'no-drag') free.push(el.getBoundingClientRect());
+  }
+  const inside = (r, x, y) => r.width && r.height && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  const out = [];
+  for (const el of document.querySelectorAll('button, a[href], [role="button"], input, select, textarea')) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') continue;
+    const x = r.left + r.width / 2; const y = r.top + r.height / 2;
+    if (document.elementFromPoint(x, y) !== el && !el.contains(document.elementFromPoint(x, y))) continue;
+    if (drag.some((d) => inside(d, x, y)) && !free.some((f) => inside(f, x, y))) out.push(el.getAttribute('aria-label') || el.textContent.trim().slice(0, 30) || el.tagName);
+  }
+  return out;
+};
+for (const nav of ['side', 'top']) {
+  await check(`${nav === 'side' ? 'side rail' : 'top tabs'}: no button sits in a window-drag region (the desktop app would swallow its clicks)`, async () => {
+    const { page } = await open({ width: 1280, height: 720 }, { nav });
+    const bad = [];
+    for (const u of ['/dashboard', '/stats', '/calendar', '/journal', '/study']) {
+      await page.goto(`${BASE}${u}`); await page.waitForTimeout(600);
+      bad.push(...(await page.evaluate(undraggable)).map((b) => `${u}: ${b}`));
+    }
+    await page.click('[aria-label="Settings"]'); await page.waitForTimeout(500);
+    bad.push(...(await page.evaluate(undraggable)).map((b) => `settings open: ${b}`));
+    await page.context().close();
+    expect(!bad.length, bad.slice(0, 8).join(' | '));
+  });
+}
+
 await check('side rail: every screen has one 44px title bar, its header inside it, nothing spilling out', async () => {
   const { page } = await open({ width: 1280, height: 720 }, { nav: 'side' });
   for (const u of ['/dashboard', '/stats', '/calendar', '/journal', '/path', '/study', '/goals', '/trash']) {

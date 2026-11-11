@@ -651,7 +651,7 @@ export function BottomLeftControls({ children }: { children: React.ReactNode }) 
   }, []);
 
   return (
-    <div className="fixed bottom-4 left-4 z-30 flex flex-col items-start gap-2">
+    <div className="fixed bottom-4 left-4 z-30 flex flex-col items-start gap-2" data-no-drag>
       <SettingsPanel open={open} onClose={() => setOpen(false)} />
       {children}
       <motion.button
