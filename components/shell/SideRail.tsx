@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -27,12 +27,14 @@ const ICON: Record<string, React.ReactNode> = {
   '/study': <><path d="M2.8 7.5 10 4l7.2 3.5L10 11 2.8 7.5Z" /><path d="M5.5 9v3.8c1.2 1.3 2.7 1.9 4.5 1.9s3.3-.6 4.5-1.9V9M17.2 7.5v4" /></>,
 };
 
+const noop = () => () => {};
+
 export function SideRail() {
   const { prefs, update } = usePreferences();
   const pathname = usePathname();
   const router = useRouter();
-  const [mac, setMac] = useState(false);
-  useEffect(() => { setMac(window.signature?.platform === 'darwin'); }, []);
+  // macOS draws its traffic lights over the rail's top: known only in the browser (false on the server, then the real answer).
+  const mac = useSyncExternalStore(noop, () => window.signature?.platform === 'darwin', () => false);
   if (prefs.nav !== 'side') return null;
   const labels = prefs.railLabels;
   const tabs = TABS.filter((t) => (t.href !== '/prop' || prefs.propTab) && (t.href !== '/study' || prefs.studyTab));
