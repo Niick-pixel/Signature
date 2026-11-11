@@ -24,7 +24,7 @@ import { History } from './History';
 import { TradeGallery, type GalleryShot } from './TradeGallery';
 import { ShotGallery } from './ShotGallery';
 import { tradeWhen } from '@/lib/when';
-import { accountLabel } from '@/lib/domain';
+import { outcomeLabel, accountLabel } from '@/lib/domain';
 import { PLAN_LABEL, planDay, planMatch, type PlanMatch } from '@/lib/planMatch';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -593,7 +593,7 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                         exit={{ opacity: 0, transition: exitQuick }} transition={spring} className="flex flex-1 flex-wrap items-center gap-3">
                         <span className="tabular-nums text-[13px] font-semibold"
                           style={{ color: `rgb(${OUTCOME_COLOR[trade.outcome]})` }}>
-                          {trade.outcome}
+                          {outcomeLabel(trade)}
                           {trade.r_multiple != null && ` · ${trade.r_multiple > 0 ? '+' : ''}${trade.r_multiple.toFixed(1)}R`}
                         </span>
                         <Button onClick={() => setSettling(true)}>Settle outcome</Button>

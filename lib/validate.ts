@@ -382,6 +382,8 @@ export function parseTradeInput(
       // The Flaw Deck (042): the active drill, and whether it was kept. A key left out keeps the stored value.
       drill_key: keep('drill_key', typeof t.drill_key === 'string' && t.drill_key.trim() ? t.drill_key.trim().slice(0, 80) : null),
       drill_kept: keep('drill_kept', oneOf('drill_kept', ['kept', 'broken', 'n/a'] as const)),
+      // A partial win (044) is a kind of win: on any other outcome it is cleared.
+      partial_win: outcome === 'Win' ? keep('partial_win', t.partial_win === true ? true : t.partial_win === false ? false : null) : null,
   };
 
   /*

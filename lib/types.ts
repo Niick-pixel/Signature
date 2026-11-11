@@ -257,6 +257,8 @@ export interface Trade {
   drill_key: string | null;
   /** Whether that drill was kept on this trade. Asked, never pre-filled. */
   drill_kept: 'kept' | 'broken' | 'n/a' | null;
+  /** A win where only part of the position reached the target (044). Null unless the outcome is a win. */
+  partial_win: boolean | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */

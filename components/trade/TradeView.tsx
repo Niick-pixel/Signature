@@ -10,7 +10,7 @@ import { OPEN_TRADE_KEY } from '@/components/stats/OpenOnBoard';
 import { ShotGallery } from '@/components/whiteboard/ShotGallery';
 import { EntryLine } from './EntryLine';
 import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
-import { CONTEXT_FLAG_LIST, SWEEP_TIER_SPEC, accountLabel } from '@/lib/domain';
+import { outcomeLabel, CONTEXT_FLAG_LIST, SWEEP_TIER_SPEC, accountLabel } from '@/lib/domain';
 import { PLAN_LABEL, type PlanMatch } from '@/lib/planMatch';
 import { tradeWhen } from '@/lib/when';
 import { navigate } from '@/lib/nav';
@@ -98,7 +98,7 @@ export function TradeView(p: TradeViewProps) {
           </h1>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Chip>{accountLabel(t.account)}{t.account_label ? ` · ${t.account_label}` : ''}</Chip>
-            <Chip color={outcomeColor}>{t.outcome}</Chip>
+            <Chip color={outcomeColor}>{outcomeLabel(t)}</Chip>
             <Chip>Grade {t.grade_letter}{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
             <Chip>{t.session}</Chip>
             {t.status !== 'Settled' && <Chip>{t.status}</Chip>}

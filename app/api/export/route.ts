@@ -58,6 +58,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'opposing_htf_gap', 'stop_placement',
   // The Flaw Deck (042).
   'drill_key', 'drill_kept',
+  // A partial win (044).
+  'partial_win',
 ];
 
 function csvCell(v: unknown): string {
@@ -166,7 +168,8 @@ export async function GET() {
     // 20: each news event's forecast and previous figures (041).
     // 21: the Flaw Deck — drills worked on (flaw_work, flaw_drills) and each trade's drill (042).
     // 22: the Stats dashboard's boards (043, a raw table).
-    version: 22,
+    // 23: whether a win was partial (044).
+    version: 23,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,

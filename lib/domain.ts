@@ -479,6 +479,10 @@ export const ACCOUNTS: readonly Account[] = ['Demo', 'Live', 'Eval', 'Funded', B
 
 /** How an account reads on screen. */
 export const accountLabel = (account: string): string => (account === BACKTEST ? 'Backtest' : account);
+
+/** How a trade's outcome reads on screen: a partial win (044) says so; "Not taken" reads "Passed". */
+export const outcomeLabel = (t: { outcome: string; partial_win?: boolean | null }): string =>
+  (t.outcome === 'Win' && t.partial_win ? 'Partial win' : t.outcome === 'Not taken' ? 'Passed' : t.outcome);
 export const isBacktest = (account: string | null | undefined): boolean => account === BACKTEST;
 
 /**

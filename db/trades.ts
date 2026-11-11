@@ -64,6 +64,8 @@ const NULLABLE_BOOL_COLUMNS = [
   'target_check_passed', 'below_min_confidence', 'written_before_outcome',
   // Edge Engine (036): unanswered is not "no".
   'cisd', 'into_eq_pool',
+  // 044: which kind of win. Unanswered (and every non-win) is NULL, never "no".
+  'partial_win',
 ] as const;
 
 function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade {
@@ -183,6 +185,7 @@ const WRITABLE = [
   'opposing_htf_gap', 'stop_placement',
   // The Flaw Deck (042).
   'drill_key', 'drill_kept',
+  'partial_win',
 ] as const;
 
 /**

@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Collapse } from '@/components/ui/Collapse';
 import {
   ACCOUNT_VALUES, BACKTEST, BACKTEST_REASON, accountLabel as accountName, SHOT_SLOTS, accountOptions, isBacktest, isHypothetical, CHECKLIST_KEYS, CONTEXT_FLAGS, WORKED_TAGS, MISTAKE_TAGS, tagOptions, type WorkedTag, MARKET_TAGS, type MarketTag, DIRECTIONS, HTF_BIASES, INSTRUMENTS,
-  OUTCOMES, PREMIUM_DISCOUNTS, REASONS, SESSIONS, SETUP_TYPES,
+  PREMIUM_DISCOUNTS, REASONS, SESSIONS, SETUP_TYPES,
   SKIP_REASONS, TRADE_STATUSES, TARGET_WHY, WEAK_TARGET, WEAK_TARGET_WARNING, targetTypeOptions,
   type Account, type ChecklistAnswer, type ChecklistKey, type ContextFlag,
   type Direction, type HtfBias,
@@ -102,6 +102,9 @@ type FormProps = {
  * one in place — no navigation, no board rebuild — carrying only the
  * session's context (lib/backtestSession).
  */
+/** How did it end: the outcomes, with a partial win beside a full one (stored as a Win, 044). */
+const HOW_IT_ENDED = ['Win', 'Partial win', 'Loss', 'Breakeven', 'Scratched', 'Not taken'] as const;
+
 export function NewTradeForm(props: FormProps) {
   const [n, setN] = useState(0);
   return <TradeForm key={n} {...props} onNext={() => setN((x) => x + 1)} />;
@@ -329,6 +332,8 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   const [premiumDiscount, setPremiumDiscount] = useState<PremiumDiscount>(trade?.premium_discount ?? 'Discount');
   const [targetType, setTargetType] = useState<TargetType>(trade?.target_type ?? 'EQH/EQL');
   const [outcome, setOutcome] = useState<Outcome>(trade?.outcome ?? 'Win');
+  // A partial win (044) is stored as a Win with partial_win set, so every count of wins still counts it.
+  const [partialWin, setPartialWin] = useState<boolean>(trade?.partial_win === true);
   const [contracts, setContracts] = useState(trade?.contracts?.toString() ?? '');
   const [stopPoints, setStopPoints] = useState(trade?.stop_points?.toString() ?? '');
   const [rMultiple, setRMultiple] = useState(trade?.r_multiple?.toString() ?? '');
@@ -363,7 +368,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   */
   const draftValues = useMemo(() => ({
     date, undated, instrument, direction, session, reason, setupType, htfBias,
-    premiumDiscount, targetType, outcome, explanation, lesson,
+    premiumDiscount, targetType, outcome, partialWin, explanation, lesson,
     context, sweepLevel, futuresConfirmed, htfDelivery, mistakeTags, workedTags, marketTags, account, accountLabel, status,
     contracts, pnlDollars, stopPoints, rMultiple,
     reached1R, wouldBeR, confirmed,
@@ -371,7 +376,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   }), [
     undated,
     date, instrument, direction, session, reason, setupType, htfBias,
-    premiumDiscount, targetType, outcome, explanation, lesson,
+    premiumDiscount, targetType, outcome, partialWin, explanation, lesson,
     context, sweepLevel, futuresConfirmed, htfDelivery, mistakeTags, workedTags, marketTags, account, accountLabel, status,
     contracts, pnlDollars, stopPoints, rMultiple,
     reached1R, wouldBeR, confirmed,
@@ -420,6 +425,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
     if (has('premiumDiscount')) setPremiumDiscount(v.premiumDiscount);
     if (has('targetType')) setTargetType(v.targetType);
     if (has('outcome')) setOutcome(v.outcome);
+    if (has('partialWin')) setPartialWin(v.partialWin === true);
     if (has('mistakeTags')) setMistakeTags(v.mistakeTags);
     if (has('workedTags')) setWorkedTags(v.workedTags);
     if (has('marketTags')) setMarketTags(v.marketTags);
@@ -676,6 +682,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       // Rubric 1's box. The server derives it from the tier when there is one;
       // an old trade that never answered the tier keeps what it had.
       chk_sweep: trade?.chk_sweep ?? null,
+      partial_win: outcome === 'Win' ? partialWin : null,
       followed_rules: followedRules,
       drill_key: drillKey,
       drill_kept: drillKey ? drillKept : null,
@@ -1302,10 +1309,14 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
               <div className="space-y-4">
               <Field quiet label="How did it end" pending={pending('outcome')} group className={need('outcome')}>
                 <Segmented
-                  value={pending('outcome') ? null : outcome}
-                  onChange={(o) => { setOutcome(o); confirm('outcome'); }}
-                  options={OUTCOMES}
-                  accentFor={(o) => OUTCOME_COLOR[o]}
+                  value={pending('outcome') ? null : outcome === 'Win' && partialWin ? 'Partial win' : outcome}
+                  onChange={(o) => {
+                    setPartialWin(o === 'Partial win');
+                    setOutcome(o === 'Partial win' ? 'Win' : o);
+                    confirm('outcome');
+                  }}
+                  options={HOW_IT_ENDED}
+                  accentFor={(o) => (o === 'Partial win' ? OUTCOME_COLOR.Win : OUTCOME_COLOR[o])}
                   labelFor={(o) => (o === 'Not taken' ? 'Passed' : o)}
                 />
               </Field>

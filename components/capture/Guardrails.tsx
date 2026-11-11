@@ -223,16 +223,22 @@ export function StopPlacedField({ value, onChange, backtest, rule, onRule, aside
         </Field>
         {aside}
       </div>
-      {backtest && (rule || value) && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px]" data-sample-stop-rule={rule ?? 'unset'} style={{ color: 'var(--text-dim)' }}>
-          {rule ? <span>This sample&apos;s stop rule: <b style={{ color: value && value !== rule ? 'rgb(var(--amber))' : 'var(--text)' }}>{rule}</b>{value && value !== rule ? ' — this trade differs' : ''}</span> : <span>No stop rule set for this sample.</span>}
-          {value && value !== rule && (
-            <button type="button" className="underline decoration-dotted underline-offset-2" onClick={() => onRule(value)} data-pin-stop-rule>
-              {rule ? 'Make this the rule' : "Pin as the sample's rule"}
-            </button>
-          )}
-          {rule && <button type="button" className="underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-faint)' }} onClick={() => onRule(null)} data-clear-stop-rule>Clear</button>}
+      {/*
+        Only when it matters: nothing when this trade follows the sample's
+        rule; one amber line when it differs; a quiet link to pin one when
+        the sample has none yet.
+      */}
+      {backtest && value && rule && value !== rule && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px]" data-sample-stop-rule={rule} style={{ color: 'var(--text-dim)' }}>
+          <span>Differs from this sample&apos;s rule: <b style={{ color: 'rgb(var(--amber))' }}>{rule}</b></span>
+          <button type="button" className="underline decoration-dotted underline-offset-2" onClick={() => onRule(value)} data-pin-stop-rule>Make this the rule</button>
+          <button type="button" className="underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-faint)' }} onClick={() => onRule(null)} data-clear-stop-rule>Clear rule</button>
         </div>
+      )}
+      {backtest && value && !rule && (
+        <button type="button" className="text-[11px] underline decoration-dotted underline-offset-2" style={{ color: 'var(--text-faint)' }} onClick={() => onRule(value)} data-pin-stop-rule>
+          Pin as this sample&apos;s stop rule
+        </button>
       )}
       <AnimatePresence initial={false}>
         {note && <Notice id="stop-inside" tone="amber">{note}</Notice>}

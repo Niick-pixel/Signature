@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { listTrades } from '@/db/trades';
 import { accountCookie } from '@/lib/account-pref';
-import { countsInStats, isHypothetical, isTaken } from '@/lib/domain';
+import { outcomeLabel, countsInStats, isHypothetical, isTaken } from '@/lib/domain';
 import { accountsInUse } from '@/lib/stats';
 import { applyStatsScope, parseStatsScope } from '@/lib/statsScope';
 import { THEMES, phraseSentences, themeSentences, themesOf } from '@/lib/insights';
@@ -84,7 +84,7 @@ function Column({ title, hue, trades, said }: { title: string; hue: string; trad
                   <span style={{ color: 'var(--text-dim)' }}>
                     {new Date(`${t.date.slice(0, 10)}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} · {t.account.replace(' (FX Replay)', '')} · {t.setup_type} {t.direction} · {t.target_type} · grade {t.grade_letter}
                   </span>
-                  <b style={{ color: `rgb(var(${hue}))` }}>{t.outcome}{t.r_multiple != null ? ` ${t.r_multiple > 0 ? '+' : ''}${t.r_multiple}R` : ''}</b>
+                  <b style={{ color: `rgb(var(${hue}))` }}>{outcomeLabel(t)}{t.r_multiple != null ? ` ${t.r_multiple > 0 ? '+' : ''}${t.r_multiple}R` : ''}</b>
                 </div>
                 {lines.length > 0 && (
                   <ul className="space-y-1">

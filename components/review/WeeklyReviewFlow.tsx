@@ -1,5 +1,6 @@
 'use client';
 
+import { outcomeLabel } from '@/lib/domain';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { riseIn, spring, springSoft, exitQuick } from '@/lib/motion';
@@ -119,7 +120,7 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
                 <span className="text-[13px] font-medium">{trade.reason}</span>
                 <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
                   {tradeDay(trade)} · {trade.checklist_score}/100
-                  {' · '}{trade.outcome}
+                  {' · '}{outcomeLabel(trade)}
                   {trade.r_multiple != null && ` · ${trade.r_multiple > 0 ? '+' : '−'}${Math.abs(trade.r_multiple).toFixed(1)}R`}
                 </span>
                 <span className="ml-auto text-[11px] tabular-nums" style={{ color: 'var(--text-faint)' }}>

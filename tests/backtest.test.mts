@@ -133,3 +133,20 @@ test('migration 042: the drill answer round-trips; an unknown answer reads as un
   const odd = input({ account: BACKTEST, undated: true, reason: BACKTEST_REASON, drill_kept: 'mostly' });
   assert.ok(odd.ok && odd.value.drill_kept === null);
 });
+
+test('migration 044: a partial win is a Win with partial_win set; any other outcome clears it', async () => {
+  getDb();
+  const { outcomeLabel } = await import('../lib/domain');
+  const ok = input({ account: BACKTEST, undated: true, reason: BACKTEST_REASON, outcome: 'Win', r_multiple: 0.8, partial_win: true });
+  assert.ok(ok.ok);
+  if (!ok.ok) return;
+  const saved = getTrade(createTrade(ok.value).id)!;
+  assert.equal(saved.outcome, 'Win');
+  assert.equal(saved.partial_win, true);
+  assert.equal(outcomeLabel(saved), 'Partial win');
+  const loss = input({ account: BACKTEST, undated: true, reason: BACKTEST_REASON, outcome: 'Loss', r_multiple: -1, partial_win: true });
+  assert.ok(loss.ok && loss.value.partial_win === null, 'only a win can be partial');
+  const plain = input({ account: BACKTEST, undated: true, reason: BACKTEST_REASON, outcome: 'Win' });
+  assert.ok(plain.ok && plain.value.partial_win == null, 'a win logged without the question is not "not partial"');
+  assert.equal(outcomeLabel({ outcome: 'Not taken' }), 'Passed');
+});

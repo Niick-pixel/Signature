@@ -45,7 +45,8 @@ export function Segmented<T extends string>({
             whileTap={press}
             animate={{ color: active ? `rgb(${accent})` : 'var(--text-dim)' }}
             transition={spring}
-            className={`relative min-w-0 flex-1 rounded-[calc(12px*var(--rk))] font-medium whitespace-nowrap ${compact ? 'px-1 py-[7px] text-[11.5px]' : 'px-3 py-2 text-[12px]'}`}
+            // Never narrower than its label: when the row is full, options wrap to a second row instead of overlapping.
+            className={`relative rounded-[calc(12px*var(--rk))] font-medium whitespace-nowrap ${compact ? 'min-w-0 flex-1 px-1 py-[7px] text-[11.5px]' : 'flex-[1_0_auto] px-3 py-2 text-[12px]'}`}
           >
             {active && (
               <motion.span
