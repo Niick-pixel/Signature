@@ -36,6 +36,8 @@ export interface BoardPage {
   filters: Record<string, string>;
   widgets: Record<string, WidgetInfo>;
   states: Record<string, WidgetState>;
+  /** A widget opened large from a link (?open=<id>) without being on the board: the deep dives, mostly. */
+  open: { widget: string; state: WidgetState } | null;
   /** Smart Rotate: per tile that has it on, the widget shown first and why (null: nothing needed you). */
   rotate: Record<string, { index: number; reason: string | null }>;
   /** Real / backtest trades that exist at all, for the source toggle. */
@@ -150,5 +152,7 @@ export function boardPage(params: StatsParams): BoardPage {
   const widgets = Object.fromEntries(registry.all().map((d) => [d.id, {
     id: d.id, title: d.title, help: d.help, kind: d.kind, view: d.view, sizes: d.sizes, category: d.category, claims: !!d.claims, settings: d.settings, defaultSize: d.defaultSize, tier: d.tier ?? 3, lean: d.lean ?? null,
   }]));
-  return { boards: boards.map((b) => ({ id: b.id, name: b.name })), board, source, filters, widgets, states, rotate, has };
+  const openDef = registry.get(one(params.open) ?? '');
+  const open = openDef ? { widget: openDef.id, state: widgetState(openDef, {}, boardScope, viewFor, has) } : null;
+  return { boards: boards.map((b) => ({ id: b.id, name: b.name })), board, source, filters, widgets, states, rotate, open, has };
 }

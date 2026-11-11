@@ -31,7 +31,8 @@ const heat = (avg: number | null, n: number, max: number) => (!n || avg == null 
   : `${avg >= 0 ? 'rgb(var(--outcome-win)' : 'rgb(var(--outcome-loss)'} / ${0.12 + 0.6 * Math.min(1, Math.abs(avg) / max)})`);
 
 /** Analytics: Time, Confluences, Psychology, Mistake cost, What if, Tilt, News, Ask your journal. Everything here is customizable in Settings → Analytics. */
-export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null }) {
+/** `embed`: one tab alone, with no page around it — as a Stats widget (the deep dives). */
+export function AnalyticsView({ initialTab, embed = false }: { initialTab: AnalyticsTab | null; embed?: boolean }) {
   const { prefs, update } = usePreferences();
   const [tab, setTab] = useState<AnalyticsTab>(initialTab ?? prefs.analyticsTab);
   const [data, setData] = useState<Data | null>(null);
@@ -45,7 +46,7 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
     void fetch(`/api/analytics?${q}`).then((r) => r.json()).then(setData).catch(() => {});
   }, [prefs.analyticsWorld, prefs.analyticsClock, prefs.analyticsMinN, prefs.analyticsLateHour, prefs.analyticsWords, prefs.newsWindow, monday, prefs.behaviourSince]);
   useEffect(() => { load(); window.addEventListener(JOURNAL_CHANGED, load); return () => window.removeEventListener(JOURNAL_CHANGED, load); }, [load]);
-  const go = (t: AnalyticsTab) => { setTab(t); window.history.replaceState(null, '', `/analytics?tab=${t}`); };
+  const go = (t: AnalyticsTab) => { setTab(t); if (!embed) window.history.replaceState(null, '', `/analytics?tab=${t}`); };
 
   // The header's actions, once: in the title bar (side rail) or in the page's own header row.
   const headActions = (<>
@@ -56,7 +57,8 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
         </div>
   </>);
   return (
-    <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-analytics={tab}>
+    <div className={embed ? '' : 'mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4'} data-analytics={tab}>
+      {!embed && (
       <InTitleBar
         merged={<MergedHeader title={<>Analytics</>} sub={<>{data ? `${data.count} settled trades · ${{ real: 'real accounts', backtest: 'backtests', all: 'real and backtest' }[data.world as 'real']}` : 'Reading…'} · fewer than {prefs.analyticsMinN} trades is an early signal, never a verdict.</>} data="analytics">
         {headActions}
@@ -72,7 +74,10 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
         {headActions}
       </div>
         </>} />
+      )}
+      {embed && <div className="mb-3 flex justify-end">{headActions}</div>}
 
+      {!embed && (
       <div className="mt-5 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--glass-stroke)' }} role="tablist">
         {ANALYTICS_TABS.map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => go(t)} data-analytics-tab={t}
@@ -82,6 +87,7 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
           </button>
         ))}
       </div>
+      )}
 
       <div className="mt-5">
         <SwapIn k={tab}>

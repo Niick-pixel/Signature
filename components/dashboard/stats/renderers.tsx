@@ -5,6 +5,8 @@
  * sparkline; at M it adds its chart. A flaw at M is its chart and the drill;
  * at L, the whole card. Never the same layout scaled.
  */
+import { ReportsView } from '@/components/reports/ReportsView';
+import { AnalyticsView } from '@/components/analytics/AnalyticsView';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SizeKey, WidgetCfg } from '@/lib/dashboard/types';
@@ -444,6 +446,9 @@ function Custom({ view, data }: { view: string; data: any }) {
     case 'quality': return <ScrollBox className="h-full"><QualityPanel {...data} /></ScrollBox>;
     case 'anatomy': return <ScrollBox className="h-full"><AnatomyExplorer {...data} /></ScrollBox>;
     case 'similar': return <ScrollBox className="h-full"><SimilarLookup {...data} /></ScrollBox>;
+    // The old Reports and Analytics pages, one tab each, as widgets: each reads its own data.
+    case 'report': return <ScrollBox className="h-full"><ReportsView initialTab={data.tab} embed /></ScrollBox>;
+    case 'analytics': return <ScrollBox className="h-full"><AnalyticsView initialTab={data.tab} embed /></ScrollBox>;
     case 'health': return (
       <ScrollBox className="h-full">
         <HealthPanel {...data} rates={hitRates(data.claims)} base={DEFAULT_THRESHOLDS} labelOf={(f: string) => fieldDef(f)?.label ?? f} />

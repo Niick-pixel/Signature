@@ -872,3 +872,10 @@ add({
 5. Rank it: add it to `TIER` (1 or 2; unlisted is 3, a deep dive) and, if it is about a flaw or a strength, to `LEAN`. The gallery, the settings panel and saving pick it up by themselves. To ship it on the default board, add it to `lib/dashboard/defaults.ts` (tier 1 only, and a stack holds five); boards already saved keep their own layout.
 6. Renaming a widget later: add `old-id → new-id` to `WIDGET_RENAMES`.
 
+
+## 63. Deep dives (the old Reports and Analytics pages)
+
+Reports and Analytics are no longer pages of their own: each of their tabs is a widget in the gallery's "Deep dives" tier (`DEEP` in `lib/dashboard/catalog.ts`): Compare two groups, Breakdowns, Fees, Rules heatmap, Your tags, Time of day, Confluences, Psychology, Mistake cost, What if, News, Ask your journal. Each draws itself from its own data (`ReportsView` / `AnalyticsView` with `embed`), so nothing was rewritten.
+
+- **Open one large without putting it on the board:** Stats → **Deep dives** (in the ⋯ menu with the side rail), or `/stats?open=<widget id>`. The others are one tap away at the top; "Add to the board" pins it.
+- `/reports` and `/analytics` (and keys R and A, and every old link) redirect to the matching deep dive. Analytics' Tilt tab opens the Tilt widget.

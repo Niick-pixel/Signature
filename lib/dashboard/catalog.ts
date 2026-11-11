@@ -235,6 +235,28 @@ add({
   select: (v) => ({ kind: 'custom', view: 'eval', data: { rows: packRows(v.lab), presets: v.evalPresets }, claim: { n: v.settled.length } }),
 });
 
+/* ───────────── deep dives: the old Reports and Analytics pages, a tab each ───────────── */
+
+const DEEP: Array<[string, 'report' | 'analytics', string, string, string]> = [
+  ['report-compare', 'report', 'compare', 'Compare two groups', 'Any two groups of trades side by side: by setup, session, weekday, grade, tag or account.'],
+  ['report-breakdowns', 'report', 'breakdowns', 'Breakdowns', 'Your results cut by one field at a time: setup, session, direction, weekday, grade and more.'],
+  ['report-fees', 'report', 'fees', 'Fees', 'What commissions and fees took out of your results, by account and over time.'],
+  ['report-heatmap', 'report', 'heatmap', 'Rules heatmap', 'Every trading day as a square: which rules were kept and which were broken.'],
+  ['report-tags', 'report', 'tags', 'Your tags', 'Your own tag groups, and what trades carrying each tag made.'],
+  ['analytics-time', 'analytics', 'time', 'Time of day', 'When you make and lose: by hour and by weekday, in New York time or your own clock.'],
+  ['analytics-confluences', 'analytics', 'confluences', 'Confluences', 'What each confluence you tick goes with: trades that had it against trades that did not.'],
+  ['analytics-psychology', 'analytics', 'psychology', 'Psychology', 'Sleep, state of mind, late trades and the words in your writing, against your results.'],
+  ['analytics-mistakes', 'analytics', 'mistakes', 'Mistake cost', 'What each mistake you tagged has cost, in R and in dollars.'],
+  ['analytics-whatif', 'analytics', 'whatif', 'What if', 'Your results replayed with a rule switched on: stop after one loss, only A setups, and others.'],
+  ['analytics-news', 'analytics', 'news', 'News', 'The week\'s red and orange releases, and how you trade near them.'],
+  ['analytics-ask', 'analytics', 'ask', 'Ask your journal', 'Search your own trades and writing in plain words. Nothing leaves this computer.'],
+];
+for (const [id, view, tab, title, help] of DEEP) add({
+  id, title, category: 'data', kind: 'custom', view, sizes: ['L', 'XL'], defaultSize: 'L', minTrades: 0, settings: {}, help,
+  // Drawn in the browser from its own data (components/reports, components/analytics); nothing to compute here.
+  select: () => ({ kind: 'custom', view, data: { tab } }),
+});
+
 /* ───────────────────────── charts ───────────────────────── */
 
 add({

@@ -17,6 +17,8 @@ import { useConfirm } from '@/components/ui/Confirm';
 import { Tile, triple } from './Tile';
 import { useBoardEditor } from './useBoardEditor';
 import { InTitleBar, useMergedHeader } from '@/components/shell/TitleSlot';
+import { Overlay } from '@/components/ui/Overlay';
+import { WidgetBody } from './renderers';
 import { BoardSettingsPanel, Gallery, Menu, WidgetSettings } from './EditPanels';
 
 /**
@@ -350,8 +352,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
   const mergedMenu = [
     { label: filters.pregraded ? 'Pre-graded only ✓' : 'Pre-graded only', onClick: () => router.push(href({ pregraded: filters.pregraded ? undefined : '1' }), { scroll: false }) },
     { label: 'Blind re-grade', onClick: () => router.push('/blind') },
-    { label: 'Reports', onClick: () => router.push('/reports') },
-    { label: 'Analytics', onClick: () => router.push('/analytics') },
+    { label: 'Deep dives…', onClick: () => router.push(href({ open: 'report-compare' }), { scroll: false }) },
     ...menu,
   ];
 
@@ -387,8 +388,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
               {sourceAndPeriod}
               <Link href={href({ pregraded: filters.pregraded ? undefined : '1' })} scroll={false} prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(!!filters.pregraded)} title="Only trades graded before the outcome was known">Pre-graded only</Link>
               <Link href="/blind" prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)} title="Grade past setups with the outcome hidden">Blind re-grade</Link>
-              <Link href="/reports" prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)}>Reports</Link>
-              <Link href="/analytics" prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)}>Analytics</Link>
+              <Link href={href({ open: 'report-compare' })} scroll={false} prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)} title="Reports and analytics: compare, breakdowns, time of day, psychology, what if…" data-deep-dives>Deep dives</Link>
               {editButton}
             </>
           )}
@@ -433,6 +433,34 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
           </p>
         )}
       </div>
+      {/* A deep dive opened from a link: large, over the board, with its siblings one tap away. */}
+      <Overlay open={!!page.open} onClose={() => router.push(href({ open: undefined }), { scroll: false })} className="flex h-[min(88vh,860px)] w-[min(1240px,94vw)] flex-col p-6"
+        // Something to read and work in: solid enough that the board behind stays behind.
+        surface="color-mix(in srgb, var(--bg-raised) 96%, transparent)">
+        {page.open && (() => {
+          const info = page.widgets[page.open.widget];
+          const dives = Object.values(page.widgets).filter((w) => w.view === 'report' || w.view === 'analytics');
+          const big = (['XL', 'L', 'T', 'M', 'S', 'W'] as SizeKey[]).find((z) => info.sizes.includes(z)) ?? 'L';
+          return (
+            <div className="flex min-h-0 flex-1 flex-col" data-open-widget={page.open.widget}>
+              <div className="flex items-center gap-3">
+                <h2 className="text-[16px] font-semibold tracking-tight">{info.title}</h2>
+                <button type="button" onClick={() => { const w = page.open!.widget; router.push(href({ open: undefined, edit: '1' }), { scroll: false }); addAt(w, null); }}
+                  className="ml-auto rounded-full border px-3 py-1 text-[12px] font-medium" style={pill(false)} title="Put this widget on the board" data-open-pin>Add to the board</button>
+              </div>
+              <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-dim)' }}>{info.help}</p>
+              {dives.some((d) => d.id === info.id) && (
+                <nav className="mt-3 flex flex-wrap gap-1.5" aria-label="Deep dives" data-dive-tabs>
+                  {dives.map((d) => (
+                    <Link key={d.id} href={href({ open: d.id })} scroll={false} prefetch={false} className="rounded-full border px-2.5 py-1 text-[12px] font-medium" style={pill(d.id === info.id)}>{d.title}</Link>
+                  ))}
+                </nav>
+              )}
+              <div className="mt-4 min-h-0 flex-1"><WidgetBody key={page.open.widget} vm={page.open.state.vm} size={big} cfg={{}} /></div>
+            </div>
+          );
+        })()}
+      </Overlay>
       <Gallery open={editing && panel === 'gallery'} onClose={() => setPanel(null)} widgets={page.widgets} previews={previews} onAdd={(w) => addAt(w, null)} onDragStart={startAdd} />
       <WidgetSettings open={editing && panel === 'widget'} onClose={() => setPanel(null)} tile={selTile} item={selItem} info={selItem ? page.widgets[selItem.widget] ?? null : null}
         schema={selItem ? page.widgets[selItem.widget]?.settings ?? null : null} sizes={selTile ? tileSizes(selTile, supports) : []}

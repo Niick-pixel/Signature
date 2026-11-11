@@ -27,13 +27,14 @@ const mins = (v: number | null) => (v == null ? '—' : v < 1 ? `${Math.round(v 
 const th = 'py-1.5 text-[10.5px] font-normal uppercase tracking-[0.06em]';
 const WEEKDAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export function ReportsView({ initialTab }: { initialTab: Tab }) {
+/** `embed`: one tab alone, with no page around it — as a Stats widget (lib/dashboard/catalog, the deep dives). */
+export function ReportsView({ initialTab, embed = false }: { initialTab: Tab; embed?: boolean }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [data, setData] = useState<Data | null>(null);
   const [world, setWorld] = useState<'real' | 'backtest' | 'all'>('real');
   const load = useCallback(() => { void fetch('/api/reports').then((r) => r.json()).then(setData).catch(() => {}); }, []);
   useEffect(() => { load(); window.addEventListener(JOURNAL_CHANGED, load); return () => window.removeEventListener(JOURNAL_CHANGED, load); }, [load]);
-  const go = (t: Tab) => { setTab(t); window.history.replaceState(null, '', `/reports?tab=${t}`); };
+  const go = (t: Tab) => { setTab(t); if (!embed) window.history.replaceState(null, '', `/reports?tab=${t}`); };
   const rows = useMemo(() => (data ? applyFilter(data.rows, { world }) : []), [data, world]);
 
   // The header's actions, once: in the title bar (side rail) or in the page's own header row.
@@ -41,7 +42,8 @@ export function ReportsView({ initialTab }: { initialTab: Tab }) {
         {tab !== 'heatmap' && <Seg value={world} onChange={setWorld} options={['real', 'backtest', 'all'] as const} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />}
   </>);
   return (
-    <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-reports={tab}>
+    <div className={embed ? '' : 'mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4'} data-reports={tab}>
+      {!embed && (
       <InTitleBar
         merged={<MergedHeader title={<>Reports</>} sub={<>{data ? `${rows.length} settled trades` : 'Reading…'}</>} data="reports">
         {headActions}
@@ -55,6 +57,9 @@ export function ReportsView({ initialTab }: { initialTab: Tab }) {
         {headActions}
       </div>
         </>} />
+      )}
+      {embed && <div className="mb-3 flex justify-end">{headActions}</div>}
+      {!embed && (
       <div className="mt-5 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--glass-stroke)' }} role="tablist">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => go(t.id)} data-reports-tab={t.id}
@@ -64,6 +69,7 @@ export function ReportsView({ initialTab }: { initialTab: Tab }) {
           </button>
         ))}
       </div>
+      )}
       <div className="mt-5">
         {!data ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading your trades…</p> : (
           <>
