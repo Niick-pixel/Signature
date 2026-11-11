@@ -12,6 +12,7 @@ import { UpdateChip } from './UpdateChip';
 import { Suspense } from 'react';
 import { NotificationBell, openReminderRoute } from './Reminders';
 import { usePreferences } from './PreferencesProvider';
+import { setTitleSlot } from './TitleSlot';
 
 export const TABS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -138,6 +139,9 @@ export function TitleBar() {
           })}
         </div>
       </nav>
+
+      {/* With the side rail: the page's own header (title, filters, actions) goes here — see TitleSlot. */}
+      <div ref={setTitleSlot} data-title-slot className="mx-2 hidden min-w-0 flex-1 items-center" />
 
       {/* Right-hand side, clear of the window buttons (see the padding above). */}
       <div className="relative ml-auto flex items-center">

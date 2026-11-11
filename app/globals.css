@@ -1057,3 +1057,6 @@ html[data-rail='labels'] { --rail-w: 184px; }
 html[data-rail='icons'] body, html[data-rail='labels'] body { padding-left: var(--rail-w); }
 html[data-rail='icons'] [data-title-wordmark], html[data-rail='labels'] [data-title-wordmark],
 html[data-rail='icons'] header.titlebar-drag [data-tabs], html[data-rail='labels'] header.titlebar-drag [data-tabs] { display: none; }
+html[data-rail='icons'] [data-title-slot], html[data-rail='labels'] [data-title-slot] { display: flex; }
+/* A page whose header merges into the title bar: its own row is gone from the first paint. */
+html[data-rail='icons'] [data-inline-header], html[data-rail='labels'] [data-inline-header] { display: none !important; }

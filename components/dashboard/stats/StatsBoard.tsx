@@ -16,6 +16,7 @@ import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { useConfirm } from '@/components/ui/Confirm';
 import { Tile, triple } from './Tile';
 import { useBoardEditor } from './useBoardEditor';
+import { InTitleBar, useMergedHeader } from '@/components/shell/TitleSlot';
 import { BoardSettingsPanel, Gallery, Menu, WidgetSettings } from './EditPanels';
 
 /**
@@ -62,15 +63,18 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
   const names = useMemo(() => Object.fromEntries(Object.values(page.widgets).map((w) => [w.id, w.title])), [page.widgets]);
   // The side panels start under the header, however many lines its tabs and toolbar wrap to.
   const head = useRef<HTMLElement>(null);
+  // The header in the title bar (side rail) or its own row: the side panels start under whichever it is.
+  const merged = useMergedHeader();
   useEffect(() => {
     const el = head.current; if (!el) return;
     const root = document.documentElement;
-    const set = () => root.style.setProperty('--board-head', `${Math.round(el.getBoundingClientRect().bottom + 6)}px`);
+    // Merged into the title bar, the panels start under the bar itself, not under the controls inside it.
+    const set = () => root.style.setProperty('--board-head', `${Math.round((el.closest('header') ?? el).getBoundingClientRect().bottom + 6)}px`);
     set();
     const ro = new ResizeObserver(set); ro.observe(el);
     window.addEventListener('resize', set);
     return () => { ro.disconnect(); window.removeEventListener('resize', set); root.style.removeProperty('--board-head'); };
-  }, []);
+  }, [merged]);
   const grid = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -296,18 +300,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
   const bg = s.background === 'gradient' ? 'radial-gradient(1200px 600px at 15% -10%, rgb(var(--accent) / 0.10), transparent 60%), radial-gradient(900px 500px at 100% 110%, rgb(var(--accent) / 0.07), transparent 60%)'
     : s.background === 'blurred' ? 'radial-gradient(500px 360px at 20% 20%, rgb(var(--accent) / 0.16), transparent 70%), radial-gradient(520px 380px at 80% 75%, rgb(var(--sem-good) / 0.10), transparent 70%)' : undefined;
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col" data-stats-board={board.id} data-editing={editing || undefined}
-      style={{
-        ['--sem-good' as string]: semVar(s.semantic.good), ['--sem-bad' as string]: semVar(s.semantic.bad), ['--sem-watch' as string]: semVar(s.semantic.watch),
-        ...(s.accent ? { ['--accent' as string]: triple(s.accent) } : {}),
-        fontSize: `${s.fontScale}rem`, backgroundImage: bg,
-      }}>
-      <header ref={head} className={`flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-6 pb-2 pt-3 ${col}`}>
-        <h1 className="text-[18px] font-semibold tracking-tight">Stats</h1>
-        {!editing && <Link href="/new" prefetch={false} className="rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-stats-new>+ New trade</Link>}
-        {/* One board needs no tabs: they show once there is a second one, or while editing (to add or rename). */}
-        {(page.boards.length > 1 || editing) && <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Boards" data-board-tabs>
+  // The header's pieces: inline (tabs across the top) or merged into the title bar (side rail; components/shell/TitleSlot).
+  const boardTabs = ((page.boards.length > 1 || editing) && <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Boards" data-board-tabs>
           {page.boards.map((b) => renaming === b.id ? (
             <input key={b.id} autoFocus defaultValue={b.name} aria-label="Board name" data-rename
               onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -322,10 +316,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
           <button type="button" aria-label="New board" title="New board" data-new-board
             onClick={async () => { const r = await ed.boardAction({ action: 'create', name: 'New board' }); if (r.ok) go(String(r.json.id), true); }}
             className="grid size-7 place-items-center rounded-full text-[15px]" style={{ color: 'var(--text-dim)' }}>+</button>
-        </nav>}
-        <div className="ml-auto flex flex-wrap items-center gap-2 text-[12px]">
-          {editing ? (
-            <>
+        </nav>);
+  const editTools = (<>
               <span className="text-[11.5px]" style={{ color: ed.status.kind === 'error' ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }} data-save-status>
                 {ed.status.kind === 'saving' ? 'Saving…' : ed.status.kind === 'saved' ? 'Saved' : ed.status.kind === 'error' ? ed.status.text : 'Drag to move · corner to resize · drop on a tile to stack'}
               </span>
@@ -334,9 +326,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
               <button type="button" onClick={ed.redo} disabled={!ed.canRedo} title="Redo (Ctrl+Shift+Z)" className="rounded-full border px-2.5 py-1 disabled:opacity-40" style={pill(false)} data-redo>↷</button>
               <button type="button" onClick={() => setPanel(panel === 'board' ? null : 'board')} className="rounded-full border px-3 py-1 font-medium" style={pill(panel === 'board')} data-open-board-settings>Board</button>
               <button type="button" onClick={() => { setEditing(false); setPanel(null); setSelected(null); router.refresh(); }} className="rounded-full px-3.5 py-1 font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-done>Done</button>
-            </>
-          ) : (
-            <>
+  </>);
+  const sourceAndPeriod = (<>
               <div role="radiogroup" aria-label="Which trades" className="flex rounded-full p-0.5" style={{ background: 'var(--glass-fill)' }} data-source-toggle>
                 {SOURCES.map((o) => (
                   <button key={o.v} type="button" role="radio" aria-checked={page.source === o.v} title={o.title} onClick={() => void setSource(o.v)}
@@ -349,20 +340,65 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
                 aria-label="Period" className="rounded-full border bg-transparent px-2.5 py-1 font-medium" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }} data-period>
                 {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
               </select>
+  </>);
+  const editButton = (<>
+              <button type="button" onClick={() => setEditing(true)} disabled={board.readOnly} title={board.readOnly ? 'Saved by a newer version of Signature' : 'Move, resize, stack, restyle and add widgets'}
+                className="rounded-full border px-3 py-1 font-semibold disabled:opacity-40" style={pill(false)} data-edit>Edit</button>
+  </>);
+  const importInput = <input ref={importer} type="file" accept="application/json,.json" hidden onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = ''; }} />;
+  // In the title bar there is room for the essentials; the rest of the toolbar joins the ⋯ menu.
+  const mergedMenu = [
+    { label: filters.pregraded ? 'Pre-graded only ✓' : 'Pre-graded only', onClick: () => router.push(href({ pregraded: filters.pregraded ? undefined : '1' }), { scroll: false }) },
+    { label: 'Blind re-grade', onClick: () => router.push('/blind') },
+    { label: 'Reports', onClick: () => router.push('/reports') },
+    { label: 'Analytics', onClick: () => router.push('/analytics') },
+    ...menu,
+  ];
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-stats-board={board.id} data-editing={editing || undefined}
+      style={{
+        ['--sem-good' as string]: semVar(s.semantic.good), ['--sem-bad' as string]: semVar(s.semantic.bad), ['--sem-watch' as string]: semVar(s.semantic.watch),
+        ...(s.accent ? { ['--accent' as string]: triple(s.accent) } : {}),
+        fontSize: `${s.fontScale}rem`, backgroundImage: bg,
+      }}>
+      <InTitleBar
+        merged={
+          <div ref={head as React.RefObject<HTMLDivElement>} className="flex min-w-0 flex-1 items-center gap-2 text-[12px]" data-stats-header="merged">
+            <span className="shrink-0 text-[15px] font-semibold tracking-tight">Stats</span>
+            {!editing && <Link href="/new" prefetch={false} className="shrink-0 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-stats-new>+ New trade</Link>}
+            {(page.boards.length > 1 || editing) && boardTabs}
+            <div className="ml-auto flex min-w-0 items-center gap-1.5 [&_[data-save-status]]:max-w-[16rem] [&_[data-save-status]]:truncate">
+              {editing ? editTools : <>{sourceAndPeriod}{editButton}</>}
+              <Menu items={editing ? menu : mergedMenu} />
+              {importInput}
+            </div>
+          </div>
+        }
+        inline={
+      <header ref={head} className={`flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-6 pb-2 pt-3 ${col}`}>
+        <h1 className="text-[18px] font-semibold tracking-tight">Stats</h1>
+        {!editing && <Link href="/new" prefetch={false} className="rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-stats-new>+ New trade</Link>}
+        {/* One board needs no tabs: they show once there is a second one, or while editing (to add or rename). */}
+        {(page.boards.length > 1 || editing) && boardTabs}
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-[12px]">
+          {editing ? editTools : (
+            <>
+              {sourceAndPeriod}
               <Link href={href({ pregraded: filters.pregraded ? undefined : '1' })} scroll={false} prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(!!filters.pregraded)} title="Only trades graded before the outcome was known">Pre-graded only</Link>
               <Link href="/blind" prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)} title="Grade past setups with the outcome hidden">Blind re-grade</Link>
               <Link href="/reports" prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)}>Reports</Link>
               <Link href="/analytics" prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)}>Analytics</Link>
-              <button type="button" onClick={() => setEditing(true)} disabled={board.readOnly} title={board.readOnly ? 'Saved by a newer version of Signature' : 'Move, resize, stack, restyle and add widgets'}
-                className="rounded-full border px-3 py-1 font-semibold disabled:opacity-40" style={pill(false)} data-edit>Edit</button>
+              {editButton}
             </>
           )}
           <Menu items={menu} />
-          <input ref={importer} type="file" accept="application/json,.json" hidden onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = ''; }} />
+          {importInput}
         </div>
       </header>
+        } />
       {board.dropped.length > 0 && <p className="px-6 pb-1 text-[11.5px]" style={{ color: 'rgb(var(--amber))' }}>Removed from this board because they no longer exist: {board.dropped.join(', ')}.</p>}
-      <div ref={gridBox} className={`relative min-h-0 w-full flex-1 px-6 pb-4 transition-[padding] duration-300 ${col} ${overflow || !s.fit ? 'overflow-y-auto' : 'overflow-hidden'}`} data-grid
+      <div ref={gridBox} className={`relative min-h-0 w-full flex-1 px-6 pb-4 transition-[padding] duration-300 ${merged ? 'pt-2' : ''} ${col} ${overflow || !s.fit ? 'overflow-y-auto' : 'overflow-hidden'}`} data-grid
         style={{ paddingRight: editing && panel ? (panel === 'gallery' ? 404 : 384) : undefined }}
         onPointerDown={(e) => { if (editing && e.target === e.currentTarget) setSelected(null); }}>
         <div ref={grid} className="grid" style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gridAutoRows: `${rowH}px`, gap: s.gap, minHeight: editing ? '100%' : undefined }}>
