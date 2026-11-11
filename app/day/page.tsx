@@ -33,7 +33,7 @@ export default async function DayPage(
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[46rem] space-y-5 px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-read)] space-y-5 px-6 pb-20 pt-4">
           {/*
             The trades first, the writing second. This page is what a calendar
             square opens into, and the square was showing a P&L — landing on a

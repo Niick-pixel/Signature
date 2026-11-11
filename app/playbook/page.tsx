@@ -25,7 +25,7 @@ export default function PlaybookPage() {
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[52rem] px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-read)] px-6 pb-20 pt-4">
           <InTitleBar
             merged={<MergedHeader title={<>Playbook</>} sub={<>Name the setups you actually trade, then find out which of them pay. A setup with
               fewer than twenty trades behind it is a hypothesis, not an edge.</>} data="playbook">

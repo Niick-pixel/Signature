@@ -147,6 +147,29 @@ for (const nav of ['side', 'top']) {
   });
 }
 
+await check('every screen sits in one of the two page widths, centred in the space beside the rail', async () => {
+  const { page } = await open({ width: 1920, height: 1000 }, { nav: 'side', railLabels: false });
+  const bad = [];
+  for (const u of SCREENS) {
+    await page.goto(`${BASE}${u}`); await page.waitForTimeout(600);
+    const r = await page.evaluate(() => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const want = { wide: 88 * rem, read: 64 * rem };
+      const cols = [...document.querySelectorAll('div')].filter((el) => {
+        const mw = parseFloat(getComputedStyle(el).maxWidth);
+        return (mw === want.wide || mw === want.read) && el.getBoundingClientRect().width > 0 && !el.closest('[role=dialog]');
+      });
+      if (!cols.length) return { none: true };
+      const el = cols[0]; const c = el.getBoundingClientRect(); const box = el.parentElement.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(el.parentElement).paddingLeft) - parseFloat(getComputedStyle(el.parentElement).paddingRight);
+      return { off: Math.round((c.left + c.right) / 2 - ((box.left + box.right) / 2 + pad / 2)), w: Math.round(c.width) };
+    });
+    if (r.none) bad.push(`${u}: no page column`); else if (Math.abs(r.off) > 2) bad.push(`${u}: ${r.off}px off centre`);
+  }
+  await page.context().close();
+  expect(!bad.length, bad.join(' | '));
+});
+
 await check('side rail: every screen has one 44px title bar, its header inside it, nothing spilling out', async () => {
   const { page } = await open({ width: 1280, height: 720 }, { nav: 'side' });
   for (const u of ['/dashboard', '/stats', '/calendar', '/journal', '/path', '/study', '/goals', '/trash']) {

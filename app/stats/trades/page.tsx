@@ -44,7 +44,7 @@ export default async function TradesFor({ searchParams }: { searchParams: Promis
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[84rem] px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-20 pt-4">
           <InTitleBar
             merged={<MergedHeader data="stats-trades" title={title} sub={<>{matched.length} trade{matched.length === 1 ? '' : 's'} · {losers.length} lost or flat · {winners.length} won ·{' '}
               <span style={{ color: net < 0 ? 'rgb(var(--outcome-loss))' : 'rgb(var(--outcome-win))' }}>{net < 0 ? '−' : '+'}{Math.abs(net).toFixed(1)}R</span>

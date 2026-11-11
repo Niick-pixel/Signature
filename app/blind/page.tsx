@@ -29,7 +29,7 @@ export default async function BlindPage() {
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[60rem] space-y-5 px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-read)] space-y-5 px-6 pb-20 pt-4">
           <InTitleBar
             merged={<MergedHeader title={<>Blind Re-grade</>} sub={<>Past setups up to the entry candle, everything after it hidden. {pool.length} setup{pool.length === 1 ? '' : 's'} have an entry marked · {counter.thisWeek} graded this week · {counter.total} in all.</>} data="blind">
             </MergedHeader>}

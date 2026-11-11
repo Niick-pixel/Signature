@@ -92,7 +92,8 @@ export function TitleBar() {
         // top of this strip, so the content has to get out of their way — the
         // theme control was landing underneath the minimise button.
         // With the side rail, the traffic lights sit over the rail, so only what is left of them needs clearing.
-        paddingLeft: isMac ? 'max(16px, calc(88px - var(--rail-w)))' : 16,
+        // 24px: the pages' own gutter, so a title sits over the content's edge.
+        paddingLeft: isMac ? 'max(24px, calc(88px - var(--rail-w)))' : 24,
         paddingRight: isWindows ? 148 : 16,
       }}
     >
@@ -141,7 +142,7 @@ export function TitleBar() {
       </nav>
 
       {/* With the side rail: the page's own header (title, filters, actions) goes here — see TitleSlot. */}
-      <div ref={setTitleSlot} data-title-slot className="mx-2 hidden min-w-0 flex-1 items-center" />
+      <div ref={setTitleSlot} data-title-slot className="mr-2 hidden min-w-0 flex-1 items-center" />
 
       {/* Right-hand side, clear of the window buttons (see the padding above). */}
       <div className="relative ml-auto flex items-center">

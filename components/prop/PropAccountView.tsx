@@ -29,12 +29,12 @@ export function PropAccountView({ id }: { id: string }) {
   const { data, error, reload } = usePropFetch<AccountData>(`/api/prop/${id}`);
   const setTab = (t: Tab) => navigate(`/prop/${id}${t === 'overview' ? '' : `?tab=${t}`}`);
 
-  if (error) return <div className="mx-auto max-w-[72rem] px-6 pt-8 text-[13px]">{error} <Link href="/prop" className="underline">Back to the hub</Link></div>;
-  if (!data) return <div className="mx-auto max-w-[72rem] px-6 pt-8 text-[12px]" style={{ color: 'var(--text-faint)' }}>Loading…</div>;
+  if (error) return <div className="mx-auto max-w-[var(--page-wide)] px-6 pt-8 text-[13px]">{error} <Link href="/prop" className="underline">Back to the hub</Link></div>;
+  if (!data) return <div className="mx-auto max-w-[var(--page-wide)] px-6 pt-8 text-[12px]" style={{ color: 'var(--text-faint)' }}>Loading…</div>;
   const { account: a, standing: s } = data;
 
   return (
-    <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-prop-account={a.id}>
+    <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-24 pt-4" data-prop-account={a.id}>
       {/* With the side rail the name and the way back are in the title bar; these two are hidden (data-inline-header). */}
       <InTitleBar inline={null} merged={<MergedHeader data="prop-account" title={<>{a.firm} <span style={{ color: 'var(--text-faint)' }}>· {a.plan}</span></>}>
         <Link href="/prop" className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>← All accounts</Link>

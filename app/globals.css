@@ -1053,6 +1053,13 @@ html[data-platform='win32'] [data-wco-pad] { padding-right: 152px; }
 .signature-thin-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 .signature-thin-scroll::-webkit-scrollbar-track { background: transparent; }
 
+/*
+  Page widths: two, shared by every screen, both centred on the same axis
+  with the same 24px gutters. Wide for boards, tables and charts; reading
+  for forms, lists and single columns.
+*/
+:root { --page-wide: 88rem; --page-read: 64rem; }
+
 /* The side rail (components/shell/SideRail, Settings → Appearance → Navigation): the page moves over by its width. */
 /* Typed, so a change of width transitions: the rail, the page's left padding
    and the board layer all follow the same value, frame by frame. */

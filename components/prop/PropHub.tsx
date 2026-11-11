@@ -29,7 +29,7 @@ export function PropHub() {
   const ended = (data?.accounts ?? []).length - (data?.accounts ?? []).filter((r) => r.account.status === 'active').length;
 
   return (
-    <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-prop-hub>
+    <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-24 pt-4" data-prop-hub>
       <InTitleBar
         merged={<MergedHeader title="Prop firms" data="prop" sub="Each account against its rules, from the trades you log on it.">
         <div className="flex gap-2">

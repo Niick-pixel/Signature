@@ -97,7 +97,7 @@ export function StudyRoom() {
     && (!query.trim() || `${n.title} ${n.body} ${n.tags.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())));
 
   return (
-    <div className="mx-auto w-full max-w-[76rem] px-6 pb-24 pt-4" data-study-room>
+    <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-24 pt-4" data-study-room>
       <InTitleBar
         merged={<MergedHeader title="Study room" data="study">
           {prefs.studyClock === 'cube' ? (

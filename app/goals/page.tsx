@@ -9,7 +9,7 @@ export default function GoalsRoute() {
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[64rem] px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-read)] px-6 pb-20 pt-4">
           <GoalsView />
         </div>
       </div>

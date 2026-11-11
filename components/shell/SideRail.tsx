@@ -16,7 +16,7 @@ import { Wordmark } from './Wordmark';
  * drag strip and the chips on the right, without the tab row. The theme and
  * settings buttons, bottom-left on every screen, sit at the rail's foot.
  *
- * Collapse and expand with the handle on the rail's edge (shown on hover) or
+ * Collapse and expand with the handle on the middle of the rail's edge (shown on hover) or
  * Ctrl/⌘+B. The width glides (--rail-w is a typed property, so the page
  * follows it frame by frame); icons never move, the names fade in after.
  */
@@ -93,12 +93,15 @@ export function SideRail() {
           );
         })}
       </nav>
-      {/* The handle: a small round button on the rail's edge, level with the
-          mark. It shows while the pointer is over the rail, or on focus. */}
+      {/* The handle: a small round button half over the rail's edge, at its
+          middle. It shows while the pointer is over the rail (or on focus) and
+          lingers 0.6s after it leaves, so reaching for it never loses it.
+          Not level with the mark: that strip moves the window, and Windows
+          treats it as the frame, so the page thinks the pointer has left. */}
       <button type="button" onClick={() => update({ railLabels: !labels })} data-rail-toggle data-no-drag
         title={`${labels ? 'Collapse' : 'Expand'} (${mac ? '⌘' : 'Ctrl'}+B)`} aria-label={labels ? 'Collapse the menu' : 'Expand the menu'} aria-expanded={labels}
-        className="glass absolute -right-3 grid size-6 place-items-center rounded-full opacity-0 transition-[opacity,transform] duration-200 hover:scale-110 focus-visible:opacity-100 group-hover/rail:opacity-100"
-        style={{ top: (mac ? 38 : 10) + 6, color: 'var(--text-dim)', background: 'var(--bg-raised)', boxShadow: 'var(--shadow-card)' }}>
+        className="glass absolute -right-3 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full opacity-0 transition-[opacity,scale] duration-200 [transition-delay:600ms,0ms] before:absolute before:-inset-3 before:content-[''] hover:scale-110 focus-visible:opacity-100 focus-visible:[transition-delay:0ms] group-hover/rail:opacity-100 group-hover/rail:[transition-delay:0ms]"
+        style={{ color: 'var(--text-dim)', background: 'var(--bg-raised)', boxShadow: 'var(--shadow-card)' }}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden
           className="transition-transform duration-300" style={{ transform: labels ? 'scaleX(-1)' : undefined }}><path d="m6 4 4 4-4 4" /></svg>
       </button>

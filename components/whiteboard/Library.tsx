@@ -188,7 +188,7 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
             className="w-44 rounded-full border px-3 py-1 text-[12px] outline-none focus:w-60"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)', transition: 'width 160ms ease' }} />
         </MergedHeader>} />}
-      <div className="mx-auto max-w-[96rem] px-5 pb-28 pt-4 sm:px-8">
+      <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-28 pt-4">
         {/* Today against your limits, as on the board: information, never a lock. */}
         <div className="mb-2 flex justify-center empty:hidden"><RiskBanner trades={realTrades} /></div>
         {/* One bar: the view, the grouping, the filters, the search. */}

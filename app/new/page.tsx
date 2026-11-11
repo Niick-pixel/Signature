@@ -45,8 +45,8 @@ export default async function NewTradePage({
             when the card already fits the window it is eighty pixels standing
             between fitting and not.
           */}
-          <div className="mx-auto w-full max-w-[96rem] px-4 pb-20 pt-4 sm:px-6
-            2xl:max-w-[132rem] 2xl:pb-10">
+          <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-20 pt-4
+            2xl:pb-10">
             {/* Two sets, one per world: a backtest is shown what earlier
                 backtests taught, a real trade what real trades did. */}
             <NewTradeForm trade={trade ?? undefined}

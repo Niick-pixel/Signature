@@ -142,7 +142,7 @@ export default async function CalendarPage(
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[88rem] px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-20 pt-4">
           <InTitleBar
             merged={<MergedHeader title="Calendar" data="calendar" sub={`${MONTHS[month]} ${year}`}><AccountSwitcher available={accounts} current={account} /></MergedHeader>}
             inline={

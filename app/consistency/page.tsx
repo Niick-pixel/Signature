@@ -10,7 +10,7 @@ export default async function ConsistencyRoute({ searchParams }: { searchParams:
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[68rem] px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-read)] px-6 pb-20 pt-4">
           <ConsistencyView initialWeek={week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? week : null} />
         </div>
       </div>

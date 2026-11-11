@@ -42,7 +42,7 @@ export function ReportsView({ initialTab, embed = false }: { initialTab: Tab; em
         {tab !== 'heatmap' && <Seg value={world} onChange={setWorld} options={['real', 'backtest', 'all'] as const} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />}
   </>);
   return (
-    <div className={embed ? '' : 'mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4'} data-reports={tab}>
+    <div className={embed ? '' : 'mx-auto w-full max-w-[var(--page-wide)] px-6 pb-24 pt-4'} data-reports={tab}>
       {!embed && (
       <InTitleBar
         merged={<MergedHeader title={<>Reports</>} sub={<>{data ? `${rows.length} settled trades` : 'Reading…'}</>} data="reports">

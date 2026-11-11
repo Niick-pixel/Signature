@@ -86,7 +86,7 @@ export function TradeView(p: TradeViewProps) {
   const openOnBoard = () => { try { window.sessionStorage.setItem(OPEN_TRADE_KEY, t.id); } catch { /* fine */ } navigate('/'); };
 
   return (
-    <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-trade-page={t.id}>
+    <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-24 pt-4" data-trade-page={t.id}>
       {/* Header: its own row with top tabs; in the title bar with the side rail (the chips and the result stay here). */}
       <InTitleBar
         merged={<MergedHeader data="trade" title={<>{t.setup_type} {t.direction === 'Long' ? '↗' : '↘'} <span style={{ color: 'var(--text-faint)' }}>· {t.instrument}</span></>}

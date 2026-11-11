@@ -57,7 +57,7 @@ export function AnalyticsView({ initialTab, embed = false }: { initialTab: Analy
         </div>
   </>);
   return (
-    <div className={embed ? '' : 'mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4'} data-analytics={tab}>
+    <div className={embed ? '' : 'mx-auto w-full max-w-[var(--page-wide)] px-6 pb-24 pt-4'} data-analytics={tab}>
       {!embed && (
       <InTitleBar
         merged={<MergedHeader title={<>Analytics</>} sub={<>{data ? `${data.count} settled trades · ${{ real: 'real accounts', backtest: 'backtests', all: 'real and backtest' }[data.world as 'real']}` : 'Reading…'} · fewer than {prefs.analyticsMinN} trades is an early signal, never a verdict.</>} data="analytics">

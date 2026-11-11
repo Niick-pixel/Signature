@@ -297,8 +297,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
       : op === 'out' ? unstack(l, selTile.id, uid, newId()) : removeWidget(l, selTile.id, uid));
   };
 
-  /** The same column as the Dashboard tab (max-w-[80rem]), unless the board is set to full width. */
-  const col = s.width === 'app' ? 'mx-auto max-w-[80rem]' : '';
+  /** The app's wide column (--page-wide, like the Dashboard), unless the board is set to full width. */
+  const col = s.width === 'app' ? 'mx-auto w-full max-w-[var(--page-wide)]' : '';
   const pill = (on: boolean) => ({ borderColor: on ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: on ? 'rgb(var(--accent) / 0.12)' : 'transparent', color: on ? 'rgb(var(--accent))' : 'var(--text-dim)' });
   const bg = s.background === 'gradient' ? 'radial-gradient(1200px 600px at 15% -10%, rgb(var(--accent) / 0.10), transparent 60%), radial-gradient(900px 500px at 100% 110%, rgb(var(--accent) / 0.07), transparent 60%)'
     : s.background === 'blurred' ? 'radial-gradient(500px 360px at 20% 20%, rgb(var(--accent) / 0.16), transparent 70%), radial-gradient(520px 380px at 80% 75%, rgb(var(--sem-good) / 0.10), transparent 70%)' : undefined;

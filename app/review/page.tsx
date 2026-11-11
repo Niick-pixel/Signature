@@ -48,7 +48,7 @@ export default async function ReviewPage(
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[50rem] px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-read)] px-6 pb-20 pt-4">
           <WeeklyReviewFlow
             week={week}
             trades={worthReviewing}

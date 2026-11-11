@@ -60,7 +60,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
   const scope = [chosen.length ? chosen.map((k) => accounts.find((a) => a.key === k)?.label ?? k).join(', ') : WORLD_LABEL[prefs.dashWorld],
     f.period !== 'all' ? DASH_PERIODS.find(([k]) => k === f.period)?.[1] : null, f.sessions.length ? f.sessions.join(', ') : null, f.dirs.length ? f.dirs.join(', ') : null].filter(Boolean).join(' · ');
   return (
-    <div className="mx-auto flex w-full max-w-[80rem] flex-col px-6 pb-6 pt-3 xl:h-full" data-dashboard>
+    <div className="mx-auto flex w-full max-w-[var(--page-wide)] flex-col px-6 pb-6 pt-4 xl:h-full" data-dashboard>
       <InTitleBar
         merged={<MergedHeader title="Dashboard" data="dashboard" sub={<>{new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · {scope}</>}>
           <div className="flex items-center gap-1.5" data-dash-accounts>

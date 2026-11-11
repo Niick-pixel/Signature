@@ -109,7 +109,7 @@ export function ExecutionsImport({ stored }: { stored: ExecutionRow[] }) {
           className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>Customize</button>
   </>);
   return (
-    <div className="mx-auto w-full max-w-[64rem] px-6 pb-24 pt-4" data-executions-page>
+    <div className="mx-auto w-full max-w-[var(--page-read)] px-6 pb-24 pt-4" data-executions-page>
       <InTitleBar
         merged={<MergedHeader title={<>Executions</>} sub={<>Import the trade file your platform exports. Each round trip is matched to the trade you logged and fills in exact entry, exit, times, size and fees — only what the trade is missing, unless you say otherwise in Settings.</>} data="executions">
         {headActions}

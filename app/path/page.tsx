@@ -20,7 +20,7 @@ export default async function PathRoute({ searchParams }: { searchParams: Promis
     <div className="flex h-dvh flex-col">
       <TitleBar />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[64rem] px-6 pb-20 pt-4">
+        <div className="mx-auto w-full max-w-[var(--page-read)] px-6 pb-20 pt-4">
           <PathView steps={steps} events={events} purchases={listPurchases()} eventTrades={eventTrades} startEditing={edit === '1'}
             redDays={(() => { const r = redDayStatus(); return { withPage: r.withPage, without: r.without, skipped: r.skipped, since: r.since }; })()} />
         </div>
