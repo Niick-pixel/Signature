@@ -51,7 +51,7 @@ export function StatsBoard({ page }: { page: BoardPage }) {
   };
   // Each board remembers its own source: switching saves it, then reloads.
   const setSource = async (v: Source) => {
-    await fetch('/api/dashboard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'source', board: board.id, source: v }) });
+    await fetch('/api/stats-board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'source', board: board.id, source: v }) });
     router.push(href({ src: undefined }), { scroll: false });
     router.refresh();
   };
