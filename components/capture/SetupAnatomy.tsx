@@ -90,7 +90,8 @@ export function SetupAnatomy({ a, set }: { a: Anatomy; set: Set }) {
     <div className="space-y-3" data-setup-anatomy>
       {/* Three questions the engine leans on (the Rule Lab, the setup score, planned vs achieved);
           everything else is optional and folded — several restate the checklist. */}
-      <Disclosure label={`Setup detail · optional${filled ? ` · ${filled} recorded` : ''}`}>
+      {/* Open from the start: three taps, and without them half of Stats has nothing to read. Still never required. */}
+      <Disclosure defaultOpen label={`Setup detail · three taps Stats reads${filled ? ` · ${filled} recorded` : ''}`}>
         <div className="space-y-3" data-anatomy-body>
           <Row label="Entry" help="How you got in. Anticipation entries (before the close) are one of the Rule Lab's tests."><Chips options={ENTRY_METHODS} value={a.entry_method as never} onChange={(v) => set('entry_method', v)} /></Row>
           <Row label="Inversion candle" help="Dodgy's rating: candle strength 0–4, inversion speed 0–3, R:R 0–3. The closure score is their sum, out of 10 — the setup score learns whether it predicts R.">

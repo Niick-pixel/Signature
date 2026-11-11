@@ -2,6 +2,7 @@
 
 import { DrillChip, type DrillKept } from './DrillChip';
 import { PlanChip, type PlanScenario } from './PlanChip';
+import { FilterNote } from './FilterNote';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InCaptureSheet } from './CaptureSheet';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
@@ -1203,6 +1204,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
               onPass={() => { setOutcome('Not taken'); confirm('outcome'); setStatus('Settled'); confirm('status'); }} />
           </div>
 
+          {!editing && <FilterNote />}
           {/* Grade before you look: one click, optional, never in the way. */}
           {!editing && (
             <div data-grade-lock={gradeLock ? (gradeLock.beforeOutcome ? 'before' : 'after') : 'open'}
@@ -1229,7 +1231,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
                     <LockIcon /> Lock grade
                   </motion.button>
                   <span className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
-                    {outcomeWritten ? 'Optional. The outcome is already in, so it would count as graded after.' : 'Optional. Lock before the result and it counts as graded before the outcome.'}
+                    {outcomeWritten ? 'The outcome is already in, so it would count as graded after.' : 'Grade first: it locks by itself when you pick how the trade ended, and counts as graded before the outcome.'}
                   </span>
                 </>
               )}
@@ -1315,6 +1317,9 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
                 <Segmented
                   value={pending('outcome') ? null : outcome === 'Win' && partialWin ? 'Partial win' : outcome}
                   onChange={(o) => {
+                    // Graded first, result second: the grade locks itself as "before the outcome" the moment the
+                    // result goes in, so it can't drift toward what happened. Unlock is one click, and says so.
+                    if (!editing && !gradeLock && !outcomeWritten && live.score > 0) setGradeLock({ at: new Date().toISOString(), beforeOutcome: true });
                     setPartialWin(o === 'Partial win');
                     setOutcome(o === 'Partial win' ? 'Win' : o);
                     confirm('outcome');
