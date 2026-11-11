@@ -26,7 +26,8 @@ jobs:
   # export/import round trip. A red run here means no build and no release:
   # sizing decisions get made off these numbers.
   test:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright's Chromium does not install on ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
