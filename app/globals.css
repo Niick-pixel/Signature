@@ -1060,3 +1060,5 @@ html[data-rail='icons'] header.titlebar-drag [data-tabs], html[data-rail='labels
 html[data-rail='icons'] [data-title-slot], html[data-rail='labels'] [data-title-slot] { display: flex; }
 /* A page whose header merges into the title bar: its own row is gone from the first paint. */
 html[data-rail='icons'] [data-inline-header], html[data-rail='labels'] [data-inline-header] { display: none !important; }
+/* A page's buttons in the title bar take the bar's size (components/shell/TitleSlot MergedHeader). */
+[data-merged-header] .ui-btn { padding: 0.25rem 0.8rem; font-size: 12px; border-radius: 999px; }

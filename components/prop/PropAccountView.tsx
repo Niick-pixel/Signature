@@ -1,5 +1,6 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { SwapIn } from '@/components/ui/Motion';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -34,10 +35,14 @@ export function PropAccountView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-prop-account={a.id}>
-      <Link href="/prop" className="text-[11px]" style={{ color: 'var(--text-faint)' }}>← All accounts</Link>
+      {/* With the side rail the name and the way back are in the title bar; these two are hidden (data-inline-header). */}
+      <InTitleBar inline={null} merged={<MergedHeader data="prop-account" title={<>{a.firm} <span style={{ color: 'var(--text-faint)' }}>· {a.plan}</span></>}>
+        <Link href="/prop" className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>← All accounts</Link>
+      </MergedHeader>} />
+      <Link href="/prop" className="text-[11px]" style={{ color: 'var(--text-faint)' }} data-inline-header>← All accounts</Link>
       <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="truncate text-[24px] font-semibold tracking-tight">{a.firm} <span style={{ color: 'var(--text-faint)' }}>· {a.plan}</span></h1>
+          <h1 data-inline-header className="truncate text-[24px] font-semibold tracking-tight">{a.firm} <span style={{ color: 'var(--text-faint)' }}>· {a.plan}</span></h1>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             <Chip color={a.phase === 'funded' ? 'rgb(var(--outcome-win))' : undefined}>{a.phase === 'funded' ? 'Funded' : 'Evaluation'}</Chip>
             <Chip>{a.journal_account}{a.label ? ` · ${a.label}` : ' · any label'}</Chip>

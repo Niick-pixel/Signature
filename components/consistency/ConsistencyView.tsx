@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
+
 import { SwapIn } from '@/components/ui/Motion';
 import { useCallback, useEffect, useState } from 'react';
 import { useLive, useLiveTick } from '@/lib/useLive';
@@ -51,8 +53,24 @@ export function ConsistencyView({ initialWeek }: { initialWeek: string | null })
   const week = Array.from({ length: 5 }, (_, i) => addDays(monday, i));
   const byDay = new Map((report?.days ?? []).map((d) => [d.day, d]));
 
+  // The header's actions, once: in the title bar (side rail) or in the page's own header row.
+  const headActions = (<>
+        <div className="flex items-center gap-1.5 text-[12px]">
+          <NavButton onClick={() => setMonday(addDays(monday, -7))} label="Previous week">‹</NavButton>
+          <span className="min-w-[9.5rem] text-center font-medium tabular-nums" data-consistency-week={monday}>
+            {monday === thisWeek ? 'This week' : `${fmt(monday)} – ${fmt(addDays(monday, 4))}`}
+          </span>
+          <NavButton onClick={() => setMonday(addDays(monday, 7))} label="Next week" disabled={monday >= thisWeek}>›</NavButton>
+        </div>
+  </>);
   return (
     <div data-consistency>
+      <InTitleBar
+        merged={<MergedHeader title={<>Consistency</>} sub={<>Did you do the process — prep, rules, journal, review — each trading day. Not P&amp;L: a red day with every ring closed is a good day here.
+            Weekends and market holidays never break a streak.</>} data="consistency">
+        {headActions}
+        </MergedHeader>}
+        inline={<>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-semibold tracking-tight">Consistency</h1>
@@ -61,14 +79,9 @@ export function ConsistencyView({ initialWeek }: { initialWeek: string | null })
             Weekends and market holidays never break a streak.
           </p>
         </div>
-        <div className="flex items-center gap-1.5 text-[12px]">
-          <NavButton onClick={() => setMonday(addDays(monday, -7))} label="Previous week">‹</NavButton>
-          <span className="min-w-[9.5rem] text-center font-medium tabular-nums" data-consistency-week={monday}>
-            {monday === thisWeek ? 'This week' : `${fmt(monday)} – ${fmt(addDays(monday, 4))}`}
-          </span>
-          <NavButton onClick={() => setMonday(addDays(monday, 7))} label="Next week" disabled={monday >= thisWeek}>›</NavButton>
-        </div>
+        {headActions}
       </div>
+        </>} />
 
       <SwapIn k={monday}><div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card>

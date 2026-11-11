@@ -1,3 +1,4 @@
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { listTrades } from '@/db/trades';
 import { listBlindGrades } from '@/db/edge';
 import { TitleBar } from '@/components/shell/TitleBar';
@@ -29,12 +30,17 @@ export default async function BlindPage() {
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[60rem] space-y-5 px-6 pb-20 pt-4">
+          <InTitleBar
+            merged={<MergedHeader title={<>Blind Re-grade</>} sub={<>Past setups up to the entry candle, everything after it hidden. {pool.length} setup{pool.length === 1 ? '' : 's'} have an entry marked · {counter.thisWeek} graded this week · {counter.total} in all.</>} data="blind">
+            </MergedHeader>}
+            inline={<>
           <header>
             <h1 className="text-[22px] font-semibold tracking-tight">Blind Re-grade</h1>
             <p className="text-[12.5px]" style={{ color: 'var(--text-dim)' }}>
               Past setups up to the entry candle, everything after it hidden. {pool.length} setup{pool.length === 1 ? '' : 's'} have an entry marked · {counter.thisWeek} graded this week · {counter.total} in all.
             </p>
           </header>
+            </>} />
           <BlindSession items={items} />
           <section className="glass grid gap-5 rounded-[calc(20px*var(--rk))] px-5 py-4 text-[12px] md:grid-cols-2" data-blind-stats>
             <div>

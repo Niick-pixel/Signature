@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
+
 import { outcomeLabel } from '@/lib/domain';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -71,8 +73,22 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
     window.location.href = `/review?week=${d.toISOString().slice(0, 10)}`;
   };
 
+  // The header's actions, once: in the title bar (side rail) or in the page's own header row.
+  const headActions = (<>
+        <div className="flex shrink-0 gap-2">
+          <Button onClick={() => shift(-1)}>←</Button>
+          <Button onClick={() => shift(1)}>→</Button>
+          <Button onClick={() => { window.location.href = '/'; }}>Close</Button>
+        </div>
+  </>);
   return (
     <motion.div {...riseIn} transition={spring} className="glass rounded-[calc(28px*var(--rk))] p-7 sm:p-9">
+      <InTitleBar
+        merged={<MergedHeader title={<>Weekly review</>} sub={<>Week of {new Date(`${week}T12:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
+            {' · '}{trades.length} of {totalInWeek} trade{totalInWeek === 1 ? '' : 's'} worth arguing with</>} data="weekly-review">
+        {headActions}
+        </MergedHeader>}
+        inline={<>
       <div className="mb-7 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight">Weekly review</h1>
@@ -81,12 +97,9 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
             {' · '}{trades.length} of {totalInWeek} trade{totalInWeek === 1 ? '' : 's'} worth arguing with
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <Button onClick={() => shift(-1)}>←</Button>
-          <Button onClick={() => shift(1)}>→</Button>
-          <Button onClick={() => { window.location.href = '/'; }}>Close</Button>
-        </div>
+        {headActions}
       </div>
+        </>} />
 
       {trades.length === 0 ? (
         <p className="text-[13px]" style={{ color: 'var(--text-dim)' }}>

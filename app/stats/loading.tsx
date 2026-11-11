@@ -8,7 +8,8 @@ export default function StatsLoading() {
       <TitleBar />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[68rem] space-y-4 px-6 pb-20 pt-4" data-stats-loading>
-          <div className="h-7 w-24 animate-pulse rounded-full" style={{ background: 'var(--glass-fill)' }} />
+          {/* The title's place: with the side rail the title is in the title bar, so there is none (data-inline-header). */}
+          <div data-inline-header className="h-7 w-24 animate-pulse rounded-full" style={{ background: 'var(--glass-fill)' }} />
           <div className="h-6 w-2/3 animate-pulse rounded-full" style={{ background: 'var(--glass-fill)' }} />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{['a', 'b', 'c', 'd', 'e', 'f'].map((k) => block('h-36', k))}</div>
           {block('h-48', 'hero')}

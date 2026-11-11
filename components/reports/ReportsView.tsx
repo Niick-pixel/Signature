@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useConfirm } from '@/components/ui/Confirm';
 import { Help } from '@/components/ui/Help';
@@ -34,15 +36,25 @@ export function ReportsView({ initialTab }: { initialTab: Tab }) {
   const go = (t: Tab) => { setTab(t); window.history.replaceState(null, '', `/reports?tab=${t}`); };
   const rows = useMemo(() => (data ? applyFilter(data.rows, { world }) : []), [data, world]);
 
+  // The header's actions, once: in the title bar (side rail) or in the page's own header row.
+  const headActions = (<>
+        {tab !== 'heatmap' && <Seg value={world} onChange={setWorld} options={['real', 'backtest', 'all'] as const} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />}
+  </>);
   return (
     <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-reports={tab}>
+      <InTitleBar
+        merged={<MergedHeader title={<>Reports</>} sub={<>{data ? `${rows.length} settled trades` : 'Reading…'}</>} data="reports">
+        {headActions}
+        </MergedHeader>}
+        inline={<>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Reports</h1>
           <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>{data ? `${rows.length} settled trades` : 'Reading…'}</p>
         </div>
-        {tab !== 'heatmap' && <Seg value={world} onChange={setWorld} options={['real', 'backtest', 'all'] as const} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />}
+        {headActions}
       </div>
+        </>} />
       <div className="mt-5 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--glass-stroke)' }} role="tablist">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => go(t.id)} data-reports-tab={t.id}

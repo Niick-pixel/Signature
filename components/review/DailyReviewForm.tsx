@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
+
 import { useEffect, useState } from 'react';
 import { shortcutAllowed } from '@/lib/keys';
 import { motion } from 'framer-motion';
@@ -68,18 +70,8 @@ export function DailyReviewForm({ day, existing, tradesOnDay }: {
     return () => document.removeEventListener('keydown', onKey);
   });
 
-  return (
-    <motion.div {...riseIn} transition={spring} className="glass rounded-[calc(28px*var(--rk))] p-7 sm:p-9">
-      <div className="mb-7 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-tight">Daily review</h1>
-          <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
-            {new Date(`${day}T12:00:00Z`).toLocaleDateString(undefined, {
-              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-            })}
-            {' · '}{tradesOnDay} trade{tradesOnDay === 1 ? '' : 's'} logged
-          </p>
-        </div>
+  // The header's actions, once: in the title bar (side rail) or in the page's own header row.
+  const headActions = (<>
         <div className="flex shrink-0 gap-2">
           <Button title="The day before" onClick={() => shift(-1)}>←</Button>
           <Button title="The day after" onClick={() => shift(1)}>→</Button>
@@ -101,7 +93,30 @@ export function DailyReviewForm({ day, existing, tradesOnDay }: {
             Close
           </Button>
         </div>
+  </>);
+  return (
+    <motion.div {...riseIn} transition={spring} className="glass rounded-[calc(28px*var(--rk))] p-7 sm:p-9">
+      <InTitleBar
+        merged={<MergedHeader title={<>Daily review</>} sub={<>{new Date(`${day}T12:00:00Z`).toLocaleDateString(undefined, {
+              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+            })}
+            {' · '}{tradesOnDay} trade{tradesOnDay === 1 ? '' : 's'} logged</>} data="daily-review">
+        {headActions}
+        </MergedHeader>}
+        inline={<>
+      <div className="mb-7 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight">Daily review</h1>
+          <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
+            {new Date(`${day}T12:00:00Z`).toLocaleDateString(undefined, {
+              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+            })}
+            {' · '}{tradesOnDay} trade{tradesOnDay === 1 ? '' : 's'} logged
+          </p>
+        </div>
+        {headActions}
       </div>
+        </>} />
 
       <div className="space-y-8">
         <div>

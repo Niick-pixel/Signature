@@ -6,6 +6,7 @@ import { accountsInUse } from '@/lib/stats';
 import { applyStatsScope, parseStatsScope } from '@/lib/statsScope';
 import { THEMES, phraseSentences, themeSentences, themesOf } from '@/lib/insights';
 import { TitleBar } from '@/components/shell/TitleBar';
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { OpenOnBoard } from '@/components/stats/OpenOnBoard';
 import type { Trade } from '@/lib/types';
 
@@ -44,6 +45,13 @@ export default async function TradesFor({ searchParams }: { searchParams: Promis
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[84rem] px-6 pb-20 pt-4">
+          <InTitleBar
+            merged={<MergedHeader data="stats-trades" title={title} sub={<>{matched.length} trade{matched.length === 1 ? '' : 's'} · {losers.length} lost or flat · {winners.length} won ·{' '}
+              <span style={{ color: net < 0 ? 'rgb(var(--outcome-loss))' : 'rgb(var(--outcome-win))' }}>{net < 0 ? '−' : '+'}{Math.abs(net).toFixed(1)}R</span>
+              {def && <> — <i>{def.rule}</i></>}</>}>
+              <a href={`/stats?${back}`} className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>← Stats</a>
+            </MergedHeader>}
+            inline={<>
           <a href={`/stats?${back}`} className="text-[12px]" style={{ color: 'var(--text-dim)' }}>← Stats</a>
           <header className="mb-5 mt-2">
             <h1 className="text-[22px] font-semibold tracking-tight">{title}</h1>
@@ -53,6 +61,7 @@ export default async function TradesFor({ searchParams }: { searchParams: Promis
               {def && <> — <i>{def.rule}</i></>}
             </p>
           </header>
+            </>} />
           {matched.length === 0 ? <p className="text-[13px]" style={{ color: 'var(--text-faint)' }}>No trades in view match.</p> : (
             <div className="grid gap-6 lg:grid-cols-2">
               <Column title="Lost or flat" hue="--outcome-loss" trades={losers} said={said} />

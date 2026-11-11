@@ -48,7 +48,7 @@ export function Button({
             : 'var(--shadow-card), 0 0 0px rgb(0 0 0 / 0)',
       }}
       transition={spring}
-      className={`relative select-none rounded-[calc(14px*var(--rk))] border px-5 py-2.5 text-[13px] font-medium
+      className={`ui-btn relative select-none rounded-[calc(14px*var(--rk))] border px-5 py-2.5 text-[13px] font-medium
         outline-none disabled:pointer-events-none disabled:opacity-40 ${VARIANTS[variant]} ${className}`}
       style={{
         background: isPrimary ? `rgb(${accent})` : 'var(--glass-fill)',

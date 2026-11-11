@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
+
 import { SwapIn } from '@/components/ui/Motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
@@ -45,8 +47,21 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
   useEffect(() => { load(); window.addEventListener(JOURNAL_CHANGED, load); return () => window.removeEventListener(JOURNAL_CHANGED, load); }, [load]);
   const go = (t: AnalyticsTab) => { setTab(t); window.history.replaceState(null, '', `/analytics?tab=${t}`); };
 
+  // The header's actions, once: in the title bar (side rail) or in the page's own header row.
+  const headActions = (<>
+        <div className="flex items-center gap-2">
+          <Seg<Preferences['analyticsWorld']> value={prefs.analyticsWorld} onChange={(analyticsWorld) => update({ analyticsWorld })}
+            options={['real', 'backtest', 'all']} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />
+          <Pill onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'analytics' } }))}>Customize</Pill>
+        </div>
+  </>);
   return (
     <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-analytics={tab}>
+      <InTitleBar
+        merged={<MergedHeader title={<>Analytics</>} sub={<>{data ? `${data.count} settled trades · ${{ real: 'real accounts', backtest: 'backtests', all: 'real and backtest' }[data.world as 'real']}` : 'Reading…'} · fewer than {prefs.analyticsMinN} trades is an early signal, never a verdict.</>} data="analytics">
+        {headActions}
+        </MergedHeader>}
+        inline={<>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Analytics</h1>
@@ -54,12 +69,9 @@ export function AnalyticsView({ initialTab }: { initialTab: AnalyticsTab | null 
             {data ? `${data.count} settled trades · ${{ real: 'real accounts', backtest: 'backtests', all: 'real and backtest' }[data.world as 'real']}` : 'Reading…'} · fewer than {prefs.analyticsMinN} trades is an early signal, never a verdict.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Seg<Preferences['analyticsWorld']> value={prefs.analyticsWorld} onChange={(analyticsWorld) => update({ analyticsWorld })}
-            options={['real', 'backtest', 'all']} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />
-          <Pill onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'analytics' } }))}>Customize</Pill>
-        </div>
+        {headActions}
       </div>
+        </>} />
 
       <div className="mt-5 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--glass-stroke)' }} role="tablist">
         {ANALYTICS_TABS.map((t) => (

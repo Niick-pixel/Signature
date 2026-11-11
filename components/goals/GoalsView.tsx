@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
+
 import { AnimatePresence, motion } from 'framer-motion';
 import { exitQuick, spring } from '@/lib/motion';
 import { Reveal } from '@/components/ui/Motion';
@@ -43,8 +45,21 @@ export function GoalsView() {
   const live = (rows ?? []).filter((r) => !r.goal.archived);
   const archived = (rows ?? []).filter((r) => r.goal.archived);
 
+  // The header's actions, once: in the title bar (side rail) or in the page's own header row.
+  const headActions = (<>
+        <button type="button" onClick={() => setAdding(true)} data-goal-add
+          className="rounded-full px-4 py-2 text-[12.5px] font-semibold" style={{ background: 'var(--text)', color: 'var(--bg)' }}>
+          + New goal
+        </button>
+  </>);
   return (
     <div data-goals>
+      <InTitleBar
+        merged={<MergedHeader title={<>Goals</>} sub={<>Habits, not P&amp;L. The journal checks each one from your trades, prep and study on its own; once a week you say how it felt.
+            A goal never stops a trade from being logged.</>} data="goals">
+        {headActions}
+        </MergedHeader>}
+        inline={<>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-semibold tracking-tight">Goals</h1>
@@ -53,11 +68,9 @@ export function GoalsView() {
             A goal never stops a trade from being logged.
           </p>
         </div>
-        <button type="button" onClick={() => setAdding(true)} data-goal-add
-          className="rounded-full px-4 py-2 text-[12.5px] font-semibold" style={{ background: 'var(--text)', color: 'var(--bg)' }}>
-          + New goal
-        </button>
+        {headActions}
       </div>
+        </>} />
 
       {rows && !live.length && (
         <div className="glass rounded-[calc(20px*var(--rk))] px-6 py-10 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>

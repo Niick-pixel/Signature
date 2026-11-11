@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -101,8 +103,18 @@ export function ExecutionsImport({ stored }: { stored: ExecutionRow[] }) {
   const linked = stored.filter((e) => e.trade_id);
   const candidatesFor = (day: string) => (preview?.candidates ?? []).filter((c) => c.day === day);
 
+  // The header's actions, once: in the title bar (side rail) or in the page's own header row.
+  const headActions = (<>
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}
+          className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>Customize</button>
+  </>);
   return (
     <div className="mx-auto w-full max-w-[64rem] px-6 pb-24 pt-4" data-executions-page>
+      <InTitleBar
+        merged={<MergedHeader title={<>Executions</>} sub={<>Import the trade file your platform exports. Each round trip is matched to the trade you logged and fills in exact entry, exit, times, size and fees — only what the trade is missing, unless you say otherwise in Settings.</>} data="executions">
+        {headActions}
+        </MergedHeader>}
+        inline={<>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Executions</h1>
@@ -110,9 +122,9 @@ export function ExecutionsImport({ stored }: { stored: ExecutionRow[] }) {
             Import the trade file your platform exports. Each round trip is matched to the trade you logged and fills in exact entry, exit, times, size and fees — only what the trade is missing, unless you say otherwise in Settings.
           </p>
         </div>
-        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}
-          className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>Customize</button>
+        {headActions}
       </div>
+        </>} />
 
       {/* The file, and how to read it */}
       <section className="glass mt-5 rounded-[calc(20px*var(--rk))] p-5" data-card>

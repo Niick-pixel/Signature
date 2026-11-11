@@ -1,5 +1,6 @@
 'use client';
 
+import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -52,6 +53,7 @@ export function TradeView(p: TradeViewProps) {
   const { trade: t, metrics: m } = p;
   const router = useRouter();
   const { prefs } = usePreferences();
+  const merged = useMergedHeader();
   const on = prefs.tradeSections;
 
   // ← and → walk through trades in the order they were taken; E edits.
@@ -85,6 +87,20 @@ export function TradeView(p: TradeViewProps) {
 
   return (
     <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-trade-page={t.id}>
+      {/* Header: its own row with top tabs; in the title bar with the side rail (the chips and the result stay here). */}
+      <InTitleBar
+        merged={<MergedHeader data="trade" title={<>{t.setup_type} {t.direction === 'Long' ? '↗' : '↘'} <span style={{ color: 'var(--text-faint)' }}>· {t.instrument}</span></>}
+          sub={tradeWhen(t, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}>
+          <NavArrow href={p.prev} label="Previous trade (←)">←</NavArrow>
+          <NavArrow href={p.next} label="Next trade (→)">→</NavArrow>
+          <div className="flex gap-2">
+
+            <HeadButton onClick={() => navigate(`/new?edit=${t.id}`)} title="Edit (E)">Edit</HeadButton>
+            <HeadButton onClick={openOnBoard}>On the board</HeadButton>
+            <HeadButton onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}>Customize</HeadButton>
+          </div>
+        </MergedHeader>}
+        inline={<>
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
@@ -114,6 +130,25 @@ export function TradeView(p: TradeViewProps) {
           </div>
         </div>
       </div>
+
+        </>} />
+      {merged && (
+        <div className="flex flex-wrap items-start justify-between gap-4" data-trade-head>
+          <div className="min-w-0">
+          <div className="flex flex-wrap gap-1.5">
+            <Chip>{accountLabel(t.account)}{t.account_label ? ` · ${t.account_label}` : ''}</Chip>
+            <Chip color={outcomeColor}>{outcomeLabel(t)}</Chip>
+            <Chip>Grade {t.grade_letter}{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
+            <Chip>{t.session}</Chip>
+            {t.status !== 'Settled' && <Chip>{t.status}</Chip>}
+          </div>
+          </div>
+          <div className="text-right">
+          <div className="text-[40px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: tone(t.r_multiple) }}>{rr(t.r_multiple)}</div>
+          <div className="mt-1 text-[14px] font-medium tabular-nums" style={{ color: tone(money) }} data-money="">{usd(money)}</div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
