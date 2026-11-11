@@ -5,7 +5,7 @@
  * sparkline; at M it adds its chart. A flaw at M is its chart and the drill;
  * at L, the whole card. Never the same layout scaled.
  */
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SizeKey, WidgetCfg } from '@/lib/dashboard/types';
 import type { BarsVM, DrillVM, FlawVM, HeatVM, KpiVM, LineVM, ListVM, RingsVM, TextVM, TooEarly, ViewModel } from '@/lib/dashboard/vm';
@@ -158,35 +158,55 @@ function Text({ vm, size }: { vm: TextVM; size: SizeKey }) {
 
 function List({ vm, size }: { vm: ListVM; size: SizeKey }) {
   if (!vm.rows.length) return <p className="flex h-full items-center text-[12.5px]" style={{ color: 'var(--text-dim)' }}>{vm.empty}</p>;
+  // A short list reads in full (the box scrolls); a long one keeps rows to two lines, each opening in place.
+  const clamp = vm.rows.length > 4;
   return (
     <div className="flex h-full min-h-0 flex-col">
       {vm.summary && <p className="mb-1.5 truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>{vm.summary}</p>}
       <ScrollBox className="-mr-2 flex-1 pr-2">
         <ul className="flex flex-col gap-1.5" data-list>
-          {vm.rows.map((r) => {
-            const body = (
-              <>
-                <div className="flex items-baseline gap-2">
-                  <span className={`min-w-0 flex-1 ${size === 'S' ? 'line-clamp-2' : 'truncate'} text-[12.5px] font-medium`}>{r.title}</span>
-                  {r.value && <span className="shrink-0 text-[12px] font-semibold tabular-nums" style={{ color: r.tone && r.tone !== 'neutral' ? hue(r.tone) : 'var(--text)' }}>{r.value}</span>}
-                </div>
-                {r.sub && <p className="line-clamp-2 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>{r.sub}</p>}
-                {r.chips && r.chips.length > 0 && (
-                  <div className="mt-0.5 flex flex-wrap gap-1">
-                    {r.chips.slice(0, 4).map((c) => <span key={c} className="max-w-full truncate rounded-full px-2 py-px text-[10.5px]" style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}>{c}</span>)}
-                  </div>
-                )}
-              </>
-            );
-            return (
-              <li key={r.key} className="rounded-[calc(10px*var(--rk))] px-2.5 py-1.5" style={{ background: 'var(--glass-fill)' }}>
-                {r.href ? <a href={r.href} className="block">{body}</a> : body}
-              </li>
-            );
-          })}
+          {vm.rows.map((r) => <ListRow key={r.key} r={r} clamp={clamp} small={size === 'S'} />)}
         </ul>
       </ScrollBox>
     </div>
+  );
+}
+
+/** One row: its whole text when it fits; when it is cut, "more" opens it where it is. */
+function ListRow({ r, clamp, small }: { r: ListVM['rows'][number]; clamp: boolean; small: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [cut, setCut] = useState(false);
+  const text = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = text.current; if (!el) return;
+    const check = () => setCut([...el.querySelectorAll<HTMLElement>('[data-clamp]')].some((x) => x.scrollHeight > x.clientHeight + 1));
+    check();
+    const ro = new ResizeObserver(check); ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, clamp]);
+  const lines = open || !clamp ? '' : 'line-clamp-2';
+  const body = (
+    <div ref={text}>
+      <div className="flex items-baseline gap-2">
+        <span data-clamp className={`min-w-0 flex-1 ${open || !clamp ? '' : small ? 'line-clamp-3' : lines} text-[12.5px] font-medium leading-snug`}>{r.title}</span>
+        {r.value && <span className="shrink-0 text-[12px] font-semibold tabular-nums" style={{ color: r.tone && r.tone !== 'neutral' ? hue(r.tone) : 'var(--text)' }}>{r.value}</span>}
+      </div>
+      {r.sub && <p data-clamp className={`${lines} text-[11.5px] leading-snug`} style={{ color: 'var(--text-dim)' }}>{r.sub}</p>}
+      {r.chips && r.chips.length > 0 && (
+        <div className="mt-0.5 flex flex-wrap gap-1">
+          {r.chips.slice(0, 4).map((c) => <span key={c} className="max-w-full truncate rounded-full px-2 py-px text-[10.5px]" style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}>{c}</span>)}
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <li className="rounded-[calc(10px*var(--rk))] px-2.5 py-1.5" style={{ background: 'var(--glass-fill)' }} data-list-row={open ? 'open' : cut ? 'cut' : 'whole'}>
+      {r.href ? <a href={r.href} className="block">{body}</a> : body}
+      {(cut || open) && (
+        <button type="button" onClick={(e) => { e.preventDefault(); setOpen(!open); }} data-list-more
+          className="mt-0.5 text-[11px] font-medium" style={{ color: 'rgb(var(--accent))' }}>{open ? 'less' : 'more'}</button>
+      )}
+    </li>
   );
 }
 
@@ -267,9 +287,9 @@ function Flaw({ vm, size }: { vm: FlawVM; size: SizeKey }) {
     </div>
   );
   const head = (
-    <div className="flex items-baseline gap-2">
-      <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: hue('watch') }}>Flaw {vm.index + 1} of {vm.total}{vm.relapsed ? ' · relapsed' : ''}</span>
-      {vm.chip !== VERDICT_LABEL[vm.level] && <span className="truncate text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{vm.chip}</span>}
+    <div className="flex min-w-0 items-baseline gap-2">
+      <span className="shrink-0 whitespace-nowrap text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: hue('watch') }}>Flaw {vm.index + 1} of {vm.total}{vm.relapsed ? ' · relapsed' : ''}</span>
+      {vm.chip !== VERDICT_LABEL[vm.level] && <span className="min-w-0 truncate text-[10.5px]" style={{ color: 'var(--text-faint)' }} title={vm.chip}>{vm.chip}</span>}
     </div>
   );
   const proof = (
@@ -333,43 +353,75 @@ function Box({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/**
+ * The active drill, said plainly: the one habit you are working on, the two
+ * ways it is measured (what you answer on each trade, and what the trades
+ * themselves show), and where to answer it.
+ */
 function Drill({ vm, size }: { vm: DrillVM; size: SizeKey }) {
   const a = useFlawActions();
   const answered = vm.kept + vm.broken;
+  const clean = Math.min(vm.clean, 20);
   const per10 = (v: number | null) => (v == null ? '—' : v.toFixed(1));
+  // Answered "kept" but the trades still show the flaw: say why the two differ.
+  const mismatch = answered > 0 && vm.kept === answered && vm.clean === 0 && vm.sinceN > 0;
+  const rows = (
+    <div className="space-y-1.5 text-[11.5px] leading-snug" data-drill-rows>
+      <div className="flex items-baseline justify-between gap-2">
+        <span style={{ color: 'var(--text-faint)' }} title="What you answered on the trade form: Drill — Kept / Broken / N/A">You answered</span>
+        <span className="tabular-nums font-medium">{answered ? `kept ${vm.kept} of ${answered}` : 'not yet'}</span>
+      </div>
+      <div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span style={{ color: 'var(--text-faint)' }} title="Checked from each trade's own data: trades in a row, newest backwards, without the flaw">Your trades show</span>
+          <span className="tabular-nums font-medium" style={{ color: clean ? hue('good') : 'var(--text)' }}>{clean} of 20 clean in a row</span>
+        </div>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--glass-fill-strong)' }}>
+          <div className="h-full rounded-full" style={{ width: `${(clean / 20) * 100}%`, background: hue('good') }} />
+        </div>
+      </div>
+      {mismatch && <p style={{ color: hue('watch') }} data-drill-mismatch>Marked kept, but the flaw still shows in the trades themselves.</p>}
+    </div>
+  );
+  const how = <p className="text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }} data-drill-how>Answer it on every new trade (Drill: Kept · Broken · N/A). 20 clean in a row, kept on 90%: it graduates.</p>;
   if (size === 'S') {
     return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="truncate text-[13px] font-semibold">{vm.title}</div>
-        <p className="line-clamp-2 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>{vm.drill}</p>
-        <div className="mt-auto flex items-baseline justify-between text-[11.5px] tabular-nums">
-          <span>kept {answered ? `${vm.kept}/${answered}` : '—'}</span><span style={{ color: hue('good') }}>{Math.min(vm.clean, 20)}/20 clean</span>
+      <div className="flex h-full min-h-0 flex-col gap-1.5 pr-4" data-drill={vm.key}>
+        <div>
+          <div className="truncate text-[13px] font-semibold">{vm.title}</div>
+          <p className="line-clamp-2 text-[11.5px] leading-snug" style={{ color: 'var(--text-dim)' }} title={vm.drill}>{vm.drill}</p>
         </div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--glass-fill-strong)' }}><div className="h-full rounded-full" style={{ width: `${Math.min(100, (vm.clean / 20) * 100)}%`, background: hue('good') }} /></div>
+        <div className="mt-auto">{rows}</div>
+        <p className="truncate text-[10.5px]" style={{ color: 'var(--text-faint)' }} title="Answer it on every new trade (Drill: Kept · Broken · N/A). 20 clean trades in a row, kept on 90%: it graduates.">Answer it on each new trade · ? for how</p>
       </div>
     );
   }
   const max = Math.max(1, vm.before ?? 0, vm.after ?? 0);
   return (
-    <div className="grid h-full min-h-0 gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }} data-drill={vm.key}>
-      <div className="flex min-h-0 flex-col">
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: hue('good') }}>Since {vm.since}</span>
-        <div className="truncate text-[15px] font-semibold">{vm.title}</div>
-        <p className="line-clamp-2 text-[12px]" style={{ color: 'var(--text-dim)' }}>{vm.drill}</p>
-        <div className="mt-auto flex items-baseline gap-4 text-[12px] tabular-nums">
-          <span>kept <b>{answered ? `${vm.kept} of ${answered}` : '—'}</b></span>
-          <span>graduate <b style={{ color: hue('good') }}>{Math.min(vm.clean, 20)}/20</b></span>
-          {size === 'L' && <button type="button" onClick={() => void a.pause(vm.id)} className="ml-auto rounded-full border px-3 py-0.5 text-[11.5px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>Pause</button>}
+    <div className="grid h-full min-h-0 gap-4 pr-4" style={{ gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)' }} data-drill={vm.key}>
+      <div className="flex min-h-0 flex-col gap-2">
+        <div>
+          <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>The one habit you are working on · since {vm.since}</span>
+          <div className="truncate text-[15px] font-semibold">{vm.title}</div>
+          <p className="line-clamp-3 text-[12px] leading-snug" style={{ color: 'var(--text-dim)' }}>{vm.drill}</p>
+        </div>
+        <div className="mt-auto space-y-2">
+          {rows}
+          {how}
+          {size === 'L' && <button type="button" onClick={() => void a.pause(vm.id)} className="rounded-full border px-3 py-0.5 text-[11.5px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>Pause this drill</button>}
         </div>
       </div>
-      <div className="flex min-h-0 items-end justify-around gap-3">
-        {([['Before', vm.before, vm.baselineN, 'muted'], ['Since', vm.after, vm.sinceN, 'good']] as const).map(([l, v, n, t]) => (
-          <div key={l} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
-            <span className="text-[15px] font-semibold tabular-nums">{per10(v)}</span>
-            <div className="w-[60%] rounded-t-[6px]" style={{ height: `${((v ?? 0) / max) * 55}%`, minHeight: 3, background: hue(t, t === 'muted' ? 1 : 0.85) }} />
-            <span className="truncate text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{l} · {n} trades</span>
-          </div>
-        ))}
+      <div className="flex min-h-0 flex-col">
+        <span className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>How often the flaw happened, per 10 trades</span>
+        <div className="flex min-h-0 flex-1 items-end justify-around gap-3">
+          {([['Before', vm.before, vm.baselineN, 'muted'], ['Since', vm.after, vm.sinceN, 'good']] as const).map(([l, v, n, t]) => (
+            <div key={l} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+              <span className="text-[15px] font-semibold tabular-nums">{per10(v)}</span>
+              <div className="w-[60%] rounded-t-[6px]" style={{ height: `${((v ?? 0) / max) * 55}%`, minHeight: 3, background: hue(t, t === 'muted' ? 1 : 0.85) }} />
+              <span className="truncate text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{l} · {n} trades</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

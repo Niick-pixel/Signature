@@ -362,6 +362,11 @@ add({
   help: 'Expectancy by how many losses you had already taken that day and which trade of the day it was, shrunk toward your mean. Real trading days only.',
   select: (v) => {
     const rows = ['0', '1', '2+'] as const; const cols = ['1st', '2nd', '3rd+'] as const;
+    // No real trading day in scope (a backtest board, a quiet period): say so, never an empty grid with n 0.
+    if (!v.tilt.cells.some((c) => c.n > 0)) {
+      return { kind: 'text', headline: '', tone: 'neutral',
+        tooEarly: { ghost: 'bars', text: v.source === 'backtest' ? 'Tilt reads real trading days only: backtests have no day to tilt on.' : 'No real trading days in this scope yet.', href: '/new', hrefLabel: 'Log a trade' } };
+    }
     return { kind: 'heat', rows: ['No loss yet', 'After 1 loss', 'After 2+'], cols: ['1st trade', '2nd', '3rd+'], claim: { n: v.tilt.cells.reduce((a, c) => a + c.n, 0) },
       cells: v.tilt.cells.filter((c) => c.n > 0).map((c) => ({ r: rows.indexOf(c.losses), c: cols.indexOf(c.tradeNo), value: c.shrunk, n: c.n, display: R(c.shrunk) })),
       caption: 'Shrunk R per trade · faded under 5 trades' };
@@ -580,10 +585,11 @@ for (let k = 1; k <= 5; k++) add({
 add({
   id: 'active-drill', title: 'Active drill', category: 'flaw', kind: 'drill', sizes: ['S', 'M', 'L'], defaultSize: 'M', minTrades: 0,
   settings: {}, attention: (v) => drillMilestone(v.deck().active?.progress),
-  help: 'The one drill you are working on: how often the flaw happened before and since, how often you kept the drill, and how close it is to graduating (20 clean trades in a row, drill kept on 90%).',
+  help: 'The one habit you are working on. Start one from a flaw card ("Work on this"). From then on, every New Trade asks "Drill: Kept / Broken / N/A" (never required). Two counts: "You answered" is what you marked on the form; "Your trades show" is checked from each trade\'s own data — trades in a row, newest backwards, where the flaw did not show (for Fix your data: every Setup detail field filled). It graduates after 20 clean trades in a row with the drill kept on 90% of your answers. On the right: how often the flaw happened per 10 trades, before you started and since.',
   select: (v) => {
     const a = v.deck().active;
-    if (!a) return { kind: 'text', headline: 'No drill active', body: 'Pick one from a flaw card: "Work on this".', tone: 'neutral' };
+    if (!a) return { kind: 'text', headline: 'No drill yet', tone: 'neutral',
+      body: 'A drill is the one habit you work on next. Press "Work on this" on a flaw card to start one; from then on every new trade asks "Drill: Kept · Broken · N/A", and this tile shows how it is going.' };
     const p = a.progress;
     return { kind: 'drill', id: a.work.id, key: a.work.flaw_key, title: a.title, drill: a.work.drill_text, since: a.work.started_at.slice(0, 10),
       before: p.rateBefore, after: p.rateSince, baselineN: a.work.baseline_n ?? 0, sinceN: p.since, kept: p.kept, broken: p.broken, na: p.na, clean: p.clean,

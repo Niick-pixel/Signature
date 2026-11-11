@@ -130,7 +130,7 @@ export function Gallery({ open, onClose, widgets, previews, onAdd, onDragStart }
                   className="cursor-grab select-none rounded-[14px] border p-2.5 active:cursor-grabbing" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-gallery-item={w.id}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
-                      {w.lean && <span className="size-1.5 shrink-0 rounded-full" style={{ background: w.lean === 'fix' ? 'rgb(var(--amber))' : 'rgb(var(--outcome-win))' }} title={w.lean === 'fix' ? 'About a flaw to fix' : 'About a strength to keep'} />}
+                      {w.lean && <span className="size-1.5 shrink-0 rounded-full" style={{ background: w.lean === 'fix' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--outcome-win))' }} title={w.lean === 'fix' ? 'About a flaw to fix' : 'About a strength to keep'} />}
                       <span className="truncate text-[12.5px] font-semibold">{w.title}</span>
                     </span>
                     <span className="shrink-0 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{CATEGORY_LABEL[w.category]} · {w.sizes.join(' ')}</span>
@@ -262,7 +262,7 @@ export function BoardSettingsPanel({ open, onClose, s, onChange }: { open: boole
       <Row label="Space between tiles"><Slider value={s.gap} min={4} max={32} step={2} onChange={(v) => onChange({ gap: v })} fmt={(v) => `${v}px`} /></Row>
       <Row label="Text size"><Slider value={s.fontScale} min={0.85} max={1.25} step={0.05} onChange={(v) => onChange({ fontScale: v })} fmt={(v) => `${Math.round(v * 100)}%`} /></Row>
       <Row label="Animations"><Pills value={s.animations} options={['full', 'reduced', 'off'] as const} onChange={(v) => onChange({ animations: v })} labels={{ full: 'Full', reduced: 'Reduced', off: 'Off' }} /></Row>
-      <Toggle label="Tint flaws and strengths (a faint warm or green wash)" on={s.tint} onChange={(v) => onChange({ tint: v })} />
+      <Toggle label="Tint flaws and strengths (a faint wash in the theme’s loss or win colour)" on={s.tint} onChange={(v) => onChange({ tint: v })} />
       <Toggle label="Colour-blind safe (blue for good, orange for bad)" on={blind}
         onChange={(v) => onChange({ semantic: v ? { ...COLOR_BLIND } : { good: 'outcome-win', bad: 'outcome-loss', watch: 'amber' } })} />
       <Row label="What the colours mean" hint="Which colour shows good, bad and watch. What counts as good stays the engine's: breaking a rule is never shown as good.">

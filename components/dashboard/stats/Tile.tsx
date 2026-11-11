@@ -138,12 +138,12 @@ export function Tile({ tile, widgets, states, reduce, index, edit, rotate, tint 
       className={`glass relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[calc(18px*var(--rk))] ${pad}`}
       style={{ gridColumn: `${tile.x + 1} / span ${SPAN[tile.size][0]}`, gridRow: `${tile.y + 1} / span ${SPAN[tile.size][1]}`, ...look, boxShadow: shadow, zIndex: edit?.dragging ? 30 : undefined }}
       data-tile={tile.id} data-size={tile.size} data-stack={items.length > 1 ? items.length : undefined} data-stack-index={s.index} data-selected={edit?.selected || undefined}>
-      {/* A faint wash for what the front widget is about: warm for a flaw to fix, green for a strength to keep. Never the meaning colours of a number. */}
+      {/* A faint wash for what the front widget is about: the theme's own loss colour for a flaw to fix, its win colour
+          for a strength (so it follows the theme and the colour-blind palette). No line, never the colour of a number. */}
       {tint && info.lean && (
         <motion.div key={info.lean} aria-hidden data-lean={info.lean} className="pointer-events-none absolute inset-0"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
-          style={{ background: `linear-gradient(180deg, rgb(var(${info.lean === 'fix' ? '--amber' : '--outcome-win'}) / 0.085), transparent 42%)`,
-            boxShadow: `inset 0 2px 0 rgb(var(${info.lean === 'fix' ? '--amber' : '--outcome-win'}) / 0.5)`, zIndex: -1 }} />
+          style={{ background: `linear-gradient(180deg, rgb(var(${info.lean === 'fix' ? '--sem-bad' : '--sem-good'}) / 0.06), transparent 55%)`, zIndex: -1 }} />
       )}
       {header()}
       <div className="relative mt-1.5 min-h-0 flex-1" style={tile.size === 'W' ? { marginTop: 2 } : undefined}>
