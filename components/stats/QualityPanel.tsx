@@ -1,17 +1,11 @@
 import { ForestBar, Thumbs, VerdictChip, sR, pct, type Thumb } from './EdgeUI';
 import { Help } from '@/components/ui/Help';
 import type { Quality, GradeTable, Spread } from '@/lib/edge/quality';
-import type { ScoreModel, Skill } from '@/lib/edge/scoreModel';
-import { verdict, type Verdict } from '@/lib/edge/verdict';
+import { skillVerdict, type ScoreModel } from '@/lib/edge/scoreModel';
+export { skillVerdict };
 
 const CHIP_TEXT = { earning: 'earning its points', overweighted: 'overweighted?', 'too-early': 'too early', none: 'no variation yet' } as const;
 
-/** Under 30 out-of-sample predictions a correlation proves nothing — Too early, whatever it says. */
-export const skillVerdict = (s: Skill, n: number): Verdict | null => {
-  if (s.pPositive == null || s.lo80 == null || s.hi80 == null) return null;
-  const v = verdict({ n, pPositive: s.pPositive, lo80: s.lo80, hi80: s.hi80 });
-  return n < 30 ? { ...v, level: 'too-early', direction: null } : v;
-};
 
 function Grades({ t, title, note, thumbs }: { t: GradeTable; title: string; note: string; thumbs: Record<string, Thumb> }) {
   const lo = Math.min(t.mu - 0.5, ...t.rows.map((r) => r.lo95)); const hi = Math.max(t.mu + 0.5, ...t.rows.map((r) => r.hi95));

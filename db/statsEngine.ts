@@ -28,11 +28,10 @@ import { equityCone } from '../lib/edge/montecarlo';
 import type { Thumb } from '../components/stats/EdgeUI';
 import { LAB_FILTERS, MAX_TESTABLE, labResult, labRows } from '../lib/edge/ruleLab';
 import { listPropAccounts } from './prop';
-import { scoreModel } from '../lib/edge/scoreModel';
+import { scoreModel, skillVerdict } from '../lib/edge/scoreModel';
 import { setupQuality } from '../lib/edge/quality';
 import { execution } from '../lib/edge/execution';
 import { similarSetups } from '../lib/edge/similar';
-import { skillVerdict } from '../components/stats/QualityPanel';
 import { language } from '../lib/edge/text';
 import { missedStats } from '../lib/edge/missed';
 import { BACKTEST_WEIGHT } from '../lib/edge/explorer';
@@ -91,7 +90,12 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
   // are in by default, because a trade that happened is a trade that happened.
   const noQuick = params.quick === '0';
   const quickCount = scoped.filter((t) => t.quick_log).length;
-  const trades = (preOnly ? preGradedOnly(scoped) : scoped).filter((t) => !noQuick || !t.quick_log);
+  const filtered = (preOnly ? preGradedOnly(scoped) : scoped).filter((t) => !noQuick || !t.quick_log);
+  // ?last=N (a dashboard widget's "last N trades"): only the N most recent, in the order they happened.
+  const lastN = Number(one(params.last));
+  const trades = Number.isInteger(lastN) && lastN > 0
+    ? [...filtered].sort((a, b) => a.date.localeCompare(b.date)).slice(-lastN)
+    : filtered;
   // The trial counts the skipped setups logged in Missed as well — on any
   // account's page, not only on Missed's (where they are already the selection).
   const sameFilters = (list: typeof all) => (preOnly ? preGradedOnly(list) : list).filter((t) => !noQuick || !t.quick_log);

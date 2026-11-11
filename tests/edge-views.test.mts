@@ -37,3 +37,8 @@ test('backtest gap: matched levels only, biggest gap first', () => {
   assert.deepEqual(g.map((r) => r.label), ['kz = LDN', 'kz = NY']);
   assert.ok(Math.abs(g[0].gap + 0.9) < 1e-9);
 });
+
+test('underwater: zero at each new high, the distance below it otherwise', () => {
+  assert.deepEqual(V.underwater([1, 3, 2, -1, 4]), [0, 0, -1, -4, 0]);
+  assert.deepEqual(V.underwater([-1, -2]), [-1, -2], 'the start (0R) is the first high');
+});

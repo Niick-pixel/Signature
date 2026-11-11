@@ -35,6 +35,7 @@ import { Z80 } from './dist';
 import { closureScore } from '../anatomy';
 import { datasetHash } from './engine';
 import type { Trade } from '../types';
+import { verdict, type Verdict } from './verdict';
 
 export const N0 = 40; export const WF_START = 20;
 /** The scale's prior: 30 points of rubric ≈ 0.3R, with an SD of 0.2R per 30 points. */
@@ -280,3 +281,10 @@ function scoreModelUncached(trades: readonly Trade[], opts: { halfLife?: number 
   const fit = fitScore(X, y, recencyWeights(trades.length, opts.halfLife ?? null));
   return { fit, weights: weights(fit, trades.length, SCORE_FEATURES, collinearGroups(X)), wf: walkForward(trades), n: trades.length };
 }
+
+/** Under 30 out-of-sample predictions a correlation proves nothing — Too early, whatever it says. */
+export const skillVerdict = (s: Skill, n: number): Verdict | null => {
+  if (s.pPositive == null || s.lo80 == null || s.hi80 == null) return null;
+  const v = verdict({ n, pPositive: s.pPositive, lo80: s.lo80, hi80: s.hi80 });
+  return n < 30 ? { ...v, level: 'too-early', direction: null } : v;
+};

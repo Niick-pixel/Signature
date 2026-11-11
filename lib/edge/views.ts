@@ -74,3 +74,9 @@ export function backtestGap(live: readonly ExplorerRow[], replay: readonly Explo
     return b ? [{ label: `${r.label} = ${r.level}`, live: r.shrunk, liveN: r.n, bt: b.shrunk, btN: b.n, gap: r.shrunk - b.shrunk }] : [];
   }).sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, max);
 }
+
+/** How far below its own high the equity curve is after each trade (0 at a new high, negative under water), in R. */
+export function underwater(cumulative: readonly number[]): number[] {
+  let peak = 0;
+  return cumulative.map((c) => { peak = Math.max(peak, c); return c - peak; });
+}

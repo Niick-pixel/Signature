@@ -14,8 +14,9 @@ import { press, spring, exitQuick } from '@/lib/motion';
  */
 export function NewTradeButton() {
   const pathname = usePathname();
-  // Hidden while you are already capturing a trade.
-  const hidden = pathname === '/new';
+  // Hidden while you are already capturing a trade, and on Stats, whose board
+  // fills the window to its corners (its header carries the button instead).
+  const hidden = pathname === '/new' || pathname === '/stats';
 
   return (
     <AnimatePresence>

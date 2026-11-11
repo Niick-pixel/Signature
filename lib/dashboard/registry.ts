@@ -10,6 +10,7 @@
  * settings panel and saved boards pick it up from this list.
  */
 import type { ChartStyle, NumberFormat, SizeKey, Source, WidgetCfg } from './types';
+import type { Kind } from './vm';
 
 export type Category = 'kpi' | 'chart' | 'insight' | 'flaw' | 'list' | 'data';
 
@@ -49,6 +50,9 @@ export interface WidgetMeta<VM = unknown> {
   category: Category;
   sizes: readonly SizeKey[];
   defaultSize: SizeKey;
+  /** The view-model kind its select returns (its renderer family); 'custom' widgets name their view. */
+  kind: Kind;
+  view?: string;
   settings: SettingsSchema;
   /** Pure: the engine's outputs, the widget's settings and scope → what it draws. Tested. */
   select: (engine: EngineView, cfg: WidgetCfg, scope: Scope) => VM;

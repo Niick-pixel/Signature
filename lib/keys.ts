@@ -21,7 +21,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ['W'], label: 'Weekly review' },
       { keys: ['1', '2', '3', '4', '5', '6', '7'], label: 'Trades, Stats, Calendar, Journal, Path, Prop, Study' },
       { keys: ['0'], label: 'Dashboard' },
-      { keys: ['F'], label: 'Work on (your flaws, one card at a time)' },
+      { keys: ['F'], label: 'Your flaws and drills (the Flaws board in Stats)' },
       { keys: ['A'], label: 'Analytics (and Ask your journal)' },
       { keys: ['G'], label: 'Goals' },
       { keys: ['R'], label: 'Reports' },

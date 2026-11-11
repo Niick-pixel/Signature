@@ -26,7 +26,7 @@ export const ACCOUNT_SHOWN_EVENT = 'signature:account-shown';
 
 /** Which screen's account a path shows, or null for a screen with no account. */
 export function scopeOf(pathname: string): AccountScope | null {
-  if (pathname === '/stats') return 'stats';
+  // Stats has no account picker: its boards choose Real / Backtest / All themselves.
   if (pathname === '/calendar') return 'calendar';
   // The New trade window opens over the board, and the board behind it is the board.
   if (pathname === '/' || pathname === '/new') return 'board';

@@ -161,7 +161,7 @@ test('stack wheel: a list scrolls first; at its edge only a fresh flick switches
 
 test('registry: ids unique, default size among the sizes, help required; defaults and scope chips', () => {
   const reg = new Registry();
-  const base = { title: 'X', category: 'kpi' as const, settings: { chartStyles: ['line', 'area'] as const, scope: true, fields: [{ key: 'win', label: 'Window', kind: 'number' as const, min: 5, max: 100, step: 5, default: 20 }] }, select: () => 1, help: 'Help.' };
+  const base = { title: 'X', category: 'kpi' as const, kind: 'kpi' as const, settings: { chartStyles: ['line', 'area'] as const, scope: true, fields: [{ key: 'win', label: 'Window', kind: 'number' as const, min: 5, max: 100, step: 5, default: 20 }] }, select: () => 1, help: 'Help.' };
   reg.add({ ...base, id: 'x', sizes: ['S', 'M'], defaultSize: 'S' });
   assert.throws(() => reg.add({ ...base, id: 'x', sizes: ['S'], defaultSize: 'S' }), /twice/);
   assert.throws(() => reg.add({ ...base, id: 'y', sizes: ['S'], defaultSize: 'L' }), /default size/);

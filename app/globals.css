@@ -1042,3 +1042,10 @@ html[data-reduce-motion='true'] .need-flash { animation: none; box-shadow: 0 0 0
 */
 html[data-platform='win32'] [data-wco-below] { margin-top: 34px; }
 html[data-platform='win32'] [data-wco-pad] { padding-right: 152px; }
+
+/* A long Stats widget scrolls inside its box: a thin overlay bar, no gutter. */
+.signature-thin-scroll { scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent; scrollbar-gutter: auto; }
+.signature-thin-scroll::-webkit-scrollbar { width: 6px; }
+.signature-thin-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 999px; }
+.signature-thin-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+.signature-thin-scroll::-webkit-scrollbar-track { background: transparent; }
