@@ -60,5 +60,8 @@ Also from earlier sessions:
 - The morning prep (`lib/prep.ts`, `docs/morning-prep.md`) ends in written plans; the decisions plan match, the plan
   grade and the stop rule read (`draw.side`, `liquidity.wait`, `draw.target`, `session.stop`…) are derived from them —
   keep those keys.
+- Navigation is a setting (top tabs or a side rail, `components/shell/SideRail`). With the rail, each tab's header
+  lives in the title bar: a page renders `<InTitleBar merged={<MergedHeader …/>} inline={…} />`
+  (`components/shell/TitleSlot`). A new tab page does the same.
 - Saved boards are versioned (`LAYOUT_SCHEMA`, `lib/dashboard/schema.ts`): never break a
   user's layout — migrate it (`WIDGET_RENAMES` for a renamed widget).

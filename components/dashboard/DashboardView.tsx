@@ -1,5 +1,6 @@
 'use client';
 
+import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { Reveal } from '@/components/ui/Motion';
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
@@ -53,12 +54,31 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
   const setF = (patch: Partial<typeof f>) => update({ dashFilters: { ...f, ...patch } });
   const flip = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const money = prefs.dashUnit === 'money' && d.total.money != null;
+  const merged = useMergedHeader();
   const b = prefs.dashBlocks;
   const toggle = (k: string) => update({ dashAccounts: chosen.includes(k) ? chosen.filter((x) => x !== k) : [...chosen, k] });
   const scope = [chosen.length ? chosen.map((k) => accounts.find((a) => a.key === k)?.label ?? k).join(', ') : WORLD_LABEL[prefs.dashWorld],
     f.period !== 'all' ? DASH_PERIODS.find(([k]) => k === f.period)?.[1] : null, f.sessions.length ? f.sessions.join(', ') : null, f.dirs.length ? f.dirs.join(', ') : null].filter(Boolean).join(' · ');
   return (
     <div className="mx-auto flex w-full max-w-[80rem] flex-col px-6 pb-6 pt-3 xl:h-full" data-dashboard>
+      <InTitleBar
+        merged={<MergedHeader title="Dashboard" data="dashboard" sub={<>{new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · {scope}</>}>
+          <div className="flex items-center gap-1.5" data-dash-accounts>
+          <Chip on={open || nFilters > 0} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" data="filters">
+            Filters{nFilters ? ` · ${nFilters}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
+          </Chip>
+          <Chip on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data="cards">
+            Cards <span aria-hidden className="inline-block transition-transform" style={{ transform: arranging ? 'rotate(180deg)' : 'none' }}>▾</span>
+          </Chip>
+          <Chip on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data="hide-pnl">
+            {prefs.hidePnl ? 'Show P&L' : 'Hide P&L'}
+          </Chip>
+          <Chip onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data="customize">
+            Customize
+          </Chip>
+</div>
+        </MergedHeader>}
+        inline={
       <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold leading-tight tracking-tight">Dashboard</h1>
@@ -83,6 +103,9 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           </Chip>
         </div>
       </header>
+        } />
+      {/* In the title bar there is no room for the quote of the day: it heads the page instead. */}
+      {merged && prefs.quoteOnDashboard && <QuoteOfDay inline className="mb-2 max-w-[44rem]" />}
 
       <Reveal open={arranging}>
         <div className="glass mb-3 rounded-[calc(18px*var(--rk))] px-4 py-3" data-dash-arrange>

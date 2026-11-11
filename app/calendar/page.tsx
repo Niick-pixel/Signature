@@ -11,6 +11,7 @@ import { balanceFor } from '@/lib/balance';
 import { accountsInUse, forAccount } from '@/lib/stats';
 import { cellsByDay, monthGrid, summarise, type DayCell } from '@/lib/calendar';
 import { TitleBar } from '@/components/shell/TitleBar';
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { AccountSwitcher } from '@/components/stats/AccountSwitcher';
 import { Panel, Stat } from '@/components/stats/Bars';
 import { BalanceCard } from '@/components/money/BalanceCard';
@@ -142,10 +143,14 @@ export default async function CalendarPage(
       <TitleBar />
       <div className="signature-enter min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[72rem] px-6 pb-20 pt-4">
-          <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <h1 className="text-[22px] font-semibold tracking-tight">Calendar</h1>
-            <AccountSwitcher available={accounts} current={account} />
-          </header>
+          <InTitleBar
+            merged={<MergedHeader title="Calendar" data="calendar" sub={`${MONTHS[month]} ${year}`}><AccountSwitcher available={accounts} current={account} /></MergedHeader>}
+            inline={
+              <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-[22px] font-semibold tracking-tight">Calendar</h1>
+                <AccountSwitcher available={accounts} current={account} />
+              </header>
+            } />
 
           <div className="space-y-5">
             {account !== 'All' && isHypothetical(account) ? (

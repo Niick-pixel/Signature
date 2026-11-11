@@ -1,5 +1,7 @@
 'use client';
 
+import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
+import { usePathname } from 'next/navigation';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Trade } from '@/lib/types';
 import { ACCOUNT_VALUES, OUTCOMES, SESSIONS, accountLabel, type Outcome, type Session } from '@/lib/domain';
@@ -57,6 +59,9 @@ const signedR = (r: number) => `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r)
 
 export function Library({ trades: initial }: { trades: Trade[] }) {
   const [trades, setTrades] = useState(initial);
+  // The library stays mounted on every screen (PersistentBoard): its header joins the title bar only on Trades.
+  const onTrades = usePathname() === '/';
+  const inTitle = useMergedHeader() && onTrades;
   // New trades from the board layer replace the list (render-time, not an effect).
   const [seen, setSeen] = useState(initial);
   if (seen !== initial) { setSeen(initial); setTrades(initial); }
@@ -174,6 +179,15 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
 
   return (
     <div className="h-full overflow-y-auto" data-library>
+      {/* With the side rail, the search sits in the title bar (the account is the title bar's own picker) — only while Trades is the screen. */}
+      {onTrades && <InTitleBar inline={null}
+        merged={<MergedHeader title="Trades" data="trades" sub={`${visible.length} of ${trades.filter((t) => !t.deleted_at).length} trades`}>
+          
+          <input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search  /" aria-label="Search trades" data-library-search
+            onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); search.current?.blur(); } if (e.key === 'Enter' && order[0]) setOpenId(order[0].id); }}
+            className="w-44 rounded-full border px-3 py-1 text-[12px] outline-none focus:w-60"
+            style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)', transition: 'width 160ms ease' }} />
+        </MergedHeader>} />}
       <div className="mx-auto max-w-[96rem] px-5 pb-28 pt-4 sm:px-8">
         {/* Today against your limits, as on the board: information, never a lock. */}
         <div className="mb-2 flex justify-center empty:hidden"><RiskBanner trades={realTrades} /></div>
@@ -201,10 +215,12 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
             to <input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} aria-label="To"
               className="rounded-[9px] border bg-transparent px-1.5 py-0.5 text-[11px] outline-none" style={{ borderColor: 'var(--glass-stroke)', color: filters.to ? 'var(--text)' : 'var(--text-faint)' }} />
           </label>
-          <input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search  /" aria-label="Search trades" data-library-search
+          {!inTitle && (
+  <input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search  /" aria-label="Search trades" data-library-search
             onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); search.current?.blur(); } if (e.key === 'Enter' && order[0]) setOpenId(order[0].id); }}
             className="ml-auto w-44 rounded-full border px-3 py-1 text-[12px] outline-none focus:w-60"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)', transition: 'width 160ms ease' }} />
+          )}
         </div>
         <div className="mt-2 flex items-center gap-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
           <span data-library-count>{visible.length} of {trades.filter((t) => !t.deleted_at).length} trades · {groups.length} group{groups.length === 1 ? '' : 's'}</span>

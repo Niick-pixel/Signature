@@ -1,5 +1,6 @@
 'use client';
 
+import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { SwapIn } from '@/components/ui/Motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
@@ -41,6 +42,7 @@ const ST = { borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)'
  */
 export function StudyRoom() {
   const { prefs } = usePreferences();
+  const merged = useMergedHeader();
   const [notes, setNotes] = useState<StudyNote[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<StudyKind | 'all'>('all');
@@ -96,6 +98,19 @@ export function StudyRoom() {
 
   return (
     <div className="mx-auto w-full max-w-[76rem] px-6 pb-24 pt-4" data-study-room>
+      <InTitleBar
+        merged={<MergedHeader title="Study room" data="study">
+          {prefs.studyClock === 'cube' ? (
+            <button type="button" onClick={() => void logBlock(prefs.cubeMinutes, selected, (notes ?? []).find((x) => x.id === selected)?.title || null)}
+              title={`Your timer rang: log ${prefs.cubeMinutes} minutes`} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-log-block>
+              Log a {prefs.cubeMinutes}-min block
+            </button>
+          ) : (
+            <button type="button" onClick={() => startTimer(null, 'Studying')} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>Start timer</button>
+          )}
+          <button type="button" onClick={() => openFocus(selected)} className="rounded-full border px-3 py-1.5 text-[12px] font-medium" style={ST}>Close the door</button>
+        </MergedHeader>}
+        inline={
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Study room</h1>
@@ -119,6 +134,16 @@ export function StudyRoom() {
           <button type="button" onClick={() => openFocus(selected)} className="rounded-full border px-3 py-1.5 text-[12px] font-medium" style={ST}>Close the door</button>
         </div>
       </div>
+        } />
+      {/* The day's meter and the streak, at the top of the page when the title bar holds the header. */}
+      {merged && <div className="flex flex-wrap items-end justify-end gap-4">
+          {totals && (
+            <div className="flex items-end gap-5" data-study-totals>
+              <div className="w-[15rem]"><StudyMeter t={totals} compact /></div>
+              <Fig label="Streak" value={`${totals.streak} day${totals.streak === 1 ? '' : 's'}`} good={totals.streak > 0} hint={`Days in a row with ${hm(totals.goal)} or more. Record: ${totals.best}.`} />
+            </div>
+          )}
+      </div>}
       {prefs.studyClock === 'cube' && (
         <p className="mt-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-cube-reminder>
           ⏱ Using your own timer: set it to <b style={{ color: 'var(--text)' }}>{prefs.cubeMinutes} minutes</b>, study, and log the block when it rings.

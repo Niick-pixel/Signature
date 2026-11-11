@@ -1,6 +1,7 @@
 import { listJournalPages } from '@/db/journal';
 import { listTrades } from '@/db/trades';
 import { TitleBar } from '@/components/shell/TitleBar';
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { JournalBook } from '@/components/journal/JournalBook';
 import { ReviewExport } from '@/components/money/ReviewExport';
 import { JOURNAL_RANGES } from '@/lib/journalExport';
@@ -56,6 +57,16 @@ export default async function JournalRoute({ searchParams }: { searchParams: Pro
           {/* Above the book, so the export menu opens over it: the page's
               entrance animation makes each section its own layer, and a
               later layer would otherwise paint over the menu. */}
+          <InTitleBar
+            merged={<MergedHeader title="Journal" data="journal" sub="Ideas, a week's summary, something noticed. Nothing required, nothing scored.">
+            <ReviewExport
+              label="the journal"
+              title="Discuss the journal with Claude"
+              blurb="Your pages in order, each with the day it was written on — the morning, the chart prep, the trades and their lessons — plus what to look for. Attach it to a new Claude chat."
+              options={JOURNAL_RANGES.map((r) => ({ href: `/api/journal-export?range=${r.id}`, title: r.label, note: `.md — ${r.note}` }))}
+            />
+            </MergedHeader>}
+            inline={
           <header className="relative z-20 mb-5 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-[22px] font-semibold tracking-tight">Journal</h1>
@@ -72,6 +83,7 @@ export default async function JournalRoute({ searchParams }: { searchParams: Pro
               options={JOURNAL_RANGES.map((r) => ({ href: `/api/journal-export?range=${r.id}`, title: r.label, note: `.md — ${r.note}` }))}
             />
           </header>
+            } />
 
           <JournalBook key={openPage ?? 'latest'} initial={pages} tradesByDay={byDay} openPage={openPage ?? null} />
         </div>

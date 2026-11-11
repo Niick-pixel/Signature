@@ -38,3 +38,14 @@ export function InTitleBar({ merged, inline }: { merged: React.ReactNode; inline
   if (prefs.nav === 'side' && el) return createPortal(merged, el);
   return <div data-inline-header className="contents">{inline}</div>;
 }
+
+/** The compact header every page puts in the title bar: its name, one quiet line of context, its actions on the right. */
+export function MergedHeader({ title, sub, children, data }: { title: React.ReactNode; sub?: React.ReactNode; children?: React.ReactNode; data?: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2.5 text-[12px]" data-merged-header={data}>
+      <span className="shrink-0 text-[15px] font-semibold tracking-tight">{title}</span>
+      {sub && <span className="min-w-0 truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>{sub}</span>}
+      {children && <div className="ml-auto flex shrink-0 items-center gap-1.5">{children}</div>}
+    </div>
+  );
+}

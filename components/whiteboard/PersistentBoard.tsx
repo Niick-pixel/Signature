@@ -70,8 +70,9 @@ export function PersistentBoard() {
       data-board-layer
       data-hidden={visible ? undefined : ''}
       aria-hidden={visible ? undefined : true}
-      className="fixed inset-x-0 bottom-0 top-16 sm:top-11"
-      style={visible ? undefined : { contentVisibility: 'hidden', pointerEvents: 'none' }}
+      className="fixed bottom-0 right-0 top-16 sm:top-11"
+      // Clear of the side rail when it is on (--rail-w is 0 otherwise).
+      style={{ left: 'var(--rail-w)', ...(visible ? {} : { contentVisibility: 'hidden', pointerEvents: 'none' }) }}
     >
       {/* The trade list. The free-form canvas is gone from here: the list is the whole tab. */}
       {trades && <Library trades={trades} />}

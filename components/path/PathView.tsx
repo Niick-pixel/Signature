@@ -1,5 +1,6 @@
 'use client';
 
+import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { Reveal } from '@/components/ui/Motion';
 import { openGoals } from '@/components/goals/GoalsSheet';
 import { useState } from 'react';
@@ -37,6 +38,7 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(startEditing);
+  const merged = useMergedHeader();
   const active = steps.find((s) => s.status === 'active') ?? null;
   const breaks = events.filter((e) => e.kind !== 'step_done');
 
@@ -46,6 +48,16 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
 
   return (
     <div className="space-y-6">
+      <InTitleBar
+        merged={<MergedHeader title="Path" data="path" sub={active ? <>Step {steps.indexOf(active) + 1} of {steps.length}: {active.title}</> : 'Every step is done'}>
+        <div className="flex gap-2">
+          <Button onClick={openGoals} data-path-goals title="Goals (G)">Goals</Button>
+          {/* The prop hub's home now the tab is off by default: evals are a step of the path. */}
+          <Button onClick={() => navigate('/prop')} data-path-prop title="Your prop and eval accounts (6)">Prop accounts</Button>
+          <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
+        </div>
+        </MergedHeader>}
+        inline={
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight">Path</h1>
@@ -62,6 +74,9 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
           <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
         </div>
       </header>
+        } />
+      {/* What to do next, under the title bar when the title moved up into it. */}
+      {merged && active && <p className="max-w-[46rem] text-[13px]" style={{ color: 'var(--text-dim)' }} data-path-next>Next: {active.nextAction}</p>}
 
       <ol className="space-y-3">
         {steps.map((s, i) => (

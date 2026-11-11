@@ -1,5 +1,6 @@
 'use client';
 
+import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -29,6 +30,14 @@ export function PropHub() {
 
   return (
     <div className="mx-auto w-full max-w-[72rem] px-6 pb-24 pt-4" data-prop-hub>
+      <InTitleBar
+        merged={<MergedHeader title="Prop firms" data="prop" sub="Each account against its rules, from the trades you log on it.">
+        <div className="flex gap-2">
+          <PillButton onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'prop' } }))}>Customize</PillButton>
+          <PillButton accent onClick={() => setAdding(true)}>Add account</PillButton>
+        </div>
+        </MergedHeader>}
+        inline={
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Prop firms</h1>
@@ -39,6 +48,7 @@ export function PropHub() {
           <PillButton accent onClick={() => setAdding(true)}>Add account</PillButton>
         </div>
       </div>
+        } />
 
       {data && (
         <div className="mt-5 grid grid-cols-3 gap-3" data-prop-ledger>
