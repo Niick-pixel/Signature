@@ -33,7 +33,6 @@ export function Backdrop() {
     <div aria-hidden className="pointer-events-none fixed inset-0 z-[-1]" data-backdrop={bg.kind}>
       {bg.kind === 'video'
         ? <video ref={video} src={src} muted loop playsInline autoPlay={!prefs.reduceMotion} className="size-full object-cover" />
-        // eslint-disable-next-line @next/next/no-img-element
         : <img src={src} alt="" className="size-full object-cover" />}
       <div className="absolute inset-0" style={{ background: 'var(--bg)', opacity: prefs.bgDim / 100 }} />
     </div>

@@ -318,7 +318,6 @@ function TradeList({ items, noteId, reload, openIn }: { items: LinkedTrade[]; no
       {items.map((t) => (
         <li key={t.id} className="flex items-center gap-3 rounded-[calc(12px*var(--rk))] border p-2" style={{ borderColor: 'var(--glass-stroke)' }}>
           {t.shot
-            // eslint-disable-next-line @next/next/no-img-element
             ? <img src={`/api/screenshots/${t.shot}?w=360`} alt="" className="h-12 w-20 shrink-0 rounded-[6px] object-cover" />
             : <div className="h-12 w-20 shrink-0 rounded-[6px]" style={{ background: 'var(--glass-fill)' }} />}
           <button type="button" onClick={() => openTrade(t.id, openIn)} className="min-w-0 flex-1 text-left">

@@ -81,7 +81,6 @@ export function ShotGallery({ tradeId, editable = true, onOpen, title = 'Trade' 
       <div className="flex flex-wrap gap-2.5">
         {shots.map((shot, i) => (
           <div key={shot.id} className="group relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={url(shot.path)}
               alt={shot.slot}

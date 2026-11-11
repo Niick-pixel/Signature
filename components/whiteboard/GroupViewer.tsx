@@ -117,7 +117,6 @@ export function GroupViewer({
                   >
                     {/* A quick log can have no chart at all. */}
                     {t.screenshot_path ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={`/api/screenshots/${t.screenshot_path}?w=480`}
                         alt=""

@@ -247,7 +247,6 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
       {peek && (
         <div className="pointer-events-none fixed z-40 overflow-hidden rounded-[12px] border shadow-lg" data-library-peek
           style={{ top: peek.top, left: peek.left, width: 340, borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`/api/screenshots/${peek.path}?w=480`} alt="" className="aspect-[16/10] w-full object-cover" decoding="async" />
         </div>
       )}

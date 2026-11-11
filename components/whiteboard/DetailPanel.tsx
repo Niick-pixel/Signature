@@ -654,10 +654,8 @@ function ChartImage({ path, onZoom }: { path: string; onZoom: () => void }) {
   }, [full]);
   return (
     <div className="relative cursor-zoom-in" onClick={onZoom} style={{ background: 'var(--letterbox)' }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={`/api/screenshots/${path}?w=720`} alt="Chart — click to zoom" className="max-h-[46vh] w-full object-contain" />
       {ready && (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={full} alt="" aria-hidden className="absolute inset-0 size-full object-contain" />
       )}
     </div>

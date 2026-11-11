@@ -144,7 +144,6 @@ export function ShotDrawingEditor({ path, src, initial, onClose, onSaved }: {
       <div className="flex min-h-0 flex-1 items-center justify-center p-4">
         <div ref={box} className="relative max-h-full max-w-full touch-none select-none" style={{ aspectRatio: String(aspect), height: 'min(100%, calc((100vw - 2rem) / ' + aspect + '))', cursor: tool === 'erase' ? 'not-allowed' : 'crosshair' }}
           onPointerDown={down} onPointerMove={move} onPointerUp={up}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={src} alt="" draggable={false} className="size-full object-contain" onLoad={(e) => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setAspect(i.naturalWidth / i.naturalHeight); }} />
           <DrawingOverlay items={preview} aspect={aspect} />
           {typing && (

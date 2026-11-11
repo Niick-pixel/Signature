@@ -63,7 +63,6 @@ export function PersonalSettings({ Section }: { Section: SectionComp }) {
                   style={{ borderColor: prefs.background?.name === f.name ? 'rgb(var(--accent))' : 'transparent' }} aria-label="Use this background">
                   {f.kind === 'video'
                     ? <video src={`/api/backgrounds/${f.name}`} muted preload="metadata" className="size-full object-cover" />
-                    // eslint-disable-next-line @next/next/no-img-element
                     : <img src={`/api/backgrounds/${f.name}`} alt="" className="size-full object-cover" />}
                 </button>
                 <button type="button" onClick={() => removeFile(f)} aria-label="Delete background" className="absolute -right-1.5 -top-1.5 hidden size-5 place-items-center rounded-full text-[10px] group-hover:grid"

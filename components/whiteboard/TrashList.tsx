@@ -51,7 +51,6 @@ export function TrashList({ trades }: { trades: Trade[] }) {
           >
             {/* A quick log can have no chart at all. */}
             {trade.screenshot_path ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={`/api/screenshots/${trade.screenshot_path}`}
                 alt=""

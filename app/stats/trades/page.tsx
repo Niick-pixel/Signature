@@ -85,7 +85,6 @@ function Column({ title, hue, trades, said }: { title: string; hue: string; trad
           return (
             <article key={t.id} data-trade-card={t.id} className="glass overflow-hidden rounded-[calc(20px*var(--rk))]">
               {t.screenshot_path && (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={`/api/screenshots/${t.screenshot_path}?w=720`} alt="" loading="lazy" className="max-h-[260px] w-full object-cover object-top" />
               )}
               <div className="space-y-2 p-4">

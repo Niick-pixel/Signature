@@ -159,7 +159,6 @@ function TradeNodeInner({ data }: NodeProps) {
         should still say what it was.
       */}
       {trade.screenshot_path && !shotBroken ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           // A card-sized copy, not the full capture: decoding twenty full
           // screenshots was most of the wait each time the board appeared.

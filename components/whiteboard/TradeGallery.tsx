@@ -86,7 +86,6 @@ export function TradeGallery({ trade, index, onIndex, onClose, onTrade, prevLabe
           <div className="flex min-h-0 flex-1">
           {pinned && (
             <div className="relative min-w-0 flex-1 border-r" style={{ borderColor: 'rgba(255,255,255,0.12)' }} onClick={(e) => e.stopPropagation()} data-gallery-pinned>
-              {/* eslint-disable-next-line @next/next/no-img-element -- a local file served by the app; next/image adds nothing here */}
               <img src={url(pinned.shot.path)} alt={pinned.shot.label} draggable={false}
                 className="absolute inset-0 m-auto max-h-full max-w-full select-none object-contain p-4 sm:p-6" />
               <div className="absolute inset-x-0 bottom-2 text-center text-[11.5px]" style={{ color: 'rgba(255,255,255,0.75)' }}>

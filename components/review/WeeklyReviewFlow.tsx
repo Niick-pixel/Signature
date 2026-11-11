@@ -143,7 +143,6 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
 
               {/* A quick log can have no chart at all. */}
               {trade.screenshot_path ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={`/api/screenshots/${trade.screenshot_path}`} alt="Chart"
                   className="mb-4 max-h-[38vh] w-full rounded-[calc(16px*var(--rk))] object-contain"
                   style={{ background: 'var(--letterbox)' }} />

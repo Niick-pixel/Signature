@@ -111,7 +111,6 @@ export function ScreenshotDropzone({ file, onFile, existingUrl = null }: Screens
               transition={springBouncy}
               className="relative w-full"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={shown} alt="Chart screenshot" className="max-h-[420px] w-full rounded-[calc(16px*var(--rk))] object-contain" />
               <motion.button
                 type="button"

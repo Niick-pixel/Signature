@@ -103,7 +103,6 @@ export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (ne
           {shown ? (
             <motion.div key={shownSlot} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96, transition: exitQuick }} transition={springBouncy} className="relative w-full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={shown} alt={`${shownSlot} chart`} className="max-h-[86px] w-full rounded-[calc(12px*var(--rk))] object-contain" />
               <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
                 style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}>{shownSlot}</span>
@@ -153,7 +152,6 @@ export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (ne
                   color: 'var(--text-faint)',
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {url && <img src={url} alt="" className="absolute inset-0 size-full object-cover opacity-80" />}
                 <span className="relative rounded-full px-1.5 py-0.5 font-medium"
                   style={{ background: url ? 'var(--glass-fill-strong)' : 'transparent', color: url ? 'var(--text-dim)' : undefined }}>

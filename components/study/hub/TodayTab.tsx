@@ -46,7 +46,6 @@ export function TodayTab({ plan, cards, drillsThisWeek, waiting, go, writePlaybo
                 {plan.examples.map((t, i) => (
                   <motion.button key={t.id} type="button" onClick={() => openTrade(t.id, 'page')} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={stagger(i)}
                     className="overflow-hidden rounded-[calc(10px*var(--rk))] border text-left" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-plan-example={t.id}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     {t.shot ? <img src={shotSrc(t.shot, 320)} alt="" className="block aspect-[4/3] w-full object-cover" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} /> : <div className="aspect-[4/3]" />}
                     <div className="px-1.5 py-1 text-[10.5px]"><span style={{ color: rTone(t.r) }}>{signedR(t.r)}</span> <span style={{ color: 'var(--text-faint)' }}>{t.date?.slice(5) ?? ''}</span></div>
                   </motion.button>

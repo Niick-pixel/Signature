@@ -68,7 +68,6 @@ export function Flashcards({ focus, onStats }: { focus: string[]; onStats?: (s: 
           {cur ? (
             <motion.div key={`${cur.tradeId}-${i}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }} transition={springSoft} data-card-id={cur.tradeId}>
               <div className="overflow-hidden rounded-[calc(14px*var(--rk))] border" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={shotSrc(cur.shot, 1400)} alt="The chart of this trade" className="block max-h-[40vh] w-full object-contain" />
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
