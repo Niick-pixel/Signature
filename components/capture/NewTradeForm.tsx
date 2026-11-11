@@ -1,6 +1,7 @@
 'use client';
 
 import { DrillChip, type DrillKept } from './DrillChip';
+import { PlanChip, type PlanScenario } from './PlanChip';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { InCaptureSheet } from './CaptureSheet';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
@@ -181,6 +182,8 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
   // The active drill from Work on (components/capture/DrillChip): its key, and the answer, empty by default.
   const [drillKey, setDrillKey] = useState<string | null>(trade?.drill_key ?? null);
   const [drillKept, setDrillKept] = useState<DrillKept | null>(trade?.drill_kept ?? null);
+  // Which of the morning's plans this was (045): asked when that day's prep wrote one, empty by default.
+  const [planScenario, setPlanScenario] = useState<PlanScenario | null>(trade?.plan_scenario ?? null);
   const [regrade, setRegrade] = useState<Regrade | null>(trade?.regrade ?? null);
   const [mistakeTags, setMistakeTags] = useState<MistakeTag[]>(trade?.mistake_tags ?? []);
   const [marketTags, setMarketTags] = useState<MarketTag[]>(trade?.market_tags ?? []);
@@ -686,6 +689,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
       followed_rules: followedRules,
       drill_key: drillKey,
       drill_kept: drillKey ? drillKept : null,
+      plan_scenario: backtest ? null : planScenario,
       regrade,
       // The legacy single tag is carried through untouched so an edit never
       // erases a value written under the old taxonomy.
@@ -1516,6 +1520,7 @@ function TradeForm({ trade, pastLessons = {}, backtestLessons = {}, onNext }: {
           />
         </div>
         <DrillChip drillKey={trade?.drill_key ?? null} value={drillKept} onChange={(k, v) => { setDrillKey(k); setDrillKept(v); }} />
+        {!backtest && <PlanChip day={date.slice(0, 10)} value={planScenario} onChange={setPlanScenario} />}
         <PostAnatomy a={anat} set={setA} broke={followedRules === false} />
         </div>
         )}

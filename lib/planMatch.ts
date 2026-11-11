@@ -60,7 +60,7 @@ const DONE: Record<string, number> = { '11:00': 660, '11:30': 690, '12:00': 720,
 export const planDay = (t: Pick<Trade, 'date'>) => t.date.slice(0, 10);
 
 export function planMatch(
-  t: Pick<Trade, 'account' | 'undated' | 'direction' | 'sweep_level' | 'target_type' | 'date'>,
+  t: Pick<Trade, 'account' | 'undated' | 'direction' | 'sweep_level' | 'target_type' | 'date'> & { plan_scenario?: Trade['plan_scenario'] },
   prep: PrepData | null | undefined,
 ): PlanMatch {
   // A replay has no morning; an undated one has no day.
@@ -68,6 +68,20 @@ export function planMatch(
   const a = prep.answers;
   const diffs: string[] = [];
   const agreed: string[] = [];
+
+  // The trade named its plan (045): it is set against that one scenario, not against both at once.
+  if (t.plan_scenario === 'none') return { status: 'off', diffs: ['not one of the plans written that morning'], agreed };
+  if (t.plan_scenario === 'A' || t.plan_scenario === 'B') {
+    const k = t.plan_scenario.toLowerCase(); const name = `Scenario ${t.plan_scenario}`;
+    const s = (f: string) => (typeof a[`plans.${k}${f}`] === 'string' ? (a[`plans.${k}${f}`] as string) : null);
+    const dir = s('Dir'); const trigger = s('Trigger'); const target = s('Target');
+    if (dir || trigger || target) {
+      if (dir) { if (dir === t.direction) agreed.push(`${name}: ${dir.toLowerCase()}`); else diffs.push(`${name} was a ${dir.toLowerCase()}, took a ${t.direction.toLowerCase()}`); }
+      if (trigger && t.sweep_level && !/gap$/.test(trigger)) { if (trigger === t.sweep_level) agreed.push(`trigger (${trigger})`); else diffs.push(`swept ${t.sweep_level}, ${name} waited for ${trigger}`); }
+      if (target && t.target_type) { if (target === t.target_type) agreed.push(`target (${target})`); else diffs.push(`aimed at ${t.target_type}, ${name} aimed at ${target}`); }
+      return diffs.length ? { status: 'off', diffs, agreed } : { status: 'in', diffs, agreed: agreed.length ? agreed : [name] };
+    }
+  }
 
   const side = typeof a['draw.side'] === 'string' ? a['draw.side'] : null;
   if (side) {
@@ -127,10 +141,60 @@ export function planSplit(trades: Trade[], prepByDay: Map<string, PrepData>): { 
     row.totalR += t.r_multiple ?? 0;
     for (const d of m.diffs) {
       const kind = d.startsWith('planned no trade') ? 'Traded on a no-trade day'
-        : d.startsWith('planned') ? 'Wrong side' : d.startsWith('swept') ? 'Different sweep'
+        : d.startsWith('not one of') ? 'Outside both plans' : d.startsWith('planned') || d.startsWith('Scenario') ? 'Wrong side' : d.startsWith('swept') ? 'Different sweep'
         : d.startsWith('entered') ? 'Outside planned hours' : 'Different target';
       reasons.set(kind, (reasons.get(kind) ?? 0) + 1);
     }
   }
   return { rows: [...rows.values()], reasons: [...reasons].sort((x, y) => y[1] - x[1]) };
+}
+
+/* ───────────── what each plan made (045) ───────────── */
+
+export interface ScenarioRow { key: 'A' | 'B' | 'none'; label: string; n: number; wins: number; totalR: number; avgR: number | null }
+
+/**
+ * R by which of the morning's plans a trade was: Scenario A (with the bias),
+ * B (the alternate) or neither. Real, settled trades that answered only;
+ * `unasked` counts real trades on a day with a written plan that never said.
+ */
+export function scenarioSplit(trades: readonly Trade[], prepByDay: ReadonlyMap<string, PrepData>): { rows: ScenarioRow[]; unasked: number } {
+  const rows: Record<'A' | 'B' | 'none', ScenarioRow> = {
+    A: { key: 'A', label: 'Scenario A', n: 0, wins: 0, totalR: 0, avgR: null },
+    B: { key: 'B', label: 'Scenario B', n: 0, wins: 0, totalR: 0, avgR: null },
+    none: { key: 'none', label: 'Neither plan', n: 0, wins: 0, totalR: 0, avgR: null },
+  };
+  let unasked = 0;
+  for (const t of trades) {
+    if (t.outcome === 'Not taken' || t.r_multiple == null || t.undated || isBacktest(t.account)) continue;
+    if (!t.plan_scenario) {
+      const p = prepByDay.get(planDay(t));
+      if (p && (p.answers['plans.aDir'] || p.answers['plans.aStory'] || p.answers['plans.bDir'] || p.answers['plans.bStory'])) unasked += 1;
+      continue;
+    }
+    const r = rows[t.plan_scenario];
+    r.n += 1; r.totalR += t.r_multiple; if (t.outcome === 'Win') r.wins += 1;
+  }
+  for (const r of Object.values(rows)) r.avgR = r.n ? r.totalR / r.n : null;
+  return { rows: [rows.A, rows.B, rows.none], unasked };
+}
+
+export interface BiasRow { key: 'with' | 'against' | 'neutral'; label: string; n: number; totalR: number; avgR: number | null }
+
+/** R with the morning's written bias, against it, and on days you called it neutral. Real, settled trades on days with a bias written. */
+export function biasSplit(trades: readonly Trade[], prepByDay: ReadonlyMap<string, PrepData>): BiasRow[] {
+  const rows: Record<BiasRow['key'], BiasRow> = {
+    with: { key: 'with', label: 'With your bias', n: 0, totalR: 0, avgR: null },
+    against: { key: 'against', label: 'Against it', n: 0, totalR: 0, avgR: null },
+    neutral: { key: 'neutral', label: 'Bias neutral', n: 0, totalR: 0, avgR: null },
+  };
+  for (const t of trades) {
+    if (t.outcome === 'Not taken' || t.r_multiple == null || t.undated || isBacktest(t.account)) continue;
+    const bias = prepByDay.get(planDay(t))?.answers['htf.bias'];
+    if (bias !== 'Bullish' && bias !== 'Bearish' && bias !== 'Neutral') continue;
+    const r = rows[bias === 'Neutral' ? 'neutral' : (bias === 'Bullish') === (t.direction === 'Long') ? 'with' : 'against'];
+    r.n += 1; r.totalR += t.r_multiple;
+  }
+  for (const r of Object.values(rows)) r.avgR = r.n ? r.totalR / r.n : null;
+  return [rows.with, rows.against, rows.neutral];
 }

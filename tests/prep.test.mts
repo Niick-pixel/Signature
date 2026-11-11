@@ -199,3 +199,24 @@ test('the journal export lays each page on its day, with the day beside it', () 
   assert.equal(doc.pages, 1);
   assert.equal(doc.filename, 'signature-journal-30d-2026-09-30');
 });
+
+test('045: a trade that names its plan is set against that scenario; neither is off plan; R by scenario and by bias', () => {
+  const { planMatch, scenarioSplit, biasSplit } = PM;
+  const prep = { steps: {}, ticks: {}, answers: deriveDecisions({ 'htf.bias': 'Bearish', 'plans.aDir': 'Short', 'plans.aTrigger': 'London high', 'plans.aTarget': 'Session high/low', 'plans.bDir': 'Long', 'plans.bTrigger': 'Asia low' }) };
+  const t = (o: Record<string, unknown>) => ({ account: 'Demo', undated: false, direction: 'Short', sweep_level: 'London high', target_type: 'Session high/low', date: '2026-11-11T08:40', outcome: 'Win', r_multiple: 1, plan_scenario: null, ...o }) as never;
+  assert.equal(planMatch(t({ plan_scenario: 'A' }), prep).status, 'in');
+  // Named B, but took the short: off plan, although the day's plans allowed both sides.
+  const b = planMatch(t({ plan_scenario: 'B' }), prep);
+  assert.equal(b.status, 'off'); assert.match(b.diffs[0], /Scenario B was a long, took a short/);
+  assert.deepEqual(planMatch(t({ plan_scenario: 'none' }), prep).diffs, ['not one of the plans written that morning']);
+  // Unanswered: the day's derived decisions, as before.
+  assert.equal(planMatch(t({}), prep).status, 'in');
+
+  const byDay = new Map([['2026-11-11', prep]]);
+  const trades = [t({ plan_scenario: 'A', r_multiple: 2 }), t({ plan_scenario: 'A', r_multiple: -1, outcome: 'Loss' }), t({ plan_scenario: 'none', r_multiple: -1, outcome: 'Loss', direction: 'Long' }), t({}),
+    t({ plan_scenario: 'A', account: 'Backtest (FX Replay)' }), t({ plan_scenario: 'B', outcome: 'Not taken' })];
+  const s = scenarioSplit(trades, byDay);
+  assert.deepEqual(s.rows.map((r) => [r.key, r.n, r.avgR]), [['A', 2, 0.5], ['B', 0, null], ['none', 1, -1]]);
+  assert.equal(s.unasked, 1, 'a real trade on a planned day that never said');
+  assert.deepEqual(biasSplit(trades, byDay).map((r) => [r.key, r.n]), [['with', 3], ['against', 1], ['neutral', 0]]);
+});

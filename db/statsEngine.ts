@@ -47,6 +47,8 @@ import type { EvalPreset } from '../components/stats/Lab';
 import { accountParam, applyStatsScope, measuredTrades, parseStatsScope } from '../lib/statsScope';
 import { TRIAL_RUBRIC } from '../lib/rubric';
 import { backtestGap } from '../lib/edge/views';
+import { listPreps } from './prep';
+import { biasSplit, scenarioSplit } from '../lib/planMatch';
 
 export type StatsParams = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -213,7 +215,12 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
     : `${what} unlocks at 30 trades (${30 - settled.length} to go). Shown as a preview — every row reads Too early until then.`);
   const trial = TRIAL_RUBRIC != null ? trialVerdict : null;
 
+  // What each of the morning's plans made, and trading with or against the written bias (lib/planMatch, 045).
+  const prepByDay = new Map(listPreps().map((x) => [x.day, x.data] as const));
+  const plans = { scenarios: scenarioSplit(settled, prepByDay), bias: biasSplit(settled, prepByDay) };
+
   return {
+    plans,
     scoped,
     leftOutWorlds,
     ctxFor,

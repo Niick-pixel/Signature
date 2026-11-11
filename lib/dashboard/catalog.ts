@@ -47,7 +47,7 @@ const TIER: Record<string, 1 | 2> = {
   'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
   'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
   'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
-  focus: 2, integrity: 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+  focus: 2, integrity: 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
 };
 /** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
 const LEAN: Record<string, 'fix' | 'keep'> = {
@@ -445,6 +445,37 @@ add({
   help: 'What would have happened under a stricter rule: expectancy with its interval, the difference against what you took, and P(better). An experiment, never a verdict; none needing more than 200 trades is proposed.',
   select: (v) => ({ kind: 'custom', view: 'rulelab', claim: { n: v.lab.length },
     data: { rows: packRows(v.lab), each: Object.fromEntries(Object.entries(v.labEach).map(([k, r]) => [k, { ...r, curve: [] }])) } }),
+});
+
+add({
+  id: 'plan-scenarios', title: 'Your plans: A, B, neither', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'What each of the morning\'s written plans made, per trade: Scenario A (with your bias), Scenario B (the alternate), and trades that were neither. Answered on the trade form ("This morning\'s plan"). Real trades only. A trade outside both plans is never shown as the good side.',
+  select: (v) => {
+    const { rows, unasked } = v.plans.scenarios;
+    const n = rows.reduce((a, r) => a + r.n, 0);
+    if (!n) return { kind: 'text', headline: '', tone: 'neutral', tooEarly: { ghost: 'bars',
+      text: unasked ? `${plural(unasked, 'trade')} on a planned day never said which plan it was. Open one and answer "This morning's plan".` : 'Write the two plans in the morning prep, then say on each trade which one it was.', href: '/new', hrefLabel: 'Log a trade' } };
+    const best = Math.max(...rows.filter((r) => r.key !== 'none' && r.avgR != null).map((r) => r.avgR as number), -Infinity);
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n, level: null },
+      items: rows.filter((r) => r.n > 0).map((r) => ({ label: r.label, value: r.avgR ?? 0, display: `${R(r.avgR)} · n ${r.n}`,
+        // Outside the plan is a warning whatever it made; the plans are plain data.
+        tone: (r.key === 'none' ? ((r.avgR ?? 0) > best ? 'watch' : 'bad') : 'accent') as Tone })),
+      caption: `R per trade${unasked ? ` · ${unasked} not answered` : ''} · too early under ${MIN_N} each` };
+  },
+});
+
+add({
+  id: 'plan-bias', title: 'With or against your bias', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Real trades on days you wrote a bias in the morning prep: those taken with it, against it, and on days you called it neutral. Tests your morning read, not your entries.',
+  select: (v) => {
+    const rows = v.plans.bias; const n = rows.reduce((a, r) => a + r.n, 0);
+    if (!n) return { kind: 'text', headline: '', tone: 'neutral', tooEarly: { ghost: 'bars', text: 'Needs real trades on days with the bias sentence written in the morning prep.', href: '/new', hrefLabel: 'Log a trade' } };
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n, level: null },
+      items: rows.filter((r) => r.n > 0).map((r) => ({ label: r.label, value: r.avgR ?? 0, display: `${R(r.avgR)} · n ${r.n}`, tone: (r.key === 'against' ? 'watch' : 'accent') as Tone })),
+      caption: `R per trade · too early under ${MIN_N} each` };
+  },
 });
 
 add({

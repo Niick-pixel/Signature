@@ -38,3 +38,10 @@ The Today panel shows the day's plan in a few rows (bias, news, overnight, locat
 ## Older preps
 
 A prep saved under the six tap steps (the first version) or the three panel steps (the second) still opens, counts by its own rule and exports as it was (`LEGACY_STEPS`, `PANEL_STEPS`). Nothing is stored in a new table: the prep is one JSON document per day (`session_prep`), and written answers are kept up to 400 characters.
+
+## Which plan was this trade? (migration 045)
+
+On a real trade whose day has a written plan, the trade form asks **"This morning's plan: which one was this trade?"** — Scenario A, Scenario B, or Neither (`components/capture/PlanChip.tsx`, column `trades.plan_scenario`). Empty until answered, never required.
+
+- **Plan match** then sets the trade against that one scenario (its direction, trigger and target), not against both plans at once; "Neither" is off plan.
+- **Stats** gain two widgets (in the gallery, tier "Useful"): **Your plans: A, B, neither** (R per trade by scenario; a trade outside both plans is never shown as the good side) and **With or against your bias** (R with the morning's written bias, against it, and on neutral days).

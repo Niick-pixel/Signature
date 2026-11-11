@@ -186,6 +186,8 @@ const WRITABLE = [
   // The Flaw Deck (042).
   'drill_key', 'drill_kept',
   'partial_win',
+  // Which of the morning's plans it was (045).
+  'plan_scenario',
 ] as const;
 
 /**
