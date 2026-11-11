@@ -13,6 +13,7 @@ import { LiveRefresh } from '@/components/shell/LiveRefresh';
 import { Shortcuts } from '@/components/shell/Shortcuts';
 import { NavTransitions } from '@/components/shell/NavTransitions';
 import { Tooltips } from '@/components/shell/Tooltips';
+import { SideRail } from '@/components/shell/SideRail';
 import { ConfirmProvider } from '@/components/ui/Confirm';
 import { BoardLayer } from '@/components/whiteboard/BoardLayer';
 import { WeekendReview } from '@/components/path/WeekendReview';
@@ -46,6 +47,8 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
       <body>
         <PreferencesProvider>
           <ConfirmProvider>
+          {/* The tabs down the left, when Settings → Appearance → Navigation says so. */}
+          <SideRail />
           {children}
           {/* The whiteboard, mounted once and kept alive — see PersistentBoard. */}
           <BoardLayer />

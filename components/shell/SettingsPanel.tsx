@@ -84,7 +84,7 @@ const CATEGORIES = [
   { id: 'morning', group: 'Trading', label: 'Morning & prep', hint: 'The check-in before the session and the chart prep.', words: 'check-in checkin morning prep chart heatmap sleep bias news' },
   { id: 'trades', group: 'Trading', label: 'Trades & import', hint: 'What the trade page shows, and executions from your broker.', words: 'trade page sections executions import csv fees broker' },
   { id: 'prop', group: 'Trading', label: 'Prop firms', hint: 'The trading day, warnings, and where the prop hub shows.', words: 'prop eval funded drawdown tab hub warnings day' },
-  { id: 'appearance', group: 'Screens', label: 'Appearance', hint: 'Theme, size, motion and the logo.', words: 'theme dark light size text zoom fit screen motion animation logo watermark' },
+  { id: 'appearance', group: 'Screens', label: 'Appearance', hint: 'Theme, size, motion and the logo.', words: 'theme dark light size text zoom fit screen motion animation logo watermark navigation tabs sidebar side rail left' },
   { id: 'personal', group: 'Screens', label: 'Personalization', hint: 'Background, accent, type, saved looks, the quote of the day.', words: 'background photo video accent colour color font type looks quote' },
   { id: 'dashboard', group: 'Screens', label: 'Dashboard & Today', hint: 'Which blocks show, which accounts, and the Today panel.', words: 'dashboard blocks cards today panel accounts phrases' },
   { id: 'analytics', group: 'Screens', label: 'Analytics', hint: 'How analytics read your trades, words and news.', words: 'analytics words emotions news reading theme dictionary' },
@@ -316,6 +316,19 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
             </>)}
             {cat === 'appearance' && (<>
+            <Section
+              title="Navigation"
+              hint="Where the tabs live. The side rail frees the height of the title bar, which every board that fits the window uses; labels make it wider."
+            >
+              <div className="flex flex-wrap items-center gap-3" data-nav-setting>
+                <Segmented value={prefs.nav} onChange={(nav) => update({ nav })} options={['top', 'side'] as const}
+                  labelFor={(v) => (v === 'top' ? 'Tabs across the top' : 'Side rail')} />
+                {prefs.nav === 'side' && (
+                  <TogglePill checked={prefs.railLabels} onChange={(railLabels) => update({ railLabels })} label="Show labels" hint="Off: icons only, the name on hover." />
+                )}
+              </div>
+            </Section>
+
             <Section
               title="Theme"
               hint="Warm creams, cool grays and two darks. Each changes the surfaces, corners and headings, not only the colours."

@@ -8,7 +8,7 @@ import { MARK_S_PATH } from './markPath';
  * wordmark in a serif. Colours come from the theme (--mark-*), so it sits
  * right on every theme; the S outline is generated with the app icon.
  */
-export function Wordmark() {
+export function Wordmark({ markOnly = false }: { markOnly?: boolean } = {}) {
   const w = 1.18;
   return (
     <div className="flex select-none items-center gap-2" data-wordmark>
@@ -21,9 +21,11 @@ export function Wordmark() {
         {/* A slight outline keeps the hairline tails visible at 22 px. */}
         <path d={MARK_S_PATH} fill="var(--mark-ink)" stroke="var(--mark-ink)" strokeWidth="7" strokeLinejoin="round" />
       </svg>
-      <span className="text-[14px]" style={{ color: 'var(--text)', fontFamily: 'Georgia, "Times New Roman", "Liberation Serif", serif', letterSpacing: '-0.01em' }}>
-        Signature
-      </span>
+      {!markOnly && (
+        <span className="text-[14px]" style={{ color: 'var(--text)', fontFamily: 'Georgia, "Times New Roman", "Liberation Serif", serif', letterSpacing: '-0.01em' }}>
+          Signature
+        </span>
+      )}
     </div>
   );
 }

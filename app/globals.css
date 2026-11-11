@@ -1049,3 +1049,11 @@ html[data-platform='win32'] [data-wco-pad] { padding-right: 152px; }
 .signature-thin-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 999px; }
 .signature-thin-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 .signature-thin-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* The side rail (components/shell/SideRail, Settings → Appearance → Navigation): the page moves over by its width. */
+:root { --rail-w: 0px; }
+html[data-rail='icons'] { --rail-w: 64px; }
+html[data-rail='labels'] { --rail-w: 184px; }
+html[data-rail='icons'] body, html[data-rail='labels'] body { padding-left: var(--rail-w); }
+html[data-rail='icons'] [data-title-wordmark], html[data-rail='labels'] [data-title-wordmark],
+html[data-rail='icons'] header.titlebar-drag [data-tabs], html[data-rail='labels'] header.titlebar-drag [data-tabs] { display: none; }

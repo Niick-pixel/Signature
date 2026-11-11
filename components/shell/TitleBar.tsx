@@ -13,7 +13,7 @@ import { Suspense } from 'react';
 import { NotificationBell, openReminderRoute } from './Reminders';
 import { usePreferences } from './PreferencesProvider';
 
-const TABS = [
+export const TABS = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/', label: 'Trades' },
   { href: '/stats', label: 'Stats' },
@@ -90,11 +90,13 @@ export function TitleBar() {
         // minimise/maximise/close on the right. Either way the buttons sit on
         // top of this strip, so the content has to get out of their way — the
         // theme control was landing underneath the minimise button.
-        paddingLeft: isMac ? 88 : 16,
+        // With the side rail, the traffic lights sit over the rail, so only what is left of them needs clearing.
+        paddingLeft: isMac ? 'max(16px, calc(88px - var(--rail-w)))' : 16,
         paddingRight: isWindows ? 148 : 16,
       }}
     >
-      <Wordmark />
+      {/* With the side rail the mark and the tabs are on the rail (globals.css hides these two). */}
+      <div data-title-wordmark><Wordmark /></div>
 
       {/* Wide windows: centred on the window, not on the space left over — so the
           tabs stay put regardless of what sits either side of them. Narrower: in
