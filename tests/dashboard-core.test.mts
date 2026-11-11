@@ -178,3 +178,18 @@ test('registry: ids unique, default size among the sizes, help required; default
   assert.equal(o.mixed, true, 'the mixed chip follows the scope, whatever the widget settings say');
   assert.equal(scopeFor({ source: 'real', period: 'all' }, { source: 'all' }, false, mixedOf).override, null, 'no override where the widget does not allow it');
 });
+
+test('history: undo, redo, a new change drops the redo branch, no-op changes are not steps, capped', async () => {
+  const H = await import('../lib/dashboard/history');
+  let h = H.historyOf(1);
+  h = H.push(h, 2); h = H.push(h, 3);
+  h = H.undo(h); assert.equal(h.present, 2);
+  h = H.undo(h); assert.equal(h.present, 1);
+  assert.equal(H.undo(h).present, 1, 'nothing before the start');
+  h = H.redo(h); assert.equal(h.present, 2);
+  h = H.push(h, 9); assert.equal(H.canRedo(h), false);
+  assert.equal(H.push(h, 9), h, 'the same value is not a step');
+  let big = H.historyOf(0);
+  for (let i = 1; i <= 150; i++) big = H.push(big, i);
+  assert.equal(big.past.length, H.LIMIT);
+});

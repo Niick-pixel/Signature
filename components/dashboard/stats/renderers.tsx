@@ -36,8 +36,8 @@ export function WidgetBody(p: BodyProps) {
   switch (vm.kind) {
     case 'kpi': return <Kpi vm={vm} size={p.size} cfg={p.cfg} />;
     case 'line': return <Line vm={vm} cfg={p.cfg} />;
-    case 'bars': return <Bars vm={vm} />;
-    case 'heat': return <Heat vm={vm} />;
+    case 'bars': return <Bars vm={vm} cfg={p.cfg} />;
+    case 'heat': return <Heat vm={vm} cfg={p.cfg} />;
     case 'text': return <Text vm={vm} size={p.size} />;
     case 'list': return <List vm={vm} size={p.size} />;
     case 'rings': return <Rings vm={vm} size={p.size} />;
@@ -71,10 +71,10 @@ function TooEarlyState({ t, size }: { t: TooEarly; size: SizeKey }) {
 
 function Kpi({ vm, size, cfg }: { vm: KpiVM; size: SizeKey; cfg: WidgetCfg }) {
   const number = (
-    <div className="min-w-0">
+    <div className="min-w-0 shrink-0">
       <div className="truncate font-semibold leading-none tracking-tight tabular-nums" style={{ fontSize: 'clamp(22px, 4.2vh, 40px)', color: toneColor(vm.tone) }} data-kpi-value>{vm.value}</div>
-      <div className="mt-1 truncate text-[12px]" style={{ color: 'var(--text-dim)' }}>{vm.caption}</div>
-      {vm.compare && <div className="mt-0.5 truncate text-[11.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{vm.compare}</div>}
+      {cfg.showSubtitle !== false && <div className="mt-1 truncate text-[12px]" style={{ color: 'var(--text-dim)' }}>{vm.caption}</div>}
+      {vm.compare && cfg.showSubtitle !== false && <div className="mt-0.5 truncate text-[11.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{vm.compare}</div>}
     </div>
   );
   if (size === 'S') {
@@ -84,7 +84,7 @@ function Kpi({ vm, size, cfg }: { vm: KpiVM; size: SizeKey; cfg: WidgetCfg }) {
         {vm.spark && vm.spark.length > 1
           ? <div className="mt-auto h-[30%] min-h-[18px] pt-1"><Sparkline values={vm.spark} tone={vm.tone === 'bad' ? 'bad' : 'accent'} /></div>
           : vm.chart?.kind === 'bars' && vm.chart.horizontal && vm.chart.items.length <= 3
-            ? <div className="mt-auto min-h-0 pt-2"><BarChart items={vm.chart.items} horizontal marker={vm.chart.marker} max={vm.chart.max} /></div> : null}
+            ? <div className="mt-auto min-h-0 flex-1 overflow-hidden pt-2"><BarChart items={vm.chart.items} horizontal marker={vm.chart.marker} max={vm.chart.max} /></div> : null}
       </div>
     );
   }
@@ -107,26 +107,26 @@ function Line({ vm, cfg }: { vm: LineVM; cfg: WidgetCfg }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1"><LineChart series={vm.series} band={vm.band} band2={vm.band2} zero={vm.zero} unit={vm.unit} style={(cfg.chartStyle as 'line') ?? 'line'} /></div>
-      {vm.caption && <p className="mt-1 truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>{vm.caption}</p>}
+      {vm.caption && cfg.showSubtitle !== false && <p className="mt-1 truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>{vm.caption}</p>}
     </div>
   );
 }
-function Bars({ vm }: { vm: BarsVM }) {
+function Bars({ vm, cfg }: { vm: BarsVM; cfg: WidgetCfg }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* A long list of bars scrolls inside its box rather than spill out of it. */}
       {vm.horizontal && vm.items.length > 4
         ? <ScrollBox className="min-h-0 flex-1 pr-1"><BarChart items={vm.items} horizontal marker={vm.marker} max={vm.max} flow /></ScrollBox>
         : <div className="min-h-0 flex-1"><BarChart items={vm.items} horizontal={vm.horizontal} marker={vm.marker} max={vm.max} /></div>}
-      {vm.caption && <p className="mt-1 truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>{vm.caption}</p>}
+      {vm.caption && cfg.showSubtitle !== false && <p className="mt-1 truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>{vm.caption}</p>}
     </div>
   );
 }
-function Heat({ vm }: { vm: HeatVM }) {
+function Heat({ vm, cfg }: { vm: HeatVM; cfg: WidgetCfg }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1"><Heatmap rows={vm.rows} cols={vm.cols} cells={vm.cells} /></div>
-      {vm.caption && <p className="mt-1 truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>{vm.caption}</p>}
+      {vm.caption && cfg.showSubtitle !== false && <p className="mt-1 truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>{vm.caption}</p>}
     </div>
   );
 }

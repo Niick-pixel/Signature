@@ -24,7 +24,7 @@ const SOURCES: Source[] = ['real', 'backtest', 'all'];
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 export const catalog = { supports: registry.supports, known: registry.known };
 
-export interface WidgetInfo { id: string; title: string; help: string; kind: Kind; view?: string; sizes: readonly string[]; category: string; claims: boolean }
+export interface WidgetInfo { id: string; title: string; help: string; kind: Kind; view?: string; sizes: readonly string[]; category: string; claims: boolean; settings: WidgetMeta['settings']; defaultSize: string }
 export interface WidgetState { vm: ViewModel; title: string; scope: string | null; mixed: boolean }
 export interface BoardPage {
   boards: Array<{ id: string; name: string }>;
@@ -50,21 +50,12 @@ function sharedFilters(params: StatsParams): Record<string, string> {
   return out;
 }
 
-export function boardPage(params: StatsParams): BoardPage {
-  seedBoards(DEFAULT_BOARDS, defaultSettings);
-  const boards = listBoards(catalog);
-  const asked = one(params.board);
-  const board = boards.find((b) => b.id === asked) ?? boards[0];
-  const src = one(params.src);
-  const source: Source = SOURCES.includes(src as Source) ? (src as Source) : board.settings.source;
-  const filters = sharedFilters(params);
-
+/** One engine per distinct scope, shared by every widget asking for it. */
+function makeViews(filters: Record<string, string>) {
   const everything = listTrades().filter(countsInStats);
   const accounts = accountsInUse(everything).map((a) => a.account);
   const realAccounts = accounts.filter((a) => isReal(a));
   const has = { real: realAccounts.length > 0, backtest: accounts.includes(BACKTEST) };
-
-  // One engine per distinct scope: source × period × last N.
   const views = new Map<string, View | null>();
   const viewFor = (s: Source, period: string | undefined, lastN: number | null): View | null => {
     const key = `${s}|${period ?? ''}|${lastN ?? ''}`;
@@ -83,36 +74,63 @@ export function boardPage(params: StatsParams): BoardPage {
     views.set(key, v);
     return v;
   };
+  return { viewFor, has };
+}
 
+/** One widget's state over its scope: the too-early gate, its select, or the error in its own tile. */
+function widgetState(def: WidgetMeta, itCfg: import('../lib/dashboard/types').WidgetCfg, boardScope: { source: Source; period: string },
+  viewFor: ReturnType<typeof makeViews>['viewFor'], has: { real: boolean; backtest: boolean }): WidgetState {
+  const cfg = withDefaults(def, itCfg);
+  const scope = scopeFor(boardScope, cfg, def.settings.scope === true, () => false);
+  const view = viewFor(scope.source, scope.period === 'all' ? undefined : scope.period, scope.lastN);
+  const mixed = !!view && view.source === 'all' && view.settled.some((x) => sourceOf(x.account) === 'backtest') && view.settled.some((x) => sourceOf(x.account) !== 'backtest' && sourceOf(x.account) !== 'missed');
+  let vm: ViewModel;
+  if (!view) {
+    vm = early(def, scope.source === 'real' && !has.real ? { text: 'No live, demo or eval trades yet.', href: '/new', hrefLabel: 'Log a trade' }
+      : scope.source === 'backtest' && !has.backtest ? { text: 'No backtests yet.', href: '/new', hrefLabel: 'Log a backtest' }
+        : { text: `This board reads more than ${MAX_SCOPES} different scopes; move this widget to another board or remove its override.` });
+  } else if (def.minTrades && view.settled.length < def.minTrades) {
+    vm = early(def, { text: `Needs ${def.minTrades - view.settled.length} more settled trade${def.minTrades - view.settled.length === 1 ? '' : 's'}.`, href: '/new', hrefLabel: 'Log a trade' });
+  } else {
+    try { vm = def.select(view as never, cfg, scope) as ViewModel; } catch (e) {
+      vm = early(def, { text: `This widget could not be drawn: ${(e as Error).message}` });
+    }
+  }
+  return { vm, title: cfg.title || def.title, scope: scope.override, mixed };
+}
+
+/** Every widget in the catalog over the board's scope: the gallery's live previews. */
+export function galleryPreviews(params: StatsParams): Record<string, WidgetState> {
+  const boards = listBoards(catalog);
+  const board = boards.find((b) => b.id === one(params.board)) ?? boards[0];
+  const src = one(params.src);
+  const source: Source = SOURCES.includes(src as Source) ? (src as Source) : board?.settings.source ?? 'real';
+  const filters = sharedFilters(params);
+  const { viewFor, has } = makeViews(filters);
+  return Object.fromEntries(registry.all().map((d) => [d.id, widgetState(d, {}, { source, period: filters.period ?? 'all' }, viewFor, has)]));
+}
+
+export function boardPage(params: StatsParams): BoardPage {
+  seedBoards(DEFAULT_BOARDS, defaultSettings);
+  const boards = listBoards(catalog);
+  const asked = one(params.board);
+  const board = boards.find((b) => b.id === asked) ?? boards[0];
+  const src = one(params.src);
+  const source: Source = SOURCES.includes(src as Source) ? (src as Source) : board.settings.source;
+  const filters = sharedFilters(params);
+
+  const { viewFor, has } = makeViews(filters);
   const states: Record<string, WidgetState> = {};
   const boardScope = { source, period: filters.period ?? 'all' };
   for (const t of board.layout.tiles as Tile[]) {
     for (const it of t.items) {
       const def = registry.get(it.widget);
-      if (!def) continue;
-      const cfg = withDefaults(def, it.cfg);
-      const allow = def.settings.scope === true;
-      const scope = scopeFor(boardScope, cfg, allow, () => false);
-      const view = viewFor(scope.source, scope.period === 'all' ? undefined : scope.period, scope.lastN);
-      const mixed = !!view && view.source === 'all' && view.settled.some((x) => sourceOf(x.account) === 'backtest') && view.settled.some((x) => sourceOf(x.account) !== 'backtest' && sourceOf(x.account) !== 'missed');
-      let vm: ViewModel;
-      if (!view) {
-        vm = early(def, scope.source === 'real' && !has.real ? { text: 'No live, demo or eval trades yet.', href: '/new', hrefLabel: 'Log a trade' }
-          : scope.source === 'backtest' && !has.backtest ? { text: 'No backtests yet.', href: '/new', hrefLabel: 'Log a backtest' }
-            : { text: `This board reads more than ${MAX_SCOPES} different scopes; move this widget to another board or remove its override.` });
-      } else if (def.minTrades && view.settled.length < def.minTrades) {
-        vm = early(def, { text: `Needs ${def.minTrades - view.settled.length} more settled trade${def.minTrades - view.settled.length === 1 ? '' : 's'}.`, href: '/new', hrefLabel: 'Log a trade' });
-      } else {
-        try { vm = def.select(view as never, cfg, scope) as ViewModel; } catch (e) {
-          vm = early(def, { text: `This widget could not be drawn: ${(e as Error).message}` });
-        }
-      }
-      states[it.uid] = { vm, title: cfg.title || def.title, scope: scope.override, mixed };
+      if (def) states[it.uid] = widgetState(def, it.cfg, boardScope, viewFor, has);
     }
   }
 
   const widgets = Object.fromEntries(registry.all().map((d) => [d.id, {
-    id: d.id, title: d.title, help: d.help, kind: d.kind, view: d.view, sizes: d.sizes, category: d.category, claims: !!d.claims,
+    id: d.id, title: d.title, help: d.help, kind: d.kind, view: d.view, sizes: d.sizes, category: d.category, claims: !!d.claims, settings: d.settings, defaultSize: d.defaultSize,
   }]));
   return { boards: boards.map((b) => ({ id: b.id, name: b.name })), board, source, filters, widgets, states, has };
 }

@@ -9,12 +9,13 @@ export const dynamic = 'force-dynamic';
  * lib/dashboard). The page never scrolls; each board fits the window.
  */
 export default async function StatsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const page = boardPage(await searchParams);
+  const params = await searchParams;
+  const page = boardPage(params);
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <TitleBar />
       <div className="signature-enter flex min-h-0 flex-1 flex-col">
-        <StatsBoard page={page} />
+        <StatsBoard key={page.board.id} page={page} startEditing={params.edit === '1'} />
       </div>
     </div>
   );

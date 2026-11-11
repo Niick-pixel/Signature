@@ -31,12 +31,26 @@ function Chip({ text, style, title }: { text: string; style: React.CSSProperties
 }
 
 const BIGGEST: SizeKey[] = ['XL', 'L', 'T', 'M', 'S', 'W'];
+const SPAN = { S: [3, 2], M: [6, 2], T: [3, 4], L: [6, 4], W: [12, 1], XL: [12, 4] } as const;
+/** A #hex as the "r g b" the theme's colour variables hold. */
+export const triple = (hex: string) => `${parseInt(hex.slice(1, 3), 16)} ${parseInt(hex.slice(3, 5), 16)} ${parseInt(hex.slice(5, 7), 16)}`;
 
-export function Tile({ tile, widgets, states, reduce, index }: {
-  tile: TileT; widgets: Record<string, WidgetInfo>; states: Record<string, WidgetState>; reduce: boolean; index: number;
+/** What edit mode adds to a tile: selection, the drag surface, the resize handle, its buttons. */
+export interface TileEdit {
+  selected: boolean; dragging: boolean; stackTarget: boolean;
+  onMoveStart: (e: React.PointerEvent) => void;
+  onResizeStart: (e: React.PointerEvent) => void;
+  onChipStart: (uid: string, e: React.PointerEvent) => void;
+  onSettings: () => void; onRemove: () => void;
+}
+
+const PENDING: WidgetState = { vm: { kind: 'text', headline: 'Drawing…', tone: 'neutral' }, title: '', scope: null, mixed: false };
+
+export function Tile({ tile, widgets, states, reduce, index, edit }: {
+  tile: TileT; widgets: Record<string, WidgetInfo>; states: Record<string, WidgetState>; reduce: boolean; index: number; edit?: TileEdit;
 }) {
-  // A stack shows only the widgets that have something to show (no empty "Flaw #5").
-  const items = useMemo(() => tile.items.filter((i) => states[i.uid] && states[i.uid].vm.kind !== 'none'), [tile.items, states]);
+  // A stack shows only the widgets that have something to show (no empty "Flaw #5") — except while editing, when every one is there to move.
+  const items = useMemo(() => tile.items.filter((i) => edit || (states[i.uid] && states[i.uid].vm.kind !== 'none')), [tile.items, states, edit]);
   const [s, dispatch] = useReducer(stackReducer, null, () => initialStack(items.length, Math.min(tile.active, Math.max(0, items.length - 1))));
   const sRef = useRef<StackState>(s);
   useEffect(() => { sRef.current = s; }, [s]);
@@ -64,8 +78,10 @@ export function Tile({ tile, widgets, states, reduce, index }: {
   const jump = useCallback((i: number) => dispatch({ type: 'jump', index: i }), []);
   const front = items[s.index] ?? items[0];
   if (!front) return null;
-  const st = states[front.uid];
   const info = widgets[front.widget];
+  const st = states[front.uid] ?? { ...PENDING, title: front.cfg.title || info?.title || front.widget };
+  const cfg = front.cfg;
+  const title = cfg.title || st.title;
   const vm: ViewModel = st.vm;
   const claim = vm.claim;
   const level = claim?.level;
@@ -73,32 +89,47 @@ export function Tile({ tile, widgets, states, reduce, index }: {
 
   const header = (big = false) => (
     <div className="flex min-w-0 items-center gap-1.5">
-      <span className={`min-w-0 truncate font-semibold ${big ? 'text-[15px]' : 'text-[11.5px] uppercase tracking-[0.06em]'}`} style={{ color: big ? 'var(--text)' : 'var(--text-dim)' }} data-tile-title>{st.title}</span>
+      <span className={`min-w-0 truncate font-semibold ${big ? 'text-[15px]' : 'text-[11.5px] uppercase tracking-[0.06em]'}`} style={{ color: big ? 'var(--text)' : 'var(--text-dim)' }} data-tile-title>{title}</span>
       {st.scope && <Chip text={st.scope} style={{ borderColor: 'rgb(var(--accent) / 0.4)', color: 'rgb(var(--accent))' }} title="This widget reads its own scope, not the board's" />}
       {st.mixed && <Chip text="mixed" style={{ borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }} title="Real and backtest trades are counted together here: read it as a blend, not a live result" />}
       {level && !vm.tooEarly && <Chip text={VERDICT_LABEL[level]} style={CHIP[level]} title="How sure the engine is" />}
-      {tile.size === 'W' && claim && !vm.tooEarly && <span className="shrink-0 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{claimText(claim)}</span>}
+      {tile.size === 'W' && claim && !vm.tooEarly && cfg.stats !== 'tooltip' && <span className="shrink-0 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{claimText(claim)}</span>}
+      {/* Folded into a tooltip, never gone: a claim always keeps its n and interval. */}
+      {claim && !vm.tooEarly && cfg.stats === 'tooltip' && <Chip text={`n ${claim.n}`} style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)' }} title={claimText(claim)} />}
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        <TileHelp text={info.help} />
-        {!big && <button type="button" onClick={() => setExpanded(true)} aria-label={`Open ${st.title} large`} title="Open large" data-expand
+        {cfg.showHelp !== false && <TileHelp text={info.help} />}
+        {!big && <button type="button" onClick={() => setExpanded(true)} aria-label={`Open ${title} large`} title="Open large" data-expand
           className="grid size-5 place-items-center rounded-full text-[12px] opacity-60 transition-opacity hover:opacity-100" style={{ color: 'var(--text-dim)' }}>↗</button>}
       </span>
     </div>
   );
-  const footer = claim && !vm.tooEarly && tile.size !== 'W' && (
+  const footer = claim && !vm.tooEarly && tile.size !== 'W' && cfg.stats !== 'tooltip' && (
     <div className="truncate pt-1 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }} data-claim>{claimText(claim)}</div>
   );
 
-  const pad = tile.size === 'W' ? 'px-4 py-2' : 'px-4 pb-2.5 pt-3';
+  const compact = cfg.density === 'compact';
+  const pad = tile.size === 'W' ? 'px-4 py-2' : compact ? 'px-3 pb-2 pt-2' : 'px-4 pb-2.5 pt-3';
+  // The widget's own look (its tokens): accent, corners, glass, glow. The meaning colours stay the board's.
+  const look: React.CSSProperties = {
+    ...(cfg.accent ? { ['--accent' as string]: triple(cfg.accent) } : {}),
+    ...(cfg.radius != null ? { borderRadius: cfg.radius } : {}),
+    ...(cfg.glass != null ? { background: `color-mix(in srgb, var(--bg-raised) ${100 - cfg.glass * 0.7}%, transparent)`, backdropFilter: `blur(${4 + cfg.glass * 0.24}px)` } : {}),
+  };
+  const glow = cfg.glow ? '0 0 46px -12px rgb(var(--accent) / 0.65)' : null;
+  const ring = edit ? (edit.stackTarget ? '0 0 0 2.5px rgb(var(--accent)), 0 0 30px -4px rgb(var(--accent) / 0.6)'
+    : edit.selected ? '0 0 0 2px rgb(var(--accent) / 0.9), 0 0 26px -6px rgb(var(--accent) / 0.6)'
+      : '0 0 0 1.5px rgb(var(--accent) / 0.4), 0 0 20px -8px rgb(var(--accent) / 0.45)') : null;
+  const shadow = [ring, glow].filter(Boolean).join(', ') || undefined;
   return (
     <motion.div
       ref={box}
+      layout={reduce ? false : 'position'}
       initial={reduce ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: reduce ? 0 : index * 0.03, duration: 0.28 }}
+      animate={{ opacity: edit?.dragging ? 0.85 : 1, y: 0, scale: edit?.dragging ? 1.015 : 1 }}
+      transition={{ delay: reduce ? 0 : index * 0.03, duration: 0.28, layout: { type: 'spring', stiffness: 420, damping: 36 } }}
       className={`glass relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[calc(18px*var(--rk))] ${pad}`}
-      style={{ gridColumn: `${tile.x + 1} / span ${({ S: 3, M: 6, T: 3, L: 6, W: 12, XL: 12 } as const)[tile.size]}`, gridRow: `${tile.y + 1} / span ${({ S: 2, M: 2, T: 4, L: 4, W: 1, XL: 4 } as const)[tile.size]}` }}
-      data-tile={tile.id} data-size={tile.size} data-stack={items.length > 1 ? items.length : undefined} data-stack-index={s.index}>
+      style={{ gridColumn: `${tile.x + 1} / span ${SPAN[tile.size][0]}`, gridRow: `${tile.y + 1} / span ${SPAN[tile.size][1]}`, ...look, boxShadow: shadow, zIndex: edit?.dragging ? 30 : undefined }}
+      data-tile={tile.id} data-size={tile.size} data-stack={items.length > 1 ? items.length : undefined} data-stack-index={s.index} data-selected={edit?.selected || undefined}>
       {header()}
       <div className="relative mt-1.5 min-h-0 flex-1" style={tile.size === 'W' ? { marginTop: 2 } : undefined}>
         <AnimatePresence initial={false} mode="popLayout" custom={s.dir}>
@@ -118,14 +149,42 @@ export function Tile({ tile, widgets, states, reduce, index }: {
       {items.length > 1 && (
         <div ref={rail} className="absolute right-1.5 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1.5 py-2" data-stack-rail>
           {items.map((it, i) => (
-            <button key={it.uid} type="button" onClick={() => jump(i)} aria-label={states[it.uid].title} aria-current={i === s.index}
+            <button key={it.uid} type="button" onClick={() => jump(i)} aria-label={(it.cfg.title || states[it.uid]?.title || widgets[it.widget]?.title || it.widget)} aria-current={i === s.index}
               className="group relative grid size-2.5 place-items-center">
               <span className="block rounded-full transition-all" style={{ width: 5, height: i === s.index ? 12 : 5, background: i === s.index ? 'rgb(var(--accent))' : 'var(--text-faint)', opacity: i === s.index ? 1 : 0.55 }} />
               <span className="pointer-events-none absolute right-4 hidden whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-medium group-hover:block"
-                style={{ background: 'var(--bg-raised)', border: '1px solid var(--glass-stroke)', color: 'var(--text)' }}>{states[it.uid].title}</span>
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--glass-stroke)', color: 'var(--text)' }}>{(it.cfg.title || states[it.uid]?.title || widgets[it.widget]?.title || it.widget)}</span>
             </button>
           ))}
         </div>
+      )}
+      {edit && (
+        <>
+          {/* The whole tile is a handle while editing; its content is shown, not used. */}
+          <div className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing" onPointerDown={edit.onMoveStart} data-drag-surface />
+          {edit.stackTarget && <div className="pointer-events-none absolute inset-x-0 bottom-2 z-30 text-center text-[11.5px] font-semibold" style={{ color: 'rgb(var(--accent))' }}>Drop to stack</div>}
+          <div className="absolute right-2 top-2 z-30 flex gap-1">
+            <button type="button" onClick={edit.onSettings} aria-label={`Settings for ${title}`} data-tile-settings
+              className="grid size-6 place-items-center rounded-full text-[12px]" style={{ background: 'var(--bg-raised)', boxShadow: 'var(--shadow-card)', color: 'var(--text-dim)' }}>⚙</button>
+            <button type="button" onClick={edit.onRemove} aria-label={`Remove ${title}`} data-tile-remove
+              className="grid size-6 place-items-center rounded-full text-[13px]" style={{ background: 'var(--bg-raised)', boxShadow: 'var(--shadow-card)', color: 'rgb(var(--outcome-loss))' }}>×</button>
+          </div>
+          {/* Only on the tile you picked: on every stacked tile they would sit over its numbers. */}
+          {tile.items.length > 1 && edit.selected && (
+            <div className="absolute inset-x-0 bottom-0 z-30 flex flex-wrap gap-1 rounded-b-[inherit] px-2 pb-2 pt-1.5 pr-7" data-stack-chips
+              style={{ background: 'color-mix(in srgb, var(--bg-raised) 82%, transparent)', backdropFilter: 'blur(8px)' }}>
+              {tile.items.map((it) => (
+                <span key={it.uid} onPointerDown={(e) => edit.onChipStart(it.uid, e)} title="Drag out of the stack"
+                  className="cursor-grab truncate rounded-full px-2 py-0.5 text-[10.5px] font-medium" style={{ maxWidth: 140, background: 'var(--bg-raised)', boxShadow: 'var(--shadow-card)', color: 'var(--text-dim)' }}>
+                  {it.cfg.title || widgets[it.widget]?.title || it.widget}
+                </span>
+              ))}
+            </div>
+          )}
+          <div onPointerDown={edit.onResizeStart} aria-label="Resize" role="separator" data-resize-handle
+            className="absolute bottom-1 right-1 z-30 size-4 cursor-nwse-resize rounded-[4px]"
+            style={{ background: 'linear-gradient(135deg, transparent 50%, rgb(var(--accent) / 0.8) 50%)' }} />
+        </>
       )}
       <Overlay open={expanded} onClose={() => setExpanded(false)} className="h-[min(82vh,760px)] w-[min(1200px,92vw)] p-6">
         <div className="flex h-full min-h-0 flex-col" data-expanded={front.widget}>

@@ -98,6 +98,9 @@ export function importBoard(file: unknown, cat: Catalog): { id: string; dropped:
   const schema = typeof f.schema === 'number' ? f.schema : 1;
   if (schema > LAYOUT_SCHEMA) throw new Error('This board was exported by a newer version of Signature.');
   const m = migrateLayout(f.layout, schema, cat.supports, cat.known);
-  const id = createBoard(typeof f.name === 'string' ? f.name : 'Imported board', m.layout, migrateSettings(f.settings));
+  const asked = typeof f.name === 'string' && f.name.trim() ? f.name.trim() : 'Imported board';
+  // Two tabs with one name can't be told apart: an import whose name is taken says where it came from.
+  const name = listBoards(cat).some((b) => b.name === asked) ? `${asked} (imported)` : asked;
+  const id = createBoard(name, m.layout, migrateSettings(f.settings));
   return { id, dropped: m.dropped };
 }

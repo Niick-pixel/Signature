@@ -57,6 +57,7 @@ test('export / import a board as a file: a new board, migrated; a foreign or new
   const back = D.importBoard(JSON.parse(JSON.stringify(file)), cat);
   assert.notEqual(back.id, 'overview');
   assert.equal(D.getBoard(back.id, cat)!.layout.tiles[0].items[0].widget, 'kpi');
+  assert.equal(D.getBoard(back.id, cat)!.name, 'Overview (imported)', 'a taken name says it was imported');
   assert.throws(() => D.importBoard({ format: 'something-else' }, cat), /not a Signature board/);
   assert.throws(() => D.importBoard({ ...file, schema: LAYOUT_SCHEMA + 1 }, cat), /newer version/);
 });
