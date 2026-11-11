@@ -368,7 +368,6 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
         merged={
           <div ref={head as React.RefObject<HTMLDivElement>} className="flex min-w-0 flex-1 items-center gap-2 text-[12px]" data-stats-header="merged">
             <span className="shrink-0 text-[15px] font-semibold tracking-tight">Stats</span>
-            {!editing && <Link href="/new" prefetch={false} className="shrink-0 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-stats-new>+ New trade</Link>}
             {(page.boards.length > 1 || editing) && boardTabs}
             <div className="ml-auto flex min-w-0 items-center gap-1.5 [&_[data-save-status]]:max-w-[16rem] [&_[data-save-status]]:truncate">
               {editing ? editTools : <>{sourceAndPeriod}{editButton}</>}
@@ -380,7 +379,6 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
         inline={
       <header ref={head} className={`flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-6 pb-2 pt-3 ${col}`}>
         <h1 className="text-[18px] font-semibold tracking-tight">Stats</h1>
-        {!editing && <Link href="/new" prefetch={false} className="rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-stats-new>+ New trade</Link>}
         {/* One board needs no tabs: they show once there is a second one, or while editing (to add or rename). */}
         {(page.boards.length > 1 || editing) && boardTabs}
         <div className="ml-auto flex flex-wrap items-center gap-2 text-[12px]">

@@ -67,7 +67,16 @@ export function SideRail() {
       <div className="titlebar-drag flex h-9 items-center overflow-hidden whitespace-nowrap px-[21px]" data-rail-mark>
         <Wordmark />
       </div>
-      <nav className="mt-4 flex flex-col gap-1 overflow-hidden px-2" aria-label="Tabs" data-rail-tabs>
+      {/* The primary action, in the same place on every screen. */}
+      <motion.div className="mx-2 mt-4" whileTap={press} whileHover={{ y: -1 }} transition={spring}>
+        <Link href="/new" prefetch={false} aria-label="New trade" title={labels ? undefined : 'New trade'} data-new-trade
+          className="flex h-10 items-center gap-3 overflow-hidden whitespace-nowrap rounded-[calc(12px*var(--rk))] px-[14px] text-[13px] font-semibold outline-none"
+          style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)', boxShadow: '0 6px 18px -8px rgb(var(--accent) / 0.8)' }}>
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M10 4.5v11M4.5 10h11" /></svg>
+          <span className="truncate" data-rail-label aria-hidden={!labels}>New trade</span>
+        </Link>
+      </motion.div>
+      <nav className="mt-3 flex flex-col gap-1 overflow-hidden px-2" aria-label="Tabs" data-rail-tabs>
         {tabs.map((t) => {
           const active = pathname === t.href || (t.href === '/prop' && pathname.startsWith('/prop/')) || (t.href === '/stats' && pathname.startsWith('/stats'));
           return (

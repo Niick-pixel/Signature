@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { BottomLeftControls } from '@/components/shell/SettingsPanel';
 import { PreferencesProvider } from '@/components/shell/PreferencesProvider';
-import { NewTradeButton } from '@/components/shell/NewTradeButton';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { MorningCheckIn } from '@/components/shell/MorningCheckIn';
 import { ReminderPoller } from '@/components/shell/Reminders';
@@ -58,7 +57,6 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <BottomLeftControls>
             <ThemeToggle />
           </BottomLeftControls>
-          <NewTradeButton />
           <MorningCheckIn />
           <ReminderPoller />
           <GoalsSheet />

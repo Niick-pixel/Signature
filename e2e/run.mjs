@@ -130,6 +130,23 @@ await check('side rail: the edge handle and Ctrl+B open and close it, the page f
   await page.context().close();
 });
 
+for (const nav of ['side', 'top']) {
+  await check(`${nav === 'side' ? 'side rail' : 'top tabs'}: New trade is in one place, the same on every screen`, async () => {
+    const { page } = await open({ width: 1280, height: 720 }, { nav });
+    const spots = new Set();
+    for (const u of SCREENS.filter((u) => u !== '/new')) {
+      await page.goto(`${BASE}${u}`); await page.waitForTimeout(500);
+      const shown = await page.evaluate(() => [...document.querySelectorAll('a[href="/new"]')].filter((a) => a.getBoundingClientRect().width && a.textContent.includes('New trade') || a.matches('[data-new-trade]') && a.getBoundingClientRect().width)
+        .map((a) => { const r = a.getBoundingClientRect(); return `${Math.round(r.left)},${Math.round(r.top)}`; }));
+      expect(shown.length === 1, `${u}: ${shown.length} New trade buttons`);
+      spots.add(shown[0]);
+    }
+    expect(spots.size === 1, `New trade moves between screens: ${[...spots].join(' ')}`);
+    await page.locator('[data-new-trade]:visible').click(); await page.waitForURL(/\/new/, { timeout: 5000 });
+    await page.context().close();
+  });
+}
+
 await check('side rail: every screen has one 44px title bar, its header inside it, nothing spilling out', async () => {
   const { page } = await open({ width: 1280, height: 720 }, { nav: 'side' });
   for (const u of ['/dashboard', '/stats', '/calendar', '/journal', '/path', '/study', '/goals', '/trash']) {

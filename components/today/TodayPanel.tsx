@@ -81,7 +81,7 @@ export function TodayPanel() {
   }, [shown, data?.tilt, load]);
 
   const open = shown && path !== '/new' && !folded;
-  // Tells docked bottom-right controls (New trade) to sit left of the panel.
+  // Tells the page to leave room on the right for the panel.
   useEffect(() => {
     const root = document.documentElement;
     if (open) root.dataset.todayOpen = 'true'; else delete root.dataset.todayOpen;
