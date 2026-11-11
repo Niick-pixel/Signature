@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Collapse } from '@/components/ui/Collapse';
-import { spring } from '@/lib/motion';
 import { flagsFor } from '@/lib/flags';
 import type { Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';

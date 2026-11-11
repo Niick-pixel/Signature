@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { MONEY_ACCOUNTS, type Account } from '@/lib/domain';
 import type { Balance } from '@/lib/balance';
 import type { CashEvent } from '@/lib/types';
-import { press, spring, springSoft } from '@/lib/motion';
+import { press, spring } from '@/lib/motion';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';

@@ -9,7 +9,7 @@ import '@xyflow/react/dist/style.css';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import {
   computeLayout, offsetSlot, reasonAccent, settle, tradeIdFromKey, arrangedKey, ARRANGEMENTS, type Arrangement,
-  GROUP_LABELS, GROUP_MODES, NODE_H, NODE_W, type GroupMode,
+  GROUP_LABELS, NODE_H, NODE_W, type GroupMode,
 } from '@/lib/layout';
 import { EASE_SOFT, spring, springBouncy, exitQuick } from '@/lib/motion';
 import type { JournalPage, BoardEdge, BoardNote, Trade } from '@/lib/types';
@@ -323,7 +323,7 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
       root.dataset.regrouping = 'true';
     }
     setGroupMode(next);
-  }, [flow]);
+  }, [flow, readOnly]);
 
 
   const layout = useMemo(
@@ -737,7 +737,7 @@ function WhiteboardInner({ trades: initial, readOnly = false, start }: { trades:
     ];
   }, [
     layout, openId, onOpen, scale, prefs.dimPassed, selectMode, selectedIds, groupMode,
-    visible.length, board.notes, saveNote, removeNote, locked,
+    visible.length, board.notes, saveNote, removeNote, locked, readOnly,
   ]);
 
   const edges = useMemo<Edge[]>(() => {

@@ -57,7 +57,7 @@ export function SignedBars({ rows }: { rows: BarRow[] }) {
 
   return (
     <div className="space-y-2.5">
-      {rows.map((row, i) => {
+      {rows.map((row) => {
         const negative = row.value < 0;
         const width = (Math.abs(row.value) / max) * 50;
         // Signed bars are always coloured by sign. Anything else makes a chart
@@ -115,7 +115,7 @@ export function SignedBars({ rows }: { rows: BarRow[] }) {
 export function RateBars({ rows }: { rows: BarRow[] }) {
   return (
     <div className="space-y-2.5">
-      {rows.map((row, i) => (
+      {rows.map((row) => (
         <div key={row.label} className="px-2 py-1.5">
           <div className="mb-1 flex items-baseline justify-between gap-3">
             <span className="truncate text-[12px]">{row.label}</span>

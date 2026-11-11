@@ -47,6 +47,21 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Lint
+        run: npm run lint
+
+      # The browser suite: every screen in both layouts, the Stats board's fit
+      # at three window sizes, edit mode, the deep dives and the morning prep,
+      # against a production build on seeded data.
+      - name: Build
+        run: npx next build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npm run e2e
+
   portable:
     needs: test
     runs-on: windows-latest

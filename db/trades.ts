@@ -1,7 +1,7 @@
 import 'server-only';
 import crypto from 'node:crypto';
 import type { SQLInputValue } from 'node:sqlite';
-import { MISTAKE_TAG_VALUES, WORKED_TAG_VALUES, MARKET_TAGS, type MistakeTag, type WorkedTag } from '../lib/domain';
+import { MISTAKE_TAG_VALUES, WORKED_TAG_VALUES, MARKET_TAGS, type MistakeTag } from '../lib/domain';
 import { CURRENT_RUBRIC, gradeUnder } from '../lib/rubric';
 import { GRADE_LETTERS } from '../lib/grade';
 import { getDb } from './index';

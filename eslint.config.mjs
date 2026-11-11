@@ -2,7 +2,7 @@ import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
 
 /** Next's own rules (React, hooks, accessibility basics, TypeScript). */
-export default [
+const config = [
   ...nextVitals,
   ...nextTs,
   {
@@ -25,6 +25,13 @@ export default [
       'react-hooks/refs': 'warn',
       'react-hooks/immutability': 'warn',
       'react-hooks/preserve-manual-memoization': 'warn',
+      // Screenshots are local files served by the app's own API: next/image's
+      // resizing CDN has nothing to add offline.
+      '@next/next/no-img-element': 'off',
+      // `{ dropped: _x, ...rest }` is how a field is left out of a copy.
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   },
 ];
+
+export default config;

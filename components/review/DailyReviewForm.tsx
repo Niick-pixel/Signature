@@ -5,7 +5,7 @@ import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { useEffect, useState } from 'react';
 import { shortcutAllowed } from '@/lib/keys';
 import { motion } from 'framer-motion';
-import { press, riseIn, spring } from '@/lib/motion';
+import { riseIn, spring } from '@/lib/motion';
 import type { DailyReview } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';

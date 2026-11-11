@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Collapse } from '@/components/ui/Collapse';
-import { press, spring, springSoft } from '@/lib/motion';
+import { press, spring } from '@/lib/motion';
 
 /** Collapsed extra fields. Expands on a height spring, never a duration. */
 export function Disclosure({

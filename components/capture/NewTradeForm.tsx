@@ -55,13 +55,11 @@ const DEFAULTED_LABEL: Record<DefaultedField, string> = {
   sweepTier: 'Sweep', status: 'Stage',
 };
 import { Button } from '@/components/ui/Button';
-import { Disclosure } from '@/components/ui/Disclosure';
 import { Field, Input } from '@/components/ui/Field';
 import { GradeBadge } from '@/components/ui/GradeBadge';
 import { Segmented } from '@/components/ui/Segmented';
 import { Select } from '@/components/ui/Select';
 import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
-import { TogglePill } from '@/components/ui/TogglePill';
 import { TriState } from '@/components/ui/TriState';
 import { TagPicker } from '@/components/ui/TagPicker';
 import { Checklist } from './Checklist';

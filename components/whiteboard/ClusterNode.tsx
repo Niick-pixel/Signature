@@ -5,7 +5,6 @@ import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { motion } from 'framer-motion';
 import { gradeLetter } from '@/lib/grade';
-import { springLayout } from '@/lib/motion';
 import type { PositionedCluster } from '@/lib/layout';
 
 export type ClusterNodeData = { cluster: PositionedCluster; accent: string; index: number };
@@ -31,7 +30,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
  * face every time the app opens.
  */
 function ClusterNodeInner({ data }: NodeProps) {
-  const { cluster, accent, index } = data as unknown as ClusterNodeData;
+  const { cluster, accent } = data as unknown as ClusterNodeData;
   const { stats } = cluster;
 
   const rTone = stats.totalR > 0 ? 'var(--outcome-win)' : stats.totalR < 0 ? 'var(--outcome-loss)' : null;

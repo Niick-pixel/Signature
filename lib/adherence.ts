@@ -1,5 +1,5 @@
 import {
-  TAKE_IT_THRESHOLD, isScored, type ChecklistAnswer, type ChecklistKey, type LegacyChecklistKey, type SweepTier,
+  isScored, type ChecklistAnswer, type ChecklistKey, type LegacyChecklistKey, type SweepTier,
 } from './domain';
 import { GATES_SINCE, gradeUnder } from './rubric';
 import { DEFAULT_RULE_CONFIG, TRADE_RULES } from './ruleBook';

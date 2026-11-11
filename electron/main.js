@@ -10,7 +10,7 @@ const net = require('node:net');
 const http = require('node:http');
 const { restoreWindowState, trackWindowState, rememberGround, rememberDisplay } = require('./window-state');
 const { zoomFor, normalise } = require('./display');
-const { resolveInstalled, readLocation, writeLocation, copyJournal, journalFolderIn, isJournal } = require('./data-location');
+const { resolveInstalled, writeLocation, copyJournal, journalFolderIn, isJournal } = require('./data-location');
 const { setupUpdates } = require('./updater');
 const { isSafeExternal } = require('./safe-external');
 

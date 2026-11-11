@@ -11,8 +11,6 @@ const GAP_Y = 30;
 const PAD = 30;
 const HEADER_H = 96;
 const CLUSTER_GAP = 60;
-/** Clusters wrap onto a new row past this width, when nothing better is known. */
-const BOARD_W = 2100;
 /**
  * Floor for cluster width. With the header on two rows the label no longer
  * competes with the stats, so this only has to fit the stats row — measured at
