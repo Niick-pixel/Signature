@@ -1055,7 +1055,14 @@ html[data-platform='win32'] [data-wco-pad] { padding-right: 152px; }
 .signature-thin-scroll::-webkit-scrollbar-track { background: transparent; }
 
 /* The side rail (components/shell/SideRail, Settings → Appearance → Navigation): the page moves over by its width. */
-:root { --rail-w: 0px; }
+/* Typed, so a change of width transitions: the rail, the page's left padding
+   and the board layer all follow the same value, frame by frame. */
+@property --rail-w { syntax: '<length>'; inherits: true; initial-value: 0px; }
+:root { --rail-w: 0px; transition: --rail-w 280ms cubic-bezier(0.32, 0.72, 0, 1); }
+:root[data-reduce-motion='true'] { transition: none; }
+/* The names fade in once there is room for them, and out at once. */
+[data-side-rail] [data-rail-label], [data-side-rail] [data-wordmark] > span { opacity: 0; transition: opacity 120ms ease; }
+html[data-rail='labels'] [data-side-rail] [data-rail-label], html[data-rail='labels'] [data-side-rail] [data-wordmark] > span { opacity: 1; transition: opacity 200ms ease 110ms; }
 html[data-rail='icons'] { --rail-w: 64px; }
 html[data-rail='labels'] { --rail-w: 184px; }
 html[data-rail='icons'] body, html[data-rail='labels'] body { padding-left: var(--rail-w); }

@@ -113,6 +113,23 @@ for (const nav of ['side', 'top']) {
   });
 }
 
+await check('side rail: the edge handle and Ctrl+B open and close it, the page following its width', async () => {
+  const { page } = await open({ width: 1280, height: 720 }, { nav: 'side', railLabels: false });
+  await page.goto(`${BASE}/stats`); await page.waitForTimeout(600);
+  const w = () => page.evaluate(() => ({ rail: Math.round(document.querySelector('[data-side-rail]').getBoundingClientRect().width), pad: parseFloat(getComputedStyle(document.body).paddingLeft) }));
+  expect((await w()).rail === 64, 'starts as icons');
+  await page.hover('[data-side-rail]'); await page.click('[data-rail-toggle]');
+  await page.waitForTimeout(90); const mid = await w();
+  expect(mid.rail > 64 && mid.rail < 184, `it glides, not jumps (mid-way ${mid.rail}px)`);
+  await page.waitForTimeout(600); const wide = await w();
+  expect(wide.rail === 184 && Math.round(wide.pad) === 184, `opens to 184px and the page follows: ${JSON.stringify(wide)}`);
+  await page.mouse.move(900, 400); await page.keyboard.press('Control+b'); await page.waitForTimeout(600);
+  expect((await w()).rail === 64, 'Ctrl+B closes it');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('signature:preferences')).railLabels);
+  expect(saved === false, 'the choice is saved');
+  await page.context().close();
+});
+
 await check('side rail: every screen has one 44px title bar, its header inside it, nothing spilling out', async () => {
   const { page } = await open({ width: 1280, height: 720 }, { nav: 'side' });
   for (const u of ['/dashboard', '/stats', '/calendar', '/journal', '/path', '/study', '/goals', '/trash']) {
