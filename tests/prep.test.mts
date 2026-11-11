@@ -12,48 +12,100 @@ import path from 'node:path';
 process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signature-prep-'));
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
-const { PREP_STEPS, LEGACY_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown, answerKey } = await import('../lib/prep');
+const { PREP_STEPS, PANEL_STEPS, LEGACY_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown, answerKey, deriveDecisions, planChecks, gradeCeiling, overnightRead, planSummary } = await import('../lib/prep');
+const PM = await import('../lib/planMatch');
 const { savePrep, getPrep, previousPrep, listPreps } = await import('../db/prep');
 const { toMarkdown } = await import('../lib/sanitise');
 const { journalExport } = await import('../lib/journalExport');
 
-test('three steps: read the panel, what the script does not do, then plan — the decisions keep their keys', () => {
-  assert.deepEqual(PREP_STEPS.map((s) => s.id), ['panel', 'heatmap', 'plan']);
-  // Off-model things stay out: no order blocks, breakers or S/R zones.
+test('six steps, top-down, ending in two plans — the decisions keep the keys the rest of the app reads', () => {
+  assert.deepEqual(PREP_STEPS.map((s) => s.id), ['news', 'htf', 'overnight', 'map', 'location', 'plans']);
+  // Off-model things stay out: no order blocks, breakers or S/R zones; and the script's settings line is gone.
   const words = JSON.stringify(PREP_STEPS);
-  for (const gone of ['Order block', 'breaker', 'resistance', 'support', 'Uptrend']) {
+  for (const gone of ['Order block', 'breaker', 'resistance', 'support', 'Uptrend', 'Costa Rica time', 'A+ only showing']) {
     assert.ok(!words.toLowerCase().includes(gone.toLowerCase()), gone);
   }
-  for (const s of PREP_STEPS) {
-    assert.ok(s.marks.length >= 3 && s.marks.length <= 6, s.id);
-    for (const f of s.fields) {
-      assert.ok(['one', 'many', 'pick'].includes(f.kind), `${s.id}.${f.id}`);
-      assert.ok(f.options.length >= 2, `${s.id}.${f.id}`);
-    }
+  for (const s of PREP_STEPS) for (const f of s.fields) {
+    assert.ok(['one', 'many', 'pick', 'text'].includes(f.kind), `${s.id}.${f.id}`);
+    if (f.kind !== 'text') assert.ok(f.options.length >= 2, `${s.id}.${f.id}`);
   }
-  // What the script draws is no longer ticked by hand; what it does not do still is.
-  for (const drawn of ['PDH and PDL', 'PWH and PWL', 'equal highs and lows', 'Unfilled 1H FVGs']) assert.ok(!words.includes(drawn), drawn);
-  for (const manual of ['Heatmap', 'Daily FVGs', 'NDOG', 'NWOG']) assert.ok(words.includes(manual), manual);
-  assert.ok(PREP_STEPS.find((s) => s.id === 'heatmap')?.heatmap);
-  // The decisions are stored where the plan grade, plan match and the stop rule read them.
-  const plan = PREP_STEPS.find((s) => s.id === 'plan')!;
-  assert.deepEqual(plan.fields.map((f) => answerKey(plan, f)),
-    ['liquidity.wait', 'draw.direction', 'draw.target', 'draw.confidence', 'draw.side', 'session.news', 'session.stop']);
-  assert.equal(plan.fields.find((f) => f.id === 'target')!.options[0], 'PDH/PDL');
-  // The six steps before are kept, to read what was saved under them.
+  const keys = PREP_STEPS.flatMap((s) => s.fields.map((f) => answerKey(s, f)));
+  for (const k of ['session.news', 'session.stop', 'liquidity.taken', 'panel.above', 'panel.below', 'htf.bias', 'htf.because', 'htf.inv',
+    'plans.aStory', 'plans.aTrigger', 'plans.aKill', 'plans.bKill', 'plans.cutoff']) assert.ok(keys.includes(k), k);
+  // Every field of the scenario table, for both scenarios.
+  for (const k of ['a', 'b']) for (const f of ['Dir', 'Story', 'Trigger', 'TriggerNote', 'Confirm', 'Target', 'TargetNote', 'RR', 'Kill']) assert.ok(keys.includes(`plans.${k}${f}`), `${k}${f}`);
+  // The two versions before are kept, to read what was saved under them.
+  assert.deepEqual(PANEL_STEPS.map((s) => s.id), ['panel', 'heatmap', 'plan']);
   assert.deepEqual(LEGACY_STEPS.map((s) => s.id), ['bias', 'liquidity', 'gaps', 'heatmap', 'draw', 'session']);
 });
 
-test('prepped: every step of the new prep; a prep saved under the six steps keeps its 4-of-6 rule', () => {
+test('prepped: every step of the new prep; a panel prep keeps its 3 steps, a six-step one its 4-of-6 rule', () => {
   const now = (steps: Record<string, string>) => prepProgress(parsePrepData({ steps }));
+  assert.deepEqual(now({ news: 'done', htf: 'done' }), { answered: 2, done: 2, total: 6, complete: false });
+  assert.equal(now({ news: 'done', htf: 'done', overnight: 'done', map: 'done', location: 'done', plans: 'done' }).complete, true);
+  assert.equal(now({ news: 'done', htf: 'done', overnight: 'done', map: 'done', location: 'skipped', plans: 'done' }).complete, false);
   assert.deepEqual(now({ panel: 'done', heatmap: 'done' }), { answered: 2, done: 2, total: 3, complete: false });
   assert.equal(now({ panel: 'done', heatmap: 'done', plan: 'done' }).complete, true);
-  assert.equal(now({ panel: 'done', heatmap: 'skipped', plan: 'done' }).complete, false);
   assert.deepEqual(now({ bias: 'done', liquidity: 'done', gaps: 'done', draw: 'done' }), { answered: 4, done: 4, total: 6, complete: true });
-  assert.equal(now({ bias: 'done', liquidity: 'done', gaps: 'done' }).complete, false);
-  // An answer moved to the plan step is read under its old key, by either version.
+  // An answer under its old key still reads, by any version.
   const d = parsePrepData({ steps: { plan: 'done' }, answers: { 'draw.side': 'Longs only', 'session.stop': '1 loss', 'panel.h1': 'Bullish', 'panel.h4': 'Sideways' } });
   assert.deepEqual(d.answers, { 'draw.side': 'Longs only', 'session.stop': '1 loss', 'panel.h1': 'Bullish' });
+});
+
+test('written answers are kept (trimmed of nothing, cut at 400 characters); an empty one is not an answer', () => {
+  const d = parsePrepData({ answers: { 'htf.because': 'the 4H displaced up', 'plans.aKill': '   ', 'plans.aStory': 'x'.repeat(900), 'plans.nope': 'y' } });
+  assert.equal(d.answers['htf.because'], 'the 4H displaced up');
+  assert.equal(d.answers['plans.aKill'], undefined);
+  assert.equal((d.answers['plans.aStory'] as string).length, 400);
+  assert.equal(d.answers['plans.nope'], undefined);
+});
+
+test('the plans give the side, the sweeps to wait for and the target — plan match reads them unchanged', () => {
+  const plans = { 'plans.aDir': 'Short', 'plans.aTrigger': 'London high', 'plans.aTarget': 'Session high/low', 'plans.bDir': 'Long', 'plans.bTrigger': 'Asia low', 'liquidity.taken': ['Asia low'] };
+  const d = deriveDecisions(plans);
+  assert.equal(d['draw.side'], 'Both ways');
+  assert.equal(d['draw.direction'], 'Down');
+  assert.deepEqual(d['liquidity.wait'], ['London high'], 'a level already run is not one to wait for');
+  assert.equal(d['draw.target'], 'Session high/low');
+  assert.equal(deriveDecisions({ 'plans.aDir': 'Long' })['draw.side'], 'Longs only');
+  assert.equal(deriveDecisions({ 'plans.aDir': 'Short', 'plans.bDir': 'Short' })['draw.side'], 'Shorts only');
+  // A gap is a trigger zone, not a sweep.
+  assert.equal(deriveDecisions({ 'plans.aDir': 'Long', 'plans.aTrigger': '4H gap' })['liquidity.wait'], undefined);
+  // No plan written: whatever the prep held is untouched.
+  const old = { 'draw.side': 'Longs only', 'liquidity.wait': ['PDL'] };
+  assert.deepEqual(deriveDecisions(old), old);
+  // And it is what planMatch needs: a long when only shorts were planned is off plan.
+  const { planMatch } = PM;
+  const m = planMatch({ account: 'Demo', undated: false, direction: 'Long', sweep_level: 'PDH', target_type: null, date: '2026-11-11T08:40' },
+    { steps: {}, ticks: {}, answers: deriveDecisions({ 'plans.aDir': 'Short', 'plans.aTrigger': 'London high' }) });
+  assert.equal(m.status, 'off');
+});
+
+test('the three rules, checked as you write: different first liquidity, a kill switch each, A with the bias', () => {
+  const same = planChecks({ 'plans.aTrigger': 'PDH', 'plans.bTrigger': 'PDH', 'plans.aKill': 'x', 'plans.bKill': 'y' });
+  assert.ok(same.some((c) => c.level === 'warn' && /differ in which liquidity/.test(c.text)));
+  const noKill = planChecks({ 'plans.aStory': 'Judas up', 'plans.bTrigger': 'Asia low', 'plans.bKill': '15m close below' });
+  assert.deepEqual(noKill.map((c) => c.text.slice(0, 32)), ["Scenario A has no kill switch. I"]);
+  assert.match(noKill[0].text, /a hope, not a plan/);
+  assert.ok(planChecks({ 'htf.bias': 'Bullish', 'plans.aDir': 'Short', 'plans.aKill': 'k' }).some((c) => /against your bullish bias/.test(c.text)));
+  assert.deepEqual(planChecks({}), [], 'nothing written, nothing to say');
+  // Grade ceiling: with the bias A+, against it B max, no honest bias A+ only.
+  assert.equal(gradeCeiling({ 'htf.bias': 'Bearish', 'plans.aDir': 'Short' }, 'a'), 'Can reach A+');
+  assert.equal(gradeCeiling({ 'htf.bias': 'Bearish', 'plans.bDir': 'Long' }, 'b'), 'B max — against the bias');
+  assert.equal(gradeCeiling({ 'htf.bias': 'Neutral' }, 'b'), 'A+ only — no bias');
+});
+
+test('overnight: what is still there, and which side was run; the plan reads as a few rows ending in C', () => {
+  assert.equal(overnightRead({ 'liquidity.taken': ['Asia high', 'London high'] }).line, 'Highs run, lows untouched: the resting liquidity is below.');
+  assert.ok(overnightRead({ 'liquidity.taken': ['Asia high'] }).stillThere.includes('London high'));
+  assert.equal(overnightRead({}).line, null);
+  const rows = planSummary({ 'htf.bias': 'Bullish', 'htf.because': 'the 4H displaced up', 'htf.inv': '21,310',
+    'plans.aStory': 'Sweep of the Asia low, then long', 'plans.aTargetNote': 'PDH', 'plans.aRR': '2+', 'plans.aKill': 'a 15m close below 21,280', 'plans.cutoff': '9:45' });
+  assert.deepEqual(rows.map((r) => r.label), ['Bias', 'Scenario A', 'Scenario C']);
+  assert.equal(rows[0].value, '4H/1H bias is bullish because the 4H displaced up. Invalidated by a 1H body close beyond 21,310.');
+  assert.equal(rows[1].value, 'Sweep of the Asia low, then long → PDH · 2+R · killed by a 15m close below 21,280');
+  assert.match(rows[2].value, /by 9:45/);
+  assert.equal(planSummary({}).length, 0);
 });
 
 test('any input reads as a valid prep; answers outside the options are dropped', () => {
@@ -137,7 +189,7 @@ test('the journal export lays each page on its day, with the day beside it', () 
   assert.match(md, /Show me where what I write and what I do disagree/);
   assert.match(md, /### Tuesday 29 September 2026 — 1 page · 1 trade, −1\.0R/);
   assert.match(md, /\*\*Morning:\*\* checked in .* · slept 5h · mind 2\/5 · bias Bullish — daily FVG · news High \(CPI 8:30\) · planned at most 2/);
-  assert.match(md, /Plan and rules: price draws Up; target EQH\/EQL/);
+  assert.match(md, /Decisions: price draws Up; target EQH\/EQL/);
   assert.match(md, /- 09:41 NQ Long · iFVG · grade C · Loss −1\.0R · why: FOMO · Live · went wrong: Chased/);
   assert.match(md, /Lesson: "Waited for nothing and chased it\."/);
   assert.match(md, /#### Page: Chasing again\n\nI \*\*chased\*\* the open\./);

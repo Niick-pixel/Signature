@@ -130,11 +130,19 @@ export function TodayPanel() {
             {s.plan && (
               <Section title="The plan" right={data?.prep.started ? `${data.prep.done}/${data.prep.total} prep` : undefined}>
                 {!data?.plan.length ? <Faint>No chart prep yet today — press P or open the morning check-in.</Faint> : (
-                  <dl className="space-y-1">
+                  <dl className="space-y-1" data-today-plan>
                     {data.plan.slice(0, 8).map((p) => (
-                      <div key={p.label} className="flex justify-between gap-3">
-                        <dt style={{ color: 'var(--text-faint)' }}>{p.label}</dt><dd className="text-right font-medium">{p.value}</dd>
-                      </div>
+                      // A short answer sits beside its label; a written sentence (the bias, a scenario) goes under it.
+                      p.value.length > 28 ? (
+                        <div key={p.label}>
+                          <dt className="text-[10.5px] uppercase tracking-[0.06em]" style={{ color: 'var(--text-faint)' }}>{p.label}</dt>
+                          <dd className="font-medium leading-snug">{p.value}</dd>
+                        </div>
+                      ) : (
+                        <div key={p.label} className="flex justify-between gap-3">
+                          <dt style={{ color: 'var(--text-faint)' }}>{p.label}</dt><dd className="text-right font-medium">{p.value}</dd>
+                        </div>
+                      )
                     ))}
                   </dl>
                 )}

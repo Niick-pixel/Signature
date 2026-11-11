@@ -134,7 +134,7 @@ export function MorningCheckIn() {
   }, [day]);
 
   return (
-    <Overlay open={open} onClose={close} className="w-[34rem] max-w-full max-h-[90vh] overflow-y-auto rounded-[calc(26px*var(--rk))] p-7"
+    <Overlay open={open} onClose={close} className={`${tab === 'chart' ? 'w-[46rem]' : 'w-[34rem]'} max-w-full max-h-[90vh] overflow-y-auto rounded-[calc(26px*var(--rk))] p-7 transition-[width] duration-300`}
       // Something to work through, not glance at: solid enough that the board behind stays behind.
       surface="color-mix(in srgb, var(--bg-raised) 94%, transparent)">
       {/* The two halves of the morning, in one window. */}

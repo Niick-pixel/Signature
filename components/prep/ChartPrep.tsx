@@ -6,7 +6,8 @@ import { localDay } from '@/lib/day';
 import { nyMinutes as nyMinutesOf } from '@/lib/planMatch';
 import { press, spring, springSoft } from '@/lib/motion';
 import {
-  EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, liveMarks, prepProgress, withWeeklyTaken,
+  EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, biasSentence, deriveDecisions, gradeCeiling, liveMarks,
+  overnightRead, planChecks, planSummary, prepProgress, scenarioC, stepsOf, withWeeklyTaken,
   type Answer, type PrepData, type PrepField, type PrepStep, type SessionPrep,
 } from '@/lib/prep';
 import type { DailyReview } from '@/lib/types';
@@ -33,10 +34,10 @@ function openLine(mins: number): string {
 }
 
 /**
- * The chart half of the check-in: six short steps, one at a time, in the same
- * window. Each is a few marks to tick as they go on the chart and a few
- * answers to tap — nothing to type. Saved as it goes; any step can be
- * skipped; the dots at the top jump anywhere.
+ * The chart half of the check-in: six steps, top-down, one at a time, every
+ * answer written down — news, the bias sentence, what was taken overnight,
+ * the liquidity map, location, and the two plans (and C). Saved as it goes;
+ * any step can be skipped; the dots at the top jump anywhere.
  */
 export function ChartPrep({ review, onClose }: { review: DailyReview | null; onClose: () => void }) {
   const [day] = useState(() => localDay());
@@ -149,7 +150,7 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
               <div className="ml-auto flex gap-2">
                 <Button onClick={() => mark('skipped')}>Skip</Button>
                 <Button variant="primary" data-prep-next onClick={() => mark('done')}>
-                  {at === PREP_STEPS.length - 1 ? 'Finish' : 'Marked — next'}
+                  {at === PREP_STEPS.length - 1 ? 'Finish' : 'Next'}
                 </Button>
               </div>
             </div>
@@ -187,8 +188,14 @@ function StepView({ step, index, data, change, review, carried }: {
       const left = wait.filter((w) => !value.includes(w));
       if (left.length) d.answers[WAIT_KEY] = left; else delete d.answers[WAIT_KEY];
     }
+    // The side, the sweeps to wait for and the target follow the written plans (plan match reads them).
+    d.answers = deriveDecisions(d.answers);
     return d;
   });
+  const f = (id: string) => step.fields.find((x) => x.id === id)!;
+  const field = (id: string, extra: Partial<Parameters<typeof FieldView>[0]> = {}) => (
+    <FieldView key={id} field={f(id)} value={data.answers[answerKey(step, f(id))]} onChange={(v) => setAnswer(f(id), v)} {...extra} />
+  );
 
   return (
     <>
@@ -209,13 +216,12 @@ function StepView({ step, index, data, change, review, carried }: {
       </div>
       <h3 className="mt-1 text-[19px] font-semibold tracking-tight">{step.title}</h3>
 
-      {step.id === 'plan' && (
-        <SessionNews review={review} answered={data.answers[answerKey(step, step.fields.find((f) => f.id === 'news')!)] != null}
-          onAnswer={(v) => setAnswer(step.fields.find((f) => f.id === 'news')!, v)} />
+      {step.id === 'news' && (
+        <SessionNews review={review} answered={data.answers['session.news'] != null} onAnswer={(v) => setAnswer(f('news'), v)} />
       )}
 
-      {/* The marks — ticked as each goes on the chart. */}
-      <div className="mt-4 space-y-1.5">
+      {/* The marks — ticked as each goes on the chart (most steps now have none: they are written down). */}
+      <div className={liveMarks(step).length ? 'mt-4 space-y-1.5' : 'hidden'}>
         {liveMarks(step).map(({ text: m, i }) => {
           const on = ticks.includes(i);
           return (
@@ -242,17 +248,55 @@ function StepView({ step, index, data, change, review, carried }: {
         })}
       </div>
 
-      {/* The answers — taps, not typing. */}
-      {step.fields.some((f) => !f.hidden) && (
-        <div className="mt-5 space-y-4">
-          {step.fields.filter((f) => !f.hidden).map((f) => (
-            <FieldView key={f.id} field={f} value={data.answers[answerKey(step, f)]} onChange={(v) => setAnswer(f, v)}
-              // A level already taken is not one to wait for.
-              hide={answerKey(step, f) === WAIT_KEY ? (Array.isArray(data.answers[TAKEN_KEY]) ? data.answers[TAKEN_KEY] as string[] : []) : []}
-              notes={answerKey(step, f) === TAKEN_KEY ? Object.fromEntries(carried.map((c) => [c.level, `since ${weekday(c.day)}`])) : {}} />
-          ))}
-        </div>
-      )}
+      {/* The answers, each written down. */}
+      <div className="mt-5 space-y-4">
+        {step.id === 'news' && <>
+          {field('news')}
+          {data.answers['session.news'] === 'Inside the killzone' && (
+            <Rule>Red folder inside NY AM: no position through it — wait for the release candle’s range, then trade off it.</Rule>
+          )}
+        </>}
+
+        {step.id === 'htf' && <HtfSentence data={data} field={field} />}
+
+        {step.id === 'overnight' && <>
+          {field('taken', { notes: Object.fromEntries(carried.map((c) => [c.level, `since ${weekday(c.day)}`])) })}
+          {(() => {
+            const r = overnightRead(data.answers);
+            return (
+              <div className="rounded-[calc(12px*var(--rk))] border px-3 py-2.5 text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)' }} data-overnight-read>
+                <p><span style={{ color: 'var(--text-faint)' }}>Still there: </span><b className="font-medium">{r.stillThere.join(', ') || 'nothing — every level was run'}</b></p>
+                {r.line && <p className="mt-1" style={{ color: 'var(--text-dim)' }}>{r.line}</p>}
+              </div>
+            );
+          })()}
+        </>}
+
+        {step.id === 'map' && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(['above', 'below'] as const).map((side) => (
+              <div key={side} className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-map-side={side}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-dim)' }}>{side === 'above' ? 'Above price' : 'Below price'}</p>
+                {field(side)}
+                {field(`${side}Tier`)}
+                {field(`${side}State`)}
+                {field(side === 'above' ? 'gapAbove' : 'gapBelow')}
+              </div>
+            ))}
+            <p className="text-[11.5px] sm:col-span-2" style={{ color: 'var(--text-faint)' }}>A 1H/4H gap between price and a level is where a move tends to end: a target stops short of it.</p>
+          </div>
+        )}
+
+        {step.id === 'location' && field('zone')}
+
+        {step.id === 'plans' && <Plans data={data} field={field} />}
+
+        {/* An earlier version's step, opened from an old prep: its fields as they were. */}
+        {!['news', 'htf', 'overnight', 'map', 'location', 'plans'].includes(step.id) && step.fields.filter((x) => !x.hidden).map((x) => (
+          <FieldView key={x.id} field={x} value={data.answers[answerKey(step, x)]} onChange={(v) => setAnswer(x, v)}
+            hide={answerKey(step, x) === WAIT_KEY ? (Array.isArray(data.answers[TAKEN_KEY]) ? data.answers[TAKEN_KEY] as string[] : []) : []} />
+        ))}
+      </div>
     </>
   );
 }
@@ -277,7 +321,9 @@ function FieldView({ field, value, onChange, hide = [], notes = {} }: {
       <span className="mb-1.5 block text-[10.5px] font-medium uppercase tracking-[0.07em]" style={{ color: 'var(--text-faint)' }}>
         {field.label}{field.kind === 'many' ? ' — any that apply' : ''}
       </span>
-      {field.kind === 'pick' ? (
+      {field.kind === 'text' ? (
+        <TextAnswer value={typeof value === 'string' ? value : ''} placeholder={field.placeholder} long={field.long} label={field.label} onChange={(v) => onChange(v.trim() ? v : null)} />
+      ) : field.kind === 'pick' ? (
         <div className="max-w-[16rem]">
           <Select value={typeof value === 'string' ? value : null} onChange={(v) => onChange(v)} options={field.options} placeholder="Choose…" />
         </div>
@@ -317,8 +363,9 @@ function Ready({ data, startedAt, onReview, onClose }: {
   data: PrepData; startedAt: string | null; onReview: () => void; onClose: () => void;
 }) {
   const p = prepProgress(data);
-  const rows = PREP_STEPS.flatMap((s) => s.fields.map((f) => [f.label, answerText(data.answers[answerKey(s, f)])] as const))
-    .filter(([, v]) => v != null);
+  // The new prep ends on its plan (bias, A, B, C); an older one lists its answers.
+  const rows = stepsOf(data) === PREP_STEPS ? planSummary(data.answers).map((r) => [r.label, r.value] as const)
+    : stepsOf(data).flatMap((s) => s.fields.map((f) => [f.label, answerText(data.answers[answerKey(s, f)])] as const)).filter(([, v]) => v != null);
   return (
     <div data-prep-ready>
       <div className="flex items-center gap-3">
@@ -338,7 +385,7 @@ function Ready({ data, startedAt, onReview, onClose }: {
         </div>
       </div>
       {rows.length > 0 && (
-        <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
+        <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]" data-prep-plan>
           {rows.map(([k, v]) => (
             <div key={k} className="contents">
               <dt style={{ color: 'var(--text-faint)' }}>{k}</dt>
@@ -411,6 +458,93 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
         {d.error ?? (d.auto ? (d.syncedAt ? `From ForexFactory, pulled ${new Date(d.syncedAt).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'From ForexFactory.') : 'ForexFactory pull is off — Analytics → News.')}
         {review?.news ? ` Morning check-in said: ${review.news === 'None' ? 'nothing major' : review.news.toLowerCase()}.` : ''}
       </p>
+    </div>
+  );
+}
+
+/** A written answer: saved as you type (the prep saves a beat after the last change). */
+function TextAnswer({ value, placeholder, long, label, onChange }: { value: string; placeholder?: string; long?: boolean; label: string; onChange: (v: string) => void }) {
+  const common = {
+    value, placeholder, 'aria-label': label, maxLength: 400,
+    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value),
+    className: 'w-full rounded-[calc(12px*var(--rk))] border bg-transparent px-3 py-2 text-[13px] leading-snug outline-none transition-colors focus:border-[rgb(var(--accent)/0.6)]',
+    style: { borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' } as React.CSSProperties,
+  };
+  // Grows with what you write (field-sizing), so a long trigger or target is read whole, not cut at the edge.
+  return <textarea rows={1} {...common} className={`${common.className} resize-none`}
+    style={{ ...common.style, fieldSizing: 'content', minHeight: long ? '3.6em' : undefined } as React.CSSProperties} />;
+}
+
+/** A rule to keep, shown where it applies. */
+function Rule({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-[calc(12px*var(--rk))] border px-3 py-2 text-[12.5px] leading-snug" data-prep-rule
+      style={{ borderColor: 'rgb(var(--amber) / 0.45)', background: 'rgb(var(--amber) / 0.08)', color: 'var(--text)' }}>{children}</p>
+  );
+}
+
+type FieldFn = (id: string, extra?: Partial<Parameters<typeof FieldView>[0]>) => React.ReactNode;
+
+/** "4H/1H bias is ___ because ___. Invalidated by a 1H body close beyond ___." — or, honestly, neutral. */
+function HtfSentence({ data, field }: { data: PrepData; field: FieldFn }) {
+  const neutral = data.answers['htf.bias'] === 'Neutral';
+  const line = biasSentence(data.answers);
+  return (
+    <div className="space-y-4" data-htf-sentence>
+      {field('bias')}
+      {neutral ? (
+        <Rule>No bias you can state honestly: <b>neutral, A+ only</b>. Both scenarios below can only be taken as A+ setups today.</Rule>
+      ) : <>
+        {field('because')}
+        {field('inv')}
+      </>}
+      {line && <p className="text-[12.5px] italic leading-snug" style={{ color: 'var(--text-dim)' }} data-bias-line>“{line}”</p>}
+      {!neutral && <p className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Can’t fill it in honestly? Choose Neutral: A+ only.</p>}
+    </div>
+  );
+}
+
+/** Scenario A (with the bias) and B (the alternate), written the same way every day, then C: neither. */
+function Plans({ data, field }: { data: PrepData; field: FieldFn }) {
+  const checks = planChecks(data.answers);
+  const card = (k: 'a' | 'b') => {
+    const ceiling = gradeCeiling(data.answers, k);
+    return (
+      <div className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-scenario={k}>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-[12px] font-semibold">{k === 'a' ? 'Scenario A · primary, with the bias' : 'Scenario B · the alternate'}</p>
+          {ceiling && <span className="shrink-0 rounded-full border px-2 py-px text-[10.5px] font-semibold" data-ceiling
+            style={ceiling.startsWith('Can') ? { borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' } : { borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }}>{ceiling}</span>}
+        </div>
+        {field(`${k}Dir`)}
+        {field(`${k}Story`)}
+        {field(`${k}Trigger`)}
+        {field(`${k}TriggerNote`)}
+        {field(`${k}Confirm`)}
+        {field(`${k}Target`)}
+        {field(`${k}TargetNote`)}
+        {field(`${k}RR`)}
+        {field(`${k}Kill`)}
+      </div>
+    );
+  };
+  return (
+    <div className="space-y-4" data-plans>
+      <div className="grid gap-3 sm:grid-cols-2">{card('a')}{card('b')}</div>
+      {checks.length > 0 && (
+        <ul className="space-y-1.5" data-plan-checks>
+          {checks.map((c) => (
+            <li key={c.text} className="rounded-[calc(10px*var(--rk))] px-3 py-1.5 text-[12px] leading-snug"
+              style={{ background: c.level === 'warn' ? 'rgb(var(--amber) / 0.1)' : 'var(--glass-fill)', color: c.level === 'warn' ? 'var(--text)' : 'var(--text-dim)' }}>{c.text}</li>
+          ))}
+        </ul>
+      )}
+      <div className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-scenario="c">
+        <p className="text-[12px] font-semibold">Scenario C · neither</p>
+        {field('cutoff')}
+        <p className="text-[12.5px] leading-snug" data-scenario-c-line>{scenarioC(data.answers)} Written down, so “no trade” counts as following the plan.</p>
+        {field('stop')}
+      </div>
     </div>
   );
 }

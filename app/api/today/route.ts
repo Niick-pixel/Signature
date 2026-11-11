@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPrep } from '@/db/prep';
 import { reviewInputs } from '@/db/review';
-import { PREP_STEPS, answerKey, answerText, prepProgress } from '@/lib/prep';
+import { PREP_STEPS, answerKey, answerText, planSummary, prepProgress, stepsOf } from '@/lib/prep';
 import { brokenFor, dayBreaksByTrade, fieldEras, sessionTrades } from '@/lib/review';
 import { pnlOf } from '@/lib/stats';
 import { dayGrade } from '@/lib/dayGrade';
@@ -20,8 +20,10 @@ export async function GET(request: Request) {
   const today = new URL(request.url).searchParams.get('today') ?? '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) return NextResponse.json({ error: 'Expected ?today=YYYY-MM-DD.' }, { status: 400 });
   const prep = getPrep(today);
-  const plan = prep ? PREP_STEPS.flatMap((s) => s.fields.filter((f) => !f.hidden).map((f) => ({ label: f.label, value: answerText(prep.data.answers[answerKey(s, f)]) })))
-    .filter((x): x is { label: string; value: string } => x.value != null) : [];
+  // Today's plan in a few rows (bias, scenarios A/B/C); a prep saved under an earlier version lists its answers.
+  const plan = !prep ? [] : stepsOf(prep.data) === PREP_STEPS ? planSummary(prep.data.answers)
+    : stepsOf(prep.data).flatMap((s) => s.fields.filter((f) => !f.hidden).map((f) => ({ label: f.label, value: answerText(prep.data.answers[answerKey(s, f)]) })))
+      .filter((x): x is { label: string; value: string } => x.value != null);
   const progress = prep ? prepProgress(prep.data) : null;
   const done = progress?.done ?? 0;
 

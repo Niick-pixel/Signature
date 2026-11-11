@@ -56,5 +56,9 @@ Also from earlier sessions:
   n and the interval can move to a tooltip but never leave a number that claims; semantic
   colours follow meaning whatever the accent; evidence chips appear at every size; no widget
   suggests a trade or breaking a written rule.
+- Stats starts with one board (`DEFAULT_BOARDS`); widgets are ranked by usefulness (`TIER`) and a stack holds at most 5 (`MAX_STACK`).
+- The morning prep (`lib/prep.ts`, `docs/morning-prep.md`) ends in written plans; the decisions plan match, the plan
+  grade and the stop rule read (`draw.side`, `liquidity.wait`, `draw.target`, `session.stop`…) are derived from them —
+  keep those keys.
 - Saved boards are versioned (`LAYOUT_SCHEMA`, `lib/dashboard/schema.ts`): never break a
   user's layout — migrate it (`WIDGET_RENAMES` for a renamed widget).

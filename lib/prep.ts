@@ -1,40 +1,50 @@
 import { TARGET_TYPES } from './domain';
 
 /**
- * The chart prep: the second half of the morning check-in, done on the chart
- * before the New York session.
+ * The morning prep: the second half of the check-in, done on the chart before
+ * the New York session. Top-down, and every answer written down, so the
+ * morning ends with two plans instead of a list of ticks:
  *
- * The TradingView script (Nick iFVG v6) now draws what the prep used to ask
- * for by hand — killzone highs and lows, PDH/PDL, PWH/PWL, equal highs and
- * lows, FVGs from 5m to 4H, the dealing range and its 50%, the HTF bias and
- * its invalidation, alerts on every level. So the prep reads, then decides:
+ *   1. News        any red folder today, and when; inside NY AM, the rule
+ *   2. HTF bias    "4H/1H bias is ___ because ___. Invalidated by a 1H body
+ *                  close beyond ___." Can't fill it honestly: neutral, A+ only
+ *   3. Overnight   Asia, London, PDH/PDL (and PWH/PWL): which were run, which
+ *                  are still there — the side taken says where the draw is
+ *   4. The map     the nearest named level above and below (type, major or
+ *                  minor, fresh or tapped) and any 1H/4H gap in between
+ *   5. Location    premium or discount of the overnight range
+ *   6. The plans   Scenario A (with bias) and B (the alternate), written the
+ *                  same way every day, and C: neither — no trade
  *
- *   1. Read the panel   the two rows read before an entry: HTF bias + 1H inv
- *                       (and the "A+ only" conflict), and the nearest levels
- *   2. Off the script   what it does not do: the order-book heatmap, Daily
- *                       FVGs, NDOG, and NWOG until the script's one works
- *   3. Plan and rules   the sweep to wait for, the draw, the target, the side,
- *                       the stop — and the day's news, filled in on its own
+ * Three rules make the plans work, and the prep checks them as you write
+ * (a note, never a gate): A and B must differ in which liquidity is taken
+ * first; each needs a kill switch, or it is a hope, not a plan; and C is
+ * always there, so "no trade" counts as following the plan.
  *
- * The six steps of the version before are kept as LEGACY_STEPS: preps saved
- * under them still read, show and export, and still count by their own rule.
+ * The decisions the rest of the app reads keep their keys: the side
+ * (draw.side), the sweeps to wait for (liquidity.wait), the target
+ * (draw.target), the direction, the news and the stop rule are derived from
+ * the written plans (deriveDecisions), so plan match, the plan grade and the
+ * stop rule work unchanged.
  *
- * The reminders are the point: the important levels and checks, each one
- * ticked, so nothing gets skipped on a rushed morning. Order blocks, breakers
- * and support/resistance zones are left out — they are not in the model.
- *
- * Nothing is typed. Like the check-in it is a prompt, never a gate: any step
- * can be skipped and nothing in the app waits on it. Times are New York time,
- * the clock the sessions are defined on.
+ * The two versions before are kept, to read what was saved under them:
+ * LEGACY_STEPS (six tap steps) and PANEL_STEPS (three steps around the
+ * TradingView panel). Like the check-in this is a prompt, never a gate.
+ * Times are New York time, the clock the sessions are defined on.
  */
 
 /** One tap-to-answer question on a step. */
 export interface PrepField {
   id: string;
   label: string;
-  /** one — a single pill; many — any number of pills; pick — a dropdown. */
-  kind: 'one' | 'many' | 'pick';
+  /** one — a single pill; many — any number of pills; pick — a dropdown; text — written down. */
+  kind: 'one' | 'many' | 'pick' | 'text';
+  /** The choices (none for text). */
   options: string[];
+  /** For text: what a good answer looks like. */
+  placeholder?: string;
+  /** For text: a few lines rather than one. */
+  long?: boolean;
   /** No longer asked; answers already saved still read (plan match, exports). */
   hidden?: boolean;
   /**
@@ -62,6 +72,9 @@ export interface PrepStep {
   /** Offers the order-book heatmap link. */
   heatmap?: boolean;
 }
+
+/** Where "already run" is stored (TAKEN_KEY below; the same key every version used). */
+const TAKEN_KEY_ = 'liquidity.taken';
 
 /** The nameable levels a sweep can take — the same names the trade form uses. */
 const SWEEPABLE = ['PDH', 'PDL', 'PWH', 'PWL', 'Asia high', 'Asia low', 'London high', 'London low', 'EQH', 'EQL'];
@@ -166,8 +179,8 @@ export const LEGACY_STEPS: PrepStep[] = [
 const PANEL_LEVELS = ['PDH', 'PDL', 'PWH', 'PWL', 'Asia high', 'Asia low', 'London high', 'London low', 'NY AM high', 'NY AM low',
   'EQH', 'EQL', 'Data high', 'Data low', '$ internal', 'LRLR'];
 
-/** The prep as it is asked now. */
-export const PREP_STEPS: PrepStep[] = [
+/** The second version: three steps around the TradingView panel. Kept to read what was saved under it. */
+export const PANEL_STEPS: PrepStep[] = [
   {
     id: 'panel', title: 'Read the panel', frames: 'The script',
     marks: [
@@ -224,15 +237,93 @@ export const PREP_STEPS: PrepStep[] = [
   },
 ];
 
+/** Overnight and weekly levels: which were run before the open. */
+export const OVERNIGHT = ['Asia high', 'Asia low', 'London high', 'London low', 'PDH', 'PDL', 'PWH', 'PWL'];
+const HIGHS = new Set(['Asia high', 'London high', 'PDH', 'PWH']);
+/** Where a scenario starts: a named level to be swept, or an HTF gap to be delivered into. */
+const TRIGGERS = [...SWEEPABLE, '1H gap', '4H gap'];
+export const RR_BANDS = ['<1.5', '1.5–2', '2+'];
+const scenario = (k: 'a' | 'b'): PrepField[] => [
+  { id: `${k}Dir`, label: 'Direction', kind: 'one', options: ['Long', 'Short'] },
+  { id: `${k}Story`, label: 'Story', kind: 'text', options: [], long: true,
+    placeholder: k === 'a' ? 'e.g. Judas up into the London high, then short' : 'e.g. Sweep of the Asia low, then long' },
+  { id: `${k}Trigger`, label: 'Trigger zone', kind: 'pick', options: TRIGGERS },
+  { id: `${k}TriggerNote`, label: 'Trigger zone, exactly', kind: 'text', options: [], placeholder: 'The level to be swept and/or the HTF gap delivered into' },
+  { id: `${k}Confirm`, label: 'Confirmation', kind: 'text', options: [], placeholder: 'Rejected fast, displacement, iFVG body close (5m agrees)' },
+  { id: `${k}Target`, label: 'First target', kind: 'pick', options: [...TARGET_TYPES] },
+  { id: `${k}TargetNote`, label: 'First target, exactly', kind: 'text', options: [], placeholder: 'The first named liquidity; any opposing HTF gap on the way' },
+  { id: `${k}RR`, label: 'Rough R', kind: 'one', options: RR_BANDS },
+  { id: `${k}Kill`, label: 'Kill switch', kind: 'text', options: [], placeholder: 'What cancels it, e.g. a 15m close above 21,480' },
+];
+
+/** The prep as it is asked now: top-down, written down, ending in two plans. */
+export const PREP_STEPS: PrepStep[] = [
+  {
+    id: 'news', title: 'News', frames: 'Today',
+    marks: [],
+    fields: [
+      { id: 'news', key: 'session.news', label: 'Red folder today', kind: 'one', options: ['None today', 'Before the open', 'Inside the killzone'] },
+    ],
+  },
+  {
+    id: 'htf', title: 'HTF bias', frames: '4H · 1H',
+    marks: [],
+    fields: [
+      { id: 'bias', label: '4H/1H bias is', kind: 'one', options: ['Bullish', 'Bearish', 'Neutral'] },
+      { id: 'because', label: 'because', kind: 'text', options: [], placeholder: 'the 4H displaced up through …, 1H holding above …' },
+      { id: 'inv', label: 'Invalidated by a 1H body close beyond', kind: 'text', options: [], placeholder: 'a level, e.g. 21,310 (the 1H iFVG low)' },
+    ],
+  },
+  {
+    id: 'overnight', title: 'What was taken overnight', frames: '1H · 15m',
+    marks: [],
+    fields: [
+      { id: 'taken', key: TAKEN_KEY_, label: 'Already run', kind: 'many', options: OVERNIGHT },
+    ],
+  },
+  {
+    id: 'map', title: 'The liquidity map', frames: '1H · 4H', heatmap: true,
+    marks: [],
+    fields: [
+      { id: 'above', key: 'panel.above', label: 'Nearest named level above', kind: 'pick', options: PANEL_LEVELS },
+      { id: 'aboveTier', key: 'panel.aboveTier', label: 'It is', kind: 'one', options: ['Major', 'Minor'] },
+      { id: 'aboveState', label: 'And', kind: 'one', options: ['Fresh', 'Tapped'] },
+      { id: 'gapAbove', label: '1H/4H gap between price and it', kind: 'one', options: ['None', '1H gap', '4H gap', 'Both'] },
+      { id: 'below', key: 'panel.below', label: 'Nearest named level below', kind: 'pick', options: PANEL_LEVELS },
+      { id: 'belowTier', key: 'panel.belowTier', label: 'It is', kind: 'one', options: ['Major', 'Minor'] },
+      { id: 'belowState', label: 'And', kind: 'one', options: ['Fresh', 'Tapped'] },
+      { id: 'gapBelow', label: '1H/4H gap between price and it', kind: 'one', options: ['None', '1H gap', '4H gap', 'Both'] },
+    ],
+  },
+  {
+    id: 'location', title: 'Location', frames: 'The overnight range',
+    marks: [],
+    fields: [
+      { id: 'zone', label: 'Right now, price is in the overnight range’s', kind: 'one', options: ['Premium', 'Equilibrium', 'Discount'] },
+    ],
+  },
+  {
+    id: 'plans', title: 'Two plans, and C', frames: 'NY AM',
+    marks: ['Alerts set on both trigger zones', 'Daily loss limit set in the platform'],
+    fields: [
+      ...scenario('a'),
+      ...scenario('b'),
+      { id: 'cutoff', label: 'Cutoff', kind: 'text', options: [], placeholder: '9:30' },
+      { id: 'stop', key: 'session.stop', label: 'Stop after', kind: 'one', options: ['1 loss', '2 losses', 'Daily limit'] },
+    ],
+  },
+];
+
 /** Every step a saved prep can hold: the live ones, then the legacy ones (not shown, still read). */
-const ALL_STEPS: PrepStep[] = [...PREP_STEPS, ...LEGACY_STEPS.filter((l) => !PREP_STEPS.some((p) => p.id === l.id))];
-const LEGACY_ONLY = new Set(LEGACY_STEPS.map((l) => l.id).filter((id) => !PREP_STEPS.some((p) => p.id === id)));
+const ALL_STEPS: PrepStep[] = [...PREP_STEPS, ...PANEL_STEPS, ...LEGACY_STEPS.filter((l) => !PANEL_STEPS.some((p) => p.id === l.id))];
+const LEGACY_ONLY = new Set(LEGACY_STEPS.map((l) => l.id).filter((id) => !PANEL_STEPS.some((p) => p.id === id)));
+const PANEL_IDS = new Set(PANEL_STEPS.map((s) => s.id));
 
 export const answerKey = (step: PrepStep, field: PrepField) => field.key ?? `${step.id}.${field.id}`;
 
 /** Every question by its stored key: the live one wins where both ask it. */
 const FIELD_BY_KEY = new Map<string, PrepField>();
-for (const st of [...LEGACY_STEPS].reverse().concat(PREP_STEPS)) for (const f of st.fields) FIELD_BY_KEY.set(answerKey(st, f), f);
+for (const st of [...LEGACY_STEPS].reverse().concat(PANEL_STEPS, PREP_STEPS)) for (const f of st.fields) FIELD_BY_KEY.set(answerKey(st, f), f);
 
 export const PREP_STEP_IDS = PREP_STEPS.map((s) => s.id);
 
@@ -254,6 +345,9 @@ export interface SessionPrep {
   completed_at: string | null;
   updated_at: string;
 }
+
+/** The longest written answer kept. */
+export const TEXT_MAX = 400;
 
 export const EMPTY_PREP: PrepData = { steps: {}, ticks: {}, answers: {} };
 
@@ -280,7 +374,10 @@ export function parsePrepData(raw: unknown): PrepData {
   for (const [key, v] of Object.entries(obj(r.answers))) {
     const field = FIELD_BY_KEY.get(key);
     if (!field) continue;
-    if (field.kind === 'many') {
+    if (field.kind === 'text') {
+      // Written answers: one tidy line (or a few), never more than a paragraph.
+      if (typeof v === 'string' && v.trim()) answers[key] = v.replace(/\r/g, '').slice(0, TEXT_MAX);
+    } else if (field.kind === 'many') {
       const list = Array.isArray(v) ? field.options.filter((o) => v.includes(o)) : [];
       if (list.length) answers[key] = list;
     } else if (typeof v === 'string' && field.options.includes(v)) {
@@ -344,6 +441,11 @@ export function liveMarks(step: PrepStep): Array<{ text: string; i: number }> {
 
 /** Saved under the six-step prep (it has a state for a step that is no longer asked). */
 export const isLegacyPrep = (data: PrepData) => Object.keys(data.steps).some((id) => LEGACY_ONLY.has(id));
+/** Saved under the three-step panel prep (and not started in the new one). */
+export const isPanelPrep = (data: PrepData) => !isLegacyPrep(data)
+  && Object.keys(data.steps).some((id) => PANEL_IDS.has(id)) && !PREP_STEPS.some((st) => data.steps[st.id]);
+/** The steps a saved prep was asked under. */
+export const stepsOf = (data: PrepData): PrepStep[] => (isLegacyPrep(data) ? LEGACY_STEPS : isPanelPrep(data) ? PANEL_STEPS : PREP_STEPS);
 
 /**
  * How far through. A prep is complete when every step is done — or, for one
@@ -355,9 +457,10 @@ export function prepProgress(data: PrepData): { answered: number; done: number; 
     const done = states.filter((s) => s === 'done').length;
     return { answered: states.length, done, total: LEGACY_STEPS.length, complete: done >= 4 };
   }
-  const live = PREP_STEPS.map((st) => data.steps[st.id]);
+  const steps = stepsOf(data);
+  const live = steps.map((st) => data.steps[st.id]);
   const done = live.filter((v) => v === 'done').length;
-  return { answered: live.filter(Boolean).length, done, total: PREP_STEPS.length, complete: done === PREP_STEPS.length };
+  return { answered: live.filter(Boolean).length, done, total: steps.length, complete: done === steps.length };
 }
 
 /** An answer as words: "PDH, PWL" for a list, the option itself otherwise. */
@@ -372,14 +475,147 @@ export function prepMarkdown(prep: SessionPrep): string {
   const p = prepProgress(d);
   const out: string[] = [];
   out.push(`- Chart prep: ${p.done} of ${p.total} steps marked${p.answered > p.done ? `, ${p.answered - p.done} skipped` : ''}${prep.started_at ? `, started ${prep.started_at.slice(11, 16)} UTC` : ''}`);
-  for (const step of isLegacyPrep(d) ? LEGACY_STEPS : PREP_STEPS) {
+  if (stepsOf(d) === PREP_STEPS) {
+    // The new prep reads as its plan (bias, overnight, A, B, C), then the decisions the app checks trades against.
+    for (const r of planSummary(d.answers)) out.push(`- ${r.label}: ${r.value}`);
+    const a = d.answers;
+    const decided = [
+      a['draw.side'] && `today I take ${answerText(a['draw.side'])}`, a['draw.direction'] && `price draws ${answerText(a['draw.direction'])}`,
+      a['draw.target'] && `target ${answerText(a['draw.target'])}`, a[WAIT_KEY] && `sweep to wait for ${answerText(a[WAIT_KEY])}`,
+      a['session.stop'] && `stop after ${answerText(a['session.stop'])}`,
+    ].filter(Boolean);
+    if (decided.length) out.push(`- Decisions: ${decided.join('; ')}`);
+    return out.join('\n');
+  }
+  for (const step of stepsOf(d)) {
     const said = step.fields
       .map((f) => [f.label, answerText(d.answers[answerKey(step, f)])] as const)
       .filter(([, v]) => v != null)
       .map(([k, v]) => `${k.toLowerCase()} ${v}`);
     const ticked = (d.ticks[step.id] ?? []).length;
     if (!said.length && !ticked) continue;
-    out.push(`- ${step.title}: ${said.join('; ')}${said.length ? ' · ' : ''}${ticked}/${liveMarks(step).length} marked`);
+    const marks = liveMarks(step).length;
+    out.push(`- ${step.title}: ${said.join('; ')}${marks ? `${said.length ? ' · ' : ''}${ticked}/${marks} marked` : ''}`);
   }
   return out.join('\n');
+}
+
+/* ───────────────────────── the plans ───────────────────────── */
+
+const str = (a: Answer | undefined): string | null => (typeof a === 'string' && a.trim() ? a.trim() : null);
+const DECIDED = ['draw.side', 'draw.direction', 'liquidity.wait', 'draw.target'] as const;
+
+/**
+ * The decisions plan match, the plan grade and the stop rule read, from the
+ * written plans: the side (both scenarios' directions), the direction (A's),
+ * the sweeps to wait for (each scenario's trigger, when it is a named level
+ * not already run) and the target (A's). A prep with no plan written keeps
+ * whatever it held: a prep saved before is never rewritten.
+ */
+export function deriveDecisions(answers: Record<string, Answer>): Record<string, Answer> {
+  const a = (k: string) => str(answers[`plans.${k}`]);
+  const dirs = [a('aDir'), a('bDir')].filter((d): d is string => !!d);
+  const triggers = [a('aTrigger'), a('bTrigger')].filter((t): t is string => !!t);
+  if (!dirs.length && !triggers.length && !a('aTarget')) return answers;
+  const out: Record<string, Answer> = { ...answers };
+  for (const k of DECIDED) delete out[k];
+  if (dirs.length) out['draw.side'] = new Set(dirs).size > 1 ? 'Both ways' : dirs[0] === 'Long' ? 'Longs only' : 'Shorts only';
+  if (a('aDir')) out['draw.direction'] = a('aDir') === 'Long' ? 'Up' : 'Down';
+  const taken = Array.isArray(answers[TAKEN_KEY]) ? answers[TAKEN_KEY] as string[] : [];
+  const wait = [...new Set(triggers.filter((t) => SWEEPABLE.includes(t) && !taken.includes(t)))];
+  if (wait.length) out[WAIT_KEY] = wait;
+  if (a('aTarget')) out['draw.target'] = a('aTarget')!;
+  return out;
+}
+
+export type Bias = 'Bullish' | 'Bearish' | 'Neutral';
+export const biasOf = (answers: Record<string, Answer>): Bias | null => (str(answers['htf.bias']) as Bias | null);
+
+/**
+ * The highest grade a scenario can reach today: with the bias, A+; against
+ * it, B at most; with no bias you can state honestly, only an A+ setup at all.
+ */
+export function gradeCeiling(answers: Record<string, Answer>, k: 'a' | 'b'): string | null {
+  const bias = biasOf(answers); const dir = str(answers[`plans.${k}Dir`]);
+  if (!bias) return null;
+  if (bias === 'Neutral') return 'A+ only — no bias';
+  if (!dir) return null;
+  const withBias = (bias === 'Bullish') === (dir === 'Long');
+  return withBias ? 'Can reach A+' : 'B max — against the bias';
+}
+
+export interface PlanCheck { level: 'warn' | 'note'; text: string }
+
+/**
+ * The three rules, checked as you write (notes, never a gate):
+ * the scenarios differ in which liquidity is taken first; each can be killed;
+ * and A is the one with the bias.
+ */
+export function planChecks(answers: Record<string, Answer>): PlanCheck[] {
+  const a = (k: string) => str(answers[`plans.${k}`]);
+  const out: PlanCheck[] = [];
+  const started = (k: 'a' | 'b') => ['Dir', 'Story', 'Trigger', 'TriggerNote', 'Target', 'Kill'].some((f) => a(`${k}${f}`));
+  if (a('aTrigger') && a('aTrigger') === a('bTrigger')) {
+    out.push({ level: 'warn', text: `Both scenarios start at ${a('aTrigger')}. They should differ in which liquidity is taken first — that is the question the open answers.` });
+  }
+  for (const k of ['a', 'b'] as const) {
+    if (started(k) && !a(`${k}Kill`)) out.push({ level: 'warn', text: `Scenario ${k.toUpperCase()} has no kill switch. If it can't be killed, it's a hope, not a plan.` });
+  }
+  if (a('aDir') && a('aDir') === a('bDir')) out.push({ level: 'note', text: `Both scenarios are ${a('aDir')!.toLowerCase()}s. B is usually the other side's story.` });
+  const bias = biasOf(answers);
+  if (bias && bias !== 'Neutral' && a('aDir') && (bias === 'Bullish') !== (a('aDir') === 'Long')) {
+    out.push({ level: 'note', text: `Scenario A is against your ${bias.toLowerCase()} bias. A is the primary, with the bias; swap them, or say why.` });
+  }
+  return out;
+}
+
+/** "Highs run, lows still there": which side of the overnight book has been taken, and so where the untaken liquidity rests. */
+export function overnightRead(answers: Record<string, Answer>): { stillThere: string[]; line: string | null } {
+  const taken = Array.isArray(answers[TAKEN_KEY]) ? answers[TAKEN_KEY] as string[] : [];
+  const stillThere = OVERNIGHT.filter((l) => !taken.includes(l));
+  const highs = taken.filter((l) => HIGHS.has(l)).length; const lows = taken.length - highs;
+  const line = !taken.length ? null
+    : highs && !lows ? 'Highs run, lows untouched: the resting liquidity is below.'
+      : lows && !highs ? 'Lows run, highs untouched: the resting liquidity is above.'
+        : 'Both sides have been run: no clean side yet.';
+  return { stillThere, line };
+}
+
+/** The bias sentence, as written: "4H/1H bias is bullish because … Invalidated by a 1H body close beyond …". */
+export function biasSentence(answers: Record<string, Answer>): string | null {
+  const bias = biasOf(answers);
+  if (!bias) return null;
+  if (bias === 'Neutral') return 'Neutral — A+ only today.';
+  const because = str(answers['htf.because']); const inv = str(answers['htf.inv']);
+  return `4H/1H bias is ${bias.toLowerCase()}${because ? ` because ${because}` : ''}.${inv ? ` Invalidated by a 1H body close beyond ${inv}.` : ''}`;
+}
+
+/** One scenario in a line, for the summary and the dashboard. */
+export function scenarioLine(answers: Record<string, Answer>, k: 'a' | 'b'): string | null {
+  const a = (f: string) => str(answers[`plans.${k}${f}`]);
+  const parts = [
+    a('Story') ?? [a('Dir'), a('Trigger') && `from ${a('TriggerNote') ?? a('Trigger')}`].filter(Boolean).join(' '),
+    (a('TargetNote') ?? a('Target')) && `→ ${a('TargetNote') ?? a('Target')}`,
+    a('RR') && `· ${a('RR')}R`,
+    a('Kill') && `· killed by ${a('Kill')}`,
+  ].filter(Boolean);
+  return parts.length && parts[0] ? parts.join(' ') : null;
+}
+
+export const scenarioC = (answers: Record<string, Answer>) =>
+  `Neither trigger zone reached by ${str(answers['plans.cutoff']) ?? '9:30'}, or price chops through both: no trade.`;
+
+/** The day's plan in a few rows: what the dashboard shows and the prep ends on. */
+export function planSummary(answers: Record<string, Answer>): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string | null }> = [
+    { label: 'Bias', value: biasSentence(answers) },
+    { label: 'News', value: str(answers['session.news']) },
+    { label: 'Overnight', value: overnightRead(answers).line },
+    { label: 'Location', value: str(answers['location.zone']) },
+    { label: 'Scenario A', value: scenarioLine(answers, 'a') },
+    { label: 'Scenario B', value: scenarioLine(answers, 'b') },
+  ];
+  const any = rows.some((r) => r.value);
+  if (any) rows.push({ label: 'Scenario C', value: scenarioC(answers) });
+  return rows.filter((r): r is { label: string; value: string } => !!r.value);
 }
