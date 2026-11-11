@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, springBouncy, springSnappy, stagger } from '@/lib/motion';
 import { navigate } from '@/lib/nav';
@@ -35,6 +35,7 @@ export function openReminderRoute(route: string): void {
 }
 
 const announce = (n: number) => { lastCount = n; window.dispatchEvent(new CustomEvent(COUNT, { detail: n })); };
+const subscribeCount = (onChange: () => void) => { window.addEventListener(COUNT, onChange); return () => window.removeEventListener(COUNT, onChange); };
 
 /** A notification on the desktop: the app's own (Windows Action Center) or, in a browser, the web one. */
 export interface SoundPrefs { on: boolean; volume: number; sounds: Record<string, SoundId | 'off'> }
@@ -114,16 +115,13 @@ const patch = async (body: Record<string, unknown>) => {
 
 /** The bell in the title bar: unread count, and the list. */
 export function NotificationBell() {
-  const [count, setCount] = useState(lastCount);
+  // The unread count lives outside React (the poller announces it). Read through an external store: while
+  // hydrating it is the server's 0, then the live count, so a count that arrives before the bell hydrates
+  // (it sits in a Suspense boundary) can't make the server and client HTML differ.
+  const count = useSyncExternalStore(subscribeCount, () => lastCount, () => 0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<BellItem[] | null>(null);
   const box = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const on = (e: Event) => setCount((e as CustomEvent<number>).detail);
-    window.addEventListener(COUNT, on);
-    return () => window.removeEventListener(COUNT, on);
-  }, []);
 
   const load = async () => {
     const res = await fetch('/api/reminders');
