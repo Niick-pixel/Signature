@@ -321,7 +321,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               hint="Where the tabs live. The side rail frees the height of the title bar, which every board that fits the window uses; labels make it wider."
             >
               <div className="flex flex-wrap items-center gap-3" data-nav-setting>
-                <Segmented value={prefs.nav} onChange={(nav) => update({ nav })} options={['top', 'side'] as const}
+                <Segmented value={prefs.nav} onChange={(nav) => update({ nav })} options={['side', 'top'] as const}
                   labelFor={(v) => (v === 'top' ? 'Tabs across the top' : 'Side rail')} />
                 {prefs.nav === 'side' && (
                   <TogglePill checked={prefs.railLabels} onChange={(railLabels) => update({ railLabels })} label="Show labels" hint="Off: icons only, the name on hover." />

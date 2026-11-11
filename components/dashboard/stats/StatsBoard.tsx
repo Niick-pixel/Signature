@@ -92,10 +92,11 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
 
   useEffect(() => {
     const el = gridBox.current; if (!el) return;
-    const fit = () => setHeight(el.clientHeight);
+    // The rows fill the box inside its padding (the top padding comes and goes with the header merge).
+    const fit = () => { const cs = getComputedStyle(el); setHeight(el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)); };
     fit(); const ro = new ResizeObserver(fit); ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [merged]);
 
   // A board's own theme while it is open (System follows yours); yours comes back when you leave.
   useEffect(() => {

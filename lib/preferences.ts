@@ -305,7 +305,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   whatIfRules: ['stop1'],
   tiltWatch: true,
   studyTab: true,
-  nav: 'top',
+  nav: 'side',
   railLabels: false,
   studyGoal: 20,
   studyMin: 120,
@@ -368,7 +368,8 @@ export function readPreferences(): Preferences {
     const saved = JSON.parse(raw) as Partial<Preferences>;
     return {
       ...DEFAULT_PREFERENCES, ...saved,
-      nav: saved.nav === 'side' ? 'side' : 'top',
+      // The side rail is the default; only an explicit choice of top tabs keeps them.
+      nav: saved.nav === 'top' ? 'top' : 'side',
       // The Prop tab moved off the title bar: once, for everyone who had it on by default. Turned back on, it stays.
       ...(saved.propTabMoved ? {} : { propTab: false, propTabMoved: true }),
       // One level deeper for the on/off maps, so a block added later is on, not undefined.

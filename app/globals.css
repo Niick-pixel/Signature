@@ -1062,3 +1062,5 @@ html[data-rail='icons'] [data-title-slot], html[data-rail='labels'] [data-title-
 html[data-rail='icons'] [data-inline-header], html[data-rail='labels'] [data-inline-header] { display: none !important; }
 /* A page's buttons in the title bar take the bar's size (components/shell/TitleSlot MergedHeader). */
 [data-merged-header] .ui-btn { padding: 0.25rem 0.8rem; font-size: 12px; border-radius: 999px; }
+/* Top tabs chosen: the rail (drawn by the server for the default) is gone from the first paint. */
+html[data-rail='off'] [data-side-rail] { display: none; }
