@@ -73,3 +73,29 @@ test('dashboard data: this week Monday to Sunday, the curve, recent first', () =
   assert.equal(d.recent[0].day, '2026-10-28');
   assert.equal(dashboardData(ts, 'all', '2026-10-29', null).total.trades, 4);
 });
+
+test('tiles: the profit factor halves, average loss in R', () => {
+  const v = tileValues([t(), t({ r_multiple: 1 }), t({ outcome: 'Loss', r_multiple: -1 }), t({ outcome: 'Loss', r_multiple: -0.5 })]);
+  assert.equal(v.grossWinR, 3);
+  assert.equal(v.grossLossR, 1.5);
+  assert.equal(v.avgLossR, 0.75);
+  assert.equal(v.grossWin, 300);
+  assert.equal(v.grossLoss, 150);
+  assert.equal(tileValues([t({ risk_dollars: null })]).grossWin, null);
+});
+
+test('daily: one point per day, the running total at its close, the day net on its own', () => {
+  const ts = [
+    t({ date: '2026-10-20T09:45' }),
+    t({ date: '2026-10-20T11:00', outcome: 'Loss', r_multiple: -1 }),
+    t({ date: '2026-10-22T09:45', r_multiple: 1 }),
+    // An undated backtest counts on the day it was logged, even when its date sorts elsewhere.
+    t({ date: '2026-10-25T09:45', undated: true, created_at: '2026-10-20T15:00:00.000Z', account: 'Backtest (FX Replay)', r_multiple: 3 }),
+  ];
+  const d = dashboardData(ts, 'all', '2026-10-29', null);
+  assert.deepEqual(d.daily.map((p) => p.day), ['2026-10-20', '2026-10-22']);
+  assert.deepEqual(d.daily.map((p) => p.netR), [4, 1]);
+  assert.deepEqual(d.daily.map((p) => p.r), [4, 5]);
+  assert.deepEqual(d.daily.map((p) => p.trades), [3, 1]);
+  assert.equal(d.daily[d.daily.length - 1].r, d.total.r, 'ends where the total ends');
+});

@@ -183,6 +183,21 @@ await check('Trades: "Discuss these trades with Claude" downloads exactly the tr
   await page.context().close();
 });
 
+await check('Dashboard: the four figures, the daily curve, the score with its scale, the process heatmap', async () => {
+  const { page, errors } = await open({ width: 1440, height: 900 }, { nav: 'side' });
+  await page.goto(`${BASE}/dashboard`); await page.waitForTimeout(1500);
+  for (const sel of ['[data-dash-hero] [data-dash-spark]', '[data-dash-tile="winrate"] [data-dash-gauge]', '[data-dash-tile="pf"] [data-dash-pf-ring]',
+    '[data-dash-tile="ratio"] [data-dash-ratio]', '[data-dash-curve] svg', '[data-dash-radar]', '[data-dash-scale]', '[data-dash-raise]', '[data-dash-heatmap]', '[data-dash-today-rings]']) {
+    expect(await page.locator(sel).count() > 0, `missing ${sel}`);
+  }
+  const cells = await page.locator('[data-heat-day]').count();
+  expect(cells === 60, `12 weeks × 5 days, got ${cells}`);
+  const scroll = await page.evaluate(() => { const s = document.querySelector('.signature-enter'); return s ? s.scrollHeight - s.clientHeight : 0; });
+  expect(scroll <= 1, `the Dashboard still fits the window (${scroll}px over)`);
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
 await check('side rail: every screen has one 44px title bar, its header inside it, nothing spilling out', async () => {
   const { page } = await open({ width: 1280, height: 720 }, { nav: 'side' });
   for (const u of ['/dashboard', '/stats', '/calendar', '/journal', '/path', '/study', '/goals', '/trash']) {

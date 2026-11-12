@@ -14,18 +14,14 @@ import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
 import { press, spring, springSoft } from '@/lib/motion';
 import { DIRECTIONS, SESSIONS } from '@/lib/domain';
 import { openTrade } from '@/components/trade/openTrade';
-import { DASH_PERIODS, overallScore, SCORE_AXES, type DashboardData, type DashWorld, type TileValues } from '@/lib/dashboard';
+import { DASH_PERIODS, type DashboardData, type DashWorld } from '@/lib/dashboard';
+import { DailyCurve, NetPnl, Score, Tiles, rr, tone, usd } from './Panels';
 
 /*
   The Dashboard (Phase 1). Every block, the world it counts, dollars or R,
   and the score's axes come from Settings → Dashboard.
 */
 
-const usd = (v: number | null, sign = true) => (v == null ? '—'
-  : `${sign ? (v < 0 ? '−' : v > 0 ? '+' : '') : (v < 0 ? '−' : '')}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-const rr = (v: number | null, dp = 2) => (v == null ? '—' : `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(dp)}R`);
-const pct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`);
-const tone = (v: number | null) => (v == null ? 'var(--text-faint)' : v > 0 ? 'rgb(var(--outcome-win))' : v < 0 ? 'rgb(var(--outcome-loss))' : 'var(--text)');
 const WORLD_LABEL: Record<DashWorld, string> = { real: 'Real accounts', backtest: 'Backtests', all: 'Real and backtests' };
 
 export interface AccountOption { key: string; label: string; n: number }
@@ -153,13 +149,13 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           {(b.hero || b.tiles) && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {b.hero && <Hero d={d} money={money} />}
+              {b.hero && <NetPnl d={d} money={money} />}
               {b.tiles && <Tiles d={d} money={money} />}
             </div>
           )}
           {(b.chart || b.week) && (
             <div className="grid min-h-[13rem] flex-1 gap-3 lg:grid-cols-[1.7fr_1fr]">
-              {b.chart && <Card title="Cumulative" note={money ? 'Net P&L, in the order traded' : 'Net R, in the order traded'} grow><Curve d={d} money={money} /></Card>}
+              {b.chart && <Card title="Daily net cumulative" note={money ? 'P&L at the close of each day traded' : 'R at the close of each day traded'} grow><DailyCurve d={d} money={money} /></Card>}
               {b.week && <Card title="This week" note="Net per day" grow><Week d={d} money={money} today={today} /></Card>}
             </div>
           )}
@@ -203,104 +199,6 @@ function Chip({ on = false, onClick, title, children, data }: { on?: boolean; on
 }
 
 
-function Hero({ d, money }: { d: DashboardData; money: boolean }) {
-  const main = money ? d.total.money : d.total.r;
-  const week = money ? d.week7.money : d.week7.r;
-  return (
-    <section data-dash-hero className="glass rounded-[calc(18px*var(--rk))] px-4 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>Total {money ? 'P&L' : 'R'}</div>
-      <div className="mt-1 text-[30px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: tone(main) }} data-money={money ? '' : undefined}>
-        {money ? usd(main) : rr(main, 1)}
-      </div>
-      <div className="mt-1.5 truncate text-[11px] tabular-nums" style={{ color: 'var(--text-dim)' }}>
-        {d.week7.trades === 0 ? 'Nothing in the last 7 days'
-          : <><span style={{ color: tone(week) }} data-money={money ? '' : undefined}>{money ? usd(week ?? 0) : rr(week, 1)}</span> in the last 7 days</>}{' '}
-        · {d.total.wins}W / {d.total.losses}L · {d.total.trades} trades
-      </div>
-    </section>
-  );
-}
-
-function delta(now: number | null, before: number | null, kind: 'pct' | 'r' | 'usd' | 'x') {
-  if (now == null || before == null) return null;
-  const v = now - before;
-  if (Math.abs(v) < 1e-9) return null;
-  const s = kind === 'pct' ? `${(Math.abs(v) * 100).toFixed(1)}%` : kind === 'usd' ? `$${Math.abs(v).toFixed(0)}` : kind === 'x' ? Math.abs(v).toFixed(2) : `${Math.abs(v).toFixed(2)}R`;
-  return { up: v > 0, text: s };
-}
-
-function Tiles({ d, money }: { d: DashboardData; money: boolean }) {
-  const a: TileValues = d.tiles.all; const n = d.tiles.last30; const p = d.tiles.prev30;
-  const tiles = [
-    { label: 'Win rate', value: pct(a.winRate), sub: `${d.total.wins + d.total.losses} decided trades`, delta: delta(n.winRate, p.winRate, 'pct'), money: false },
-    { label: 'Avg win', value: rr(a.avgWinR), sub: `Profit factor ${a.profitFactor?.toFixed(2) ?? '—'}`, delta: delta(n.avgWinR, p.avgWinR, 'r'), money: false },
-    money
-      ? { label: 'Avg win / loss', value: usd(a.avgWin, false), sub: `Avg loss ${usd(a.avgLoss, false)}`, delta: delta(n.avgWin, p.avgWin, 'usd'), money: true }
-      : { label: 'Profit factor', value: a.profitFactor?.toFixed(2) ?? '—', sub: 'R won over R lost', delta: delta(n.profitFactor, p.profitFactor, 'x'), money: false },
-  ];
-  return (
-    <>
-      {tiles.map((t) => (
-        <motion.div key={t.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={springSoft}
-          className="glass rounded-[calc(18px*var(--rk))] px-4 py-3" data-dash-tile>
-          <div className="flex items-start justify-between gap-2">
-            <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{t.label}</span>
-            {t.delta && (
-              <span className="text-[10.5px] font-medium tabular-nums" title="Last 30 days against the 30 before"
-                style={{ color: t.delta.up ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>
-                {t.delta.up ? '↗' : '↘'} {t.delta.text} <span style={{ color: 'var(--text-faint)' }}>30d</span>
-              </span>
-            )}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold leading-none tabular-nums" data-money={t.money ? '' : undefined}>{t.value}</div>
-          <div className="mt-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }} data-money={t.money ? '' : undefined}>{t.sub}</div>
-        </motion.div>
-      ))}
-    </>
-  );
-}
-
-function Curve({ d, money }: { d: DashboardData; money: boolean }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const pts = d.curve.map((p) => (money ? p.money ?? 0 : p.r));
-  if (pts.length < 2) return <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>A couple more trades and the line appears.</p>;
-  const W = 640; const H = 200; const pad = 8;
-  const lo = Math.min(0, ...pts); const hi = Math.max(0, ...pts); const span = hi - lo || 1;
-  const x = (i: number) => pad + (i / (pts.length - 1)) * (W - pad * 2);
-  const y = (v: number) => pad + (1 - (v - lo) / span) * (H - pad * 2);
-  const line = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const last = pts[pts.length - 1];
-  const hue = last >= 0 ? '--outcome-win' : '--outcome-loss';
-  const shown = hover ?? pts.length - 1;
-  return (
-    <div className="flex h-full min-h-[9rem] flex-col" data-dash-curve>
-      <div className="mb-1 flex items-baseline justify-between text-[11.5px] tabular-nums">
-        <span style={{ color: 'var(--text-faint)' }}>{d.curve[shown].day}</span>
-        <b style={{ color: tone(pts[shown]) }} data-money={money ? '' : undefined}>{money ? usd(pts[shown]) : rr(pts[shown], 1)}</b>
-      </div>
-      {/* The line stretches to the card; the dot is drawn outside the SVG so it stays round. */}
-      <div className="relative min-h-0 flex-1">
-      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 size-full" preserveAspectRatio="none"
-        onMouseLeave={() => setHover(null)}
-        onMouseMove={(e) => { const r = (e.currentTarget as SVGElement).getBoundingClientRect(); setHover(Math.max(0, Math.min(pts.length - 1, Math.round(((e.clientX - r.left) / r.width) * (pts.length - 1))))); }}>
-        <defs>
-          <linearGradient id="dash-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor={`rgb(var(${hue}))`} stopOpacity="0.22" />
-            <stop offset="1" stopColor={`rgb(var(${hue}))`} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <line x1={pad} x2={W - pad} y1={y(0)} y2={y(0)} stroke="var(--glass-stroke)" strokeDasharray="4 4" />
-        <path d={`${line} L${x(pts.length - 1)},${y(lo)} L${x(0)},${y(lo)} Z`} fill="url(#dash-fill)" />
-        <path d={line} fill="none" stroke={`rgb(var(${hue}))`} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-        {hover != null && <line x1={x(shown)} x2={x(shown)} y1={pad} y2={H - pad} stroke="var(--text-faint)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="3 3" />}
-      </svg>
-      <span className="pointer-events-none absolute size-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full" data-dash-dot
-        style={{ left: `${(x(shown) / W) * 100}%`, top: `${(y(pts[shown]) / H) * 100}%`, background: `rgb(var(${hue}))`, boxShadow: '0 0 0 2px var(--bg-raised)' }} />
-      </div>
-    </div>
-  );
-}
-
 function Week({ d, money, today }: { d: DashboardData; money: boolean; today: string }) {
   const vals = d.week.map((w) => (money ? w.money ?? 0 : w.r));
   const max = Math.max(1e-9, ...vals.map(Math.abs));
@@ -326,52 +224,6 @@ function Week({ d, money, today }: { d: DashboardData; money: boolean; today: st
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function Score({ d, enabled }: { d: DashboardData; enabled: Record<string, boolean> }) {
-  const axes = SCORE_AXES.filter((a) => enabled[a.key] !== false);
-  const score = overallScore(d.axes, enabled);
-  const R = 78; const C = 100;
-  const at = (i: number, r: number) => {
-    const ang = -Math.PI / 2 + (i / axes.length) * Math.PI * 2;
-    return [C + Math.cos(ang) * r, C + Math.sin(ang) * r] as const;
-  };
-  const shape = axes.map((a, i) => at(i, ((d.axes[a.key] ?? 0) / 100) * R).join(',')).join(' ');
-  return (
-    <div className="flex flex-wrap items-center gap-3" data-dash-score={score ?? ''}>
-      <div className="text-center">
-        <div className="text-[36px] font-semibold leading-none tabular-nums"
-          style={{ color: score == null ? 'var(--text-faint)' : score >= 70 ? 'rgb(var(--outcome-win))' : score >= 45 ? 'rgb(var(--accent))' : 'rgb(var(--outcome-loss))' }}>
-          {score ?? '—'}
-        </div>
-        <div className="mt-1 text-[10.5px]" style={{ color: 'var(--text-faint)' }}>out of 100</div>
-      </div>
-      {axes.length >= 3 && (
-        <svg viewBox="0 0 200 200" className="h-[150px] w-[150px]">
-          {[0.33, 0.66, 1].map((k) => (
-            <polygon key={k} points={axes.map((_, i) => at(i, R * k).join(',')).join(' ')} fill="none" stroke="var(--glass-stroke)" />
-          ))}
-          <motion.polygon initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={springSoft}
-            points={shape} fill="rgb(var(--accent) / 0.18)" stroke="rgb(var(--accent))" strokeWidth="1.5" />
-          {axes.map((a, i) => {
-            const [lx, ly] = at(i, R + 14);
-            return (
-              <text key={a.key} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize="8.5" fill="var(--text-dim)">
-                <title>{`${a.hint} ${d.axes[a.key] ?? '—'}/100`}</title>{a.label}
-              </text>
-            );
-          })}
-        </svg>
-      )}
-      <ul className="min-w-[8rem] flex-1 space-y-0.5 text-[11px] tabular-nums">
-        {axes.map((a) => (
-          <li key={a.key} className="flex justify-between gap-3" title={a.hint}>
-            <span style={{ color: 'var(--text-dim)' }}>{a.label}</span><b>{d.axes[a.key] ?? '—'}</b>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

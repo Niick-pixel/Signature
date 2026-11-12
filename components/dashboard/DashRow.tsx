@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
-import { Rings } from '@/components/consistency/Rings';
 import { openGoals } from '@/components/goals/GoalsSheet';
 import { navigate } from '@/lib/nav';
 import { localDay } from '@/lib/day';
 import { springSoft, stagger } from '@/lib/motion';
-import { mondayOf, type DayRings, type Streak } from '@/lib/consistency';
+import { addDays, mondayOf, RINGS, type DayRings, type Streak } from '@/lib/consistency';
 import { DASH_CARDS, DASH_CARD_INFO, DASH_ROW_MAX, type DashCard, type DashSlot } from '@/lib/preferences';
 import type { DashboardData } from '@/lib/dashboard';
 import { Card } from './Card';
@@ -115,29 +114,82 @@ function Mini({ children, onClick, disabled, label, data }: { children: React.Re
 
 /* ───────────────────────── the new cards ───────────────────────── */
 
-/** Process this week: the rings for each trading day and the streak (lib/consistency). */
+/**
+ * Process: twelve weeks of the four rings as a heatmap (Monday to Friday, one
+ * column a week, the deeper the colour the more rings closed), then today
+ * against its rings and the streak (lib/consistency). Nothing here is P&L.
+ */
+const HEAT_WEEKS = 12;
+const RING_MARK: Record<string, string> = { done: '✓', open: '○', na: '–' };
 function ProcessCard() {
-  const [r, setR] = useState<{ days: DayRings[]; closedDays: number; tradingDays: number; streak: Streak } | null>(null);
+  const [r, setR] = useState<{ today: DayRings; days: DayRings[]; streak: Streak } | null>(null);
   const live = useLiveTick();
-  useEffect(() => { const t = localDay(); void getJson<typeof r>(`/api/consistency?today=${t}&week=${mondayOf(t)}`).then(setR); }, [live]);
+  const today = localDay();
+  const first = addDays(mondayOf(today), -(HEAT_WEEKS - 1) * 7);
+  useEffect(() => { void getJson<typeof r>(`/api/consistency?today=${localDay()}&from=${first}`).then(setR); }, [live, first]);
   if (!r) return null;
-  const monday = mondayOf(localDay());
-  const days = Array.from({ length: 5 }, (_, i) => { const d = new Date(`${monday}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); });
   const by = new Map(r.days.map((x) => [x.day, x]));
+  const weeks = Array.from({ length: HEAT_WEEKS }, (_, w) => addDays(first, w * 7));
+  const level = (x: DayRings | undefined, day: string) => {
+    if (day > today) return { bg: 'transparent', border: 'var(--glass-stroke)' };
+    if (!x || !x.tradingDay) return { bg: 'var(--glass-fill)', border: 'transparent' };
+    const f = x.of ? x.done / x.of : 0;
+    const mix = x.closed ? 100 : f >= 0.66 ? 62 : f >= 0.33 ? 38 : f > 0 ? 20 : 0;
+    return { bg: mix ? `color-mix(in srgb, rgb(var(--accent)) ${mix}%, transparent)` : 'var(--glass-stroke)', border: 'transparent' };
+  };
+  const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'short' });
+  const t = r.today;
   return (
-    <Card title="Process this week" note={`streak ${r.streak.current}`} onTitle={() => navigate('/consistency')}>
-      <div className="flex items-end justify-between gap-1" data-dash-process>
-        {days.map((day, i) => {
-          const x = by.get(day);
-          return (
-            <div key={day} className="flex flex-col items-center gap-1">
-              {x ? <Rings day={x} size={34} stroke={3.4} /> : <div className="size-[34px]" />}
-              <span className="text-[10px]" style={faint}>{WEEKDAY[i]}</span>
-            </div>
-          );
-        })}
+    <Card title="Process" note={`streak ${r.streak.current} · best ${r.streak.best}`} onTitle={() => navigate('/consistency')}>
+      <div data-dash-process>
+        <div className="grid gap-[3px]" style={{ gridTemplateColumns: `14px repeat(${HEAT_WEEKS}, minmax(0, 1fr))` }} data-dash-heatmap>
+          <span />
+          {weeks.map((w, i) => (
+            <span key={w} className="overflow-visible whitespace-nowrap text-[9px] leading-3" style={faint}>{i === 0 || month(w) !== month(weeks[i - 1]) ? month(w) : ''}</span>
+          ))}
+          {WEEKDAY.map((wd, row) => (
+            <Fragment key={row}>
+              <span className="text-[9px] leading-none" style={{ ...faint, alignSelf: 'center' }}>{row % 2 === 0 ? wd : ''}</span>
+              {weeks.map((w) => {
+                const day = addDays(w, row);
+                const x = by.get(day);
+                const c = level(x, day);
+                const what = day > today ? 'ahead' : !x ? 'no data' : !x.tradingDay ? (x.holiday ?? 'market closed')
+                  : `${x.done} of ${x.of} rings · ${RINGS.map((g) => `${g.label} ${RING_MARK[x.rings[g.id]]}`).join('  ')}`;
+                return (
+                  <span key={day} title={`${new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} — ${what}`}
+                    className="aspect-square max-h-[16px] w-full rounded-[3px]" data-heat-day={day}
+                    style={{ background: c.bg, border: `1px solid ${c.border}`, outline: day === today ? '1.5px solid rgb(var(--accent))' : undefined, outlineOffset: 1 }} />
+                );
+              })}
+            </Fragment>
+          ))}
+        </div>
+        <div className="mt-1.5 flex items-center justify-end gap-1 text-[9px]" style={faint} aria-hidden>
+          Fewer
+          {[0, 20, 38, 62, 100].map((m) => <span key={m} className="size-[9px] rounded-[2px]" style={{ background: m ? `color-mix(in srgb, rgb(var(--accent)) ${m}%, transparent)` : 'var(--glass-stroke)' }} />)}
+          All rings
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3 border-t pt-2" style={{ borderColor: 'var(--glass-stroke)' }} data-dash-today-rings>
+          <div className="shrink-0">
+            <span className="text-[10px] uppercase tracking-[0.08em]" style={faint}>Today</span>
+            <div className="text-[20px] font-semibold leading-none tabular-nums" style={{ color: t.closed ? 'rgb(var(--accent))' : 'var(--text)' }}>{t.done}<span className="text-[13px]" style={faint}>/{t.of}</span></div>
+          </div>
+          <div className="flex min-w-0 flex-wrap justify-end gap-1">
+            {RINGS.map((g) => {
+              const st = t.rings[g.id];
+              return (
+                <span key={g.id} title={g.hint} className="rounded-full border px-2 py-0.5 text-[10.5px]"
+                  style={st === 'done'
+                    ? { borderColor: 'rgb(var(--accent) / 0.5)', background: 'rgb(var(--accent) / 0.12)', color: 'rgb(var(--accent))' }
+                    : { borderColor: 'var(--glass-stroke)', color: st === 'na' ? 'var(--text-faint)' : 'var(--text-dim)' }}>
+                  {RING_MARK[st]} {g.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
       </div>
-      <p className="mt-1.5 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>{r.closedDays} of {r.tradingDays} days with every ring closed · best streak {r.streak.best}</p>
     </Card>
   );
 }

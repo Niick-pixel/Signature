@@ -62,7 +62,13 @@ export function totals(ts: readonly Trade[]): Totals {
 /** W / L / BE from R where recorded (lib/edge/metrics), from the label only where it never was. */
 const classOf = (t: Trade) => (t.r_multiple != null ? resultClass(t.r_multiple) : t.outcome === 'Win' ? 'W' : t.outcome === 'Loss' ? 'L' : 'BE');
 
-export interface TileValues { winRate: number | null; avgWinR: number | null; profitFactor: number | null; avgWin: number | null; avgLoss: number | null }
+export interface TileValues {
+  winRate: number | null; avgWinR: number | null; profitFactor: number | null; avgWin: number | null; avgLoss: number | null;
+  /** Average loss in R, as a positive number. */
+  avgLossR: number | null;
+  /** R won and R lost (positive), and the same in dollars where priced: the profit factor's two halves. */
+  grossWinR: number; grossLossR: number; grossWin: number | null; grossLoss: number | null;
+}
 
 export function tileValues(ts: readonly Trade[]): TileValues {
   // Canonical classes (lib/edge/metrics): averages over wins only and losses only; PF over every positive and negative R.
@@ -73,7 +79,13 @@ export function tileValues(ts: readonly Trade[]): TileValues {
   const sumW = ts.filter((t) => (t.r_multiple ?? 0) > 0).reduce((s, t) => s + (t.r_multiple as number), 0);
   const sumL = Math.abs(ts.filter((t) => (t.r_multiple ?? 0) < 0).reduce((s, t) => s + (t.r_multiple as number), 0));
   const r = (v: number | null) => (v == null ? null : round(v));
+  const lossR = losses.map((t) => t.r_multiple).filter((v): v is number => v != null).map(Math.abs);
+  const pricedAll = ts.map(pnlOf).filter((v): v is number => v != null);
   return {
+    avgLossR: r(mean(lossR)),
+    grossWinR: round(sumW), grossLossR: round(sumL),
+    grossWin: pricedAll.length ? round(pricedAll.filter((v) => v > 0).reduce((s, v) => s + v, 0)) : null,
+    grossLoss: pricedAll.length ? round(Math.abs(pricedAll.filter((v) => v < 0).reduce((s, v) => s + v, 0))) : null,
     winRate: wins.length + losses.length ? round(wins.length / (wins.length + losses.length), 3) : null,
     avgWinR: r(mean(winsR)),
     profitFactor: sumL > 0 ? round(sumW / sumL) : null,
@@ -123,6 +135,8 @@ export interface DashboardData {
   tiles: { all: TileValues; last30: TileValues; prev30: TileValues };
   /** Cumulative, in the order traded: money when priced, R always. */
   curve: Array<{ day: string; r: number; money: number | null }>;
+  /** Cumulative at the close of each day traded, with that day's own net. */
+  daily: Array<{ day: string; r: number; money: number | null; netR: number; netMoney: number | null; trades: number }>;
   /** This week, Monday to Sunday: net per day. */
   week: Array<{ day: string; r: number; money: number | null; trades: number }>;
   axes: ScoreAxes;
@@ -142,6 +156,21 @@ export function dashboardData(trades: readonly Trade[], world: DashWorld, today:
     const m = pnlOf(t); if (m != null) { cm += m; priced = true; }
     return { day: dayOf(t), r: round(cr), money: priced ? round(cm) : null };
   });
+  // By day (an undated backtest counts on the day it was logged, so group first, then run the total).
+  const byDay = new Map<string, { netR: number; netMoney: number | null; trades: number }>();
+  for (const t of ts) {
+    const k = dayOf(t); const m = pnlOf(t);
+    const e = byDay.get(k) ?? { netR: 0, netMoney: null, trades: 0 };
+    e.netR += t.r_multiple ?? 0; e.trades += 1;
+    if (m != null) e.netMoney = (e.netMoney ?? 0) + m;
+    byDay.set(k, e);
+  }
+  let dr = 0; let dm = 0; let dPriced = false;
+  const daily: DashboardData['daily'] = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, e]) => {
+    dr += e.netR;
+    if (e.netMoney != null) { dm += e.netMoney; dPriced = true; }
+    return { day, r: round(dr), money: dPriced ? round(dm) : null, netR: round(e.netR), netMoney: e.netMoney == null ? null : round(e.netMoney), trades: e.trades };
+  });
   const monday = (() => { const d = new Date(`${today}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
   const week = Array.from({ length: 7 }, (_, i) => {
     const day = addDays(monday, i);
@@ -153,7 +182,7 @@ export function dashboardData(trades: readonly Trade[], world: DashWorld, today:
     total: totals(ts),
     week7: totals(between(since(7), today)),
     tiles: { all: tileValues(ts), last30: tileValues(between(since(30), today)), prev30: tileValues(between(since(60), since(31))) },
-    curve, week,
+    curve, daily, week,
     axes: scoreAxes(ts, rulesKeptShare),
     recent: [...ts].reverse().slice(0, 8).map((t) => ({
       id: t.id, day: dayOf(t), account: t.account, setup: t.setup_type, direction: t.direction, outcome: t.outcome, r: t.r_multiple, money: pnlOf(t),

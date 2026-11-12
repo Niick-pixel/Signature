@@ -96,6 +96,8 @@ export interface Preferences {
   propTab: boolean;
   /** Set once the Prop tab has been moved off the title bar for everyone (it was on by default). */
   propTabMoved: boolean;
+  /** The process heatmap was added to the Dashboard's bottom row once (2026-11). */
+  processRowAdded: boolean;
   /** Which day a trade counts on for firm rules: its calendar date, or the futures session (6pm New York). */
   propDayBoundary: 'calendar' | 'cme';
   /** Warn when this share (%) of the drawdown or daily limit is all that is left. */
@@ -203,7 +205,7 @@ export const DASH_CARD_INFO: Record<DashCard, { label: string; hint: string }> =
   score: { label: 'Discipline score', hint: 'The score and its axes.' },
   recent: { label: 'Recent trades', hint: 'The last five, click to open.' },
   prop: { label: 'Prop accounts', hint: 'Room left on each active account. Hidden when you have none.' },
-  process: { label: 'Process this week', hint: 'The rings for each trading day and the streak.' },
+  process: { label: 'Process', hint: 'Twelve weeks of process rings as a heatmap, today against its rings, and the streak.' },
   study: { label: 'Study', hint: 'Minutes today, the study streak, flashcards due.' },
   goals: { label: 'Goals', hint: 'Each goal, its streak, and today.' },
   fix: { label: 'Fix first', hint: 'What costs you most right now, from Stats. Information, never a signal.' },
@@ -211,7 +213,16 @@ export const DASH_CARD_INFO: Record<DashCard, { label: string; hint: string }> =
   news: { label: "Today's news", hint: 'High and medium releases today, in your currencies.' },
   quote: { label: "Today's line", hint: 'The quote of the day, as a card.' },
 };
-export const DEFAULT_DASH_ROW: DashSlot[] = [{ id: 'score', size: 2 }, { id: 'recent', size: 2 }, { id: 'prop', size: 1 }];
+export const DEFAULT_DASH_ROW: DashSlot[] = [{ id: 'score', size: 2 }, { id: 'process', size: 2 }, { id: 'recent', size: 2 }, { id: 'prop', size: 1 }];
+
+/** Once: the process heatmap joins a saved row after the score, when there is room and it is not there yet. */
+export function withProcess(row: DashSlot[]): DashSlot[] {
+  if (row.some((s) => s.id === 'process') || row.length >= DASH_ROW_MAX) return row;
+  const at = row.findIndex((s) => s.id === 'score');
+  const next = [...row];
+  next.splice(at + 1, 0, { id: 'process', size: 2 });
+  return next;
+}
 export function parseDashRow(raw: unknown, blocks?: Partial<Record<string, boolean>>): DashSlot[] {
   if (!Array.isArray(raw)) {
     // Before the row was modular: the three blocks that were switched on.
@@ -290,6 +301,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   importAutoLink: true,
   propTab: false,
   propTabMoved: true,
+  processRowAdded: true,
   propDayBoundary: 'cme',
   propWarnPct: 25,
   propShowEnded: false,
@@ -374,7 +386,8 @@ export function readPreferences(): Preferences {
       ...(saved.propTabMoved ? {} : { propTab: false, propTabMoved: true }),
       // One level deeper for the on/off maps, so a block added later is on, not undefined.
       dashBlocks: { ...DEFAULT_PREFERENCES.dashBlocks, ...(saved.dashBlocks ?? {}) },
-      dashRow: parseDashRow(saved.dashRow, saved.dashBlocks),
+      dashRow: saved.processRowAdded ? parseDashRow(saved.dashRow, saved.dashBlocks) : withProcess(parseDashRow(saved.dashRow, saved.dashBlocks)),
+      processRowAdded: true,
       scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
       sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
