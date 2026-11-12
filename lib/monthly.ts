@@ -74,7 +74,7 @@ const ref = (t: Trade) => `T-${t.id.replace(/-/g, '').slice(0, 8)}`;
 const when = (t: Trade) => t.date.replace('T', ' ').slice(0, 16);
 const ext = (p: string) => (/\.[a-z0-9]+$/i.exec(p)?.[0] ?? '.png').toLowerCase();
 
-function table(head: string[], rows: unknown[][]): string {
+export function table(head: string[], rows: unknown[][]): string {
   if (rows.length === 0) return '_None._';
   return [
     `| ${head.join(' | ')} |`,
@@ -97,7 +97,7 @@ function numbers(trades: Trade[]) {
   return { a, e, m, d };
 }
 
-function groupRows(trades: Trade[], keyOf: (t: Trade) => string): unknown[][] {
+export function groupRows(trades: Trade[], keyOf: (t: Trade) => string): unknown[][] {
   const groups = new Map<string, Trade[]>();
   for (const t of trades) groups.set(keyOf(t), [...(groups.get(keyOf(t)) ?? []), t]);
   return [...groups.entries()]
@@ -105,6 +105,83 @@ function groupRows(trades: Trade[], keyOf: (t: Trade) => string): unknown[][] {
     .filter((g) => g.a.taken > 0)
     .sort((x, y) => x.a.totalR - y.a.totalR)
     .map((g) => [g.k, g.a.taken, pct(g.a.winRate), r1(g.a.totalR), r2(g.a.avgR)]);
+}
+
+/**
+ * One trade, as the review documents write it: setup, why, grade, checklist,
+ * tags, guardrails, execution, flags, charts and the writing. Shared by the
+ * monthly review and the Trades export so a trade reads the same in both.
+ * Charts are appended to `charts` (zip name and source path).
+ */
+export function tradeSection(t: Trade, shots: Map<string, Array<{ slot: string; path: string }>>, charts: Array<{ name: string; source: string }>): string[] {
+  const out: string[] = [];
+  const h = (s: string) => out.push('', s, '');
+  const p = (s: string) => out.push(s);
+  const pnl = pnlOf(t);
+  const verdict = adherenceOf(t);
+  const outcome = t.outcome === 'Not taken' ? 'Passed' : `${t.outcome} ${r1(t.r_multiple)}${pnl != null && !isHypothetical(t.account) ? ` (${usd(pnl)})` : ''}`;
+  h(`### ${when(t)} · ${t.account}${isHypothetical(t.account) ? (countsInStats(t) ? ' (would have, written before)' : ' (would have — Hindsight, not counted)') : ''} · ${t.instrument} ${t.direction} · ${outcome} · \`${ref(t)}\``);
+  p(`- **Setup:** ${t.setup_type} · ${t.session} · HTF ${t.htf_bias.toLowerCase()} · ${t.premium_discount} · target ${t.target_type}`);
+  p(`- **Why I took it:** ${t.reason}${isHypothetical(t.account) && t.skip_reason ? ` · **why I didn't:** ${t.skip_reason}` : ''}`);
+  p(`- **Grade:** ${t.checklist_score} (${t.grade_letter})${t.grade_at_entry != null && t.grade_at_entry !== t.checklist_score ? `, ${t.grade_at_entry} at entry` : ''} · trigger ${t.trigger_fired ? 'fired' : '**did not fire**'} · rules ${verdict === 'followed' ? 'followed' : verdict === 'broken' ? '**broken**' : 'not scored'}${t.followed_rules != null ? ` (I said ${t.followed_rules ? 'followed' : 'broken'})` : ''}${t.graded_post_hoc ? ' · graded after the fact' : ''}${t.regrade ? ` · re-graded ${t.regrade}` : ''}`);
+  p(`- **Checklist:** sweep ${t.sweep_tier ? SWEEP_TIER_SPEC[t.sweep_tier].label : 'not recorded'} · ${CHECKLIST_ITEMS.map((i) => `${t[i.key] === true ? '✓' : t[i.key] === false ? '✗' : i.gate ? '?' : 'n/a'} ${i.label}`).join(' · ')}`);
+  const context = CONTEXT_FLAG_LIST.filter((f) => (t as unknown as Record<string, unknown>)[f.key] === true).map((f) => f.label);
+  if (context.length) p(`- **Context present:** ${context.join(', ')}`);
+  if (t.mistake_tags.length) p(`- **Mistakes tagged:** ${t.mistake_tags.join(', ')}`);
+  if (t.worked_tags?.length) p(`- **What worked:** ${t.worked_tags.join(', ')}`);
+  if (t.market_tags?.length) p(`- **What the market did (outside my control):** ${t.market_tags.join(', ')}`);
+  {
+    const g: string[] = [];
+    if (t.chart_date) g.push(`replayed session ${t.chart_date}`);
+    if (t.grade_locked_at) g.push(`grade locked ${t.graded_post_hoc ? 'after' : '**before**'} the outcome`);
+    if (t.confidence_at_entry != null) g.push(`confidence ${t.confidence_at_entry}/5${t.below_min_confidence ? ' (**below my minimum**)' : ''}`);
+    if (t.management) g.push(`management: ${t.management}`);
+    if (t.be_trigger) g.push(`BE trigger ${t.be_trigger}`);
+    if (g.length) p(`- **Guardrails:** ${g.join(' · ')}`);
+    const tc: string[] = [];
+    if (t.nearest_liquidity_type) tc.push(`nearest ${t.nearest_liquidity_type}${t.nearest_liquidity_price != null ? ` @ ${t.nearest_liquidity_price}` : ''}`);
+    if (t.opposing_swings_between) tc.push(`${t.opposing_swings_between} opposing swings`);
+    if (t.r_to_nearest != null) tc.push(`${t.r_to_nearest}R to nearest`);
+    if (t.r_to_nearest_bucket) tc.push(`${t.r_to_nearest_bucket}R to nearest`);
+    if (t.eqhl_checks) tc.push(`EQH/EQL: ${t.eqhl_checks.touches ? '2+ touches' : 'not 2 touches'}, ${t.eqhl_checks.untested ? 'untested' : 'tested'}, ${t.eqhl_checks.in_range ? 'in range' : 'out of range'}`);
+    if (tc.length || t.target_check_passed != null) p(`- **Target check:** ${tc.join(' · ')}${t.target_check_passed == null ? '' : t.target_check_passed ? ' — passed' : ' — **failed**'}`);
+  }
+  for (const o of t.overrides ?? []) {
+    p(`- **Logged past ${o.kind === 'daily_limit' ? 'the daily loss limit' : `a commitment: "${o.commitment_text ?? ''}"`}**${o.step_title ? ` (${o.step_title})` : ''} — ${o.reason ? `my reason: ${o.reason}` : '_no reason given_'}`);
+  }
+  if (t.quick_log) p('- **Quick log:** saved fast, past the form\'s minimums — the writing may be thin.');
+  const exec = [
+    t.contracts != null && `${t.contracts} contract${t.contracts === 1 ? '' : 's'}`,
+    t.risk_dollars != null && `risk ${usd(t.risk_dollars)}`,
+    t.stop_points != null && `stop ${t.stop_points} pts`,
+    t.confidence_at_entry != null && `confidence ${t.confidence_at_entry}/5`,
+    t.mae_r != null && `MAE ${r2(t.mae_r)}`,
+    t.mfe_r != null && `MFE ${r2(t.mfe_r)}`,
+    t.reached_1r != null && (t.reached_1r ? 'reached +1R first' : 'never reached +1R'),
+  ].filter(Boolean);
+  if (exec.length) p(`- **Execution:** ${exec.join(' · ')}`);
+  if (t.outcome === 'Not taken') {
+    p(`- **Passed:** would it have hit TP? ${t.would_have_hit_tp == null ? 'not checked' : t.would_have_hit_tp ? 'yes' : 'no'}${t.skip_reason ? ` · real reason: ${t.skip_reason}` : ''}${t.r_left_on_table != null ? ` · R left: ${r1(t.r_left_on_table)}` : ''}`);
+  }
+  const flags = openFlagsFor(t);
+  if (flags.length) p(`- **Inconsistencies the app flagged:** ${flags.map((f) => f.label).join('; ')}`);
+
+  const stem = `charts/${t.date.slice(0, 10)}_${t.date.slice(11, 16).replace(':', '')}_${ref(t)}`;
+  const names: string[] = [];
+  if (t.screenshot_path) {
+    charts.push({ name: `${stem}${ext(t.screenshot_path)}`, source: t.screenshot_path });
+    names.push(`${stem}${ext(t.screenshot_path)}`);
+  }
+  (shots.get(t.id) ?? []).forEach((s, i) => {
+    const name = `${stem}_${i + 2}-${s.slot.toLowerCase().replace(/[^a-z]+/g, '-')}${ext(s.path)}`;
+    charts.push({ name, source: s.path });
+    names.push(name);
+  });
+  if (names.length) p(`- **Chart${names.length > 1 ? 's' : ''}:** ${names.map((n) => `\`${n}\``).join(', ')}`);
+  p('');
+  p(`**What I wrote:** ${t.explanation.trim() || '_nothing_'}`);
+  if (t.lesson?.trim()) { p(''); p(`**Lesson:** ${t.lesson.trim()}`); }
+  return out;
 }
 
 export function monthlyReview(input: MonthlyInput): MonthlyReview {
@@ -316,72 +393,7 @@ export function monthlyReview(input: MonthlyInput): MonthlyReview {
   const charts: MonthlyChart[] = [];
   h('## Every trade');
   p('Oldest first. Missed trades are marked; their R is what they would have made.');
-  for (const t of monthTrades) {
-    const pnl = pnlOf(t);
-    const verdict = adherenceOf(t);
-    const outcome = t.outcome === 'Not taken' ? 'Passed' : `${t.outcome} ${r1(t.r_multiple)}${pnl != null && !isHypothetical(t.account) ? ` (${usd(pnl)})` : ''}`;
-    h(`### ${when(t)} · ${t.account}${isHypothetical(t.account) ? (countsInStats(t) ? ' (would have, written before)' : ' (would have — Hindsight, not counted)') : ''} · ${t.instrument} ${t.direction} · ${outcome} · \`${ref(t)}\``);
-    p(`- **Setup:** ${t.setup_type} · ${t.session} · HTF ${t.htf_bias.toLowerCase()} · ${t.premium_discount} · target ${t.target_type}`);
-    p(`- **Why I took it:** ${t.reason}${isHypothetical(t.account) && t.skip_reason ? ` · **why I didn't:** ${t.skip_reason}` : ''}`);
-    p(`- **Grade:** ${t.checklist_score} (${t.grade_letter})${t.grade_at_entry != null && t.grade_at_entry !== t.checklist_score ? `, ${t.grade_at_entry} at entry` : ''} · trigger ${t.trigger_fired ? 'fired' : '**did not fire**'} · rules ${verdict === 'followed' ? 'followed' : verdict === 'broken' ? '**broken**' : 'not scored'}${t.followed_rules != null ? ` (I said ${t.followed_rules ? 'followed' : 'broken'})` : ''}${t.graded_post_hoc ? ' · graded after the fact' : ''}${t.regrade ? ` · re-graded ${t.regrade}` : ''}`);
-    p(`- **Checklist:** sweep ${t.sweep_tier ? SWEEP_TIER_SPEC[t.sweep_tier].label : 'not recorded'} · ${CHECKLIST_ITEMS.map((i) => `${t[i.key] === true ? '✓' : t[i.key] === false ? '✗' : i.gate ? '?' : 'n/a'} ${i.label}`).join(' · ')}`);
-    const context = CONTEXT_FLAG_LIST.filter((f) => (t as unknown as Record<string, unknown>)[f.key] === true).map((f) => f.label);
-    if (context.length) p(`- **Context present:** ${context.join(', ')}`);
-    if (t.mistake_tags.length) p(`- **Mistakes tagged:** ${t.mistake_tags.join(', ')}`);
-    if (t.worked_tags?.length) p(`- **What worked:** ${t.worked_tags.join(', ')}`);
-    if (t.market_tags?.length) p(`- **What the market did (outside my control):** ${t.market_tags.join(', ')}`);
-    {
-      const g: string[] = [];
-      if (t.chart_date) g.push(`replayed session ${t.chart_date}`);
-      if (t.grade_locked_at) g.push(`grade locked ${t.graded_post_hoc ? 'after' : '**before**'} the outcome`);
-      if (t.confidence_at_entry != null) g.push(`confidence ${t.confidence_at_entry}/5${t.below_min_confidence ? ' (**below my minimum**)' : ''}`);
-      if (t.management) g.push(`management: ${t.management}`);
-      if (t.be_trigger) g.push(`BE trigger ${t.be_trigger}`);
-      if (g.length) p(`- **Guardrails:** ${g.join(' · ')}`);
-      const tc: string[] = [];
-      if (t.nearest_liquidity_type) tc.push(`nearest ${t.nearest_liquidity_type}${t.nearest_liquidity_price != null ? ` @ ${t.nearest_liquidity_price}` : ''}`);
-      if (t.opposing_swings_between) tc.push(`${t.opposing_swings_between} opposing swings`);
-      if (t.r_to_nearest != null) tc.push(`${t.r_to_nearest}R to nearest`);
-      if (t.r_to_nearest_bucket) tc.push(`${t.r_to_nearest_bucket}R to nearest`);
-      if (t.eqhl_checks) tc.push(`EQH/EQL: ${t.eqhl_checks.touches ? '2+ touches' : 'not 2 touches'}, ${t.eqhl_checks.untested ? 'untested' : 'tested'}, ${t.eqhl_checks.in_range ? 'in range' : 'out of range'}`);
-      if (tc.length || t.target_check_passed != null) p(`- **Target check:** ${tc.join(' · ')}${t.target_check_passed == null ? '' : t.target_check_passed ? ' — passed' : ' — **failed**'}`);
-    }
-    for (const o of t.overrides ?? []) {
-      p(`- **Logged past ${o.kind === 'daily_limit' ? 'the daily loss limit' : `a commitment: "${o.commitment_text ?? ''}"`}**${o.step_title ? ` (${o.step_title})` : ''} — ${o.reason ? `my reason: ${o.reason}` : '_no reason given_'}`);
-    }
-    if (t.quick_log) p('- **Quick log:** saved fast, past the form\'s minimums — the writing may be thin.');
-    const exec = [
-      t.contracts != null && `${t.contracts} contract${t.contracts === 1 ? '' : 's'}`,
-      t.risk_dollars != null && `risk ${usd(t.risk_dollars)}`,
-      t.stop_points != null && `stop ${t.stop_points} pts`,
-      t.confidence_at_entry != null && `confidence ${t.confidence_at_entry}/5`,
-      t.mae_r != null && `MAE ${r2(t.mae_r)}`,
-      t.mfe_r != null && `MFE ${r2(t.mfe_r)}`,
-      t.reached_1r != null && (t.reached_1r ? 'reached +1R first' : 'never reached +1R'),
-    ].filter(Boolean);
-    if (exec.length) p(`- **Execution:** ${exec.join(' · ')}`);
-    if (t.outcome === 'Not taken') {
-      p(`- **Passed:** would it have hit TP? ${t.would_have_hit_tp == null ? 'not checked' : t.would_have_hit_tp ? 'yes' : 'no'}${t.skip_reason ? ` · real reason: ${t.skip_reason}` : ''}${t.r_left_on_table != null ? ` · R left: ${r1(t.r_left_on_table)}` : ''}`);
-    }
-    const flags = openFlagsFor(t);
-    if (flags.length) p(`- **Inconsistencies the app flagged:** ${flags.map((f) => f.label).join('; ')}`);
-
-    const stem = `charts/${t.date.slice(0, 10)}_${t.date.slice(11, 16).replace(':', '')}_${ref(t)}`;
-    const names: string[] = [];
-    if (t.screenshot_path) {
-      charts.push({ name: `${stem}${ext(t.screenshot_path)}`, source: t.screenshot_path });
-      names.push(`${stem}${ext(t.screenshot_path)}`);
-    }
-    (shots.get(t.id) ?? []).forEach((s, i) => {
-      const name = `${stem}_${i + 2}-${s.slot.toLowerCase().replace(/[^a-z]+/g, '-')}${ext(s.path)}`;
-      charts.push({ name, source: s.path });
-      names.push(name);
-    });
-    if (names.length) p(`- **Chart${names.length > 1 ? 's' : ''}:** ${names.map((n) => `\`${n}\``).join(', ')}`);
-    p('');
-    p(`**What I wrote:** ${t.explanation.trim() || '_nothing_'}`);
-    if (t.lesson?.trim()) { p(''); p(`**Lesson:** ${t.lesson.trim()}`); }
-  }
+  for (const t of monthTrades) out.push(...tradeSection(t, shots, charts));
   if (monthTrades.length === 0) p('_No trades this month._');
 
   /* ------------------------------------------------------------- lessons */

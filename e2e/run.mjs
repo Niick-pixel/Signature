@@ -170,6 +170,19 @@ await check('every screen sits in one of the two page widths, centred in the spa
   expect(!bad.length, bad.join(' | '));
 });
 
+await check('Trades: "Discuss these trades with Claude" downloads exactly the trades on screen', async () => {
+  const { page } = await open({ width: 1440, height: 900 }, { nav: 'side' });
+  await page.goto(`${BASE}/`); await page.waitForTimeout(900);
+  const shown = Number((await page.locator('[data-library-count]').innerText()).match(/^(\d+)/)[1]);
+  await page.locator('[data-review-export]:visible').click();
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByText('Document only').click()]);
+  const md = fs.readFileSync(await dl.path(), 'utf8');
+  expect(/\.md$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+  const sections = (md.match(/^### \d{4}-\d{2}-\d{2} /gm) ?? []).length;
+  expect(/^# Trades/.test(md) && sections === shown, `${sections} trades written, ${shown} on screen`);
+  await page.context().close();
+});
+
 await check('side rail: every screen has one 44px title bar, its header inside it, nothing spilling out', async () => {
   const { page } = await open({ width: 1280, height: 720 }, { nav: 'side' });
   for (const u of ['/dashboard', '/stats', '/calendar', '/journal', '/path', '/study', '/goals', '/trash']) {

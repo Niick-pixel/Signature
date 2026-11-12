@@ -1,6 +1,7 @@
 'use client';
 
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
+import { ReviewExport } from '@/components/money/ReviewExport';
 import { usePathname } from 'next/navigation';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Trade } from '@/lib/types';
@@ -177,6 +178,37 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
   }, []);
   const flip = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
+  /*
+    "Discuss these trades with Claude": exactly what the list shows (filters
+    and search live here, in the browser), so the ids go to the server and the
+    document comes back as a download.
+  */
+  const viewWords = [
+    filters.account !== 'All' && accountLabel(filters.account),
+    filters.outcomes.length > 0 && filters.outcomes.map((o) => (o === 'Not taken' ? 'Passed' : o)).join('/'),
+    filters.sessions.length > 0 && filters.sessions.join('/'),
+    filters.minGrade > 0 && `${gradeLetter(filters.minGrade)} or better`,
+    (filters.from || filters.to) && `${filters.from || '…'} to ${filters.to || '…'}`,
+    filters.onlyFlagged && 'flagged only',
+    q.trim() && `search “${q.trim()}”`,
+  ].filter(Boolean).join(' · ') || 'everything';
+  const exportTrades = async (format: 'md' | 'zip') => {
+    const res = await fetch('/api/trades-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: visible.map((t) => t.id), view: viewWords, format }) });
+    if (!res.ok) return;
+    const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `signature-trades.${format}`;
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+  const discuss = (
+    <ReviewExport label="these trades" title="Discuss these trades with Claude"
+      blurb={`The ${visible.length} trade${visible.length === 1 ? '' : 's'} on screen (${viewWords}), oldest first: the numbers, then every trade with what you wrote, its grade and tags, plus what to look for. Attach it to a new Claude chat.`}
+      options={[
+        { href: '#trades-md', title: 'Document only', note: '.md — the numbers and your writing', onPick: () => void exportTrades('md') },
+        { href: '#trades-zip', title: 'With charts', note: '.zip — the document plus every chart, named after its trade', onPick: () => void exportTrades('zip') },
+      ]} />
+  );
+
   return (
     <div className="h-full overflow-y-auto" data-library>
       {/* With the side rail, the search sits in the title bar (the account is the title bar's own picker) — only while Trades is the screen. */}
@@ -187,6 +219,7 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
             onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); search.current?.blur(); } if (e.key === 'Enter' && order[0]) setOpenId(order[0].id); }}
             className="w-44 rounded-full border px-3 py-1 text-[12px] outline-none focus:w-60"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)', transition: 'width 160ms ease' }} />
+          {discuss}
         </MergedHeader>} />}
       <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-28 pt-4">
         {/* Today against your limits, as on the board: information, never a lock. */}
@@ -221,6 +254,7 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
             className="ml-auto w-44 rounded-full border px-3 py-1 text-[12px] outline-none focus:w-60"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)', transition: 'width 160ms ease' }} />
           )}
+          {!inTitle && onTrades && discuss}
         </div>
         <div className="mt-2 flex items-center gap-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
           <span data-library-count>{visible.length} of {trades.filter((t) => !t.deleted_at).length} trades · {groups.length} group{groups.length === 1 ? '' : 's'}</span>

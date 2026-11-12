@@ -15,8 +15,10 @@ import { press, spring, springSoft, exitQuick } from '@/lib/motion';
  */
 export function ReviewExport({ month, label, options, title, blurb }: {
   month?: string; label: string;
-  /** Replaces the monthly menu — the journal export passes its ranges. */
-  options?: Array<{ href: string; title: string; note: string }>;
+  /** Replaces the monthly menu — the journal export passes its ranges. An
+      option with `onPick` runs it instead of following `href` (the Trades
+      list sends the ids it shows). */
+  options?: Array<{ href: string; title: string; note: string; onPick?: () => void }>;
   title?: string;
   blurb?: string;
 }) {
@@ -65,14 +67,14 @@ export function ReviewExport({ month, label, options, title, blurb }: {
             className="absolute right-0 top-full z-30 mt-2 w-[22rem]"
           >
             <div className="glass rounded-[calc(18px*var(--rk))] p-3"
-              style={{ background: 'color-mix(in srgb, var(--bg-raised) 94%, transparent)' }}>
+              style={{ background: 'color-mix(in srgb, var(--bg-raised) 99%, transparent)' }}>
               <p className="px-2 pb-2 pt-1 text-[11.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
                 {blurb ?? 'The whole month as one document: numbers, rules, mornings, misses and every trade with what you wrote — plus what to ask. Attach it to a new Claude chat; it explains itself.'}
               </p>
               {(options ?? [
                 { href: `/api/review-export?month=${month}&format=md`, title: 'Document only', note: '.md — the numbers and your writing' },
                 { href: `/api/review-export?month=${month}&format=zip`, title: 'With charts', note: '.zip — the document plus every chart, named after its trade' },
-              ]).map((o) => <Option key={o.href} {...o} />)}
+              ]).map((o) => <Option key={o.href} {...o} onPick={o.onPick && (() => { setOpen(false); o.onPick!(); })} />)}
             </div>
           </motion.div>
         )}
@@ -81,9 +83,9 @@ export function ReviewExport({ month, label, options, title, blurb }: {
   );
 }
 
-function Option({ href, title, note }: { href: string; title: string; note: string }) {
+function Option({ href, title, note, onPick }: { href: string; title: string; note: string; onPick?: () => void }) {
   return (
-    <a href={href} download
+    <a href={href} download onClick={onPick ? (e) => { e.preventDefault(); onPick(); } : undefined}
       className="block rounded-[calc(12px*var(--rk))] px-2.5 py-2 outline-none transition-colors duration-150
         hover:bg-[var(--glass-fill-strong)] focus-visible:bg-[var(--glass-fill-strong)]">
       <span className="block text-[12.5px] font-medium">{title}</span>
