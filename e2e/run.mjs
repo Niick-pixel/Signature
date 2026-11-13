@@ -709,6 +709,36 @@ await check('Step 1 can be edited once: Back, Edit Step 1 · once, change a row 
   expect(!errors.length, errors.join(' | '));
 });
 
+await check('Trade summary: a Rubric v2 trade reads as v2 (rows, gate, how it is measured, still to fill); an older one says legacy', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  for (const k of ['2', '1', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  await page.click('[data-finish-later]');
+  const t = await savedTrade(page);
+  const openPanel = async (id) => {
+    await page.evaluate((id) => sessionStorage.setItem('signature:open-trade', id), id);
+    await page.goto(`${BASE}/`);
+    await page.waitForSelector('[data-panel-close]', { timeout: 8000 });
+  };
+  await openPanel(t.id);
+  await page.waitForSelector('[data-v2-summary]');
+  expect(await page.locator('[data-v2-grade]').count() === 1, 'the v2 grade block');
+  expect(await page.locator('[data-v2-row]').count() === 4, 'the four rows');
+  expect(await page.locator('[data-v2-row="row_inversion"]').getAttribute('data-score') === '1', 'each row as scored');
+  expect(/8 is A\+/.test(await page.locator('[data-v2-measure]').innerText()), 'how it is measured');
+  expect(/Step 2/.test(await page.locator('[data-v2-owed]').innerText()), 'what is still to fill');
+  expect(await page.locator('text=Phase 3 never fired').count() === 0 && await page.locator('[data-legacy-banner]').count() === 0, 'no checklist on a v2 trade');
+  expect(await page.locator('[data-open-step2]').count() === 1, 'Open Step 2 instead of Settle');
+  const old = await page.evaluate(async () => (await (await fetch('/api/trades')).json()).find((x) => x.rubric_version !== 5 && !x.deleted_at));
+  await openPanel(old.id);
+  await page.waitForSelector('[data-legacy-banner]');
+  expect(await page.locator('[data-v2-summary]').count() === 0, 'the checklist view, as it was');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
 await check('Replay plan: with no day locked, New trade offers to plan it or trade without — unplanned, capped at B', async () => {
   const { page, errors } = await open({ width: 1920, height: 1080 }, { nav: 'side', decisionSeconds: 90 });
   const st = await page.evaluate(async () => (await fetch('/api/replay')).json());

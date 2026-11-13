@@ -15,7 +15,7 @@ const route = await import('../app/api/news/route');
 const json = (body: unknown) => new Request('http://x/api/news', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
 test('a calendar file imports once; a hand-entered event needs a time and a name', async () => {
-  const text = 'Title,Country,Date,Time,Impact\nCPI m/m,USD,10-14-2026,8:30am,High\nGerman ZEW,EUR,10-15-2026,5:00am,High';
+  const text = 'Title,Country,Date,Time,Impact\nNon-Farm Employment Change,USD,10-14-2026,8:30am,High\nGerman ZEW,EUR,10-15-2026,5:00am,High';
   const a = await (await route.POST(json({ text, zone: 'America/New_York' }))).json();
   assert.deepEqual([a.added, a.already], [2, 0]);
   const b = await (await route.POST(json({ text, zone: 'America/New_York' }))).json();
@@ -26,7 +26,7 @@ test('a calendar file imports once; a hand-entered event needs a time and a name
 });
 
 test('high-impact events in counted currencies mark red-folder days for the rules; off means off', () => {
-  assert.equal(reviewInputs().ctxFor('2026-10-14').redFolder, true, 'USD CPI');
+  assert.equal(reviewInputs().ctxFor('2026-10-14').redFolder, true, 'USD NFP');
   assert.equal(reviewInputs().ctxFor('2026-10-15').redFolder, false, 'EUR does not count by default');
   assert.equal(reviewInputs().ctxFor('2026-10-16').redFolder, false, 'medium impact does not count');
   D.saveNewsSettings({ currencies: ['USD', 'EUR'] });

@@ -1,6 +1,7 @@
 'use client';
 
-import { V2Mark } from '@/components/ui/V2Mark';
+import { V2Summary } from '@/components/whiteboard/V2Summary';
+import { V2_LETTER_OF, gradeV2, isRubricV2 } from '@/lib/decision';
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { useEffect } from 'react';
 import Link from 'next/link';
@@ -56,6 +57,7 @@ export function TradeView(p: TradeViewProps) {
   const { prefs } = usePreferences();
   const merged = useMergedHeader();
   const on = prefs.tradeSections;
+  const v2 = isRubricV2(t);
 
   // ← and → walk through trades in the order they were taken; E edits.
   useEffect(() => {
@@ -116,7 +118,7 @@ export function TradeView(p: TradeViewProps) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Chip>{accountLabel(t.account)}{t.account_label ? ` · ${t.account_label}` : ''}</Chip>
             <Chip color={outcomeColor}>{outcomeLabel(t)}</Chip>
-            <Chip>Grade {t.grade_letter ?? '—'}<V2Mark t={t} />{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
+            <Chip>{v2 ? `${V2_LETTER_OF(t.grade_letter) ?? 'No trade'} · ${gradeV2(t).total}/8 · Rubric v2` : <>Grade {t.grade_letter ?? '—'}{t.graded_post_hoc ? ' · after the fact' : ''} · legacy checklist</>}</Chip>
             <Chip>{t.session}</Chip>
             {t.status !== 'Settled' && <Chip>{t.status}</Chip>}
           </div>
@@ -139,7 +141,7 @@ export function TradeView(p: TradeViewProps) {
           <div className="flex flex-wrap gap-1.5">
             <Chip>{accountLabel(t.account)}{t.account_label ? ` · ${t.account_label}` : ''}</Chip>
             <Chip color={outcomeColor}>{outcomeLabel(t)}</Chip>
-            <Chip>Grade {t.grade_letter ?? '—'}<V2Mark t={t} />{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
+            <Chip>{v2 ? `${V2_LETTER_OF(t.grade_letter) ?? 'No trade'} · ${gradeV2(t).total}/8 · Rubric v2` : <>Grade {t.grade_letter ?? '—'}{t.graded_post_hoc ? ' · after the fact' : ''} · legacy checklist</>}</Chip>
             <Chip>{t.session}</Chip>
             {t.status !== 'Settled' && <Chip>{t.status}</Chip>}
           </div>
@@ -172,6 +174,9 @@ export function TradeView(p: TradeViewProps) {
             </Card>
           )}
 
+          {/* Rubric v2: the grade row by row and how it is measured, the decision, the outcome step, the tags. */}
+          {v2 && <Card title="Rubric v2"><V2Summary trade={t} plan={p.plan} /></Card>}
+
           {on.chart && (
             <Card title="Chart" note={p.bars?.source_name ?? 'From a local price file'}>
               <TradeChart tradeId={t.id} bars={p.bars?.bars ?? null} trade={t} exec={p.exec} pad={prefs.chartPad} zone={prefs.importZone} />
@@ -194,7 +199,7 @@ export function TradeView(p: TradeViewProps) {
         </div>
 
         <div className="space-y-4">
-          {on.chips && (
+          {on.chips && !v2 && (
             <Card title="Plan and confluences">
               <div className="space-y-3" data-trade-chips>
                 <div>

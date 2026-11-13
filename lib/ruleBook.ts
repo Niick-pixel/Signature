@@ -255,7 +255,7 @@ export const DAY_RULES: DayRule[] = [
   },
   {
     id: 'news-day', scope: 'day', short: 'No red-folder day',
-    text: 'No trade on a red-folder (NFP / FOMC / CPI) day.',
+    text: 'No trade on a red-folder (NFP / FOMC) day. CPI is not one: it can turn the direction, it does not leave the day unreadable.',
     broken: (day, _cfg, ctx) => {
       if (ctx.backtest) return [];
       // The morning check-in or the news calendar said high-impact news, a

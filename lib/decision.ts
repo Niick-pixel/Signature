@@ -519,3 +519,43 @@ export function cleanStep1Edit(raw: unknown): { ok: true; value: Step1Answers } 
  */
 export const step1EditedAfterOutcome = (t: { step1_edited_at?: string | null; outcome_at?: string | null }): boolean =>
   !!t.step1_edited_at && !!t.outcome_at && t.step1_edited_at > t.outcome_at;
+
+/* ───────────────────────── the trade summary ───────────────────────── */
+
+/** How Rubric v2 grades, in the words the summary shows under the rows. */
+export const V2_MEASURE = {
+  rows: 'Four rows, 0–2 each, out of 8: 8 is A+, 6–7 is A, 5 is B, 4 or less is no trade.',
+  gates: 'No trade outright: more than one gap, any row at 0, or a planned R under 1.5.',
+  caps: 'Capped at B: Scenario B, Unplanned, a no-bias replay day, or a long in the premium / a short in the discount of the leg.',
+} as const;
+
+/**
+ * What a Rubric v2 trade still owes, as the form names it: `owed` blocks the
+ * record from being complete; `optional` is only "not set".
+ */
+export function v2ToFill(t: {
+  decision?: string | null; outcome_at?: string | null; r_multiple?: number | null; exit_reason?: string | null; mfe_r?: number | null;
+  explanation?: string | null; lesson?: string | null; would_be_r?: number | null; pass_reasons?: readonly string[] | null;
+  leg_location?: string | null; htf_origin?: string | null; entry_method?: string | null; confidence_at_entry?: number | null;
+}, min: { explanation: number; lesson: number; pass: number }): { owed: string[]; optional: string[] } {
+  const taken = (t.decision ?? 'take') === 'take';
+  const len = (s: string | null | undefined) => (s ?? '').trim().length;
+  const owed: string[] = [];
+  if (!t.outcome_at) owed.push('Step 2 — the outcome');
+  else if (taken) {
+    if (t.r_multiple == null) owed.push('R');
+    if (!t.exit_reason) owed.push('Exit');
+    if (t.mfe_r == null) owed.push('Max R');
+    if (len(t.explanation) < min.explanation) owed.push(`Explanation (${len(t.explanation)}/${min.explanation})`);
+    if (len(t.lesson) < min.lesson) owed.push(`Lesson (${len(t.lesson)}/${min.lesson})`);
+  } else {
+    if (t.would_be_r == null) owed.push('R it would have made');
+    if (!t.pass_reasons?.length) owed.push(t.decision === 'missed' ? 'Why I missed' : 'Why I passed');
+    if (len(t.explanation) < min.pass) owed.push(`Explanation (${len(t.explanation)}/${min.pass})`);
+  }
+  const optional = [
+    t.leg_location ? null : 'Leg location', t.htf_origin ? null : 'HTF origin',
+    t.entry_method ? null : 'Entry type', t.confidence_at_entry ? null : 'Confidence',
+  ].filter((x): x is string => x != null);
+  return { owed, optional };
+}

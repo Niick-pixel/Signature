@@ -1051,7 +1051,7 @@ function ReasonRow({ decision, reasons, main, onTap, flash }: { decision: Decisi
 }
 
 /** From open to decision: when each row and the gate were scored, and which took longest (048). */
-function DecisionReplay({ trade }: { trade: Trade }) {
+export function DecisionReplay({ trade }: { trade: Trade }) {
   const r = decisionReplay(trade);
   // The scale is what happened (the limit is drawn only when it falls inside), so close answers stay apart.
   const end = (Math.max(r?.total ?? 0, ...(r?.marks.map((m) => m.at) ?? [0])) || 1) * 1.04;
@@ -1070,13 +1070,22 @@ function DecisionReplay({ trade }: { trade: Trade }) {
             {trade.decision_limit != null && trade.decision_limit <= end && (
               <div className="absolute top-0 h-full w-px" style={{ left: `${(trade.decision_limit / end) * 100}%`, background: 'rgb(var(--grade-f) / 0.5)' }} title="The limit" />
             )}
-            {r.marks.map((m, i) => (
-              <div key={m.key} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${(m.at / end) * 100}%` }} title={`${m.label} at ${m.at}s (+${m.took}s)`}>
-                <span className="block size-2.5 rounded-full border-2" style={{ borderColor: 'rgb(var(--accent))', background: r.slowest?.label === m.label ? 'rgb(var(--accent))' : 'var(--bg-raised)' }} />
-                {/* Labels alternate above and below the line, so neighbours never sit on each other. */}
-                <span className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[9.5px] ${i % 2 ? 'top-3' : 'bottom-3'}`} style={faint}>{m.label}</span>
-              </div>
-            ))}
+            {(() => {
+              // Labels alternate above and below the line; one too close to the last on its side
+              // gives way (the line under the chart still lists every time), so none sit on each other.
+              const last: [number, number] = [-1, -1];
+              return r.marks.map((m, i) => {
+                const side = i % 2; const x = m.at / end;
+                const show = last[side] < 0 || x - last[side] >= 0.1;
+                if (show) last[side] = x;
+                return (
+                  <div key={m.key} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${x * 100}%` }} title={`${m.label} at ${m.at}s (+${m.took}s)`}>
+                    <span className="block size-2.5 rounded-full border-2" style={{ borderColor: 'rgb(var(--accent))', background: r.slowest?.label === m.label ? 'rgb(var(--accent))' : 'var(--bg-raised)' }} />
+                    {show && <span className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[9.5px] ${side ? 'top-3' : 'bottom-3'}`} style={faint} data-replay-label>{m.label}</span>}
+                  </div>
+                );
+              });
+            })()}
             <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${((trade.decision_seconds ?? r.total) / end) * 100}%` }}>
               <span className="block h-3.5 w-1 rounded-full" style={{ background: 'var(--text)' }} title="Decided" />
             </div>

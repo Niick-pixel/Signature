@@ -142,10 +142,20 @@ export function parseNewsFile(text: string, zone: SourceZone): { events: NewsEve
   return /BEGIN:VCALENDAR/.test(text.slice(0, 2000)) ? { ...parseIcs(text, zone), format: 'ics' } : { ...parseNewsCsv(text, zone), format: 'csv' };
 }
 
-/** The days that are red-folder days from the events: a high-impact event in a counted currency. */
-export function redDays(events: readonly Pick<NewsEvent, 'at' | 'currency' | 'impact'>[], currencies: readonly string[]): Set<string> {
+/**
+ * High impact, but not a no-trade day: CPI can turn the day's direction, it
+ * does not leave the day unreadable the way FOMC or NFP does. It still shows
+ * on the calendar, in the prep and in the news stats — it just never breaks
+ * the red-folder rule.
+ */
+export const NOT_RED_FOLDER = /\bcpi\b|consumer price/i;
+/** Breaks the red-folder rule: high impact, and not one of NOT_RED_FOLDER. */
+export const isRedFolder = (e: Pick<NewsEvent, 'impact' | 'title'>): boolean => e.impact === 'High' && !NOT_RED_FOLDER.test(e.title);
+
+/** The days that are red-folder days from the events: a high-impact event in a counted currency (CPI aside). */
+export function redDays(events: readonly Pick<NewsEvent, 'at' | 'currency' | 'impact' | 'title'>[], currencies: readonly string[]): Set<string> {
   const want = new Set(currencies.map((c) => c.toUpperCase()));
-  return new Set(events.filter((e) => e.impact === 'High' && want.has(e.currency.toUpperCase())).map((e) => e.at.slice(0, 10)));
+  return new Set(events.filter((e) => isRedFolder(e) && want.has(e.currency.toUpperCase())).map((e) => e.at.slice(0, 10)));
 }
 
 /* ───────────── ForexFactory's weekly feed ───────────── */

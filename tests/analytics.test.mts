@@ -76,7 +76,10 @@ test('news: ForexFactory CSV and .ics, clocks honoured, red days by currency', (
   assert.equal(i.format, 'ics'); assert.equal(i.events.length, 2); assert.equal(i.skipped, 1);
   assert.deepEqual(i.events[0], { at: '2026-10-29T12:30', all_day: false, currency: 'USD', title: 'FOMC Statement', impact: 'High' });
   assert.equal(i.events[1].at, '2026-10-30T06:30'); assert.equal(i.events[1].impact, 'Medium');
-  assert.deepEqual([...N.redDays([...c.events, ...i.events], ['USD'])].sort(), ['2026-10-14', '2026-10-29']);
+  // CPI (10-14) is high impact but not a red-folder day; FOMC (10-29) is.
+  assert.deepEqual([...N.redDays([...c.events, ...i.events], ['USD'])].sort(), ['2026-10-29']);
+  assert.equal(N.isRedFolder({ impact: 'High', title: 'Core CPI m/m' }), false);
+  assert.equal(N.isRedFolder({ impact: 'High', title: 'Non-Farm Employment Change' }), true);
   assert.equal(N.impactOf('predicted 0.2%'), null, 'no false matches inside words or numbers');
   assert.equal(A.eventFamily('Core CPI m/m'), 'CPI'); assert.equal(A.eventFamily('Non-Farm Employment Change'), 'NFP');
 });

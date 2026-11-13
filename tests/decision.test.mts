@@ -432,3 +432,14 @@ test('the Setup-detail drill on a v2 trade reads planned R, entry, target, confi
   // An old trade is still measured on the old form's fields.
   assert.equal(fillsGroup({ rubric_version: 3, liquidity_event: 'x', entry_method: 'y', candle_strength: 'z', planned_rr: '2' } as never, setup), true);
 });
+
+test('the summary names what a v2 trade still owes, as the form does', () => {
+  const min = { explanation: 160, lesson: 160, pass: 20 };
+  assert.deepEqual(D.v2ToFill({ decision: 'take', outcome_at: null }, min).owed, ['Step 2 — the outcome']);
+  const taken = D.v2ToFill({ decision: 'take', outcome_at: 'x', r_multiple: 1, exit_reason: null, mfe_r: 2, explanation: 'E'.repeat(170), lesson: 'short', leg_location: 'EQ' }, min);
+  assert.deepEqual(taken.owed, ['Exit', 'Lesson (5/160)']);
+  assert.deepEqual(taken.optional, ['HTF origin', 'Entry type', 'Confidence']);
+  const pass = D.v2ToFill({ decision: 'pass', outcome_at: 'x', would_be_r: 2, pass_reasons: [], explanation: 'Waited and it ran.' }, min);
+  assert.deepEqual(pass.owed, ['Why I passed', 'Explanation (18/20)']);
+  assert.match(D.V2_MEASURE.rows, /8 is A\+, 6–7 is A, 5 is B/);
+});

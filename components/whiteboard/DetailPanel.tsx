@@ -1,6 +1,8 @@
 'use client';
 
 import { V2Mark } from '@/components/ui/V2Mark';
+import { V2GradeBlock, V2Summary } from './V2Summary';
+import { isRubricV2 } from '@/lib/decision';
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -195,6 +197,7 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
     onClose();
   }
 
+  const v2 = trade ? isRubricV2(trade) : false;
   return (
     <AnimatePresence>
       {trade && (
@@ -295,7 +298,7 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                       </span>
                     )}
                   </div>
-                  <GradeBadge
+                  {v2 ? <V2GradeBlock trade={trade} /> : <><GradeBadge
                     // The frozen grade, as a percentage: what this trade was
                     // given under its own rubric, not today's re-computation.
                     total={trade.checklist_score}
@@ -304,8 +307,16 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                     size="md"
                     triggerFired={trade.trigger_fired}
                   />
-                  <V2Mark t={trade} />
+                  <V2Mark t={trade} /></>}
                 </div>
+
+                {v2 ? <V2Summary trade={trade} plan={plan} /> : <>
+                {/* An older trade: graded on the checklist, kept as it was. */}
+                <p data-legacy-banner className="mb-4 rounded-[calc(14px*var(--rk))] border px-4 py-2.5 text-[12px] leading-snug"
+                  style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
+                  <b style={{ color: 'var(--text)' }}>Legacy · checklist rubric {trade.rubric_version}</b> — logged before Rubric v2, graded on the
+                  {' '}100-point checklist below. Kept as it was; its grade is never mixed with Rubric v2&rsquo;s in the stats.
+                </p>
 
                 {/* Rubric 2's gates, stated where they failed. A trade graded
                     before they existed was never held to them. */}
@@ -559,6 +570,8 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                   </div>
                 )}
 
+                </>}
+
                 {/* The other charts: HTF context, entry, result. Added here
                     rather than at capture time, because they are usually
                     available at different moments from the entry. */}
@@ -598,7 +611,9 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                           {outcomeLabel(trade)}
                           {trade.r_multiple != null && ` · ${trade.r_multiple > 0 ? '+' : ''}${trade.r_multiple.toFixed(1)}R`}
                         </span>
-                        <Button onClick={() => setSettling(true)}>Settle outcome</Button>
+                        {v2 ? (
+                          <a href={`/new?edit=${trade.id}`} className="outline-none" data-open-step2><Button tabIndex={-1}>Open Step 2</Button></a>
+                        ) : <Button onClick={() => setSettling(true)}>Settle outcome</Button>}
                         <a href={`/new?edit=${trade.id}`} className="outline-none">
                           <Button tabIndex={-1}>Edit</Button>
                         </a>
