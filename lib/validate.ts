@@ -1,7 +1,7 @@
 import {
   ACCOUNT_VALUES, BACKTEST, CHECKLIST_ITEMS, signForOutcome, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAG_VALUES,
   OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, RENAMED_TARGET_TYPES, SESSIONS, SETUP_TYPES, SKIP_REASONS,
-  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, R_BUCKETS, MANAGEMENTS, HTF_GAPS, STOP_PLACEMENTS, WORKED_TAG_VALUES, MARKET_TAGS, MGMT_PLANS, PARTIAL_LEVELS,
+  SWEEP_TIERS, TARGET_TYPE_VALUES, TRADE_STATUSES, BE_TRIGGERS, SWING_COUNTS, R_BUCKETS, MANAGEMENTS, HTF_GAPS, STOP_PLACEMENTS, WORKED_TAG_VALUES, MARKET_TAG_VALUES, MGMT_PLANS, PARTIAL_LEVELS,
   type ChecklistKey, type Regrade, type TradeStatus, type WorkedTag, type MarketTag, type ContextFlag, type MistakeTag, type Tri,
 } from './domain';
 import { localStamp } from './day';
@@ -11,7 +11,7 @@ import { MIN_EXPLANATION, MIN_LESSON, type TradeInput } from './types';
 import { sanitizeOverrides } from './overrides';
 import {
   BIAS_TIMEFRAMES, EMOTIONS_AFTER, ENTRY_METHODS, EXIT_REASONS, FVG_QUALITIES, LIQUIDITY_EVENTS, MAE_BUCKETS, MFE_BUCKETS,
-  MOVED_TO_BE, PLANNED_RRS, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS,
+  MOVED_TO_BE, PLANNED_RR_VALUES, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS,
 } from './anatomy';
 import { TRADE_RULES } from './ruleBook';
 
@@ -126,7 +126,30 @@ export function parseTradeInput(
     || (floor.previous?.quick_log === true
       && (explanation.length < MIN_EXPLANATION || lesson.length < MIN_LESSON || !screenshot_path));
 
-  if (!quick) {
+  /*
+    Rubric v2 (046): Step 1 saves the decision before anything is written
+    about it. Until Step 2 (outcome_at), the record is "outcome pending":
+    like a Planned trade, it owes no explanation, lesson or chart yet.
+  */
+  const decision = (['take', 'pass', 'missed'] as const).find((d) => d === t.decision)
+    ?? (floor.previous?.stored?.decision as 'take' | 'pass' | 'missed' | undefined) ?? null;
+  const outcomeAt = typeof t.outcome_at === 'string' && t.outcome_at ? t.outcome_at : null;
+  const pendingOutcome = decision != null && !outcomeAt;
+  if (decision && !floor.previous && !floor.restoring) {
+    const rows = ['row_sweep', 'row_inversion', 'row_path', 'row_target'] as const;
+    if (decision !== 'missed' && rows.some((k) => ![0, 1, 2].includes(t[k] as number))) {
+      return { ok: false, error: 'Score all four rows before deciding.' };
+    }
+    if (decision !== 'missed' && !['A', 'B', 'none'].includes(t.plan_scenario as string)) {
+      return { ok: false, error: 'Pick the scenario — A, B or Unplanned — before deciding.' };
+    }
+  }
+  // A pass or a miss is priced too: what it would have done is required once the outcome is written.
+  if (decision && decision !== 'take' && outcomeAt && typeof t.would_be_r !== 'number') {
+    return { ok: false, error: 'What would it have done? A pass or a miss needs its hypothetical R.' };
+  }
+
+  if (!quick && !pendingOutcome) {
     if (!explanation) return { ok: false, error: 'An explanation is required.' };
     if (explanationShort) {
       return { ok: false, error: `The explanation needs at least ${MIN_EXPLANATION} characters.` };
@@ -146,7 +169,7 @@ export function parseTradeInput(
 
   // A new full entry needs its chart. An edit never does: refusing to save a
   // correction because a chart is missing would make the record unfixable.
-  if (!screenshot_path && !quick && !floor.previous && !floor.restoring) {
+  if (!screenshot_path && !quick && !pendingOutcome && !floor.previous && !floor.restoring) {
     return { ok: false, error: 'A screenshot is required.' };
   }
 
@@ -326,7 +349,7 @@ export function parseTradeInput(
         : [],
       market_tags: Array.isArray(t.market_tags)
         ? t.market_tags.filter(
-            (v): v is MarketTag => typeof v === 'string' && (MARKET_TAGS as readonly string[]).includes(v),
+            (v): v is MarketTag => typeof v === 'string' && (MARKET_TAG_VALUES as readonly string[]).includes(v),
           )
         : [],
       overrides: sanitizeOverrides(t.overrides),
@@ -362,7 +385,7 @@ export function parseTradeInput(
       cisd: keep('cisd', tri('cisd')),
       smt_state: keep('smt_state', oneOf('smt_state', SMT_STATES)),
       into_eq_pool: keep('into_eq_pool', tri('into_eq_pool')),
-      planned_rr: keep('planned_rr', oneOf('planned_rr', PLANNED_RRS)),
+      planned_rr: keep('planned_rr', oneOf('planned_rr', PLANNED_RR_VALUES)),
       entry_method: keep('entry_method', oneOf('entry_method', ENTRY_METHODS)),
       stop_method: keep('stop_method', oneOf('stop_method', STOP_METHODS)),
       pre_state: keep('pre_state', intIn('pre_state', 1, 5)),
@@ -384,6 +407,8 @@ export function parseTradeInput(
       drill_kept: keep('drill_kept', oneOf('drill_kept', ['kept', 'broken', 'n/a'] as const)),
       // Which of the morning's plans it was (045). Asked, never pre-filled; a key left out keeps the stored value.
       plan_scenario: keep('plan_scenario', oneOf('plan_scenario', ['A', 'B', 'none'] as const)),
+      // Rubric v2 (046). Step 1's fields are locked once decided (see below and the trigger).
+      ...v2Fields(t, decision, outcomeAt, floor),
       // A partial win (044) is a kind of win: on any other outcome it is cleared.
       partial_win: outcome === 'Win' ? keep('partial_win', t.partial_win === true ? true : t.partial_win === false ? false : null) : null,
   };
@@ -407,4 +432,34 @@ export function parseTradeInput(
   }
 
   return { ok: true, value };
+}
+
+const ROW_KEYS = ['row_sweep', 'row_inversion', 'row_path', 'row_target'] as const;
+const LOCKED_V2 = [...ROW_KEYS, 'leg_location', 'decision', 'decided_at', 'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'plan_scenario', 'direction', 'planned_rr'] as const;
+
+/** The rubric v2 fields. On a decided trade, Step 1's come from the record, whatever the payload says. */
+type V2Fields = Pick<TradeInput, 'row_sweep' | 'row_inversion' | 'row_path' | 'row_target' | 'leg_location' | 'decision' | 'decided_at'
+  | 'decision_seconds' | 'decision_limit' | 'grade_override' | 'late_rows' | 'outcome_at' | 'would_be_mfe_r'>;
+function v2Fields(t: Record<string, unknown>, decision: 'take' | 'pass' | 'missed' | null, outcomeAt: string | null, floor: WritingFloor): V2Fields {
+  const row = (k: string) => (t[k] === 0 || t[k] === 1 || t[k] === 2 ? t[k] as number : null);
+  const num = (k: string, lo = 0) => (typeof t[k] === 'number' && Number.isFinite(t[k]) && (t[k] as number) >= lo ? t[k] as number : null);
+  const out: Record<string, unknown> = {
+    row_sweep: row('row_sweep'), row_inversion: row('row_inversion'), row_path: row('row_path'), row_target: row('row_target'),
+    leg_location: ['Discount', 'EQ', 'Premium'].includes(t.leg_location as string) ? t.leg_location : null,
+    decision,
+    decided_at: decision && typeof t.decided_at === 'string' ? t.decided_at : null,
+    decision_seconds: decision ? num('decision_seconds') : null,
+    decision_limit: decision && num('decision_limit', 1) != null ? Math.round(num('decision_limit', 1)!) : null,
+    grade_override: decision === 'take' ? t.grade_override === true : decision ? false : null,
+    late_rows: Array.isArray(t.late_rows) ? t.late_rows.filter((k): k is string => (ROW_KEYS as readonly string[]).includes(k as string)) : null,
+    outcome_at: outcomeAt,
+    would_be_mfe_r: typeof t.would_be_mfe_r === 'number' && Number.isFinite(t.would_be_mfe_r) ? t.would_be_mfe_r : null,
+  };
+  const stored = floor.previous?.stored;
+  if (stored?.decided_at && !floor.restoring) {
+    for (const k of LOCKED_V2) if (k in stored) out[k] = stored[k];
+    // Step 2 can be saved more than once; the first time it was written stays.
+    if (stored.outcome_at) out.outcome_at = stored.outcome_at;
+  }
+  return out as V2Fields;
 }

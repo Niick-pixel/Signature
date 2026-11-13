@@ -60,6 +60,9 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'drill_key', 'drill_kept',
   // A partial win (044).
   'partial_win', 'plan_scenario',
+  // Rubric v2, the timed decision (046).
+  'row_sweep', 'row_inversion', 'row_path', 'row_target', 'leg_location', 'decision', 'decided_at',
+  'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'outcome_at', 'would_be_mfe_r',
 ];
 
 function csvCell(v: unknown): string {
@@ -169,7 +172,9 @@ export async function GET() {
     // 21: the Flaw Deck — drills worked on (flaw_work, flaw_drills) and each trade's drill (042).
     // 22: the Stats dashboard's boards (043, a raw table).
     // 23: whether a win was partial (044).
-    version: 24,
+    // 24: which of the morning's plans a trade was (045).
+    // 25: rubric v2 — the four rows, the decision and its time, the override, the outcome step (046).
+    version: 25,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,

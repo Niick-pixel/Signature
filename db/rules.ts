@@ -57,6 +57,11 @@ export function applyRules(input: TradeInput, before: Trade | null, settings = g
       && !Number.isNaN(Date.parse(input.grade_locked_at)) && Date.parse(input.grade_locked_at) <= Date.now() + 60_000;
     out.grade_locked_at = lockedFirst ? input.grade_locked_at : now;
     out.graded_post_hoc = !(input.status === 'Planned' || input.status === 'Live' || lockedFirst);
+    // Rubric v2 (046): the grade locks with the decision, before any outcome exists.
+    if (input.decision && input.decided_at && !Number.isNaN(Date.parse(input.decided_at))) {
+      out.grade_locked_at = input.decided_at;
+      out.graded_post_hoc = false;
+    }
   } else {
     out.graded_post_hoc = before.graded_post_hoc;
     out.grade_locked_at = before.grade_locked_at
@@ -82,7 +87,8 @@ export function applyRules(input: TradeInput, before: Trade | null, settings = g
   if (newEra) {
     const below = isTaken(out.outcome) && out.status !== 'Planned' && belowMinConfidence(out.confidence_at_entry, settings);
     out.below_min_confidence = below;
-    if (below) {
+    // Rubric v2 reads confidence off Step 1 and computes "rules followed" itself (lib/decision); no derived tag.
+    if (below && !out.decision) {
       if (!out.mistake_tags.includes('Low confidence entry')) out.mistake_tags = [...out.mistake_tags, 'Low confidence entry'];
       out.followed_rules = false;
     }

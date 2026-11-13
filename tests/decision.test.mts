@@ -1,0 +1,219 @@
+/*
+  Rubric v2 (046): the four-row grade (gates, caps, totals), the timed
+  decision (expiry → missed, the grace, locking), the computed "rules
+  followed", the consistency flags, and the record — saved at Step 1 with its
+  outcome pending, Step 1 read-only after, old trades untouched.
+*/
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signature-decision-'));
+process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
+
+const D = await import('../lib/decision');
+const { createTrade, getTrade, updateTrade } = await import('../db/trades');
+const { parseTradeInput } = await import('../lib/validate');
+const { applyRules } = await import('../db/rules');
+
+const rows = (s: number, i: number, p: number, t: number) => ({ row_sweep: s, row_inversion: i, row_path: p, row_target: t });
+const facts = { direction: 'Long', plan_scenario: 'A', leg_location: 'Discount', planned_rr: '2' } as const;
+
+/* ───────────── the grade ───────────── */
+
+test('totals: 8 is A+, 6–7 A, 5 B, 4 or less no trade', () => {
+  assert.equal(D.gradeV2({ ...rows(2, 2, 2, 2), ...facts }).letter, 'A+');
+  assert.equal(D.gradeV2({ ...rows(2, 2, 2, 1), ...facts }).letter, 'A');
+  assert.equal(D.gradeV2({ ...rows(2, 1, 2, 1), ...facts }).letter, 'A');
+  assert.equal(D.gradeV2({ ...rows(1, 1, 2, 1), ...facts }).letter, 'B');
+  const four = D.gradeV2({ ...rows(1, 1, 1, 1), ...facts });
+  assert.equal(four.letter, 'No trade');
+  assert.equal(four.total, 4);
+});
+
+test('gate: any row at 0 is no trade, and the row is named', () => {
+  const g = D.gradeV2({ ...rows(2, 2, 0, 2), ...facts });
+  assert.equal(g.letter, 'No trade');
+  assert.deepEqual(g.gate, { key: 'row_path', label: 'Path' });
+  assert.match(g.reason, /Path scored 0/);
+});
+
+test('caps: scenario B, unplanned, long in premium, short in discount — each max B, each named', () => {
+  for (const [patch, id] of [
+    [{ plan_scenario: 'B' }, 'scenario-b'], [{ plan_scenario: 'none' }, 'unplanned'],
+    [{ direction: 'Long', leg_location: 'Premium' }, 'leg'], [{ direction: 'Short', leg_location: 'Discount' }, 'leg'],
+  ] as const) {
+    const g = D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, ...patch });
+    assert.equal(g.letter, 'B', id);
+    assert.ok(g.caps.some((c) => c.id === id), id);
+    assert.ok(g.reason.length > 0);
+  }
+  // Short in premium and long in discount are the right side: no cap.
+  assert.equal(D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, direction: 'Short', leg_location: 'Premium' }).letter, 'A+');
+  // A cap never raises: a B with a cap is still B, a no trade still no trade.
+  assert.equal(D.gradeV2({ ...rows(1, 1, 2, 1), ...facts, plan_scenario: 'B' }).letter, 'B');
+  assert.equal(D.gradeV2({ ...rows(1, 1, 1, 1), ...facts, plan_scenario: 'B' }).letter, 'No trade');
+});
+
+test('planned R under 1.5 is no trade; unanswered rows leave the grade incomplete', () => {
+  const g = D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, planned_rr: '1' });
+  assert.equal(g.letter, 'No trade');
+  assert.equal(g.lowR, true);
+  const partial = D.gradeV2({ row_sweep: 2, row_inversion: 2, ...facts });
+  assert.equal(partial.complete, false);
+  assert.deepEqual(partial.missing, ['row_path', 'row_target']);
+  assert.equal(D.gradeV2({ ...rows(2, 2, 2, 2), direction: 'Long' }).complete, false, 'scenario, leg and R still owed');
+});
+
+test('stored: no trade as F, the score as total over 8', () => {
+  assert.deepEqual(D.storedGrade(D.gradeV2({ ...rows(2, 2, 2, 2), ...facts })), { letter: 'A+', score: 100 });
+  assert.deepEqual(D.storedGrade(D.gradeV2({ ...rows(2, 2, 0, 2), ...facts })), { letter: 'F', score: 75 });
+  assert.equal(D.V2_LETTER_OF('F'), 'No trade');
+});
+
+/* ───────────── the clock and the decision ───────────── */
+
+test('the clock: amber at 10 s, red at 5 s, expired at the limit, the grace 15 s after', () => {
+  const t0 = 1_000_000;
+  assert.equal(D.clock(t0, t0 + 29_000, 40).tone, 'calm');
+  assert.equal(D.clock(t0, t0 + 30_000, 40).tone, 'amber');
+  assert.equal(D.clock(t0, t0 + 35_500, 40).tone, 'red');
+  assert.equal(D.clock(t0, t0 + 40_000, 40).expired, true);
+  assert.equal(D.clock(t0, t0 + 54_000, 40).graceOver, false);
+  assert.equal(D.clock(t0, t0 + 55_000, 40).graceOver, true);
+});
+
+test('take and pass before the limit store the time taken; the override only on a no-trade take', () => {
+  const t0 = 5_000_000;
+  const g = D.gradeV2({ ...rows(2, 2, 2, 1), ...facts });
+  const take = D.lockDecision({ choice: 'take', startedAt: t0, at: t0 + 21_340, limit: 40, grade: g });
+  assert.equal(take.decision, 'take');
+  assert.equal(take.decision_seconds, 21.3);
+  assert.equal(take.grade_override, false);
+  assert.equal(take.decided_at, new Date(t0 + 21_340).toISOString());
+  const bad = D.gradeV2({ ...rows(2, 0, 2, 2), ...facts });
+  assert.equal(D.needsOverride(bad), true);
+  assert.equal(D.lockDecision({ choice: 'take', startedAt: t0, at: t0 + 9000, limit: 40, grade: bad, override: true }).grade_override, true);
+  assert.equal(D.lockDecision({ choice: 'pass', startedAt: t0, at: t0 + 9000, limit: 40, grade: bad, override: true }).grade_override, false);
+});
+
+test('timer expiry → missed — too slow, at the full limit, rows scored after it marked late', () => {
+  const t0 = 9_000_000;
+  const g = D.gradeV2({ ...rows(2, 2, 1, 2), ...facts });
+  const m = D.lockDecision({
+    choice: 'missed', startedAt: t0, at: t0 + 52_000, limit: 40, grade: g,
+    scoredAt: { row_sweep: t0 + 10_000, row_inversion: t0 + 20_000, row_path: t0 + 44_000, row_target: t0 + 51_000 },
+  });
+  assert.equal(m.decision, 'missed');
+  assert.equal(m.decision_seconds, 40);
+  assert.deepEqual(m.late_rows, ['row_path', 'row_target']);
+  // A take that arrives after the limit is a miss, whatever was pressed.
+  assert.equal(D.lockDecision({ choice: 'take', startedAt: t0, at: t0 + 41_000, limit: 40, grade: g }).decision, 'missed');
+  // Untimed (Demo, Live): no limit, no miss, nothing late.
+  const live = D.lockDecision({ choice: 'take', startedAt: t0, at: t0 + 300_000, limit: null, grade: g });
+  assert.deepEqual([live.decision, live.decision_seconds, live.decision_limit, live.late_rows], ['take', 300, null, null]);
+});
+
+test('discard: only while no row has been scored', () => {
+  assert.equal(D.canDiscard({}), true);
+  assert.equal(D.canDiscard({ row_target: 0 }), false);
+});
+
+/* ───────────── rules followed, consistency ───────────── */
+
+test('rules followed: computed from the override, the "me" tags, risk, and day rules off backtests', () => {
+  const cfg = { maxRiskPct: 1, backtest: false };
+  assert.deepEqual(D.rulesFollowedV2({ mistake_tags: [] }, cfg), { followed: true, reasons: [] });
+  const r = D.rulesFollowedV2({ grade_override: true, mistake_tags: ['Moved stop before BE trigger', 'Some old tag'] }, cfg);
+  assert.equal(r.followed, false);
+  assert.deepEqual(r.reasons, ['Took it although the grade said no trade', 'Moved stop before BE trigger']);
+  assert.deepEqual(D.rulesFollowedV2({ risk_percent: 1.5 }, cfg).reasons, ['Risk over 1%']);
+  assert.deepEqual(D.rulesFollowedV2({}, { ...cfg, dayBreaks: ['At most 2 trades'] }).reasons, ['At most 2 trades']);
+  assert.deepEqual(D.rulesFollowedV2({}, { ...cfg, backtest: true, dayBreaks: ['At most 2 trades'] }).reasons, [], 'a backtest has no real days');
+});
+
+test('consistency: a stop moved before a 1R trigger the trade reached; "just short" under 80% of the plan', () => {
+  assert.equal(D.consistencyFlags({ mistake_tags: ['Moved stop before BE trigger'], reached_1r: true, management: 'BE at 1R' }).length, 1);
+  assert.equal(D.consistencyFlags({ mistake_tags: ['Moved stop before BE trigger'], reached_1r: false, management: 'BE at 1R' }).length, 0);
+  assert.equal(D.consistencyFlags({ mistake_tags: ['Moved stop before BE trigger'], reached_1r: true, management: 'BE on structure break' }).length, 0);
+  assert.equal(D.consistencyFlags({ market_tags: ['Turned just short of target'], mfe_r: 1.5, planned_rr: '2' }).length, 1);
+  assert.equal(D.consistencyFlags({ market_tags: ['Turned just short of target'], mfe_r: 1.7, planned_rr: '2' }).length, 0);
+});
+
+/* ───────────── the record ───────────── */
+
+const step1 = (x: Record<string, unknown> = {}) => ({
+  date: '2026-11-13T09:45', instrument: 'NQ', direction: 'Long', session: 'NY AM', reason: 'Backtest replay',
+  setup_type: 'iFVG', htf_bias: 'With bias', premium_discount: 'Discount', target_type: 'PDH/PDL',
+  outcome: 'Win', r_multiple: null, account: 'Backtest (FX Replay)', status: 'Live', explanation: '', lesson: '',
+  ...rows(2, 2, 2, 1), plan_scenario: 'A', leg_location: 'Discount', planned_rr: '2', entry_method: 'On inversion close',
+  confidence_at_entry: 4, decision: 'take', decided_at: '2026-11-13T09:45:21.000Z', decision_seconds: 21.3, decision_limit: 40,
+  grade_override: false, ...x,
+});
+const save = (x: Record<string, unknown> = {}) => {
+  const r = parseTradeInput(step1(x));
+  if (!r.ok) throw new Error(r.error);
+  return createTrade(applyRules(r.value, null));
+};
+
+test('Step 1 saves with the outcome pending: no writing owed, graded under rubric 5, locked before the outcome', () => {
+  const t = save();
+  assert.equal(t.rubric_version, 5);
+  assert.equal(t.grade_letter, 'A');
+  assert.equal(t.checklist_score, 88);
+  assert.equal(t.decision, 'take');
+  assert.equal(t.outcome_at, null);
+  assert.equal(t.graded_post_hoc, false);
+  assert.equal(t.grade_locked_at, '2026-11-13T09:45:21.000Z');
+});
+
+test('deciding needs all four rows and the scenario — except a miss, which may leave rows empty', () => {
+  const short = parseTradeInput(step1({ row_target: null }));
+  assert.equal(short.ok, false);
+  assert.equal(parseTradeInput(step1({ plan_scenario: null })).ok, false);
+  const miss = save({ decision: 'missed', outcome: 'Not taken', status: 'Settled', row_target: null, decision_seconds: 40, late_rows: ['row_path'] });
+  assert.equal(miss.decision, 'missed');
+  assert.equal(miss.grade_letter, null, 'an unfinished grade stores no letter');
+  assert.deepEqual(miss.late_rows, ['row_path']);
+});
+
+test('locking: Step 1 cannot be edited after the decision, by the form or the database', () => {
+  const t = save();
+  // An edit that tries to change the rows and the scenario keeps the stored ones.
+  const r = parseTradeInput({ ...step1(), ...rows(0, 0, 0, 0), plan_scenario: 'B', direction: 'Short', outcome_at: '2026-11-13T10:30:00.000Z',
+    r_multiple: 2, status: 'Settled', explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) },
+  { previous: { explanation: '', lesson: '', status: 'Live', stored: t as unknown as Record<string, unknown> } });
+  if (!r.ok) throw new Error(r.error);
+  const back = updateTrade(t.id, r.value)!;
+  assert.deepEqual([back.row_sweep, back.row_path, back.plan_scenario, back.direction], [2, 2, 'A', 'Long']);
+  assert.equal(back.grade_letter, 'A', 'the grade at the decision stays');
+  assert.equal(back.outcome_at, '2026-11-13T10:30:00.000Z');
+  // And the database itself refuses a direct change.
+  assert.throws(() => updateTrade(t.id, { ...r.value, row_sweep: 0 }), /Step 1 is locked/);
+});
+
+test('a pass or a miss needs its hypothetical outcome once Step 2 is written', () => {
+  const t = save({ decision: 'pass', outcome: 'Not taken', status: 'Settled' });
+  const prev = { previous: { explanation: '', lesson: '', status: 'Settled' as const, stored: t as unknown as Record<string, unknown> } };
+  const without = parseTradeInput({ ...step1({ decision: 'pass', outcome: 'Not taken', status: 'Settled' }), outcome_at: '2026-11-13T11:00:00.000Z',
+    explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) }, prev);
+  assert.equal(without.ok, false);
+  const withR = parseTradeInput({ ...step1({ decision: 'pass', outcome: 'Not taken', status: 'Settled' }), outcome_at: '2026-11-13T11:00:00.000Z',
+    would_be_r: -1, would_be_mfe_r: 0.4, explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) }, prev);
+  assert.equal(withR.ok, true);
+});
+
+test('old trades are untouched: no decision, graded under the checklist rubric as before', () => {
+  const r = parseTradeInput({
+    date: '2026-10-01T08:00', instrument: 'NQ', direction: 'Short', session: 'NY AM', reason: 'Rules-based (A+ setup)',
+    setup_type: 'iFVG', htf_bias: 'With bias', premium_discount: 'Premium', target_type: 'EQH/EQL',
+    outcome: 'Win', r_multiple: 2, account: 'Live', explanation: 'E'.repeat(170), lesson: 'L'.repeat(170),
+    screenshot_path: 'x.png', sweep_tier: 'major', singular_gap: true, chk_returned_to_fvg: true, chk_inversion_close: true,
+  });
+  if (!r.ok) throw new Error(r.error);
+  const t = createTrade(r.value);
+  assert.equal(t.rubric_version, 3);
+  assert.deepEqual([t.decision, t.row_sweep, t.outcome_at, t.leg_location], [null, null, null, null]);
+});

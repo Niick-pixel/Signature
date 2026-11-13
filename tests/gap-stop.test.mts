@@ -47,7 +47,8 @@ test('the notes never block: a 1H gap at 2+ with the stop inside the zone saves,
 });
 
 test('the new tags exist on the right side, and the server accepts them', () => {
-  assert.ok((D.MISTAKE_TAGS as readonly string[]).includes('Opposing HTF gap in path'));
+  // Retired from the list by rubric v2 (046), still accepted on the trades that carry it.
+  assert.ok((D.MISTAKE_TAG_VALUES as readonly string[]).includes('Opposing HTF gap in path'));
   assert.ok((D.MISTAKE_TAGS as readonly string[]).includes('Stop inside zone'));
   assert.ok((D.WORKED_TAGS as readonly string[]).includes('Stop beyond the zone'));
   const r = parseTradeInput({ ...base, mistake_tags: ['Opposing HTF gap in path', 'Stop inside zone'], worked_tags: ['Stop beyond the zone'] });

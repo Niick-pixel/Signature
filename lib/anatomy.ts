@@ -11,6 +11,8 @@ export const LIQUIDITY_EVENTS = ['PDH/PDL', 'PWH/PWL', 'Asia H/L', 'London H/L',
 export const FVG_QUALITIES = ['Displacement', 'Drift'] as const;
 export const SMT_STATES = ['Agrees', 'Diverges (confirming)', 'None'] as const;
 export const PLANNED_RRS = ['1', '1.5', '2', '3', '4+'] as const;
+/** Every planned R accepted: the old form's, plus rubric v2's 2.5 (lib/decision V2_PLANNED_RS). */
+export const PLANNED_RR_VALUES = ['1', '1.5', '2', '2.5', '3', '4+'] as const;
 export const ENTRY_METHODS = ['On inversion close', 'Retrace into FVG', 'CE of FVG', 'Before close (anticipation)'] as const;
 export const STOP_METHODS = ['Beyond sweep wick', 'Beyond FVG', 'Widened for HTF FVG', 'Other'] as const;
 export const EXIT_REASONS = ['TP', 'SL', 'BE stop', 'Manual early', 'Manual late', 'Time'] as const;

@@ -43,7 +43,7 @@ test('market tags round-trip, apart from the mistakes; unknown ones are dropped'
   const r = parseTradeInput(raw({ market_tags: ["Didn't follow the plan"] }));
   if (!r.ok) throw new Error(r.error);
   assert.deepEqual(updateTrade(t.id, r.value)!.market_tags, ["Didn't follow the plan"]);
-  assert.ok(MARKET_TAGS.length >= 5);
+  assert.ok(MARKET_TAGS.length >= 4);
 });
 
 test('the market is never a rule break', () => {

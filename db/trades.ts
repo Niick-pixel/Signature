@@ -1,8 +1,9 @@
 import 'server-only';
 import crypto from 'node:crypto';
 import type { SQLInputValue } from 'node:sqlite';
-import { MISTAKE_TAG_VALUES, WORKED_TAG_VALUES, MARKET_TAGS, type MistakeTag } from '../lib/domain';
+import { MISTAKE_TAG_VALUES, WORKED_TAG_VALUES, MARKET_TAG_VALUES, type MistakeTag } from '../lib/domain';
 import { CURRENT_RUBRIC, gradeUnder } from '../lib/rubric';
+import { RUBRIC_V2, gradeV2, storedGrade, type RowKey } from '../lib/decision';
 import { GRADE_LETTERS } from '../lib/grade';
 import { getDb } from './index';
 import { sanitizeOverrides } from '../lib/overrides';
@@ -60,6 +61,8 @@ const NULLABLE_BOOL_COLUMNS = [
   'singular_gap',
   // Rubric 4 (trial): never checked must not read back as "not confirmed".
   'sweep_futures_confirmed',
+  // Rubric v2 (046): asked only on a decided trade.
+  'grade_override',
   'target_hit', 'target_fresh', 'opposite_taken',
   'target_check_passed', 'below_min_confidence', 'written_before_outcome',
   // Edge Engine (036): unanswered is not "no".
@@ -81,8 +84,10 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
   trade.live_score = r.checklist_score as number;
   trade.live_letter = r.grade_letter as Trade['grade_letter'];
   trade.live_trigger = Boolean(r.trigger_fired);
-  trade.checklist_score = (r.score_at_entry ?? r.checklist_score) as number;
-  trade.grade_letter = (r.letter_at_entry ?? r.grade_letter) as Trade['grade_letter'];
+  // Rubric v2 (5): the old boxes are empty, so the live checklist grade means nothing — the stored one, or none.
+  const v2 = r.rubric_version === RUBRIC_V2;
+  trade.checklist_score = (v2 ? (r.score_at_entry ?? 0) : (r.score_at_entry ?? r.checklist_score)) as number;
+  trade.grade_letter = (v2 ? (r.letter_at_entry ?? null) : (r.letter_at_entry ?? r.grade_letter)) as Trade['grade_letter'];
   delete (trade as unknown as Record<string, unknown>).score_at_entry;
   delete (trade as unknown as Record<string, unknown>).letter_at_entry;
   delete (trade as unknown as Record<string, unknown>).trigger_fired_at_entry;
@@ -96,7 +101,7 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
   // a corrupt tag list must never make a trade unreadable.
   trade.mistake_tags = parseTags((row as unknown as { mistake_tags: string | null }).mistake_tags);
   trade.worked_tags = parseList(r.worked_tags as string | null, WORKED_TAG_VALUES);
-  trade.market_tags = parseList(r.market_tags as string | null, MARKET_TAGS);
+  trade.market_tags = parseList(r.market_tags as string | null, MARKET_TAG_VALUES);
   trade.overrides = sanitizeOverrides(r.overrides);
   trade.eqhl_checks = (() => {
     if (typeof r.eqhl_checks !== 'string') return null;
@@ -104,6 +109,12 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
     catch { return null; }
   })();
   trade.trigger_fired = Boolean(r.trigger_fired_at_entry ?? r.trigger_fired);
+  // Rubric v2 (046): the rows scored after the clock ran out.
+  trade.late_rows = (() => {
+    if (typeof r.late_rows !== 'string') return null;
+    try { const v: unknown = JSON.parse(r.late_rows); return Array.isArray(v) ? v.filter((x): x is RowKey => typeof x === 'string' && x.startsWith('row_')) : null; }
+    catch { return null; }
+  })();
   trade.rule_breaks_manual = (() => {
     if (typeof r.rule_breaks_manual !== 'string') return [];
     try { const v: unknown = JSON.parse(r.rule_breaks_manual); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; }
@@ -188,6 +199,9 @@ const WRITABLE = [
   'partial_win',
   // Which of the morning's plans it was (045).
   'plan_scenario',
+  // Rubric v2: the decision (046). Locked by a trigger once decided_at is set.
+  'row_sweep', 'row_inversion', 'row_path', 'row_target', 'leg_location', 'decision', 'decided_at',
+  'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'outcome_at', 'would_be_mfe_r',
 ] as const;
 
 /**
@@ -196,6 +210,16 @@ const WRITABLE = [
  * while the trade is Planned and locked with it after.
  */
 function frozen(input: TradeInput, version: number): Record<string, SQLInputValue> {
+  // Rubric v2 (4 rows): the rows and the facts, not the old boxes. An unfinished
+  // grade (a miss with rows left empty) stores no letter rather than a wrong one.
+  if (version === RUBRIC_V2) {
+    const g = gradeV2(input);
+    const s = storedGrade(g);
+    return {
+      rubric_version: RUBRIC_V2, score_at_entry: g.missing.length ? null : s.score, letter_at_entry: g.missing.length ? null : s.letter,
+      trigger_fired_at_entry: null, grade_at_entry: g.missing.length ? null : s.score,
+    };
+  }
   const g = gradeUnder(version, input);
   return {
     rubric_version: version, score_at_entry: g.score, letter_at_entry: g.letter,
@@ -236,6 +260,7 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
   out.overrides = input.overrides?.length ? JSON.stringify(input.overrides) : null;
   out.eqhl_checks = input.eqhl_checks ? JSON.stringify(input.eqhl_checks) : null;
   out.rule_breaks_manual = input.rule_breaks_manual?.length ? JSON.stringify(input.rule_breaks_manual) : null;
+  out.late_rows = input.late_rows?.length ? JSON.stringify(input.late_rows) : null;
   return out;
 }
 
@@ -248,7 +273,7 @@ export function createTrade(input: TradeInput): Trade {
   db.prepare(
     `INSERT INTO trades (id, ${cols.join(', ')})
      VALUES (@id, ${cols.map((c) => `@${c}`).join(', ')})`,
-  ).run({ id, ...flatten(input), ...frozen(input, CURRENT_RUBRIC) });
+  ).run({ id, ...flatten(input), ...frozen(input, input.decision ? RUBRIC_V2 : CURRENT_RUBRIC) });
   return getTrade(id)!;
 }
 

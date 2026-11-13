@@ -404,19 +404,25 @@ export const TAKE_IT_THRESHOLD = 70;
  * forcing a single choice throws two thirds of it away.
  */
 export const MISTAKE_TAGS = [
-  'Long in premium', 'Short in discount', 'Against HTF bias', 'Took it before the sweep',
-  "Didn't wait for the close", 'Chased', 'Outside killzone', 'Ignored news', 'No defined target',
-  'Moved stop', 'Cut winner early', 'Oversized', 'Revenge', 'Overtraded',
-  // Added by the app when a trade is taken below the minimum confidence.
-  'Low confidence entry',
-  // Pre-selected from the form's target and stop fields (040); still editable.
-  'Opposing HTF gap in path', 'Stop inside zone',
+  // Rubric v2 (046): what went wrong, me — execution and management only. The
+  // setup's own faults (bias, range side, sweep, target, close, confidence,
+  // killzone) are read off Step 1 now; tagging them too made the data
+  // contradict itself ("Against HTF bias" and "With HTF bias" on one trade).
+  'Entered late / chased', 'Entered before the close', 'Moved stop before BE trigger', 'Moved target (greed)',
+  'Cut winner early', 'Ignored kill switch', "Traded against today's plan", 'Oversized',
+  'Revenge / one more after a loss', 'Stop inside zone',
 ] as const;
 /**
  * No longer offered, still accepted: trades were tagged with them, and a tag
  * dropped from the list would vanish from those trades on the next read.
  */
-export const RETIRED_MISTAKE_TAGS = ['Entered late', 'Entered early', 'No trigger', 'Undersized', 'Widened stop'] as const;
+export const RETIRED_MISTAKE_TAGS = [
+  'Entered late', 'Entered early', 'No trigger', 'Undersized', 'Widened stop',
+  // Retired by rubric v2 (046): derived from Step 1, or reworded.
+  'Long in premium', 'Short in discount', 'Against HTF bias', 'Took it before the sweep',
+  "Didn't wait for the close", 'Chased', 'Outside killzone', 'Ignored news', 'No defined target',
+  'Moved stop', 'Revenge', 'Overtraded', 'Low confidence entry', 'Opposing HTF gap in path',
+] as const;
 export const MISTAKE_TAG_VALUES = [...MISTAKE_TAGS, ...RETIRED_MISTAKE_TAGS] as const;
 export type MistakeTag = (typeof MISTAKE_TAG_VALUES)[number];
 
@@ -429,13 +435,16 @@ export type MistakeTag = (typeof MISTAKE_TAG_VALUES)[number];
  * can be told apart from luck.
  */
 export const WORKED_TAGS = [
-  'Waited for the sweep', 'Waited for the close', 'Entered on the retest',
-  'Long in discount / short in premium', 'With HTF bias', 'Inside the killzone',
-  'Clear target named', 'Stop where the idea fails', 'Sized correctly',
-  'Let the winner run', 'Managed to plan', 'Stopped at the limit',
-  'Stop beyond the zone',
+  'Decided within time', 'Stop where the idea fails', 'Stop beyond the zone', 'Managed to plan',
+  'Took partials as planned', 'Let the runner run per plan', 'Respected the kill switch',
+  'Stopped at the daily limit', 'Sized correctly',
 ] as const;
-export const RETIRED_WORKED_TAGS = ['Took only the A+', 'Respected the news', 'Stayed patient', 'Followed the plan exactly'] as const;
+export const RETIRED_WORKED_TAGS = [
+  'Took only the A+', 'Respected the news', 'Stayed patient', 'Followed the plan exactly',
+  // Retired by rubric v2 (046): derived from Step 1, or reworded.
+  'Waited for the sweep', 'Waited for the close', 'Entered on the retest', 'Long in discount / short in premium',
+  'With HTF bias', 'Inside the killzone', 'Clear target named', 'Let the winner run', 'Stopped at the limit',
+] as const;
 export const WORKED_TAG_VALUES = [...WORKED_TAGS, ...RETIRED_WORKED_TAGS] as const;
 export type WorkedTag = (typeof WORKED_TAG_VALUES)[number];
 
@@ -450,10 +459,14 @@ export function tagOptions<T extends string>(offered: readonly T[], carried: rea
  * so Stats can separate process from luck; never a rule break.
  */
 export const MARKET_TAGS = [
-  "Didn't follow the plan", 'Stopped by a wick', 'News spike', 'Slippage',
-  'Chop, no follow-through', 'Turned just short of target', 'Thin, low volume',
+  'Chop / no follow-through', 'News spike', 'Turned just short of target', 'Opposing HTF gap formed after entry',
 ] as const;
-export type MarketTag = (typeof MARKET_TAGS)[number];
+/** No longer offered, still accepted and kept on the trades that carry them. */
+export const RETIRED_MARKET_TAGS = [
+  "Didn't follow the plan", 'Stopped by a wick', 'Slippage', 'Chop, no follow-through', 'Thin, low volume',
+] as const;
+export const MARKET_TAG_VALUES = [...MARKET_TAGS, ...RETIRED_MARKET_TAGS] as const;
+export type MarketTag = (typeof MARKET_TAG_VALUES)[number];
 
 /**
  * Every account label the schema will accept, including retired ones.

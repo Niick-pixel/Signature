@@ -17,7 +17,7 @@
 import { CHECKLIST_PHASES, HTF_BIASES, PREMIUM_DISCOUNTS, SESSIONS, SETUP_TYPES, TARGET_TYPES, isBacktest, isHypothetical } from '../domain';
 import {
   BIAS_TIMEFRAMES, EMOTIONS_AFTER, ENTRY_METHODS, EXIT_REASONS, FVG_QUALITIES, LIQUIDITY_EVENTS, MAE_BUCKETS, MFE_BUCKETS,
-  MOVED_TO_BE, PLANNED_RRS, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS, closureLetter, closureScore,
+  MOVED_TO_BE, PLANNED_RRS, PLANNED_RR_VALUES, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS, closureLetter, closureScore,
 } from '../anatomy';
 import type { Trade } from '../types';
 import type { TradeState } from './state';
@@ -103,7 +103,7 @@ export const FIELDS: FieldDef[] = [
   { key: 'target_type', label: 'Target', kind: 'cat', options: TARGET_TYPES, timing: 'pre', objective: true, source: 'trade', predictor: true,
     get: (t) => ((TARGET_TYPES as readonly string[]).includes(t.target_type ?? '') ? t.target_type : null) },
   { key: 'into_eq_pool', label: 'Into an EQ pool', kind: 'bool', timing: 'pre', objective: true, source: 'trade', predictor: true, get: tri('into_eq_pool') },
-  { key: 'planned_rr', label: 'Planned R:R', kind: 'cat', options: PLANNED_RRS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('planned_rr') },
+  { key: 'planned_rr', label: 'Planned R:R', kind: 'cat', options: PLANNED_RR_VALUES, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('planned_rr') },
   { key: 'entry_method', label: 'Entry', kind: 'cat', options: ENTRY_METHODS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('entry_method') },
   { key: 'stop_method', label: 'Stop', kind: 'cat', options: STOP_METHODS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('stop_method') },
   ...CHECK_ITEMS.map((i): FieldDef => ({

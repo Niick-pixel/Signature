@@ -261,6 +261,29 @@ export interface Trade {
   plan_scenario: 'A' | 'B' | 'none' | null;
   /** A win where only part of the position reached the target (044). Null unless the outcome is a win. */
   partial_win: boolean | null;
+  /* --- Rubric v2, the timed decision (046). Null on every older trade. --- */
+  /** The four rows, 0 / 1 / 2 each (lib/decision ROWS). */
+  row_sweep: number | null;
+  row_inversion: number | null;
+  row_path: number | null;
+  row_target: number | null;
+  /** Measured on the leg that made the sweep (not premium_discount, the old swing range). */
+  leg_location: 'Discount' | 'EQ' | 'Premium' | null;
+  /** Take, pass, or missed — too slow. Set once, when Step 1 locks. */
+  decision: 'take' | 'pass' | 'missed' | null;
+  decided_at: string | null;
+  /** Seconds from opening the form to the decision; the full limit on a miss. */
+  decision_seconds: number | null;
+  /** The limit it had, in seconds. Null: untimed (Demo and Live by default). */
+  decision_limit: number | null;
+  /** Taken although the grade said No trade. */
+  grade_override: boolean | null;
+  /** Rows scored after the clock ran out (in the grace). */
+  late_rows: Array<'row_sweep' | 'row_inversion' | 'row_path' | 'row_target'> | null;
+  /** When Step 2 (the outcome) was written. Null on a decided trade: outcome pending. */
+  outcome_at: string | null;
+  /** What a pass or a miss would have reached at best, in R, when known. */
+  would_be_mfe_r: number | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */
