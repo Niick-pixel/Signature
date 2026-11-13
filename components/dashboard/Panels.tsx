@@ -208,7 +208,9 @@ export function DailyCurve({ d, money }: { d: DashboardData; money: boolean }) {
   const line = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const area = `${line} L${W},${y(0)} L0,${y(0)} Z`;
   const y0 = y(0);
-  const shown = hover ?? pts.length - 1;
+  // The hovered point is clamped to the points there are: when the data reloads with fewer days (a new
+  // day or week, a filter) while the pointer rests on the chart, a stale index would read past the end.
+  const shown = Math.min(hover ?? pts.length - 1, pts.length - 1);
   const day = days[Math.max(0, shown - 1)];
   const fmt = (v: number) => (money ? usd(v) : rr(v, 1));
   const axis = (v: number) => (money ? usd0(v) : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}R`);

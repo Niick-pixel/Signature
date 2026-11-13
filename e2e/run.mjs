@@ -327,6 +327,29 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   expect(!errors.length, errors.join(' | '));
 });
 
+await check('Dashboard: the pointer resting on the daily curve while the data shrinks (a new day, a filter) does not break the screen', async () => {
+  const { page, errors } = await open({ width: 1600, height: 1000 }, { nav: 'side', dashFilters: { period: 'all', sessions: [], dirs: [] } });
+  await page.goto(`${BASE}/dashboard`);
+  await page.locator('text=Skip today').click({ timeout: 3000 }).catch(() => {});
+  // Open the filters first, then park the pointer on the curve's last point and switch the period from the
+  // keyboard: the data reloads with fewer days while the pointer never moves (what a fresh morning does).
+  await page.locator('[data-dash-accounts] button:has-text("Filters")').first().click();
+  const curve = page.locator('[data-dash-curve] svg').first();
+  await curve.waitFor();
+  const box = await curve.boundingBox();
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  await page.locator('[data-dashboard] button', { hasText: /^London$/ }).first().evaluate((el) => el.focus());
+  const before = await page.locator('[data-dash-curve] path').first().getAttribute('d');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(1500);
+  const after = await page.locator('[data-dash-curve] path').first().getAttribute('d').catch(() => '');
+  expect(((after || '').match(/L/g) || []).length < (before.match(/L/g) || []).length, 'the curve has fewer days, still drawn');
+  expect(await page.locator('text=This screen hit an error').count() === 0, 'no error screen');
+  expect(!errors.length, errors.join(' | '));
+  await page.context().close();
+});
+
 /* ───────────── Rubric v2: the two-step New trade ───────────── */
 
 /** A locked replay day (a biased Long day), so backtests open straight on Step 1. */
