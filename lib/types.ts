@@ -284,6 +284,8 @@ export interface Trade {
   outcome_at: string | null;
   /** What a pass or a miss would have reached at best, in R, when known. */
   would_be_mfe_r: number | null;
+  /** Rubric v2 fact (047): the timeframe the reaction started from. Never graded. */
+  htf_origin: 'None' | '5m' | '15m' | '30m' | '1H' | '4H' | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
   deleted_at: string | null;
   /** Why it was deleted — asked every time. Null unless it is in the Trash. */
@@ -487,6 +489,8 @@ export const MIN_EXPLANATION = 160;
  * fiction, so a Planned entry is exempt until it settles.
  */
 export const MIN_LESSON = 160;
+/** A pass or a miss (rubric v2): one line on why, not a page. */
+export const MIN_PASS_EXPLANATION = 20;
 
 /**
  * A movement of real money, or a statement of where the account actually is.

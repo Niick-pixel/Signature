@@ -336,6 +336,11 @@ async function openNewTrade(prefs = {}) {
   await page.waitForSelector('[data-decide-step]');
   return { page, errors };
 }
+/** The two answers no key covers by default: the gate (G) and a planned R of 2R. */
+const gateAndR = async (page) => {
+  await page.keyboard.press('g');
+  await page.locator('[data-facts] button', { hasText: /^2R$/ }).click();
+};
 const savedTrade = async (page) => page.evaluate(async () => {
   const list = await (await fetch('/api/trades?pending=1')).json();
   return list.filter((t) => t.rubric_version === 5).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
@@ -345,13 +350,36 @@ await check('Rubric v2: four rows, direction and scenario, and Take — keyboard
   const { page, errors } = await openNewTrade();
   expect(await page.locator('[data-timer]').getAttribute('data-timer') === 'calm', 'the clock runs on a backtest');
   for (const k of ['2', '2', '1', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
   expect(await page.locator('[data-grade]').getAttribute('data-grade') === 'A', 'seven of eight with scenario A is an A');
+  expect(await page.locator('[data-gate="one"]').count() === 1, 'G answers the gate');
   await page.keyboard.press('t');
   await page.waitForSelector('[data-outcome-step]');
   const t = await savedTrade(page);
   expect(t.decision === 'take' && t.decision_seconds < 40 && t.decision_limit === 40 && t.grade_letter === 'A' && t.outcome_at === null,
     `saved as decided: ${JSON.stringify({ d: t.decision, s: t.decision_seconds, g: t.grade_letter })}`);
   expect(await page.locator('[data-similar]').count() === 1, 'similar setups appear only now, in Step 2');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Rubric v2: G answers the gate; more than one gap is No trade; Take waits on the gate and the planned R', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  expect(await page.locator('[data-decide-button="take"]').isDisabled(), 'Take waits on the gate and the planned R');
+  await page.keyboard.press('g'); await page.keyboard.press('g');
+  expect(await page.locator('[data-gate="many"]').count() === 1, 'G again: more than one');
+  expect(await page.locator('[data-grade]').getAttribute('data-grade') === 'No trade', 'more than one gap is No trade');
+  expect(/more than one gap/.test(await page.locator('[data-grade-reason]').innerText()), 'named in the badge');
+  await page.keyboard.press('g');
+  expect(await page.locator('[data-decide-button="take"]').isDisabled(), 'still waiting on the planned R');
+  await page.locator('[data-facts] button', { hasText: /^2R$/ }).click();
+  expect(!(await page.locator('[data-decide-button="take"]').isDisabled()), 'Take open');
+  await page.keyboard.press('h'); await page.keyboard.press('h');
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  const t = await savedTrade(page);
+  expect(t.singular_gap === true && t.htf_origin === '5m' && t.grade_letter === 'A+', JSON.stringify({ g: t.singular_gap, h: t.htf_origin, l: t.grade_letter }));
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -380,7 +408,7 @@ await check('Rubric v2: the clock runs out → a chime, nothing decided; Missed 
 await check('Rubric v2: a Take after the clock is still a take, stored over time', async () => {
   const { page, errors } = await openNewTrade({ decisionSeconds: 10 });
   for (const k of ['2', '2', '1', '2', 'l', 'a']) await page.keyboard.press(k);
-  await page.locator('[data-facts] button', { hasText: /^2R$/ }).click();
+  await gateAndR(page);
   await page.waitForSelector('[data-missed]', { timeout: 15000 });
   expect(!(await page.locator('[data-decide-button="take"]').isDisabled()), 'Take stays available');
   await page.keyboard.press('t');
@@ -423,7 +451,9 @@ await check('Rubric v2: Close shuts an untouched form, asks once something is en
   // Take with answers missing: the missing ones are marked required and blink.
   await page.click('[data-decide-button="take"]', { force: true }).catch(() => {});
   expect(await page.locator('[data-required="true"]').count() >= 2, 'direction and scenario marked required');
-  for (const k of ['2', '2', '2', 's', 'b', 'p']) await page.keyboard.press(k);
+  for (const k of ['2', '2', '2', 's', 'b']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('p');
   await page.waitForSelector('[data-outcome-step][data-decision="pass"]');
   const t = await savedTrade(page);
   // An edit that tries to change the rows keeps the locked ones.
@@ -438,7 +468,9 @@ await check('Rubric v2: Close shuts an untouched form, asks once something is en
 
 await check('Rubric v2: Step 2 goes back to a read-only Step 1, and Close offers to save what is written as unfinished', async () => {
   const { page, errors } = await openNewTrade();
-  for (const k of ['2', '2', '1', '2', 'l', 'a', 'p']) await page.keyboard.press(k);
+  for (const k of ['2', '2', '1', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('p');
   await page.waitForSelector('[data-outcome-step]');
   await page.fill('[data-field="would-r"]', '1.5');
   await page.click('[data-back]');
@@ -458,7 +490,9 @@ await check('Rubric v2: Step 2 goes back to a read-only Step 1, and Close offers
 
 await check('Trades: unfinished trades wait on their own shelf; deleting one asks only for DELETE', async () => {
   const { page, errors } = await openNewTrade();
-  for (const k of ['2', '2', '2', '2', 'l', 'a', 'p']) await page.keyboard.press(k);
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('p');
   await page.waitForSelector('[data-outcome-step]');
   await page.click('[data-finish-later]');
   await page.goto(`${BASE}/`);

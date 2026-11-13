@@ -7,13 +7,14 @@ import {
 import { localStamp } from './day';
 import { REGRADE_HINT, regradeAllowed, type GradeLetter } from './grade';
 import { CURRENT_RUBRIC, HTF_DELIVERIES, SWEEP_LEVELS, gradeUnder } from './rubric';
-import { MIN_EXPLANATION, MIN_LESSON, type TradeInput } from './types';
+import { MIN_EXPLANATION, MIN_LESSON, MIN_PASS_EXPLANATION, type TradeInput } from './types';
 import { sanitizeOverrides } from './overrides';
 import {
   BIAS_TIMEFRAMES, EMOTIONS_AFTER, ENTRY_METHODS, EXIT_REASONS, FVG_QUALITIES, LIQUIDITY_EVENTS, MAE_BUCKETS, MFE_BUCKETS,
   MOVED_TO_BE, PLANNED_RR_VALUES, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS,
 } from './anatomy';
 import { TRADE_RULES } from './ruleBook';
+import { HTF_ORIGINS } from './decision';
 
 /**
  * Whose standard a piece of writing is held to.
@@ -143,13 +144,30 @@ export function parseTradeInput(
     if (decision !== 'missed' && !['A', 'B', 'none'].includes(t.plan_scenario as string)) {
       return { ok: false, error: 'Pick the scenario — A, B or Unplanned — before deciding.' };
     }
+    // 047: the singular-gap gate is answered, and the planned R is set (the Target row's thresholds read it).
+    if (decision !== 'missed' && typeof t.singular_gap !== 'boolean') {
+      return { ok: false, error: 'Answer the singular-gap gate — one gap, or more than one — before deciding.' };
+    }
+    if (decision !== 'missed' && (typeof t.planned_rr !== 'string' || !t.planned_rr)) {
+      return { ok: false, error: 'Set the planned R before deciding.' };
+    }
   }
   // A pass or a miss is priced too: what it would have done is required once the outcome is written.
   if (decision && decision !== 'take' && outcomeAt && typeof t.would_be_r !== 'number') {
     return { ok: false, error: 'What would it have done? A pass or a miss needs its hypothetical R.' };
   }
 
-  if (!quick && !pendingOutcome) {
+  /*
+    A pass or a miss (047 follow-up) owes less: the hypothetical R above and
+    one line of explanation. The lesson is optional; the 160-character
+    minimums are for trades that were taken.
+  */
+  const notTaken = decision === 'pass' || decision === 'missed';
+  if (notTaken && outcomeAt && explanation.length < MIN_PASS_EXPLANATION && !asWritten(explanation, floor.previous?.explanation)) {
+    return { ok: false, error: `One line of explanation — at least ${MIN_PASS_EXPLANATION} characters — on why it was ${decision === 'pass' ? 'passed' : 'missed'}.` };
+  }
+
+  if (!quick && !pendingOutcome && !notTaken) {
     if (!explanation) return { ok: false, error: 'An explanation is required.' };
     if (explanationShort) {
       return { ok: false, error: `The explanation needs at least ${MIN_EXPLANATION} characters.` };
@@ -435,17 +453,18 @@ export function parseTradeInput(
 }
 
 const ROW_KEYS = ['row_sweep', 'row_inversion', 'row_path', 'row_target'] as const;
-const LOCKED_V2 = [...ROW_KEYS, 'leg_location', 'decision', 'decided_at', 'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'plan_scenario', 'direction', 'planned_rr'] as const;
+const LOCKED_V2 = [...ROW_KEYS, 'singular_gap', 'htf_origin', 'leg_location', 'decision', 'decided_at', 'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'plan_scenario', 'direction', 'planned_rr'] as const;
 
 /** The rubric v2 fields. On a decided trade, Step 1's come from the record, whatever the payload says. */
 type V2Fields = Pick<TradeInput, 'row_sweep' | 'row_inversion' | 'row_path' | 'row_target' | 'leg_location' | 'decision' | 'decided_at'
-  | 'decision_seconds' | 'decision_limit' | 'grade_override' | 'late_rows' | 'outcome_at' | 'would_be_mfe_r'>;
+  | 'decision_seconds' | 'decision_limit' | 'grade_override' | 'late_rows' | 'outcome_at' | 'would_be_mfe_r' | 'htf_origin'>;
 function v2Fields(t: Record<string, unknown>, decision: 'take' | 'pass' | 'missed' | null, outcomeAt: string | null, floor: WritingFloor): V2Fields {
   const row = (k: string) => (t[k] === 0 || t[k] === 1 || t[k] === 2 ? t[k] as number : null);
   const num = (k: string, lo = 0) => (typeof t[k] === 'number' && Number.isFinite(t[k]) && (t[k] as number) >= lo ? t[k] as number : null);
   const out: Record<string, unknown> = {
     row_sweep: row('row_sweep'), row_inversion: row('row_inversion'), row_path: row('row_path'), row_target: row('row_target'),
     leg_location: ['Discount', 'EQ', 'Premium'].includes(t.leg_location as string) ? t.leg_location : null,
+    htf_origin: (HTF_ORIGINS as readonly string[]).includes(t.htf_origin as string) ? t.htf_origin : null,
     decision,
     decided_at: decision && typeof t.decided_at === 'string' ? t.decided_at : null,
     decision_seconds: decision ? num('decision_seconds') : null,

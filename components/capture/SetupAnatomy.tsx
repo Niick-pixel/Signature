@@ -175,7 +175,9 @@ export function PostAnatomy({ a, set, broke }: { a: Anatomy; set: Set; broke: bo
   );
 }
 
-export interface SimilarResult { n: number; k: number; pool: number; meanR: number | null; shrunkR: number | null; pWin: number | null; fieldsUsed: number; neighbours: Array<{ id: string; date: string; r: number }> }
+export interface SimilarResult { n: number; k: number; pool: number; meanR: number | null; shrunkR: number | null; pWin: number | null; fieldsUsed: number; neighbours: Array<{ id: string; date: string; r: number }>;
+  /** Rubric v2: matched against v2 trades only, and how many matched of the ten it needs. */
+  v2?: { have: number; need: number } }
 
 const sR = (v: number | null) => (v == null ? '—' : `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(2)}R`);
 
@@ -189,12 +191,13 @@ export function SimilarCard({ s, loading }: { s: SimilarResult | null; loading: 
         <Help>The nearest past trades by their setup fields only (Gower distance) — never by how they ended. The expected R is pulled toward your overall average, so a few trades cannot make an extreme claim.</Help>
       </div>
       {loading ? <p className="mt-1" style={{ color: 'var(--text-faint)' }}>Looking…</p>
+        : s?.v2 && s.v2.have < s.v2.need ? <p className="mt-1 tabular-nums" style={{ color: 'var(--text-faint)' }} data-similar-v2-short>Not enough v2 trades yet ({s.v2.have}/{s.v2.need}). Only Rubric v2 trades are compared here.</p>
         : !s || !s.n ? <p className="mt-1" style={{ color: 'var(--text-faint)' }}>{s && s.fieldsUsed < 3 ? 'Tap a few more setup fields to find similar trades.' : 'Not enough past trades to compare with yet.'}</p>
           : (
             <p className="mt-1 tabular-nums" data-similar-line>
               <b>{s.n}</b> similar trade{s.n === 1 ? '' : 's'} · expected <b>{sR(s.shrunkR)}</b>
               <span style={{ color: 'var(--text-faint)' }}> (raw {sR(s.meanR)})</span> · win chance <b>{s.pWin == null ? '—' : `${Math.round(s.pWin * 100)}%`}</b>
-              <span className="block text-[11px]" style={{ color: 'var(--text-faint)' }}>Matched on {s.fieldsUsed} setup fields, from {s.pool} past trades. A guide, not a verdict.</span>
+              <span className="block text-[11px]" style={{ color: 'var(--text-faint)' }}>Matched on {s.fieldsUsed} setup fields, from {s.pool} past{s.v2 ? ' Rubric v2' : ''} trades. A guide, not a verdict.</span>
             </p>
           )}
     </div>

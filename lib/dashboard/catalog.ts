@@ -47,7 +47,7 @@ const TIER: Record<string, 1 | 2> = {
   'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
   'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
   'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
-  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
 };
 /** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
 const LEAN: Record<string, 'fix' | 'keep'> = {
@@ -501,6 +501,36 @@ add({
     return { kind: 'heat', rows: ['Sweep', 'Inversion', 'Path', 'Target'], cols: ['0', '1', '2'], claim: { n: d.n },
       cells: keys.flatMap((k, r) => ([0, 1, 2] as const).map((s) => ({ r, c: s, value: d.byRow[k][s].avgR ?? 0, n: d.byRow[k][s].n, display: d.byRow[k][s].n ? R(d.byRow[k][s].avgR, 1) : '—' }))),
       caption: 'R per trade taken, by the row\'s score · faded under 5' };
+  },
+});
+
+add({
+  id: 'v2-gap', title: 'Rubric v2: singular gap', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'The gate before the rows: ONE clean, unmistakable FVG, or more than one (No trade). Every Rubric v2 decision that answered it, and R per trade taken. A taken "more than one" was taken against a no-trade grade.',
+  select: (v) => {
+    const d = v.decisions;
+    const answered = d.byGap.reduce((s, g) => s + g.count, 0);
+    if (!answered) return V2_EMPTY('bars');
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: answered, level: null },
+      items: d.byGap.filter((g) => g.count > 0).map((g) => ({ label: g.label, value: g.taken.avgR ?? 0,
+        display: `${g.taken.n ? R(g.taken.avgR) : '—'} · ${g.taken.n} taken of ${g.count}`, tone: (g.key === 'many' ? 'bad' : 'accent') as Tone })),
+      caption: 'R per trade taken · how many answered' };
+  },
+});
+
+add({
+  id: 'v2-origin', title: 'Rubric v2: by HTF origin', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Where the reaction started (a fact on Step 1, never graded): how many Rubric v2 decisions came from each, and the expectancy of the ones taken.',
+  select: (v) => {
+    const d = v.decisions;
+    const rows = d.byOrigin.filter((o) => o.count > 0);
+    if (!rows.length) return V2_EMPTY('bars');
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: rows.reduce((s, o) => s + o.count, 0), level: null },
+      items: rows.map((o) => ({ label: o.key === 'None' ? 'No HTF origin' : o.key, value: o.taken.avgR ?? 0,
+        display: `${o.taken.n ? R(o.taken.avgR) : '—'} · ${o.taken.n} taken of ${o.count}`, tone: 'accent' as Tone })),
+      caption: 'Expectancy of trades taken · count of decisions' };
   },
 });
 

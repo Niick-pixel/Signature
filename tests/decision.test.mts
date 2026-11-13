@@ -17,6 +17,7 @@ const D = await import('../lib/decision');
 const { createTrade, updateTrade } = await import('../db/trades');
 const { parseTradeInput } = await import('../lib/validate');
 const { applyRules } = await import('../db/rules');
+const { getDb } = await import('../db/index');
 
 const rows = (s: number, i: number, p: number, t: number) => ({ row_sweep: s, row_inversion: i, row_path: p, row_target: t });
 const facts = { direction: 'Long', plan_scenario: 'A', leg_location: 'Discount', planned_rr: '2' } as const;
@@ -152,7 +153,7 @@ const step1 = (x: Record<string, unknown> = {}) => ({
   date: '2026-11-13T09:45', instrument: 'NQ', direction: 'Long', session: 'NY AM', reason: 'Backtest replay',
   setup_type: 'iFVG', htf_bias: 'With bias', premium_discount: 'Discount', target_type: 'PDH/PDL',
   outcome: 'Win', r_multiple: null, account: 'Backtest (FX Replay)', status: 'Live', explanation: '', lesson: '',
-  ...rows(2, 2, 2, 1), plan_scenario: 'A', leg_location: 'Discount', planned_rr: '2', entry_method: 'On inversion close',
+  ...rows(2, 2, 2, 1), singular_gap: true, htf_origin: '15m', plan_scenario: 'A', leg_location: 'Discount', planned_rr: '2', entry_method: 'On inversion close',
   confidence_at_entry: 4, decision: 'take', decided_at: '2026-11-13T09:45:21.000Z', decision_seconds: 21.3, decision_limit: 40,
   grade_override: false, ...x,
 });
@@ -278,10 +279,65 @@ test('stats: v2 records only, by total, row, scenario, time and decision; passes
 });
 
 test('exports: a v2 trade names its rubric and carries its rows, decision and time; an old one names its checklist rubric', () => {
-  const lines = D.v2Lines({ ...rows(2, 2, 1, 2), direction: 'Long', plan_scenario: 'B', leg_location: 'Discount', planned_rr: '2', rubric_version: 5,
+  const lines = D.v2Lines({ ...rows(2, 2, 1, 2), singular_gap: true, htf_origin: '1H', direction: 'Long', plan_scenario: 'B', leg_location: 'Discount', planned_rr: '2', rubric_version: 5,
     grade_letter: 'B', decision: 'take', decision_seconds: 18.2, decision_limit: 40, grade_override: false, target_type: 'PDH/PDL', entry_method: 'On inversion close', confidence_at_entry: 4 });
-  assert.match(lines[0], /Rubric v2 \(4 rows\) · Sweep 2 · Inversion 2 · Path 1 · Target 2 = 7\/8 → \*\*B\*\* \(Scenario B/);
+  assert.match(lines[0], /Rubric v2 \(4 rows\) · singular gap one gap · Sweep 2 · Inversion 2 · Path 1 · Target 2 = 7\/8 → \*\*B\*\* \(Scenario B/);
+  assert.match(lines[1], /HTF origin 1H/);
   assert.match(lines[2], /Taken in 18\.2s of 40s/);
   assert.equal(D.rubricName({ rubric_version: 3 }), 'checklist rubric 3');
   assert.equal(D.v2Result({ decision: 'missed', outcome_at: 'x', would_be_r: -1 }), 'Missed — too slow · would have −1.0R');
+});
+
+/* ───────────── 047: the singular-gap gate, the HTF origin, planned R, lighter passes ───────────── */
+
+test('the singular-gap gate: more than one gap is No trade, named, and never part of the /8', () => {
+  const many = D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, singular_gap: false });
+  assert.equal(many.letter, 'No trade');
+  assert.equal(many.total, 8, 'the rows still add up; the gate sits outside them');
+  assert.deepEqual(many.gate, { key: 'singular_gap', label: 'Singular gap' });
+  assert.match(many.reason, /more than one gap/);
+  const one = D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, singular_gap: true });
+  assert.equal(one.letter, 'A+');
+  assert.equal(one.gate, null);
+  // Unanswered: the grade shows, but it is not complete (Take waits on it).
+  const open = D.gradeV2({ ...rows(2, 2, 2, 2), ...facts });
+  assert.equal(open.letter, 'A+');
+  assert.equal(open.complete, false);
+  assert.equal(D.storedGrade(many).letter, 'F');
+});
+
+test('planned R: under 1.5 is No trade, and the form offers nothing below 1.5', () => {
+  const g = D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, singular_gap: true, planned_rr: '1.2' });
+  assert.equal(g.letter, 'No trade');
+  assert.equal(g.lowR, true);
+  assert.ok(D.V2_PLANNED_RS.every((r) => Number.parseFloat(r) >= 1.5));
+});
+
+test('deciding needs the gate and the planned R; HTF origin is stored and locked, never graded', () => {
+  const noGap = parseTradeInput(step1({ singular_gap: null }));
+  assert.equal(noGap.ok, false);
+  assert.match(noGap.ok ? '' : noGap.error, /singular-gap/);
+  const noR = parseTradeInput(step1({ planned_rr: null }));
+  assert.equal(noR.ok, false);
+  assert.match(noR.ok ? '' : noR.error, /planned R/);
+  // A miss owes neither (the clock ran out).
+  assert.equal(parseTradeInput(step1({ decision: 'missed', singular_gap: null, planned_rr: null, ...rows(2, 2, null, null) })).ok, true);
+  const t = save({ htf_origin: '4H' });
+  assert.equal(t.htf_origin, '4H');
+  assert.equal(t.singular_gap, true);
+  assert.throws(() => getDb().prepare('UPDATE trades SET htf_origin = ? WHERE id = ?').run('5m', t.id), /Step 1 is locked/);
+  assert.throws(() => getDb().prepare('UPDATE trades SET singular_gap = 0 WHERE id = ?').run(t.id), /Step 1 is locked/);
+  assert.equal(D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, singular_gap: true }).letter, D.gradeV2({ ...rows(2, 2, 2, 2), ...facts, singular_gap: true, ...{ htf_origin: '4H' } }).letter);
+});
+
+test('a pass or a miss owes the hypothetical R and one line; the lesson is optional; taken trades keep 160 + 160', () => {
+  const pass = save({ decision: 'pass', status: 'Settled', outcome: 'Not taken' });
+  const write = (x: Record<string, unknown>) => parseTradeInput({ ...pass, ...x, outcome_at: '2026-11-13T11:00:00.000Z' }, { previous: { explanation: '', lesson: '', status: 'Settled', stored: pass as unknown as Record<string, unknown> } });
+  assert.equal(write({ would_be_r: -1, explanation: 'short', lesson: '' }).ok, false, 'under 20 characters');
+  const ok = write({ would_be_r: -1, explanation: 'Two gaps in the leg, passed.', lesson: '' });
+  assert.equal(ok.ok, true, ok.ok ? '' : ok.error);
+  const take = save();
+  const taken = parseTradeInput({ ...take, outcome: 'Win', r_multiple: 2, status: 'Settled', screenshot_path: 'x.png', explanation: 'Two gaps in the leg, passed.', lesson: '', outcome_at: '2026-11-13T11:00:00.000Z' },
+    { previous: { explanation: '', lesson: '', status: 'Live', stored: take as unknown as Record<string, unknown> } });
+  assert.equal(taken.ok, false, 'a taken trade still owes 160');
 });

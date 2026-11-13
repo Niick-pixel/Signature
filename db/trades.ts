@@ -202,6 +202,8 @@ const WRITABLE = [
   // Rubric v2: the decision (046). Locked by a trigger once decided_at is set.
   'row_sweep', 'row_inversion', 'row_path', 'row_target', 'leg_location', 'decision', 'decided_at',
   'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'outcome_at', 'would_be_mfe_r',
+  // The HTF origin (047), locked with Step 1 (the gate reuses singular_gap).
+  'htf_origin',
 ] as const;
 
 /**

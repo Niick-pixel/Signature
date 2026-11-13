@@ -90,8 +90,23 @@ export const plannedRNumber = (v: string | null | undefined): number | null =>
 /* ───────────────────────── the grade ───────────────────────── */
 
 export type V2Letter = 'A+' | 'A' | 'B' | 'No trade';
+/**
+ * The singular-gap gate (047): ONE clean, unmistakable FVG, or more than one.
+ * Pass/fail only — not part of the /8. More than one is No trade. Stored in
+ * the checklist's own singular_gap column: true = one gap, false = more than one.
+ */
+export type SingularGap = 'one' | 'many';
+export const SINGULAR_GAP_LABEL: Record<SingularGap, string> = { one: 'One gap', many: 'More than one' };
+export const gapOf = (v: boolean | null | undefined): SingularGap | null => (v === true ? 'one' : v === false ? 'many' : null);
+export const SINGULAR_GAP_QUESTION = 'Singular gap — ONE clean, unmistakable FVG';
+/** Where the reaction started (047). A fact only: never graded. */
+export const HTF_ORIGINS = ['None', '5m', '15m', '30m', '1H', '4H'] as const;
+export type HtfOrigin = (typeof HTF_ORIGINS)[number];
+
 export interface V2Input {
   row_sweep?: number | null; row_inversion?: number | null; row_path?: number | null; row_target?: number | null;
+  /** true: one gap; false: more than one. */
+  singular_gap?: boolean | null;
   direction?: 'Long' | 'Short' | string | null;
   plan_scenario?: Scenario | string | null;
   leg_location?: LegLocation | string | null;
@@ -106,8 +121,8 @@ export interface V2Grade {
   /** Every row scored, and the facts the caps and the R rule read are set. */
   complete: boolean;
   letter: V2Letter;
-  /** The row scored 0, when one is: a failed gate. */
-  gate: { key: RowKey; label: string } | null;
+  /** A failed gate: more than one gap, or a row scored 0. */
+  gate: { key: RowKey | 'singular_gap'; label: string } | null;
   caps: V2Cap[];
   /** Planned R under 1.5. */
   lowR: boolean;
@@ -123,6 +138,7 @@ export function gradeV2(a: V2Input): V2Grade {
   const missing = ROWS.filter((r, i) => scores[i] == null).map((r) => r.key);
   const total = scores.reduce<number>((s, v) => s + (v ?? 0), 0);
   const zero = ROWS.find((r) => a[r.key] === 0) ?? null;
+  const manyGaps = a.singular_gap === false;
   const caps: V2Cap[] = [];
   if (a.plan_scenario === 'B') caps.push({ id: 'scenario-b', message: 'Scenario B (against the bias) — max B.' });
   if (a.plan_scenario === 'none') caps.push({ id: 'unplanned', message: 'Unplanned — max B.' });
@@ -131,11 +147,12 @@ export function gradeV2(a: V2Input): V2Grade {
   }
   const r = plannedRNumber(a.planned_rr);
   const lowR = r != null && r < 1.5;
-  const complete = missing.length === 0 && a.plan_scenario != null && a.direction != null && a.leg_location != null && a.planned_rr != null;
+  const complete = missing.length === 0 && a.singular_gap != null && a.plan_scenario != null && a.direction != null && a.leg_location != null && a.planned_rr != null;
 
   let letter: V2Letter;
   let reason: string;
-  if (zero) { letter = 'No trade'; reason = `Gate failed: ${zero.label} scored 0.`; }
+  if (manyGaps) { letter = 'No trade'; reason = 'Gate failed: more than one gap.'; }
+  else if (zero) { letter = 'No trade'; reason = `Gate failed: ${zero.label} scored 0.`; }
   else if (lowR) { letter = 'No trade'; reason = 'Planned R under 1.5.'; }
   else {
     letter = bandOf(total);
@@ -143,7 +160,8 @@ export function gradeV2(a: V2Input): V2Grade {
     if (caps.length && (letter === 'A+' || letter === 'A')) { letter = 'B'; reason = caps.map((c) => c.message).join(' '); }
     else if (caps.length) reason += ` ${caps.map((c) => c.message).join(' ')}`;
   }
-  return { total, missing, complete, letter, gate: zero ? { key: zero.key, label: zero.label } : null, caps, lowR, reason };
+  const gate = manyGaps ? { key: 'singular_gap' as const, label: 'Singular gap' } : zero ? { key: zero.key, label: zero.label } : null;
+  return { total, missing, complete, letter, gate, caps, lowR, reason };
 }
 
 /** As stored: the letter column (No trade = F) and the score column (total / 8, as a percentage). */
@@ -335,14 +353,15 @@ export function v2Lines(t: V2Input & {
   rubric_version?: number | null; grade_letter?: string | null; decision?: string | null; decision_seconds?: number | null; decision_limit?: number | null;
   grade_override?: boolean | null; late_rows?: readonly string[] | null; entry_method?: string | null; target_type?: string | null;
   confidence_at_entry?: number | null; would_be_mfe_r?: number | null; exit_reason?: string | null; regrade?: string | null;
+  htf_origin?: string | null;
 }): string[] {
   const g = gradeV2(t);
   const letter = V2_LETTER_OF(t.grade_letter) ?? (g.missing.length ? 'unfinished' : g.letter);
   const rows = ROWS.map((r) => `${r.label} ${t[r.key] ?? '—'}`).join(' · ');
   const late = t.late_rows?.length ? ` · ${t.late_rows.length} row${t.late_rows.length === 1 ? '' : 's'} scored after the clock` : '';
   return [
-    `- **Rubric:** ${RUBRIC_V2_LABEL} · ${rows} = ${g.total}/8 → **${letter}**${g.gate || g.caps.length || g.lowR ? ` (${g.reason})` : ''}${t.regrade ? ` · re-graded ${t.regrade} (never counted)` : ''}`,
-    `- **Facts:** scenario ${t.plan_scenario ? SCENARIO_LABEL[t.plan_scenario as Scenario] : '—'} · leg ${t.leg_location ?? '—'} · target ${t.target_type ?? '—'} · entry ${t.entry_method ?? '—'} · planned ${t.planned_rr ? `${t.planned_rr}R` : '—'} · confidence ${t.confidence_at_entry ?? '—'}/5`,
+    `- **Rubric:** ${RUBRIC_V2_LABEL} · singular gap ${gapOf(t.singular_gap) ? SINGULAR_GAP_LABEL[gapOf(t.singular_gap)!].toLowerCase() : '—'} · ${rows} = ${g.total}/8 → **${letter}**${g.gate || g.caps.length || g.lowR ? ` (${g.reason})` : ''}${t.regrade ? ` · re-graded ${t.regrade} (never counted)` : ''}`,
+    `- **Facts:** scenario ${t.plan_scenario ? SCENARIO_LABEL[t.plan_scenario as Scenario] : '—'} · leg ${t.leg_location ?? '—'} · target ${t.target_type ?? '—'} · entry ${t.entry_method ?? '—'} · planned ${t.planned_rr ? `${t.planned_rr}R` : '—'} · confidence ${t.confidence_at_entry ?? '—'}/5 · HTF origin ${t.htf_origin ?? '—'}`,
     `- **Decision:** ${t.decision ? DECISION_LABEL[t.decision as Decision] : '—'} in ${t.decision_seconds ?? '—'}s${t.decision_limit ? ` of ${t.decision_limit}s` : ' (untimed)'}${t.grade_override ? ' · **taken against a no-trade grade**' : ''}${late}${t.decision !== 'take' && t.would_be_mfe_r != null ? ` · would have reached ${sR(t.would_be_mfe_r)} at best` : ''}${t.exit_reason ? ` · exit ${t.exit_reason}` : ''}`,
   ];
 }

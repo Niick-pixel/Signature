@@ -63,6 +63,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   // Rubric v2, the timed decision (046).
   'row_sweep', 'row_inversion', 'row_path', 'row_target', 'leg_location', 'decision', 'decided_at',
   'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'outcome_at', 'would_be_mfe_r',
+  // The HTF origin (047); the singular-gap gate is the checklist's singular_gap, already exported.
+  'htf_origin',
 ];
 
 function csvCell(v: unknown): string {
@@ -174,7 +176,8 @@ export async function GET() {
     // 23: whether a win was partial (044).
     // 24: which of the morning's plans a trade was (045).
     // 25: rubric v2 — the four rows, the decision and its time, the override, the outcome step (046).
-    version: 25,
+    // 26: the singular-gap gate and the HTF origin (047).
+    version: 26,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,

@@ -1,4 +1,4 @@
-import { ROWS, isRubricV2, overTime, type RowKey } from './decision';
+import { HTF_ORIGINS, ROWS, gapOf, isRubricV2, overTime, type RowKey } from './decision';
 import type { Trade } from './types';
 
 /**
@@ -18,6 +18,10 @@ export interface DecisionStats {
   /** Seconds to decide, in buckets of the limit's quarters (timed decisions only), then the ones past the limit, and the misses. */
   time: { buckets: Array<{ label: string; n: number }>; timed: number; over: number; missed: number; median: number | null };
   decisions: Array<{ key: 'take' | 'pass' | 'missed'; label: string; cell: Cell; hypothetical: boolean }>;
+  /** The singular-gap gate (047): every decided record answering it, and R per trade taken. */
+  byGap: Array<{ key: 'one' | 'many'; label: string; count: number; taken: Cell }>;
+  /** The HTF origin (047): the same, per origin. */
+  byOrigin: Array<{ key: string; count: number; taken: Cell }>;
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
@@ -59,5 +63,14 @@ export function decisionStats(trades: readonly Trade[]): DecisionStats {
     cell: cellOf(v2.filter((t) => t.decision === key).map(v2R)), hypothetical: key !== 'take',
   }));
 
-  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, over, missed, median }, decisions };
+  const byGap = (['one', 'many'] as const).map((key) => {
+    const at = v2.filter((t) => gapOf(t.singular_gap) === key);
+    return { key, label: key === 'one' ? 'One gap' : 'More than one', count: at.length, taken: cellOf(at.filter((t) => t.decision === 'take').map((t) => t.r_multiple)) };
+  });
+  const byOrigin = HTF_ORIGINS.map((key) => {
+    const at = v2.filter((t) => t.htf_origin === key);
+    return { key, count: at.length, taken: cellOf(at.filter((t) => t.decision === 'take').map((t) => t.r_multiple)) };
+  });
+
+  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, over, missed, median }, decisions, byGap, byOrigin };
 }
