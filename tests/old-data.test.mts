@@ -68,7 +68,7 @@ test('a pre-Path journal comes through every later migration unchanged', () => {
   assert.deepEqual(objs, [
     'idx_trades_account', 'idx_trades_date', 'idx_trades_deleted', 'idx_trades_grade', 'idx_trades_outcome', 'idx_trades_playbook',
     'idx_trades_reason', 'idx_trades_status', 'idx_trades_sweep_tier', 'idx_trades_target_type',
-    'trades_decision_locked', 'trades_decision_locked_047', 'trades_grade_at_entry_locked', 'trades_loss_negative_insert', 'trades_loss_negative_update', 'trades_no_return_to_planned', 'trades_touch_updated_at',
+    'trades_decision_locked', 'trades_decision_locked_047', 'trades_decision_locked_048', 'trades_grade_at_entry_locked', 'trades_loss_negative_insert', 'trades_loss_negative_update', 'trades_no_return_to_planned', 'trades_touch_updated_at',
   ]);
   // And Eval is now a legal account, in trades and in cash.
   db.prepare("UPDATE trades SET account = 'Eval' WHERE rowid = (SELECT min(rowid) FROM trades)").run();

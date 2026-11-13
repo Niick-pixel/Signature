@@ -47,7 +47,7 @@ const TIER: Record<string, 1 | 2> = {
   'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
   'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
   'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
-  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'v2-mirrors': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'v2-mirrors': 2, 'v2-pass-reasons': 2, 'v2-fear-rule': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
 };
 /** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
 const LEAN: Record<string, 'fix' | 'keep'> = {
@@ -547,6 +547,36 @@ add({
     ]);
     return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: v.decisions.n, level: null }, items,
       caption: 'R per trade taken: the mirror done right (✓) against the mistake (✗)' };
+  },
+});
+
+add({
+  id: 'v2-pass-reasons', title: 'Passes and misses: why', category: 'chart', kind: 'bars', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Rubric v2 passes and misses by their main reason: how many, and what they would have made (the hypothetical R written on Step 2). Above zero: the reason cost you; below: it saved you.',
+  select: (v) => {
+    const rows = v.decisions.byReason.filter((b) => b.count > 0);
+    if (!rows.length) return V2_EMPTY('bars');
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: rows.reduce((s, b) => s + b.count, 0), level: null },
+      items: rows.map((b) => ({ label: b.reason, value: b.would.avgR ?? 0, display: `${R(b.would.avgR)} · n ${b.count}`,
+        tone: ((b.would.avgR ?? 0) > 0 ? 'watch' : 'accent') as Tone })),
+      caption: 'Would-have-made R per pass or miss, by main reason' };
+  },
+});
+
+add({
+  id: 'v2-fear-rule', title: 'Fear passes vs rule passes', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'The passes and misses whose main reason was "Doubt or fear", beside the ones where the rubric said no trade: what each would have made. If the fear passes would have won more, the fear is costing you; if the rule passes would have lost, the rubric is earning its keep.',
+  select: (v) => {
+    const { fear, rule } = v.decisions.fearVsRule;
+    if (!fear.n && !rule.n) return V2_EMPTY('bars');
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: fear.n + rule.n, level: null },
+      items: [
+        { label: 'Doubt or fear', value: fear.avgR ?? 0, display: fear.n ? `${R(fear.avgR)} · n ${fear.n}` : 'none yet', tone: 'watch' as Tone },
+        { label: 'Rubric said no trade', value: rule.avgR ?? 0, display: rule.n ? `${R(rule.avgR)} · n ${rule.n}` : 'none yet', tone: 'accent' as Tone },
+      ],
+      caption: 'Would-have-made R per pass' };
   },
 });
 

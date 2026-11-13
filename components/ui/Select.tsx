@@ -89,6 +89,17 @@ export function Select<T extends string>({
     };
   }, [open, measure]);
 
+  // While open (not while it fades out), the page knows a menu has the keys: single-key shortcuts wait.
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    html.dataset.menuOpen = String(Number(html.dataset.menuOpen ?? 0) + 1);
+    return () => {
+      const n = Number(html.dataset.menuOpen ?? 1) - 1;
+      if (n > 0) html.dataset.menuOpen = String(n); else delete html.dataset.menuOpen;
+    };
+  }, [open]);
+
   // Click-away and Escape both close.
   useEffect(() => {
     if (!open) return;

@@ -43,7 +43,9 @@ export interface DataGroup {
 }
 export const DATA_GROUPS: ReadonlyArray<DataGroup> = [
   { key: 'setup', label: 'Setup detail', fields: ['liquidity_event', 'entry_method', 'candle_strength', 'planned_rr'],
-    v2: () => ['row_sweep', 'row_inversion', 'row_path', 'row_target', 'leg_location', 'entry_method', 'planned_rr'] },
+    // Rubric v2: the setup facts Step 1 asks beyond its required rows (the old form's
+    // liquidity event and candle strength do not exist on a v2 trade, and never count).
+    v2: () => ['planned_rr', 'entry_method', 'target_type', 'confidence_at_entry', 'htf_origin'] },
   { key: 'outcome', label: 'Outcome detail', fields: ['exit_reason', 'mfe_bucket', 'moved_to_be'],
     v2: (t) => (t.decision === 'take' ? ['exit_reason', 'mfe_r'] : ['would_be_r']) },
   { key: 'stop', label: 'Stop and gap', fields: ['stop_placement', 'opposing_htf_gap'], v2: null },

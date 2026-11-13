@@ -65,6 +65,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'outcome_at', 'would_be_mfe_r',
   // The HTF origin (047); the singular-gap gate is the checklist's singular_gap, already exported.
   'htf_origin',
+  // Step 1 timings, the pass/miss reasons, the replay day (048).
+  'row_times', 'pass_reasons', 'pass_main_reason', 'replay_day_id',
 ];
 
 function csvCell(v: unknown): string {
@@ -177,7 +179,8 @@ export async function GET() {
     // 24: which of the morning's plans a trade was (045).
     // 25: rubric v2 — the four rows, the decision and its time, the override, the outcome step (046).
     // 26: the singular-gap gate and the HTF origin (047).
-    version: 26,
+    // 27: Step 1 timings, pass/miss reasons, replay days (048).
+    version: 27,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,

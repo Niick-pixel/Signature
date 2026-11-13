@@ -336,10 +336,15 @@ async function openNewTrade(prefs = {}) {
   await page.waitForSelector('[data-decide-step]');
   return { page, errors };
 }
-/** The two answers no key covers by default: the gate (G) and a planned R of 2R. */
+/** The answers no key covers by default: the gate (G), a planned R of 2R, and a target type. */
+const pickTarget = async (page) => {
+  await page.locator('[data-facts] [role="combobox"]').nth(3).click();
+  await page.locator('[role="option"]:has-text("PDH/PDL")').click();
+};
 const gateAndR = async (page) => {
   await page.keyboard.press('g');
   await page.locator('[data-facts] button', { hasText: /^2R$/ }).click();
+  await pickTarget(page);
 };
 const savedTrade = async (page) => page.evaluate(async () => {
   const list = await (await fetch('/api/trades?pending=1')).json();
@@ -374,6 +379,8 @@ await check('Rubric v2: G answers the gate; more than one gap is No trade; Take 
   await page.keyboard.press('g');
   expect(await page.locator('[data-decide-button="take"]').isDisabled(), 'still waiting on the planned R');
   await page.locator('[data-facts] button', { hasText: /^2R$/ }).click();
+  expect(await page.locator('[data-decide-button="take"]').isDisabled(), 'still waiting on the target type');
+  await pickTarget(page);
   expect(!(await page.locator('[data-decide-button="take"]').isDisabled()), 'Take open');
   await page.keyboard.press('h'); await page.keyboard.press('h');
   await page.keyboard.press('t');
@@ -458,7 +465,7 @@ await check('Rubric v2: Close shuts an untouched form, asks once something is en
   const t = await savedTrade(page);
   // An edit that tries to change the rows keeps the locked ones.
   const res = await page.evaluate(async (t) => {
-    const f = new FormData(); f.append('trade', JSON.stringify({ ...t, row_sweep: 0, would_be_r: -1, outcome_at: new Date().toISOString(), explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) }));
+    const f = new FormData(); f.append('trade', JSON.stringify({ ...t, row_sweep: 0, would_be_r: -1, pass_reasons: ['Rubric said no trade'], outcome_at: new Date().toISOString(), explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) }));
     const r = await fetch(`/api/trades/${t.id}`, { method: 'PUT', body: f });
     return { ok: r.ok, t: await r.json() };
   }, t);
@@ -537,6 +544,30 @@ await check('Rubric v2: the tag row — a tag and its mirror never together, the
   // Three boxes, one height.
   const hs = await page.locator('[data-tag-grid]').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
   expect(Math.max(...hs) - Math.min(...hs) <= 2, `same height: ${hs.join(', ')}`);
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Rubric v2: a pass shows "Why I passed" instead of the tags; a reason is required; the second tap makes it main', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('p');
+  await page.waitForSelector('[data-outcome-step][data-decision="pass"]');
+  expect(await page.locator('[data-tags]').count() === 0, 'no tag groups on a pass');
+  expect(await page.locator('[data-reasons]').count() === 1, 'the reasons instead');
+  await page.fill('[data-field="would-r"]', '2');
+  await page.locator('[data-outcome-step] textarea').first().fill('Waited and it ran without me.');
+  await page.click('[data-save-outcome]');
+  expect(/passed/.test(await page.locator('[data-outcome-step] [role="alert"]').innerText()), 'a reason is required');
+  await page.click('[data-reason="Rubric said no trade"]');
+  await page.click('[data-reason="Doubt or fear"]');
+  await page.click('[data-reason="Doubt or fear"]');
+  expect(await page.locator('[data-reason="Doubt or fear"][data-main]').count() === 1, 'second tap: main');
+  await page.click('[data-save-outcome]');
+  await page.waitForSelector('[data-outcome-step]', { state: 'detached', timeout: 5000 });
+  const t = await page.evaluate(async () => (await (await fetch('/api/trades')).json()).filter((x) => x.rubric_version === 5 && x.decision === 'pass').pop());
+  expect(t && t.pass_main_reason === 'Doubt or fear' && t.pass_reasons.length === 2 && t.mistake_tags.length === 0, JSON.stringify(t && { m: t.pass_main_reason, r: t.pass_reasons }));
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });

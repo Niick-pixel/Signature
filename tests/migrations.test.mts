@@ -33,7 +33,7 @@ test('the final schema has every table', () => {
   const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>).map((r) => r.name);
   assert.deepEqual(tables, [
     'app_settings', 'blind_grades', 'board_edges', 'board_notes', 'cash_events', 'custom_tags', 'daily_reviews', 'dashboard_boards', 'eval_purchases', 'execution_unlinks', 'executions',
-    'flag_dismissals', 'flaw_drills', 'flaw_work', 'goal_checkins', 'goals', 'insights', 'journal_pages', 'news_events', 'notifications', 'path_events', 'path_steps', 'playbooks', 'predictions', 'prop_accounts', 'prop_payouts', 'red_day_pages', 'red_day_skips', 'schema_migrations',
+    'flag_dismissals', 'flaw_drills', 'flaw_work', 'goal_checkins', 'goals', 'insights', 'journal_pages', 'news_events', 'notifications', 'path_events', 'path_steps', 'playbooks', 'predictions', 'prop_accounts', 'prop_payouts', 'red_day_pages', 'red_day_skips', 'replay_days', 'schema_migrations',
     'session_prep', 'shot_drawings', 'study_cards', 'study_note_trades', 'study_notes', 'study_sessions', 'tag_groups', 'theme_dictionary', 'trade_bars', 'trade_custom_tags', 'trade_edits', 'trade_partials', 'trade_screenshots', 'trades',
     'video_marks', 'watch_later', 'weekly_reviews',
   ]);

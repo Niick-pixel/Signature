@@ -284,6 +284,13 @@ export interface Trade {
   outcome_at: string | null;
   /** What a pass or a miss would have reached at best, in R, when known. */
   would_be_mfe_r: number | null;
+  /** Rubric v2 (048): when each row and the gate were last scored, in seconds since Step 1 opened. */
+  row_times: Partial<Record<'singular_gap' | 'row_sweep' | 'row_inversion' | 'row_path' | 'row_target', number>> | null;
+  /** Rubric v2 (048), a pass or a miss: why (lib/decision PASS_REASONS), and the main one. */
+  pass_reasons: string[] | null;
+  pass_main_reason: string | null;
+  /** The replay day a backtest was traded on (048). */
+  replay_day_id: string | null;
   /** Rubric v2 fact (047): the timeframe the reaction started from. Never graded. */
   htf_origin: 'None' | '5m' | '15m' | '30m' | '1H' | '4H' | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */

@@ -1,4 +1,4 @@
-import { HTF_ORIGINS, MIRRORS, ROWS, gapOf, isRubricV2, overTime, type RowKey } from './decision';
+import { HTF_ORIGINS, MIRRORS, PASS_REASONS, ROWS, gapOf, isRubricV2, overTime, type RowKey } from './decision';
 import type { Trade } from './types';
 
 /**
@@ -24,6 +24,10 @@ export interface DecisionStats {
   byOrigin: Array<{ key: string; count: number; taken: Cell }>;
   /** Each ME tag against its WORKED mirror: R per trade taken carrying one or the other. */
   mirrors: Array<{ me: string; worked: string; me_cell: Cell; worked_cell: Cell }>;
+  /** Passes and misses (048) by their main reason: how many, and what they would have made (hypothetical R). */
+  byReason: Array<{ reason: string; count: number; would: Cell }>;
+  /** The question behind it: did the fear passes cost more than the rule passes saved? */
+  fearVsRule: { fear: Cell; rule: Cell };
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
@@ -80,5 +84,15 @@ export function decisionStats(trades: readonly Trade[]): DecisionStats {
     worked_cell: cellOf(taken.filter((t) => (t.worked_tags ?? []).includes(worked)).map((t) => t.r_multiple)),
   }));
 
-  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, over, missed, median }, decisions, byGap, byOrigin, mirrors };
+  const notTaken = v2.filter((t) => t.decision === 'pass' || t.decision === 'missed');
+  const byReason = PASS_REASONS.map((reason) => {
+    const at = notTaken.filter((t) => t.pass_main_reason === reason);
+    return { reason, count: at.length, would: cellOf(at.map((t) => t.would_be_r)) };
+  });
+  const fearVsRule = {
+    fear: byReason.find((b) => b.reason === 'Doubt or fear')!.would,
+    rule: byReason.find((b) => b.reason === 'Rubric said no trade')!.would,
+  };
+
+  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, over, missed, median }, decisions, byGap, byOrigin, mirrors, byReason, fearVsRule };
 }

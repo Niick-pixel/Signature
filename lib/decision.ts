@@ -201,7 +201,10 @@ export interface DecisionRecord {
   decision_limit: number | null;
   grade_override: boolean;
   late_rows: RowKey[] | null;
+  /** When each row and the gate were last scored, in seconds since the form opened (048). */
+  row_times: Partial<Record<TimedKey, number>> | null;
 }
+export type TimedKey = RowKey | 'singular_gap';
 
 /**
  * The record Step 1 locks with. Running out of time does not decide for you:
@@ -212,8 +215,8 @@ export interface DecisionRecord {
 export function lockDecision(o: {
   choice: Decision; startedAt: number; at: number; limit: number | null;
   grade: V2Grade; override?: boolean;
-  /** When each row was scored (ms), to tell which came after the limit. */
-  scoredAt?: Partial<Record<RowKey, number>>;
+  /** When each row (and the gate) was scored (ms): which came after the limit, and the decision replay. */
+  scoredAt?: Partial<Record<TimedKey, number>>;
 }): DecisionRecord {
   const seconds = Math.round(((o.at - o.startedAt) / 1000) * 10) / 10;
   const decision: Decision = o.choice;
@@ -226,7 +229,27 @@ export function lockDecision(o: {
     decision_limit: o.limit,
     grade_override: decision === 'take' && o.grade.letter === 'No trade' && Boolean(o.override),
     late_rows: late.length ? late : null,
+    row_times: (() => {
+      const e = Object.entries(o.scoredAt ?? {}).filter(([, ms]) => typeof ms === 'number' && ms >= o.startedAt);
+      return e.length ? Object.fromEntries(e.map(([k, ms]) => [k, Math.round(((ms as number) - o.startedAt) / 100) / 10])) : null;
+    })(),
   };
+}
+
+/**
+ * The decision replay (048): each timed answer in the order it was given,
+ * how long it took after the one before, and the slowest. Null when the
+ * trade has no timings (decided before 048).
+ */
+export function decisionReplay(t: { row_times?: Partial<Record<TimedKey, number>> | null; decision_seconds?: number | null }):
+  { marks: Array<{ key: TimedKey; label: string; at: number; took: number }>; total: number; slowest: { label: string; took: number } | null } | null {
+  if (!t.row_times || !Object.keys(t.row_times).length) return null;
+  const label = (k: TimedKey) => (k === 'singular_gap' ? 'Gate' : ROWS.find((r) => r.key === k)?.label ?? k);
+  const sorted = (Object.entries(t.row_times) as Array<[TimedKey, number]>).sort((a, b) => a[1] - b[1]);
+  const marks = sorted.map(([key, at], i) => ({ key, label: label(key), at, took: Math.round((at - (i ? sorted[i - 1][1] : 0)) * 10) / 10 }));
+  const total = t.decision_seconds ?? marks[marks.length - 1].at;
+  const slowest = marks.reduce<(typeof marks)[number] | null>((m, x) => (!m || x.took > m.took ? x : m), null);
+  return { marks, total, slowest: slowest ? { label: slowest.label, took: slowest.took } : null };
 }
 
 /** A decision made after the clock ran out (a miss is its own thing). */
@@ -315,6 +338,15 @@ export function autoMarketTags(t: { mfe_r?: number | null; planned_rr?: string |
 }
 /** On an older trade, these were execution and count as a rule broken in the weekly review. */
 export const OLD_EXECUTION_TAGS = ['Moved stop', 'Cut winner early', 'Oversized', 'Revenge', 'Chased', 'Overtraded'] as const;
+
+/* ───────────────────────── a pass or a miss: why ───────────────────────── */
+
+/** Why I passed / why I missed (048). Several can apply; one is the main reason. */
+export const PASS_REASONS = [
+  'Rubric said no trade', 'Scenario B cap', 'Unclear target', "Couldn't read it in time",
+  'Doubt or fear', 'Not in my plan', 'Waiting for a retest', 'Candle too big',
+] as const;
+export type PassReason = (typeof PASS_REASONS)[number];
 
 /* ───────────────────────── rules followed ───────────────────────── */
 

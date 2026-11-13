@@ -14,7 +14,7 @@ import {
   MOVED_TO_BE, PLANNED_RR_VALUES, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS,
 } from './anatomy';
 import { TRADE_RULES } from './ruleBook';
-import { HTF_ORIGINS } from './decision';
+import { HTF_ORIGINS, PASS_REASONS } from './decision';
 
 /**
  * Whose standard a piece of writing is held to.
@@ -163,6 +163,10 @@ export function parseTradeInput(
     minimums are for trades that were taken.
   */
   const notTaken = decision === 'pass' || decision === 'missed';
+  const firstOutcome = outcomeAt && !floor.previous?.stored?.outcome_at;
+  if (notTaken && firstOutcome && !(Array.isArray(t.pass_reasons) && t.pass_reasons.some((x) => (PASS_REASONS as readonly string[]).includes(x as string)))) {
+    return { ok: false, error: `Why was it ${decision === 'pass' ? 'passed' : 'missed'}? Pick at least one reason.` };
+  }
   if (notTaken && outcomeAt && explanation.length < MIN_PASS_EXPLANATION && !asWritten(explanation, floor.previous?.explanation)) {
     return { ok: false, error: `One line of explanation — at least ${MIN_PASS_EXPLANATION} characters — on why it was ${decision === 'pass' ? 'passed' : 'missed'}.` };
   }
@@ -453,11 +457,11 @@ export function parseTradeInput(
 }
 
 const ROW_KEYS = ['row_sweep', 'row_inversion', 'row_path', 'row_target'] as const;
-const LOCKED_V2 = [...ROW_KEYS, 'singular_gap', 'htf_origin', 'leg_location', 'decision', 'decided_at', 'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'plan_scenario', 'direction', 'planned_rr'] as const;
+const LOCKED_V2 = [...ROW_KEYS, 'singular_gap', 'htf_origin', 'row_times', 'leg_location', 'decision', 'decided_at', 'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'plan_scenario', 'direction', 'planned_rr'] as const;
 
 /** The rubric v2 fields. On a decided trade, Step 1's come from the record, whatever the payload says. */
 type V2Fields = Pick<TradeInput, 'row_sweep' | 'row_inversion' | 'row_path' | 'row_target' | 'leg_location' | 'decision' | 'decided_at'
-  | 'decision_seconds' | 'decision_limit' | 'grade_override' | 'late_rows' | 'outcome_at' | 'would_be_mfe_r' | 'htf_origin'>;
+  | 'decision_seconds' | 'decision_limit' | 'grade_override' | 'late_rows' | 'outcome_at' | 'would_be_mfe_r' | 'htf_origin' | 'row_times' | 'pass_reasons' | 'pass_main_reason' | 'replay_day_id'>;
 function v2Fields(t: Record<string, unknown>, decision: 'take' | 'pass' | 'missed' | null, outcomeAt: string | null, floor: WritingFloor): V2Fields {
   const row = (k: string) => (t[k] === 0 || t[k] === 1 || t[k] === 2 ? t[k] as number : null);
   const num = (k: string, lo = 0) => (typeof t[k] === 'number' && Number.isFinite(t[k]) && (t[k] as number) >= lo ? t[k] as number : null);
@@ -473,7 +477,18 @@ function v2Fields(t: Record<string, unknown>, decision: 'take' | 'pass' | 'misse
     late_rows: Array.isArray(t.late_rows) ? t.late_rows.filter((k): k is string => (ROW_KEYS as readonly string[]).includes(k as string)) : null,
     outcome_at: outcomeAt,
     would_be_mfe_r: typeof t.would_be_mfe_r === 'number' && Number.isFinite(t.would_be_mfe_r) ? t.would_be_mfe_r : null,
+    row_times: t.row_times && typeof t.row_times === 'object'
+      ? Object.fromEntries(Object.entries(t.row_times as Record<string, unknown>)
+        .filter(([k, v]) => (k === 'singular_gap' || (ROW_KEYS as readonly string[]).includes(k)) && typeof v === 'number' && Number.isFinite(v) && v >= 0))
+      : null,
+    pass_reasons: decision && decision !== 'take' && Array.isArray(t.pass_reasons)
+      ? [...new Set(t.pass_reasons.filter((x): x is string => typeof x === 'string' && (PASS_REASONS as readonly string[]).includes(x)))] : null,
+    pass_main_reason: null,
+    replay_day_id: typeof t.replay_day_id === 'string' && t.replay_day_id ? t.replay_day_id : null,
   };
+  // The main reason is one of the reasons; with none marked, the first picked is the main one.
+  const reasons = out.pass_reasons as string[] | null;
+  if (reasons?.length) out.pass_main_reason = reasons.includes(t.pass_main_reason as string) ? t.pass_main_reason : reasons[0];
   const stored = floor.previous?.stored;
   if (stored?.decided_at && !floor.restoring) {
     for (const k of LOCKED_V2) if (k in stored) out[k] = stored[k];

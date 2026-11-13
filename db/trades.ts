@@ -115,6 +115,19 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
     try { const v: unknown = JSON.parse(r.late_rows); return Array.isArray(v) ? v.filter((x): x is RowKey => typeof x === 'string' && x.startsWith('row_')) : null; }
     catch { return null; }
   })();
+  // 048: the Step 1 timings and the reasons a pass or a miss gives.
+  trade.row_times = (() => {
+    if (typeof r.row_times !== 'string') return null;
+    try {
+      const v = JSON.parse(r.row_times) as Record<string, unknown>;
+      return Object.fromEntries(Object.entries(v).filter(([k, x]) => (k === 'singular_gap' || k.startsWith('row_')) && typeof x === 'number')) as Trade['row_times'];
+    } catch { return null; }
+  })();
+  trade.pass_reasons = (() => {
+    if (typeof r.pass_reasons !== 'string') return null;
+    try { const v: unknown = JSON.parse(r.pass_reasons); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : null; }
+    catch { return null; }
+  })();
   trade.rule_breaks_manual = (() => {
     if (typeof r.rule_breaks_manual !== 'string') return [];
     try { const v: unknown = JSON.parse(r.rule_breaks_manual); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; }
@@ -204,6 +217,8 @@ const WRITABLE = [
   'decision_seconds', 'decision_limit', 'grade_override', 'late_rows', 'outcome_at', 'would_be_mfe_r',
   // The HTF origin (047), locked with Step 1 (the gate reuses singular_gap).
   'htf_origin',
+  // Step 1 timings, the pass/miss reasons and the replay day (048).
+  'row_times', 'pass_reasons', 'pass_main_reason', 'replay_day_id',
 ] as const;
 
 /**
@@ -263,6 +278,8 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
   out.eqhl_checks = input.eqhl_checks ? JSON.stringify(input.eqhl_checks) : null;
   out.rule_breaks_manual = input.rule_breaks_manual?.length ? JSON.stringify(input.rule_breaks_manual) : null;
   out.late_rows = input.late_rows?.length ? JSON.stringify(input.late_rows) : null;
+  out.row_times = input.row_times && Object.keys(input.row_times).length ? JSON.stringify(input.row_times) : null;
+  out.pass_reasons = input.pass_reasons?.length ? JSON.stringify(input.pass_reasons) : null;
   return out;
 }
 

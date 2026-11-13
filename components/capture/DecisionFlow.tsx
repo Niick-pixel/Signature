@@ -27,11 +27,11 @@ import { REGRADE_HINT, regradeOptions, type GradeLetter } from '@/lib/grade';
 import { MIN_EXPLANATION, MIN_LESSON, MIN_PASS_EXPLANATION, type Trade } from '@/lib/types';
 import { playChime } from '@/lib/chime';
 import {
-  AUTO_MARKET_TAGS, MARKET_TAGS_V2, ME_TAGS, WORKED_TAGS_V2, autoMarketTags, overTime, tagBlocked,
+  PASS_REASONS, decisionReplay, AUTO_MARKET_TAGS, MARKET_TAGS_V2, ME_TAGS, WORKED_TAGS_V2, autoMarketTags, overTime, tagBlocked,
   DECISION_LABEL, HTF_ORIGINS, SINGULAR_GAP_LABEL, SINGULAR_GAP_QUESTION, gapOf, type HtfOrigin, type SingularGap, LEG_HELP, LEG_LOCATIONS, OVERRIDE_PROMPT, ROWS, RUBRIC_V2_LABEL, SCENARIO_LABEL,
   V2_ENTRIES, V2_LETTER_OF, V2_PLANNED_RS, V2_TARGETS, clock, consistencyFlags, gradeV2, lockDecision,
   needsOverride, rulesFollowedV2, scenarioFromPlan,
-  type Decision, type LegLocation, type RowKey, type Scenario, type V2Grade,
+  type Decision, type LegLocation, type RowKey, type TimedKey, type Scenario, type V2Grade,
 } from '@/lib/decision';
 
 /*
@@ -118,14 +118,19 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   const [picked, setPicked] = useState<Scenario | null>(null);
   const [leg, setLeg] = useState<LegLocation | null>(null);
   // The singular-gap gate: no default, tapped every time (true = one gap).
-  const [gap, setGap] = useState<boolean | null>(null);
+  const [gap, setGapValue] = useState<boolean | null>(null);
   const [htfOrigin, setHtfOrigin] = useState<HtfOrigin | null>(null);
   const [target, setTarget] = useState<string | null>(null);
   const [entry, setEntry] = useState<string | null>(null);
   const [plannedR, setPlannedR] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
   const [rows, setRows] = useState<Partial<Record<RowKey, 0 | 1 | 2>>>({});
-  const [scoredAt, setScoredAt] = useState<Partial<Record<RowKey, number>>>({});
+  const [scoredAt, setScoredAt] = useState<Partial<Record<TimedKey, number>>>({});
+  // The gate is timed like the rows, for the decision replay.
+  const setGap = useCallback((v: boolean | ((x: boolean | null) => boolean)) => {
+    setGapValue(v);
+    setScoredAt((s) => ({ ...s, singular_gap: Date.now() }));
+  }, []);
   const [focus, setFocus] = useState(0);
   const [slots, setSlots] = useState<SlotFiles>({});
   const [asking, setAsking] = useState(false);
@@ -168,13 +173,14 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   const input = { ...rows, singular_gap: gap, direction, plan_scenario: scenario, leg_location: leg, planned_rr: plannedR };
   const grade: V2Grade = gradeV2(input);
   // Planned R is required too: the Target row's thresholds (1.5R, 2R) are read against it.
-  const ready = grade.missing.length === 0 && gap != null && direction != null && scenario != null && plannedR != null;
+  // Target type too: with no default, "not picked" and a real "Other" can be told apart (the drill reads it).
+  const ready = grade.missing.length === 0 && gap != null && direction != null && scenario != null && plannedR != null && target != null;
   const owed = [
     ...(gap == null ? ['singular gap'] : []),
     ...grade.missing.map((k) => ROWS.find((r) => r.key === k)!.label),
-    ...(direction ? [] : ['direction']), ...(scenario ? [] : ['scenario']), ...(plannedR ? [] : ['planned R']),
+    ...(direction ? [] : ['direction']), ...(scenario ? [] : ['scenario']), ...(plannedR ? [] : ['planned R']), ...(target ? [] : ['target type']),
   ];
-  const optional = [leg ? null : 'leg location', htfOrigin ? null : 'HTF origin', target ? null : 'target', entry ? null : 'entry', confidence ? null : 'confidence'].filter(Boolean) as string[];
+  const optional = [leg ? null : 'leg location', htfOrigin ? null : 'HTF origin', entry ? null : 'entry', confidence ? null : 'confidence'].filter(Boolean) as string[];
 
   // Scoring a row moves the focus to the next row still unscored (in key order, wrapping); when every
   // row is scored it stays put. Re-scoring an earlier row therefore never drags the focus somewhere odd.
@@ -274,7 +280,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
-      if (document.querySelector('[role="listbox"]') || closing) return;
+      if (document.documentElement.dataset.menuOpen || closing) return;
       const k = e.key.toLowerCase();
       const ours = asking ? ['enter', 't', 'escape'] : ['0', '1', '2', 'arrowdown', 'arrowup', 'l', 's', 'a', 'b', 'u', 'g', 'h', 't', 'p', 'm', 'escape'];
       if (ours.includes(k) || e.key.length === 1) { e.stopPropagation(); if (k !== 'escape') e.preventDefault(); }
@@ -301,7 +307,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [asking, focus, score, decide, save, expired, closing, requestClose]);
+  }, [asking, focus, score, decide, save, expired, closing, requestClose, setGap]);
 
   return (
     <div data-decide-step className="flex flex-1 flex-col">
@@ -354,7 +360,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
             <Segmented value={htfOrigin ?? ('' as HtfOrigin)} onChange={setHtfOrigin} options={HTF_ORIGINS} compact />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field quiet label="Target type">
+            <Field quiet label="Target type" required={!target} className={flashing && !target ? 'need-flash' : ''}>
               <Select value={target} onChange={setTarget} placeholder="Which…" options={TARGET_VALUES} labelFor={targetLabel} />
             </Field>
             <Field quiet label="Entry type">
@@ -602,6 +608,15 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const [worked, setWorked] = useState<string[]>(trade.worked_tags ?? []);
   const [regrade, setRegrade] = useState(trade.regrade ?? null);
   const [tagNote, setTagNote] = useState<string | null>(null);
+  // A pass or a miss: why. Tap picks, a second tap makes it the main reason, a third removes it.
+  const [reasons, setReasons] = useState<string[]>(trade.pass_reasons ?? []);
+  const [mainReason, setMainReason] = useState<string | null>(trade.pass_main_reason ?? null);
+  const tapReason = (r: string) => {
+    if (!reasons.includes(r)) { setReasons([...reasons, r]); if (!mainReason) setMainReason(r); return; }
+    if (mainReason !== r) { setMainReason(r); return; }
+    const rest = reasons.filter((x) => x !== r);
+    setReasons(rest); setMainReason(rest[0] ?? null);
+  };
   const toggleTag = (side: 'me' | 'market' | 'worked', tag: string) => {
     const [list, set] = side === 'me' ? [me, setMe] : side === 'market' ? [market, setMarket] : [worked, setWorked];
     if (list.includes(tag)) { set(list.filter((x) => x !== tag)); setTagNote(null); return; }
@@ -645,12 +660,13 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
     ...(taken && settled && !ended ? ['how it ended'] : []),
     ...(taken && settled && num(r) == null ? ['R'] : []),
     ...(!taken && num(wouldR) == null ? ['what it would have done'] : []),
+    ...(!taken && reasons.length === 0 ? [`why it was ${decision === 'pass' ? 'passed' : 'missed'}`] : []),
     ...(explanation.trim().length < minExplanation ? [`explanation (${minExplanation}+)`] : []),
     ...(lessonRequired && lesson.trim().length < MIN_LESSON ? [`lesson (${MIN_LESSON}+)`] : []),
   ];
 
   // What has been written since the form opened: closing then asks.
-  const snapshot = JSON.stringify([ended, r, pnl, contracts, mfe, reached1R, exit, management, wouldR, wouldMfe, explanation, lesson, me, market, worked, regrade, stage, drillKept]);
+  const snapshot = JSON.stringify([ended, r, pnl, contracts, mfe, reached1R, exit, management, wouldR, wouldMfe, explanation, lesson, me, market, worked, regrade, stage, drillKept, reasons, mainReason]);
   const [initial] = useState(snapshot);
   const dirty = snapshot !== initial;
   const requestClose = useCallback(() => { if (dirty) setClosing(true); else closeCapture(); }, [dirty]);
@@ -660,7 +676,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   }, [requestClose]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || closing || document.querySelector('[role="listbox"]')) return;
+      if (e.key !== 'Escape' || closing || document.documentElement.dataset.menuOpen) return;
       e.preventDefault(); e.stopPropagation(); requestClose();
     };
     window.addEventListener('keydown', onKey, true);
@@ -671,9 +687,20 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const draft: Partial<Trade> = {
     ...trade, exit_reason: taken ? exit : null, mfe_r: taken ? num(mfe) : null, would_be_r: taken ? null : num(wouldR),
   };
+  // From the drill card: a Step 2 field is scrolled to and focused; a Step 1 field opens the locked Step 1.
+  const jumpTo = (field: keyof Trade) => {
+    const here: Partial<Record<keyof Trade, string>> = { exit_reason: 'exit', mfe_r: 'mfe', would_be_r: 'would-r', r_multiple: 'r' };
+    const key = here[field];
+    if (!key) { onBack(); return; }
+    const el = document.querySelector<HTMLElement>(`[data-field="${key}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    (el?.querySelector('input, button') as HTMLElement | null ?? el)?.focus();
+  };
   const onDrill = useCallback((k: string | null, v: DrillKept | null) => { setDrillKey(k); setDrillKept(v); }, []);
 
   /** `draft`: keep what is written but leave the outcome unwritten — the trade stays on the Unfinished shelf. */
+  const drillCard = <DrillChip drillKey={drillKey} value={drillKept} onChange={onDrill} draft={draft} onJump={jumpTo} />;
+
   async function save(next = false, draft = false) {
     if (owed.length && !draft) {
       setError(`Still to write: ${owed.join(', ')}.`);
@@ -693,7 +720,9 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       exit_reason: taken ? exit : null, management: taken ? management : trade.management,
       would_be_r: taken ? null : num(wouldR), would_be_mfe_r: taken ? null : num(wouldMfe),
       explanation: explanation.trim(), lesson: lesson.trim() || null,
-      mistake_tags: me, market_tags: [...market, ...autoNow], worked_tags: worked,
+      // A pass or a miss carries its reasons instead of tags: execution tags mean nothing on a trade not taken.
+      mistake_tags: taken ? me : [], market_tags: taken ? [...market, ...autoNow] : [], worked_tags: taken ? worked : [],
+      pass_reasons: taken ? null : reasons, pass_main_reason: taken ? null : mainReason,
       regrade, drill_key: drillKey, drill_kept: drillKey ? drillKept : null,
       // Step 2 is written once settled; a trade still open stays pending.
       outcome_at: draft ? (trade.outcome_at ?? null) : settled ? (trade.outcome_at ?? new Date().toISOString()) : null,
@@ -745,7 +774,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       <HeaderStrip backtest={backtest} />
 
       {/* Three equal columns: the locked decision, how it ended, the words. The tags run below them, then Save. */}
-      <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
         {/* Step 1, read-only: the decision and its grade. */}
         <div className="flex flex-col gap-3" data-step1-summary>
           <div className="rounded-[calc(18px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
@@ -782,11 +811,8 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               {gapOf(trade.singular_gap) ? SINGULAR_GAP_LABEL[gapOf(trade.singular_gap)!] : 'gap —'} · {trade.direction} · {trade.plan_scenario ? SCENARIO_LABEL[trade.plan_scenario] : 'no scenario'} · leg {trade.leg_location ?? '—'} · HTF origin {trade.htf_origin ?? '—'} · target {trade.target_type} · {trade.entry_method ?? 'entry —'} · plan {trade.planned_rr ? `${trade.planned_rr}R` : '—'} · confidence {trade.confidence_at_entry ?? '—'}
             </p>
           </div>
-          <Field quiet label="Honest re-grade" hint={`${REGRADE_HINT} Stored, never counted in stats or expectancy.`}>
-            <Select value={regrade} onChange={setRegrade} placeholder="Not re-graded" options={regrades} />
-          </Field>
-          <SimilarCard s={similar} loading={simLoading} />
-          <DrillChip drillKey={drillKey} value={drillKept} onChange={onDrill} draft={draft} />
+          {/* Placed so the three columns end level above the tag row (they balance differently once taken). */}
+          {taken ? <>{drillCard}<DecisionReplay trade={trade} /></> : <><DecisionReplay trade={trade} /><RubricProgress /></>}
         </div>
 
         {/* How it ended — or, for a pass or a miss, what it would have done. */}
@@ -812,9 +838,11 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
                   <Segmented value={reached1R == null ? '' : reached1R ? 'Yes' : 'No'} onChange={(v) => setReached1R(v === 'Yes')} options={['Yes', 'No']} accentFor={yesNoTone} compact />
                 </Field>
               </div>
-              <Field quiet label="Exit">
-                <Segmented value={exit ?? ''} onChange={setExit} options={EXIT_REASONS} accentFor={exitTone} compact />
-              </Field>
+              <div data-field="exit">
+                <Field quiet label="Exit" group>
+                  <Segmented value={exit ?? ''} onChange={setExit} options={EXIT_REASONS} accentFor={exitTone} compact />
+                </Field>
+              </div>
               <Field quiet label="Management plan">
                 <Select value={management} onChange={setManagement} placeholder="Which plan?" options={V2_MANAGEMENTS} />
               </Field>
@@ -832,6 +860,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               </div>
             </div>
           )}
+          {taken ? <RubricProgress /> : drillCard}
         </div>
 
         {/* The words, and what they add up to. */}
@@ -857,11 +886,18 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               {flags.map((f) => <li key={f} className="rounded-[10px] px-2.5 py-1.5" style={{ background: 'color-mix(in srgb, rgb(var(--grade-b)) 12%, transparent)', color: 'var(--text)' }}>⚠ {f}</li>)}
             </ul>
           )}
+          <Field quiet label="Honest re-grade" hint={`${REGRADE_HINT} Stored, never counted in stats or expectancy.`}>
+            <Select value={regrade} onChange={setRegrade} placeholder="Not re-graded" options={regrades} />
+          </Field>
+          <SimilarCard s={similar} loading={simLoading} />
         </div>
       </div>
 
       {/* The three tag lists under a rule: ME and WORKED as mirrored 3 × 4 grids (an opposite sits at the
           same place on the other side), MARKET between them as 2 × 3 — the same height, side by side. */}
+      {!taken ? (
+        <ReasonRow decision={decision} reasons={reasons} main={mainReason} onTap={tapReason} flash={flashing && reasons.length === 0} />
+      ) : (
       <div className="mt-5 grid items-stretch gap-x-6 gap-y-4 border-t pt-4 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
         <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken. Its opposite sits at the same place under What worked.">
           <TagGrid cols={3} tone="loss" options={tagOptions(ME_TAGS as readonly string[], trade.mistake_tags)} value={me}
@@ -877,7 +913,10 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
         </TagBlock>
         {tagNote && <p className="text-[11.5px] md:col-span-3" style={{ color: 'rgb(var(--grade-b))' }} role="status" data-tag-note>{tagNote}</p>}
       </div>
+      )}
 
+      {/* Spare height goes here, under the tags — never as a gap above them. */}
+      <div className="flex-1" aria-hidden />
       {/* Save, along the bottom. */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: 'var(--glass-stroke)' }}>
         <div className="min-w-0 text-[11px] leading-snug" style={faint}>
@@ -913,6 +952,112 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
           { label: 'Keep writing', data: 'keep', onClick: () => setClosing(false) },
         ]} />
     </div>
+  );
+}
+
+/** Why I passed / why I missed: the full-width row a pass or a miss gets instead of the tags. */
+function ReasonRow({ decision, reasons, main, onTap, flash }: { decision: Decision; reasons: string[]; main: string | null; onTap: (r: string) => void; flash: boolean }) {
+  const title = decision === 'pass' ? 'Why I passed' : 'Why I missed';
+  const required = reasons.length === 0;
+  return (
+    <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--glass-stroke)' }} data-reasons={reasons.length}>
+      <span className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: required ? 'rgb(var(--accent))' : 'var(--text-faint)' }}>
+        {required && <span aria-hidden className="size-1.5 rounded-full" style={{ background: 'rgb(var(--accent))' }} />}
+        {title}{required && <span className="font-medium normal-case tracking-normal opacity-75">· required</span>}
+        <Help>Pick every reason that applies. Tap a picked one again to make it the main reason (★); a third tap removes it. Stats compares them — fear passes against rule passes.</Help>
+      </span>
+      <div className={`grid grid-cols-2 gap-1.5 rounded-[calc(16px*var(--rk))] border p-2 md:grid-cols-4 ${flash ? 'need-flash' : ''}`}
+        style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
+        {PASS_REASONS.map((r) => {
+          const on = reasons.includes(r);
+          const isMain = main === r && on;
+          return (
+            <button key={r} type="button" onClick={() => onTap(r)} aria-pressed={on} data-reason={r} data-main={isMain || undefined}
+              className="flex min-h-[2.5rem] items-center justify-center gap-1.5 rounded-[calc(11px*var(--rk))] border px-2 py-1.5 text-[12px] transition-colors"
+              style={{
+                borderColor: isMain ? 'rgb(var(--accent))' : on ? 'rgb(var(--accent) / 0.45)' : 'transparent',
+                background: on ? `rgb(var(--accent) / ${isMain ? 0.16 : 0.08})` : 'transparent',
+                color: on ? 'rgb(var(--accent))' : 'var(--text-dim)', fontWeight: isMain ? 600 : 400,
+              }}>
+              {isMain && <span aria-label="main reason">★</span>}{r}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** From open to decision: when each row and the gate were scored, and which took longest (048). */
+function DecisionReplay({ trade }: { trade: Trade }) {
+  const r = decisionReplay(trade);
+  // The scale is what happened (the limit is drawn only when it falls inside), so close answers stay apart.
+  const end = (Math.max(r?.total ?? 0, ...(r?.marks.map((m) => m.at) ?? [0])) || 1) * 1.04;
+  return (
+    <section className="rounded-[calc(16px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-decision-replay={r ? r.marks.length : 0}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>Decision replay</span>
+        <span className="text-[11px] tabular-nums" style={dim}>{trade.decision_seconds ?? '—'}s{trade.decision_limit ? ` of ${trade.decision_limit}s` : ''}</span>
+      </div>
+      {!r ? (
+        <p className="mt-1 text-[11.5px]" style={faint}>No timings on this trade — they are kept from Step 1 on trades decided from now on.</p>
+      ) : (
+        <>
+          <div className="relative mx-3 mt-5 mb-4 h-6" aria-hidden>
+            <div className="absolute inset-x-0 top-1/2 h-px" style={{ background: 'var(--glass-stroke)' }} />
+            {trade.decision_limit != null && trade.decision_limit <= end && (
+              <div className="absolute top-0 h-full w-px" style={{ left: `${(trade.decision_limit / end) * 100}%`, background: 'rgb(var(--grade-f) / 0.5)' }} title="The limit" />
+            )}
+            {r.marks.map((m, i) => (
+              <div key={m.key} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${(m.at / end) * 100}%` }} title={`${m.label} at ${m.at}s (+${m.took}s)`}>
+                <span className="block size-2.5 rounded-full border-2" style={{ borderColor: 'rgb(var(--accent))', background: r.slowest?.label === m.label ? 'rgb(var(--accent))' : 'var(--bg-raised)' }} />
+                {/* Labels alternate above and below the line, so neighbours never sit on each other. */}
+                <span className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[9.5px] ${i % 2 ? 'top-3' : 'bottom-3'}`} style={faint}>{m.label}</span>
+              </div>
+            ))}
+            <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${((trade.decision_seconds ?? r.total) / end) * 100}%` }}>
+              <span className="block h-3.5 w-1 rounded-full" style={{ background: 'var(--text)' }} title="Decided" />
+            </div>
+          </div>
+          <p className="mt-1 text-[11px] tabular-nums" style={dim}>
+            {r.slowest && <>Longest: <b style={{ color: 'var(--text)' }}>{r.slowest.label}</b> (+{r.slowest.took}s). </>}
+            {r.marks.map((m) => `${m.label} ${m.at}s`).join(' · ')}
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Rubric v2 trades logged toward the first review; from ten, R per trade by rubric total. */
+function RubricProgress() {
+  const [p, setP] = useState<{ logged: number; firstReview: number; showFrom: number; byTotal: Array<{ total: number; n: number; avgR: number | null }> | null } | null>(null);
+  useEffect(() => { void fetch('/api/decision-progress').then((r) => (r.ok ? r.json() : null)).then(setP).catch(() => {}); }, []);
+  if (!p) return null;
+  const share = Math.min(1, p.logged / p.firstReview);
+  return (
+    <section className="rounded-[calc(16px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-rubric-progress={p.logged}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>Rubric v2 progress</span>
+        <span className="text-[11px] tabular-nums" style={dim}><b style={{ color: 'var(--text)' }}>{p.logged}</b> / {p.firstReview} until the first review</span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--glass-stroke)' }}>
+        <div className="h-full rounded-full" style={{ width: `${share * 100}%`, background: 'rgb(var(--accent))' }} />
+      </div>
+      {p.byTotal ? (
+        <div className="mt-2 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
+          {p.byTotal.map((b) => (
+            <div key={b.total} className="contents">
+              <span style={faint}>{b.total}/8</span>
+              <span style={{ color: (b.avgR ?? 0) >= 0 ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>{b.avgR == null ? '—' : `${b.avgR >= 0 ? '+' : '−'}${Math.abs(b.avgR).toFixed(2)}R`}</span>
+              <span style={faint}>n {b.n}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[11px]" style={faint}>Numbers by rubric total appear from {p.showFrom} trades — fewer would be noise.</p>
+      )}
+    </section>
   );
 }
 

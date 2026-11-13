@@ -206,7 +206,7 @@ test('a pass or a miss needs its hypothetical outcome once Step 2 is written', (
     explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) }, prev);
   assert.equal(without.ok, false);
   const withR = parseTradeInput({ ...step1({ decision: 'pass', outcome: 'Not taken', status: 'Settled' }), outcome_at: '2026-11-13T11:00:00.000Z',
-    would_be_r: -1, would_be_mfe_r: 0.4, explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) }, prev);
+    would_be_r: -1, would_be_mfe_r: 0.4, explanation: 'E'.repeat(170), lesson: 'L'.repeat(170), pass_reasons: ['Rubric said no trade'] }, prev);
   assert.equal(withR.ok, true);
 });
 
@@ -334,8 +334,15 @@ test('a pass or a miss owes the hypothetical R and one line; the lesson is optio
   const pass = save({ decision: 'pass', status: 'Settled', outcome: 'Not taken' });
   const write = (x: Record<string, unknown>) => parseTradeInput({ ...pass, ...x, outcome_at: '2026-11-13T11:00:00.000Z' }, { previous: { explanation: '', lesson: '', status: 'Settled', stored: pass as unknown as Record<string, unknown> } });
   assert.equal(write({ would_be_r: -1, explanation: 'short', lesson: '' }).ok, false, 'under 20 characters');
-  const ok = write({ would_be_r: -1, explanation: 'Two gaps in the leg, passed.', lesson: '' });
+  // No reason: refused; one reason, the first picked becomes the main one.
+  const noReason = write({ would_be_r: -1, explanation: 'Two gaps in the leg, passed.', lesson: '' });
+  assert.equal(noReason.ok, false);
+  assert.match(noReason.ok ? '' : noReason.error, /reason/);
+  const ok = write({ would_be_r: -1, explanation: 'Two gaps in the leg, passed.', lesson: '', pass_reasons: ['Doubt or fear', 'Unclear target'] });
   assert.equal(ok.ok, true, ok.ok ? '' : ok.error);
+  assert.equal((ok as { value: { pass_main_reason: string } }).value.pass_main_reason, 'Doubt or fear');
+  const main = write({ would_be_r: -1, explanation: 'Two gaps in the leg, passed.', lesson: '', pass_reasons: ['Doubt or fear', 'Unclear target'], pass_main_reason: 'Unclear target' });
+  assert.equal((main as { value: { pass_main_reason: string } }).value.pass_main_reason, 'Unclear target');
   const take = save();
   const taken = parseTradeInput({ ...take, outcome: 'Win', r_multiple: 2, status: 'Settled', screenshot_path: 'x.png', explanation: 'Two gaps in the leg, passed.', lesson: '', outcome_at: '2026-11-13T11:00:00.000Z' },
     { previous: { explanation: '', lesson: '', status: 'Live', stored: take as unknown as Record<string, unknown> } });
@@ -375,4 +382,21 @@ test('retired v2 "me" tags still count as rules broken on the trades that carry 
   assert.deepEqual(D.rulesFollowedV2({ mistake_tags: ['Oversized'] }, cfg).reasons, ['Oversized']);
   assert.deepEqual(D.rulesFollowedV2({ mistake_tags: ['No management plan before entry'] }, cfg).reasons, ['No management plan before entry']);
   assert.equal(D.rulesFollowedV2({ mistake_tags: ['Chop / no follow-through'] }, cfg).followed, true);
+});
+
+/* ───────────── the drill on v2 fields ───────────── */
+
+test('the Setup-detail drill on a v2 trade reads planned R, entry, target, confidence and HTF origin — never the old form\'s fields', async () => {
+  const { DATA_GROUPS, fillsGroup, groupFields } = await import('../lib/drill');
+  const { hitTest } = await import('../lib/edge/flaws');
+  const setup = DATA_GROUPS.find((g) => g.key === 'setup')!;
+  const v2 = { rubric_version: 5, decision: 'take', planned_rr: '2', entry_method: 'On inversion close', target_type: 'PDH/PDL', confidence_at_entry: 4, htf_origin: '15m',
+    liquidity_event: null, candle_strength: null } as never;
+  assert.deepEqual([...groupFields(v2, setup)], ['planned_rr', 'entry_method', 'target_type', 'confidence_at_entry', 'htf_origin']);
+  assert.equal(fillsGroup(v2, setup), true, 'old-form fields left empty do not count against a v2 trade');
+  assert.equal(fillsGroup({ ...(v2 as object), htf_origin: null } as never, setup), false);
+  const hit = hitTest('data', { themesOf: () => [], breaksOf: () => [], states: new Map(), exec: { earlyBe: { ids: [] } } as never });
+  assert.equal(hit(v2), false, 'no flaw on a filled v2 trade');
+  // An old trade is still measured on the old form's fields.
+  assert.equal(fillsGroup({ rubric_version: 3, liquidity_event: 'x', entry_method: 'y', candle_strength: 'z', planned_rr: '2' } as never, setup), true);
 });
