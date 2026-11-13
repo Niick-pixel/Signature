@@ -666,3 +666,49 @@ export function planSummary(answers: Record<string, Answer>): Array<{ label: str
   if (any) rows.push({ label: 'Scenario C', value: scenarioC(answers) });
   return rows.filter((r): r is { label: string; value: string } => !!r.value);
 }
+
+/* ───────────────────── what the earlier steps already answered ───────────────────── */
+
+/** The levels marked run overnight (weekly ones carried in included). */
+export const takenOf = (answers: Record<string, Answer>): string[] =>
+  Array.isArray(answers[TAKEN_KEY]) ? answers[TAKEN_KEY] as string[] : [];
+
+/**
+ * What a scenario is not offered, from what the prep already knows: the wrong
+ * side for its direction, every level already run overnight (it cannot be
+ * swept again, and it is no longer resting liquidity to aim at), and the data
+ * wick on a day with no news.
+ */
+export function notOffered(answers: Record<string, Answer>, k: 'a' | 'b', as: 'zone' | 'target'): string[] {
+  return [...new Set([
+    ...wrongSide(answers[`plans.${k}Dir`], as),
+    ...takenOf(answers),
+    ...(answers['session.news'] === 'None today' ? ['Data wick'] : []),
+  ])];
+}
+
+/**
+ * The plans kept in step with the earlier answers, after every tap:
+ *  - the bias, once picked, fills A with it and B against it (when both are empty);
+ *  - a zone or a target that is no longer offered (run overnight, the wrong side
+ *    after a change of direction, a data wick with no news) is let go.
+ */
+export function tidyPlans(answers: Record<string, Answer>, changed: string): Record<string, Answer> {
+  const out = { ...answers };
+  const bias = str(out['htf.bias']);
+  if (changed === 'htf.bias' && (bias === 'Bullish' || bias === 'Bearish') && !out['plans.aDir'] && !out['plans.bDir']) {
+    out['plans.aDir'] = bias === 'Bullish' ? 'Long' : 'Short';
+    out['plans.bDir'] = bias === 'Bullish' ? 'Short' : 'Long';
+  }
+  for (const k of ['a', 'b'] as const) {
+    const zones = list(out[`plans.${k}Zones`]);
+    if (zones) {
+      const no = notOffered(out, k, 'zone');
+      const left = zones.filter((z) => !no.includes(z));
+      if (left.length) out[`plans.${k}Zones`] = left; else delete out[`plans.${k}Zones`];
+    }
+    const at = str(out[`plans.${k}TargetAt`]);
+    if (at && notOffered(out, k, 'target').includes(at)) delete out[`plans.${k}TargetAt`];
+  }
+  return out;
+}

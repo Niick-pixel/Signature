@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { Segmented } from '@/components/ui/Segmented';
 import { Field, Input } from '@/components/ui/Field';
 import { Help } from '@/components/ui/Help';
+import { Button } from '@/components/ui/Button';
 import { ShotSlots, type SlotFiles } from './ShotSlots';
 import { ExplanationField } from './ExplanationField';
 import { DrillChip, type DrillKept } from './DrillChip';
@@ -33,8 +34,8 @@ import {
   PASS_REASONS, decisionReplay, AUTO_MARKET_TAGS, MARKET_TAGS_V2, ME_TAGS, WORKED_TAGS_V2, autoMarketTags, overTime, tagBlocked,
   DECISION_LABEL, HTF_ORIGINS, SINGULAR_GAP_LABEL, SINGULAR_GAP_QUESTION, gapOf, type HtfOrigin, type SingularGap, LEG_HELP, LEG_LOCATIONS, OVERRIDE_PROMPT, ROWS, RUBRIC_V2_LABEL, SCENARIO_LABEL,
   V2_ENTRIES, V2_LETTER_OF, V2_PLANNED_RS, V2_TARGETS, clock, consistencyFlags, gradeV2, lockDecision,
-  needsOverride, rulesFollowedV2, scenarioFromPlan,
-  type Decision, type LegLocation, type RowKey, type TimedKey, type Scenario, type V2Grade,
+  needsOverride, rulesFollowedV2, scenarioFromPlan, STEP1_EDITABLE, step1Answers, step1EditedAfterOutcome, storedGrade,
+  type Step1Answers, type Step1Key, type Decision, type LegLocation, type RowKey, type TimedKey, type Scenario, type V2Grade,
 } from '@/lib/decision';
 
 /*
@@ -88,7 +89,7 @@ export function DecisionFlow({ trade, onNext }: { trade?: Trade; onNext?: () => 
       className="glass mx-auto flex flex-col rounded-[calc(28px*var(--rk))] p-5 sm:p-6 lg:min-h-[calc(100dvh-var(--titlebar-h,2.75rem)-2rem)]">
       {saved ? (
         <>
-          {view === 'locked' && <LockedStep1 trade={saved} onForward={() => setView('outcome')} />}
+          {view === 'locked' && <LockedStep1 trade={saved} onForward={() => setView('outcome')} onEdited={setSaved} />}
           <div className={view === 'locked' ? 'hidden' : 'flex flex-1 flex-col'}>
             <OutcomeStep trade={saved} onNext={onNext} onBack={() => setView('locked')} />
           </div>
@@ -1304,61 +1305,107 @@ const noop = () => {};
  * answer shown, nothing changeable — the decision is the record of that
  * moment. "Step 2 →" goes back to what you were writing.
  */
-function LockedStep1({ trade, onForward }: { trade: Trade; onForward: () => void }) {
-  const g = gradeV2(trade);
-  const letter = V2_LETTER_OF(trade.grade_letter) ?? 'No trade';
+function LockedStep1({ trade, onForward, onEdited }: { trade: Trade; onForward: () => void; onEdited: (t: Trade) => void }) {
+  // Step 1 can be edited once (049): the answers and the grade; never the decision or its clock.
+  const [asking, setAsking] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Step1Answers>(() => step1Answers(trade as unknown as Record<string, unknown>));
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const shown = (editing ? { ...trade, ...draft } : trade) as Trade;
+  const set = (k: Step1Key, v: string | number | boolean | null) => setDraft((d) => ({ ...d, [k]: v }));
+  const changed = STEP1_EDITABLE.filter((k) => (draft[k] ?? null) !== ((trade as unknown as Record<string, unknown>)[k] ?? null));
+  const g = gradeV2(shown);
+  const letter = editing ? (g.missing.length ? 'No trade' : V2_LETTER_OF(storedGrade(g).letter) ?? 'No trade') : V2_LETTER_OF(trade.grade_letter) ?? 'No trade';
   const decision = (trade.decision ?? 'take') as Decision;
-  const rowsOf = (k: RowKey) => (trade[k] ?? null) as 0 | 1 | 2 | null;
+  const rowsOf = (k: RowKey) => (shown[k] ?? null) as 0 | 1 | 2 | null;
+  const ro = editing ? '' : 'pointer-events-none';
+  const on = <T,>(k: Step1Key) => (editing ? (v: T) => set(k, v as never) : noop);
+  const original = trade.step1_original;
+  const after = step1EditedAfterOutcome(trade);
+
+  const saveEdit = async () => {
+    if (!changed.length) { setEditing(false); return; }
+    setSaving(true); setError(null);
+    const res = await fetch(`/api/trades/${trade.id}/step1`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.fromEntries(changed.map((k) => [k, draft[k] ?? null]))),
+    }).catch(() => null);
+    const body = res ? await res.json().catch(() => null) : null;
+    setSaving(false);
+    if (!res || !res.ok) { setError(body?.error ?? 'Could not save the edit.'); return; }
+    setEditing(false);
+    onEdited(body as Trade);
+  };
+
   return (
-    <div data-locked-step1 className="flex flex-1 flex-col">
+    <div data-locked-step1={editing ? 'editing' : trade.step1_edited_at ? 'edited' : 'locked'} className="flex flex-1 flex-col">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-[20px] font-semibold">New trade <span className="text-[13px] font-medium" style={faint}>· Step 1 of 2 — Decide · locked</span></h1>
+          <h1 className="text-[20px] font-semibold">New trade <span className="text-[13px] font-medium" style={faint}>· Step 1 of 2 — Decide · {editing ? 'editing (once)' : trade.step1_edited_at ? 'edited once' : 'locked'}</span></h1>
           <p className="mt-0.5 text-[12.5px]" style={dim}>
             {DECISION_LABEL[decision]} in {trade.decision_seconds ?? '—'}s{trade.decision_limit ? ` of ${trade.decision_limit}s` : ' (untimed)'}
             {trade.decided_at && <> · {new Date(trade.decided_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</>}
-            {' '}· nothing here can change.
+            {' '}· {editing ? 'the decision and its time stay; the answers and the grade change.' : trade.step1_edited_at ? 'its one edit is used — nothing more can change.' : 'locked; it can be edited once.'}
           </p>
+          {trade.step1_edited_at && original && !editing && (
+            <p className="mt-1 text-[11.5px]" style={faint} data-step1-original>
+              Edited {new Date(trade.step1_edited_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              {' '}· was <b style={dim}>{V2_LETTER_OF(original.letter) ?? 'No trade'}</b>
+              {(() => {
+                const was = STEP1_EDITABLE.filter((k) => (original.answers[k] ?? null) !== ((trade as unknown as Record<string, unknown>)[k] ?? null));
+                return was.length ? <> · changed: {was.map((k) => `${STEP1_LABEL[k]} ${fmt(original.answers[k])} → ${fmt((trade as unknown as Record<string, unknown>)[k])}`).join(', ')}</> : null;
+              })()}
+              {after && <> · <span style={{ color: 'rgb(var(--amber))' }}>after the outcome — left out of the v2 sample</span></>}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
-        <div className="rounded-[calc(16px*var(--rk))] border px-3 py-2" style={{ borderColor: `color-mix(in srgb, ${LETTER_TONE[letter]} 45%, transparent)`, background: `color-mix(in srgb, ${LETTER_TONE[letter]} 9%, transparent)` }}>
+        <div className="rounded-[calc(16px*var(--rk))] border px-3 py-2" style={{ borderColor: `color-mix(in srgb, ${LETTER_TONE[letter]} 45%, transparent)`, background: `color-mix(in srgb, ${LETTER_TONE[letter]} 9%, transparent)` }} data-locked-grade={letter}>
           <span className="text-[24px] font-semibold leading-none" style={{ color: LETTER_TONE[letter] }}>{letter}</span>
           <span className="ml-2 text-[12px] tabular-nums" style={faint}>{g.total}/8 · v2</span>
           {(g.gate || g.caps.length > 0 || g.lowR) && <p className="mt-0.5 max-w-[16rem] text-[10.5px]" style={dim}>{g.reason}</p>}
         </div>
-        <motion.button type="button" onClick={onForward} whileTap={press} transition={spring} data-forward
-          className="rounded-full px-4 py-1.5 text-[12.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
-          Step 2 →
-        </motion.button>
+        {editing ? <>
+          <Button onClick={() => { setEditing(false); setDraft(step1Answers(trade as unknown as Record<string, unknown>)); setError(null); }}>Cancel</Button>
+          <Button variant="primary" onClick={() => void saveEdit()} disabled={saving || !changed.length} data-save-step1>Save the edit</Button>
+        </> : <>
+          {!trade.step1_edited_at && <Button onClick={() => setAsking(true)} data-edit-step1>Edit Step 1 · once</Button>}
+          <motion.button type="button" onClick={onForward} whileTap={press} transition={spring} data-forward
+            className="rounded-full px-4 py-1.5 text-[12.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
+            Step 2 →
+          </motion.button>
+        </>}
         </div>
       </div>
+      {error && <p className="-mt-2 mb-3 text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
 
       <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
-        <div className="pointer-events-none flex flex-col gap-4" aria-readonly>
-          <div className="grid grid-cols-2 gap-3">
+        <div className={`${ro} flex flex-col gap-4`} aria-readonly={!editing}>
+          <div className="pointer-events-none grid grid-cols-2 gap-3">
             <Field quiet label="Account"><Select value={trade.account} onChange={noop} options={[trade.account]} labelFor={(a) => accountLabel(a as Account)} disabled /></Field>
             <Field quiet label="Instrument"><Select value={trade.instrument} onChange={noop} options={[trade.instrument]} disabled /></Field>
           </div>
-          <Field quiet label="Session"><Select value={trade.session} onChange={noop} options={[trade.session]} disabled /></Field>
-          <Field quiet label="Direction" group><Segmented value={trade.direction} onChange={noop} options={['Long', 'Short'] as const} accentFor={directionTone} /></Field>
+          <div className="pointer-events-none"><Field quiet label="Session"><Select value={trade.session} onChange={noop} options={[trade.session]} disabled /></Field></div>
+          <Field quiet label="Direction" group><Segmented value={shown.direction} onChange={on('direction')} options={['Long', 'Short'] as const} accentFor={directionTone} /></Field>
           <Field quiet label="Scenario" group>
-            <Segmented value={(trade.plan_scenario ?? '') as Scenario} onChange={noop} options={['A', 'B', 'none'] as const} labelFor={(v) => (v === 'none' ? 'Unplanned' : v)} accentFor={scenarioTone} />
+            <Segmented value={(shown.plan_scenario ?? '') as Scenario} onChange={on('plan_scenario')} options={['A', 'B', 'none'] as const} labelFor={(v) => (v === 'none' ? 'Unplanned' : v)} accentFor={scenarioTone} />
           </Field>
-          <Field quiet label="Leg location" group><Segmented value={(trade.leg_location ?? '') as LegLocation} onChange={noop} options={LEG_LOCATIONS} accentFor={legTone(trade.direction)} /></Field>
-          <Field quiet label="HTF origin" group><Segmented value={(trade.htf_origin ?? '') as HtfOrigin} onChange={noop} options={HTF_ORIGINS} compact /></Field>
+          <Field quiet label="Leg location" group><Segmented value={(shown.leg_location ?? '') as LegLocation} onChange={on('leg_location')} options={LEG_LOCATIONS} accentFor={legTone(shown.direction)} /></Field>
+          <Field quiet label="HTF origin" group><Segmented value={(shown.htf_origin ?? '') as HtfOrigin} onChange={on('htf_origin')} options={HTF_ORIGINS} compact /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field quiet label="Target type"><Select value={trade.target_type} onChange={noop} options={[trade.target_type]} labelFor={targetLabel} disabled /></Field>
-            <Field quiet label="Entry type"><Select value={trade.entry_method ?? null} onChange={noop} options={trade.entry_method ? [trade.entry_method] : []} placeholder="—" labelFor={entryLabel} disabled /></Field>
+            <Field quiet label="Target type"><Select value={shown.target_type} onChange={on('target_type')} options={editing ? TARGET_VALUES : [trade.target_type]} labelFor={targetLabel} disabled={!editing} /></Field>
+            <Field quiet label="Entry type"><Select value={shown.entry_method ?? null} onChange={on('entry_method')} options={editing ? ENTRY_VALUES : shown.entry_method ? [shown.entry_method] : []} placeholder="—" labelFor={entryLabel} disabled={!editing} /></Field>
           </div>
-          <Field quiet label="Planned R" group><Segmented value={trade.planned_rr ?? ''} onChange={noop} options={V2_PLANNED_RS} labelFor={(v) => `${v}R`} accentFor={plannedRTone} /></Field>
-          <Field quiet label="Confidence" group><Segmented value={trade.confidence_at_entry ? String(trade.confidence_at_entry) : ''} onChange={noop} options={CONFIDENCES} accentFor={confidenceTone} /></Field>
+          <Field quiet label="Planned R" group><Segmented value={shown.planned_rr ?? ''} onChange={on('planned_rr')} options={V2_PLANNED_RS} labelFor={(v) => `${v}R`} accentFor={plannedRTone} /></Field>
+          <Field quiet label="Confidence" group><Segmented value={shown.confidence_at_entry ? String(shown.confidence_at_entry) : ''} onChange={editing ? (v) => set('confidence_at_entry', Number(v)) : noop} options={CONFIDENCES} accentFor={confidenceTone} /></Field>
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-        <div className="pointer-events-none flex flex-col gap-4" aria-readonly>
-        <GateBar value={gapOf(trade.singular_gap)} onChange={noop} readOnly />
+        <div className={`${ro} flex flex-col gap-4`} aria-readonly={!editing}>
+        <GateBar value={gapOf(shown.singular_gap)} onChange={editing ? (v) => set('singular_gap', v === 'one') : noop} readOnly={!editing} />
         <div className="grid gap-3 xl:grid-flow-col xl:grid-cols-2 xl:grid-rows-2">
           {ROWS.map((r) => (
-            <RubricRow key={r.key} row={r} value={rowsOf(r.key)} focused={false} readOnly onFocus={noop} onPick={noop}
+            <RubricRow key={r.key} row={r} value={rowsOf(r.key)} focused={false} readOnly={!editing} onFocus={noop} onPick={editing ? (v) => set(r.key, v) : noop}
               late={(trade.late_rows ?? []).includes(r.key)} />
           ))}
         </div>
@@ -1367,6 +1414,21 @@ function LockedStep1({ trade, onForward }: { trade: Trade; onForward: () => void
         <TradeCharts tradeId={trade.id} />
         </div>
       </div>
+      <CloseDialog open={asking} onCancel={() => setAsking(false)}
+        title="Edit Step 1 — once?"
+        body={`The rows, the gate and the facts can be changed one time; the grade is given again from them. The decision (${DECISION_LABEL[decision].toLowerCase()}) and its time stay as they were. The original is kept beside the edit and the trade shows as edited.${trade.outcome_at ? ' The outcome is already written, so this trade will leave the Rubric v2 sample: a grade given knowing the result is not a grade before the outcome.' : ''}`}
+        actions={[
+          { label: 'Edit it', primary: true, data: 'edit', onClick: () => { setAsking(false); setEditing(true); } },
+          { label: 'Keep it locked', data: 'keep', onClick: () => setAsking(false) },
+        ]} />
     </div>
   );
 }
+
+/** Step 1's answers, as the edit line names them. */
+const STEP1_LABEL: Record<Step1Key, string> = {
+  row_sweep: 'Sweep', row_inversion: 'Inversion', row_path: 'Path', row_target: 'Target', singular_gap: 'Gap',
+  leg_location: 'Leg', htf_origin: 'HTF origin', direction: 'Direction', plan_scenario: 'Scenario', planned_rr: 'Planned R',
+  target_type: 'Target type', entry_method: 'Entry', confidence_at_entry: 'Confidence',
+};
+const fmt = (v: unknown) => (v == null ? '—' : v === true ? 'one gap' : v === false ? 'more than one' : String(v));

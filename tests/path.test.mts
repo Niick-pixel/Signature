@@ -161,7 +161,7 @@ test('the export carries the Path, at version 23, and overrides in every format'
   const res = await exportRoute.GET();
   const buf = Buffer.from(await res.arrayBuffer());
   const json = JSON.parse(unzip(buf, 'trades.json').toString('utf8'));
-  assert.equal(json.version, 27);
+  assert.equal(json.version, 28);
   assert.ok(Array.isArray(json.red_day_skips));
   assert.equal(json.path_steps.length, 6);
   assert.ok(json.path_events.length > 0);

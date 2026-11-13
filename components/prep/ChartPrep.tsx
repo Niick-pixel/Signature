@@ -7,7 +7,7 @@ import { nyMinutes as nyMinutesOf } from '@/lib/planMatch';
 import { press, spring, springSoft } from '@/lib/motion';
 import {
   EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, biasSentence, deriveDecisions, gradeCeiling, liveMarks,
-  overnightRead, planChecks, planSummary, prepProgress, scenarioC, stepsOf, withWeeklyTaken, wrongSide,
+  overnightRead, planChecks, planSummary, prepProgress, scenarioC, stepsOf, withWeeklyTaken, notOffered, takenOf, tidyPlans,
   type Answer, type PrepData, type PrepField, type PrepStep, type SessionPrep,
 } from '@/lib/prep';
 import type { DailyReview } from '@/lib/types';
@@ -188,8 +188,9 @@ function StepView({ step, index, data, change, review, carried }: {
       const left = wait.filter((w) => !value.includes(w));
       if (left.length) d.answers[WAIT_KEY] = left; else delete d.answers[WAIT_KEY];
     }
-    // The side, the sweeps to wait for and the target follow the written plans (plan match reads them).
-    d.answers = deriveDecisions(d.answers);
+    // The plans follow what is already answered (a level run overnight is not offered), then
+    // the side, the sweeps to wait for and the target follow the plans (plan match reads them).
+    d.answers = deriveDecisions(tidyPlans(d.answers, key));
     return d;
   });
   const f = (id: string) => step.fields.find((x) => x.id === id)!;
@@ -277,7 +278,7 @@ function StepView({ step, index, data, change, review, carried }: {
             {(['above', 'below'] as const).map((side) => (
               <div key={side} className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-map-side={side}>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-dim)' }}>{side === 'above' ? 'Above price' : 'Below price'}</p>
-                {field(side)}
+                {field(side, { hide: takenOf(data.answers) })}
                 {field(`${side}Tier`)}
                 {field(`${side}State`)}
                 {field(side === 'above' ? 'gapAbove' : 'gapBelow')}
@@ -325,7 +326,7 @@ function FieldView({ field, value, onChange, hide = [], notes = {} }: {
         <TextAnswer value={typeof value === 'string' ? value : ''} placeholder={field.placeholder} long={field.long} label={field.label} onChange={(v) => onChange(v.trim() ? v : null)} />
       ) : field.kind === 'pick' ? (
         <div className="max-w-[16rem]">
-          <Select value={typeof value === 'string' ? value : null} onChange={(v) => onChange(v)} options={field.options} placeholder="Choose…" />
+          <Select value={typeof value === 'string' ? value : null} onChange={(v) => onChange(v)} options={field.options.filter((o) => !hide.includes(o) || o === value)} placeholder="Choose…" />
         </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
@@ -531,10 +532,10 @@ function Plans({ data, field }: { data: PrepData; field: FieldFn }) {
         </div>
         {field(`${k}Dir`)}
         {/* A long waits below price and aims above; a short the other way round. */}
-        {field(`${k}Zones`, { hide: wrongSide(data.answers[`plans.${k}Dir`], 'zone') })}
+        {field(`${k}Zones`, { hide: notOffered(data.answers, k, 'zone') })}
         {field(`${k}Confirms`)}
         {field(`${k}Target`)}
-        {field(`${k}TargetAt`, { hide: wrongSide(data.answers[`plans.${k}Dir`], 'target') })}
+        {field(`${k}TargetAt`, { hide: notOffered(data.answers, k, 'target') })}
         {field(`${k}RR`)}
         {field(`${k}Kills`)}
         <Written answers={data.answers} keys={['Story', 'TriggerNote', 'Confirm', 'TargetNote', 'Kill'].map((f) => `plans.${k}${f}`)} />
@@ -543,6 +544,21 @@ function Plans({ data, field }: { data: PrepData; field: FieldFn }) {
   };
   return (
     <div className="space-y-4" data-plans>
+      {(() => {
+        const taken = takenOf(data.answers);
+        const noNews = data.answers['session.news'] === 'None today';
+        const bias = data.answers['htf.bias'];
+        const parts = [
+          taken.length ? <>run overnight, so not offered: <b>{taken.join(', ')}</b></> : null,
+          noNews ? <>no news today, so no data wick</> : null,
+          bias === 'Bullish' || bias === 'Bearish' ? <>A goes with your {String(bias).toLowerCase()} bias, B the other way</> : null,
+        ].filter(Boolean);
+        return parts.length ? (
+          <p className="text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }} data-plans-auto>
+            From your earlier answers: {parts.map((p, i) => <span key={i}>{i > 0 && ' · '}{p}</span>)}.
+          </p>
+        ) : null;
+      })()}
       <div className="grid gap-3 sm:grid-cols-2">{card('a')}{card('b')}</div>
       {checks.length > 0 && (
         <ul className="space-y-1.5" data-plan-checks>

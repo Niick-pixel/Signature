@@ -412,10 +412,11 @@ export function scenarioFromPlan(direction: string | null, plans: { aDir: string
   return a && !b ? 'A' : b && !a ? 'B' : null;
 }
 
-/** Rubric v2's sample on the Path: v2 trades locked at the decision, outcome written, never re-graded. */
+/** Rubric v2's sample on the Path: v2 trades locked at the decision, outcome written, never re-graded, Step 1 not edited after the outcome. */
 export const V2_SAMPLE_TARGET = 50;
-export function v2SampleCount(trades: ReadonlyArray<{ rubric_version?: number | null; decided_at?: string | null; outcome_at?: string | null; regrade?: string | null; deleted_at?: string | null }>): number {
-  return trades.filter((t) => t.rubric_version === RUBRIC_V2 && t.decided_at && t.outcome_at && !t.regrade && !t.deleted_at).length;
+// A Step 1 edited after the outcome (049) is out: its grade was given knowing the result.
+export function v2SampleCount(trades: ReadonlyArray<{ rubric_version?: number | null; decided_at?: string | null; outcome_at?: string | null; regrade?: string | null; deleted_at?: string | null; step1_edited_at?: string | null }>): number {
+  return trades.filter((t) => t.rubric_version === RUBRIC_V2 && t.decided_at && t.outcome_at && !t.regrade && !t.deleted_at && !step1EditedAfterOutcome(t)).length;
 }
 
 /** The old checklist's scale: every grade not decided under Rubric v2. By-grade stats read only these, so the scales never mix. */
@@ -458,3 +459,63 @@ export function v2Lines(t: V2Input & {
     `- **Decision:** ${t.decision ? DECISION_LABEL[t.decision as Decision] : '—'} in ${t.decision_seconds ?? '—'}s${t.decision_limit ? ` of ${t.decision_limit}s` : ' (untimed)'}${t.grade_override ? ' · **taken against a no-trade grade**' : ''}${late}${t.decision !== 'take' && t.would_be_mfe_r != null ? ` · would have reached ${sR(t.would_be_mfe_r)} at best` : ''}${t.exit_reason ? ` · exit ${t.exit_reason}` : ''}`,
   ];
 }
+
+/* ───────────────────────── Step 1, edited once (049) ───────────────────────── */
+
+/**
+ * What the one edit of Step 1 may change: the answers the grade is made of
+ * and the facts beside them. Never the decision, its time or its clock.
+ */
+export const STEP1_EDITABLE = [
+  'row_sweep', 'row_inversion', 'row_path', 'row_target', 'singular_gap', 'leg_location', 'htf_origin',
+  'direction', 'plan_scenario', 'planned_rr', 'target_type', 'entry_method', 'confidence_at_entry',
+] as const;
+export type Step1Key = typeof STEP1_EDITABLE[number];
+export type Step1Answers = Partial<Record<Step1Key, string | number | boolean | null>>;
+/** What Step 1 said before its edit: the answers and the grade they made. */
+export interface Step1Original { answers: Step1Answers; letter: string | null; score: number | null }
+
+/** The answers as they stand on a trade, for the original kept beside an edit. */
+export const step1Answers = (t: Record<string, unknown>): Step1Answers =>
+  Object.fromEntries(STEP1_EDITABLE.map((k) => [k, (t[k] ?? null) as string | number | boolean | null]));
+
+/**
+ * The edit, checked: only Step 1's keys, each a value the form offers.
+ * Returns the cleaned patch, or why not.
+ */
+export function cleanStep1Edit(raw: unknown): { ok: true; value: Step1Answers } | { ok: false; error: string } {
+  if (!raw || typeof raw !== 'object') return { ok: false, error: 'Nothing to edit.' };
+  const r = raw as Record<string, unknown>;
+  const out: Step1Answers = {};
+  const among = (k: Step1Key, list: readonly unknown[], nullable = true) => {
+    if (!(k in r)) return true;
+    if (r[k] == null && nullable) { out[k] = null; return true; }
+    if (!list.includes(r[k])) return false;
+    out[k] = r[k] as string | number;
+    return true;
+  };
+  const checks: Array<[Step1Key, boolean]> = [
+    ...(['row_sweep', 'row_inversion', 'row_path', 'row_target'] as const).map((k) => [k, among(k, [0, 1, 2], false)] as [Step1Key, boolean]),
+    ['singular_gap', among('singular_gap', [true, false], false)],
+    ['leg_location', among('leg_location', LEG_LOCATIONS)],
+    ['htf_origin', among('htf_origin', HTF_ORIGINS)],
+    ['direction', among('direction', ['Long', 'Short'], false)],
+    ['plan_scenario', among('plan_scenario', ['A', 'B', 'none'], false)],
+    ['planned_rr', among('planned_rr', V2_PLANNED_RS, false)],
+    ['target_type', among('target_type', V2_TARGETS.map((x) => x.value), false)],
+    ['entry_method', among('entry_method', V2_ENTRIES.map((x) => x.value))],
+    ['confidence_at_entry', among('confidence_at_entry', [1, 2, 3, 4, 5])],
+  ];
+  const bad = checks.find(([, ok]) => !ok);
+  if (bad) return { ok: false, error: `Not an answer Step 1 offers: ${bad[0]}.` };
+  const extra = Object.keys(r).filter((k) => !(STEP1_EDITABLE as readonly string[]).includes(k));
+  if (extra.length) return { ok: false, error: `Only Step 1's answers can be edited, not ${extra.join(', ')}.` };
+  return { ok: true, value: out };
+}
+
+/**
+ * Edited after the outcome was written: the grade was set knowing the result,
+ * so the trade leaves the "graded before the outcome" sample.
+ */
+export const step1EditedAfterOutcome = (t: { step1_edited_at?: string | null; outcome_at?: string | null }): boolean =>
+  !!t.step1_edited_at && !!t.outcome_at && t.step1_edited_at > t.outcome_at;

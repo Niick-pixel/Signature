@@ -291,6 +291,9 @@ export interface Trade {
   pass_main_reason: string | null;
   /** The replay day a backtest was traded on (048). */
   replay_day_id: string | null;
+  /** Step 1's one edit (049): when it was made, and what Step 1 said before it. */
+  step1_edited_at: string | null;
+  step1_original: { answers: Record<string, string | number | boolean | null>; letter: string | null; score: number | null } | null;
   /** Rubric v2 fact (047): the timeframe the reaction started from. Never graded. */
   htf_origin: 'None' | '5m' | '15m' | '30m' | '1H' | '4H' | null;
   /** Soft delete. Nothing leaves without a second, deliberate act. */
@@ -330,6 +333,8 @@ export type TradeInput = Omit<
   | 'trigger_fired' | 'grade_letter' | 'live_score' | 'live_trigger' | 'live_letter' | 'rubric_version'
   | 'created_at' | 'updated_at' | 'position_x' | 'position_y'
   | 'deleted_at' | 'deleted_reason' | 'dismissed_flags'
+  // Written only by Step 1's one edit (db/trades editStep1), never by a save.
+  | 'step1_edited_at' | 'step1_original'
 >;
 
 export interface TradeShot {

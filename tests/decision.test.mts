@@ -14,7 +14,7 @@ process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signatur
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
 const D = await import('../lib/decision');
-const { createTrade, updateTrade } = await import('../db/trades');
+const { createTrade, updateTrade, editStep1, getTrade } = await import('../db/trades');
 const { parseTradeInput } = await import('../lib/validate');
 const { applyRules } = await import('../db/rules');
 const { getDb } = await import('../db/index');
@@ -197,6 +197,38 @@ test('locking: Step 1 cannot be edited after the decision, by the form or the da
   assert.equal(back.outcome_at, '2026-11-13T10:30:00.000Z');
   // And the database itself refuses a direct change.
   assert.throws(() => updateTrade(t.id, { ...r.value, row_sweep: 0 }), /Step 1 is locked/);
+});
+
+test('Step 1 can be edited once: the answers and the grade change, the original is kept, the decision and its clock never', () => {
+  const t = save();
+  assert.equal(t.grade_letter, 'A');
+  // Only Step 1's answers, each one the form offers.
+  assert.equal(D.cleanStep1Edit({ decision: 'pass' }).ok, false);
+  assert.equal(D.cleanStep1Edit({ row_sweep: 3 }).ok, false);
+  const patch = D.cleanStep1Edit({ row_sweep: 0, row_inversion: 1, htf_origin: '1H' });
+  if (!patch.ok) throw new Error(patch.error);
+  const e = editStep1(t.id, patch.value);
+  assert.deepEqual([e.row_sweep, e.row_inversion, e.htf_origin], [0, 1, '1H']);
+  assert.notEqual(e.grade_letter, 'A', 'graded again from the new answers');
+  assert.ok(e.step1_edited_at);
+  assert.equal(e.step1_original?.letter, 'A');
+  assert.equal(e.step1_original?.answers.row_sweep, 2);
+  assert.deepEqual([e.decision, e.decided_at, e.decision_seconds], [t.decision, t.decided_at, t.decision_seconds], 'the decision and its time stay');
+  // Once: the app and the database both refuse a second edit.
+  assert.throws(() => editStep1(t.id, { row_sweep: 2 }), /already edited once/);
+  assert.throws(() => getDb().prepare('UPDATE trades SET row_sweep = 2 WHERE id = ?').run(t.id), /Step 1 is locked/);
+  assert.throws(() => getDb().prepare('UPDATE trades SET step1_edited_at = NULL WHERE id = ?').run(t.id), /already edited once/);
+  assert.throws(() => getDb().prepare('UPDATE trades SET letter_at_entry = ? WHERE id = ?').run('A+', t.id), /grade at entry is locked/);
+  assert.throws(() => getDb().prepare('UPDATE trades SET decision_seconds = 1 WHERE id = ?').run(t.id), /decision and its time/);
+  // Even in the edit itself, the decision cannot ride along.
+  const u = save();
+  assert.throws(() => getDb().prepare("UPDATE trades SET decision = 'pass', step1_edited_at = 'x' WHERE id = ?").run(u.id), /decision and its time/);
+  assert.equal(getTrade(u.id)!.step1_edited_at, null);
+  // Edited after the outcome: out of the v2 sample; before it, still in.
+  assert.equal(D.step1EditedAfterOutcome({ step1_edited_at: '2026-11-13T12:00:00Z', outcome_at: '2026-11-13T11:00:00Z' }), true);
+  assert.equal(D.step1EditedAfterOutcome({ step1_edited_at: '2026-11-13T10:00:00Z', outcome_at: '2026-11-13T11:00:00Z' }), false);
+  const base = { rubric_version: 5, decided_at: 'd', outcome_at: '2026-11-13T11:00:00Z' };
+  assert.equal(D.v2SampleCount([base, { ...base, step1_edited_at: '2026-11-13T12:00:00Z' }, { ...base, step1_edited_at: '2026-11-13T10:00:00Z' }]), 2);
 });
 
 test('a pass or a miss needs its hypothetical outcome once Step 2 is written', () => {

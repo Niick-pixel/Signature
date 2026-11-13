@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import type { SQLInputValue } from 'node:sqlite';
 import { MISTAKE_TAG_VALUES, WORKED_TAG_VALUES, MARKET_TAG_VALUES, type MistakeTag } from '../lib/domain';
 import { CURRENT_RUBRIC, gradeUnder } from '../lib/rubric';
-import { RUBRIC_V2, gradeV2, storedGrade, type RowKey } from '../lib/decision';
+import { RUBRIC_V2, gradeV2, step1Answers, storedGrade, type RowKey, type Step1Answers, type Step1Original } from '../lib/decision';
 import { getReplayDay } from './replay';
 import { noBiasCap } from '../lib/replay';
 import { GRADE_LETTERS } from '../lib/grade';
@@ -117,6 +117,15 @@ function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade
     try { const v: unknown = JSON.parse(r.late_rows); return Array.isArray(v) ? v.filter((x): x is RowKey => typeof x === 'string' && x.startsWith('row_')) : null; }
     catch { return null; }
   })();
+  // 049: what Step 1 said before its one edit.
+  trade.step1_original = (() => {
+    if (typeof r.step1_original !== 'string') return null;
+    try {
+      const v = JSON.parse(r.step1_original) as Step1Original;
+      return v && typeof v.answers === 'object' ? { answers: v.answers, letter: v.letter ?? null, score: v.score ?? null } : null;
+    } catch { return null; }
+  })();
+  trade.step1_edited_at = (r.step1_edited_at as string | null) ?? null;
   // 048: the Step 1 timings and the reasons a pass or a miss gives.
   trade.row_times = (() => {
     if (typeof r.row_times !== 'string') return null;
@@ -322,6 +331,8 @@ export function importTrade(
      * different grade from the one it was taken on — the exported one wins.
      */
     grade?: { score: number; letter: string; trigger: boolean } | null;
+    /** Step 1's one edit (049), carried over as it was. */
+    step1?: { edited_at: string; original: unknown } | null;
   },
 ): Trade {
   const columns: string[] = [...UNGRADED, 'position_x', 'position_y', 'deleted_at', 'deleted_reason', ...FROZEN];
@@ -342,6 +353,11 @@ export function importTrade(
     grade_at_entry: input.grade_at_entry ?? (graded.score_at_entry as number),
   };
   if (meta.created_at) { columns.push('created_at'); values.created_at = meta.created_at; }
+  if (meta.step1) {
+    columns.push('step1_edited_at', 'step1_original');
+    values.step1_edited_at = meta.step1.edited_at;
+    values.step1_original = meta.step1.original == null ? null : JSON.stringify(meta.step1.original);
+  }
 
   getDb().prepare(
     `INSERT INTO trades (id, ${columns.join(', ')})
@@ -472,6 +488,31 @@ export function updateTrade(id: string, input: TradeInput): Trade | null {
       : { id, ...Object.fromEntries(Object.entries(flatten(input)).filter(([k]) => k !== 'grade_at_entry')) });
   recordEdits(id, before, input);
   return getTrade(id);
+}
+
+/**
+ * Step 1's one edit (049): the answers change, the grade is given again from
+ * them, and what Step 1 said before is kept beside it. The decision, its time
+ * and its clock stay as they were; the schema refuses a second edit.
+ */
+export function editStep1(id: string, patch: Step1Answers): Trade {
+  const before = getTrade(id);
+  if (!before) throw new Error('No such trade.');
+  if (before.rubric_version !== RUBRIC_V2 || !before.decided_at) throw new Error('Only a decided Rubric v2 trade has a Step 1 to edit.');
+  if (before.step1_edited_at) throw new Error('Step 1 was already edited once.');
+  const next = { ...(before as unknown as TradeInput), ...patch } as TradeInput;
+  const original: Step1Original = { answers: step1Answers(before as unknown as Record<string, unknown>), letter: before.grade_letter ?? null, score: before.grade_letter ? before.checklist_score : null };
+  const flat = flatten(next);
+  const graded = frozen(next, RUBRIC_V2);
+  const cols = Object.keys(patch);
+  getDb().prepare(`UPDATE trades SET ${[...cols, 'score_at_entry', 'letter_at_entry', 'grade_at_entry'].map((c) => `${c} = @${c}`).join(', ')},
+    step1_edited_at = @step1_edited_at, step1_original = @step1_original WHERE id = @id`).run({
+    id, ...Object.fromEntries(cols.map((c) => [c, flat[c] ?? null])),
+    score_at_entry: graded.score_at_entry ?? null, letter_at_entry: graded.letter_at_entry ?? null, grade_at_entry: graded.grade_at_entry ?? null,
+    step1_edited_at: new Date().toISOString(), step1_original: JSON.stringify(original),
+  });
+  recordEdits(id, before, next);
+  return getTrade(id)!;
 }
 
 /** Everything that has ever changed on one trade, newest first. */

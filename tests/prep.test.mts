@@ -12,7 +12,7 @@ import path from 'node:path';
 process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signature-prep-'));
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
-const { PREP_STEPS, PANEL_STEPS, LEGACY_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown, answerKey, deriveDecisions, planChecks, gradeCeiling, overnightRead, planSummary, wrongSide } = await import('../lib/prep');
+const { PREP_STEPS, PANEL_STEPS, LEGACY_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown, answerKey, deriveDecisions, planChecks, gradeCeiling, overnightRead, planSummary, wrongSide, tidyPlans, notOffered } = await import('../lib/prep');
 const PM = await import('../lib/planMatch');
 const { savePrep, getPrep, previousPrep, listPreps } = await import('../db/prep');
 const { toMarkdown } = await import('../lib/sanitise');
@@ -238,4 +238,21 @@ test('045: a trade that names its plan is set against that scenario; neither is 
   assert.deepEqual(s.rows.map((r) => [r.key, r.n, r.avgR]), [['A', 2, 0.5], ['B', 0, null], ['none', 1, -1]]);
   assert.equal(s.unasked, 1, 'a real trade on a planned day that never said');
   assert.deepEqual(biasSplit(trades, byDay).map((r) => [r.key, r.n]), [['with', 3], ['against', 1], ['neutral', 0]]);
+});
+
+test('the plans follow the earlier steps: the bias fills A and B, a level run overnight is never offered or kept', () => {
+  const filled = tidyPlans({ 'htf.bias': 'Bullish' }, 'htf.bias');
+  assert.deepEqual([filled['plans.aDir'], filled['plans.bDir']], ['Long', 'Short']);
+  // Only when both are empty, and only as the bias is picked: a direction chosen by hand stays.
+  assert.equal(tidyPlans({ 'htf.bias': 'Bullish', 'plans.aDir': 'Short' }, 'htf.bias')['plans.bDir'], undefined);
+  assert.equal(tidyPlans({ 'htf.bias': 'Bullish' }, 'plans.aRR')['plans.aDir'], undefined);
+  const a = { 'liquidity.taken': ['Asia low'], 'session.news': 'None today', 'plans.aDir': 'Long' };
+  assert.ok(notOffered(a, 'a', 'zone').includes('Asia low') && notOffered(a, 'a', 'zone').includes('Data wick'));
+  assert.ok(notOffered(a, 'a', 'zone').includes('PDH'), 'a long waits below');
+  // Marking a level run lets it go from a plan that had it; so does turning the scenario around.
+  const t = tidyPlans({ ...a, 'plans.aZones': ['Asia low', 'PDL'], 'plans.aTargetAt': 'PDH' }, 'liquidity.taken');
+  assert.deepEqual(t['plans.aZones'], ['PDL']);
+  const flipped = tidyPlans({ ...t, 'plans.aDir': 'Short' }, 'plans.aDir');
+  assert.equal(flipped['plans.aZones'], undefined);
+  assert.equal(flipped['plans.aTargetAt'], undefined, 'PDH is no target for a short');
 });

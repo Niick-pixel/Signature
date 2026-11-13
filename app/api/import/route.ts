@@ -98,6 +98,7 @@ export async function POST(request: Request) {
       grade: typeof r.checklist_score === 'number' && typeof r.grade_letter === 'string'
         ? { score: r.checklist_score, letter: r.grade_letter, trigger: r.trigger_fired === true }
         : null,
+      step1: typeof r.step1_edited_at === 'string' ? { edited_at: r.step1_edited_at, original: r.step1_original ?? null } : null,
     });
     imported += 1;
   }

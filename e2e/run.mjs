@@ -312,10 +312,13 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   await pill('taken', 'Asia high'); await next();                                 // overnight
   await next(); await pill('zone', 'Premium'); await next();                      // map, location
   expect(await page.locator('[data-chart-prep] textarea').count() === 0, 'no text boxes on the plans');
-  await pill('aDir', 'Short');
+  // The bearish bias already filled A short and B long; the Asia high, run overnight, is not offered.
+  expect(await g('aDir').locator('[aria-pressed="true"]').innerText() === 'Short' && await g('bDir').locator('[aria-pressed="true"]').innerText() === 'Long', 'A with the bias, B against it');
   expect(await g('aZones').getByRole('button', { name: 'PDL', exact: true }).count() === 0, 'a short waits above: no lows offered');
+  expect(await g('aZones').getByRole('button', { name: 'Asia high', exact: true }).count() === 0, 'run overnight: not offered');
+  expect(/run overnight, so not offered: Asia high/.test(await page.locator('[data-plans-auto]').innerText()), 'and it says why');
   await pill('aZones', 'PDH'); await pill('aConfirms', 'CISD');
-  await pill('bDir', 'Long'); await pill('bZones', 'London low'); await page.waitForTimeout(300);
+  await pill('bZones', 'London low'); await page.waitForTimeout(300);
   expect(await g('bZones').getByRole('button', { name: 'PDH', exact: true }).count() === 0, 'a long: no highs offered');
   const notes = await page.locator('[data-plan-checks]').innerText();
   expect(/no kill switch/.test(notes), `the rules were not checked: ${notes}`);
@@ -675,6 +678,33 @@ await check('Step 1: the plan section and the chart box keep one size — a tall
   expect(await page.locator('[data-rubric] [aria-pressed="true"], [data-rubric] [aria-checked="true"]').count() === 0, 'the rows are cleared');
   const secs = Number((await page.locator('[data-seconds]').innerText()).replace(/\D/g, '')) || 0;
   expect(secs <= 1 || secs >= 89, `the clock restarted (${secs})`);
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Step 1 can be edited once: Back, Edit Step 1 · once, change a row — the grade follows, the original is kept, no second edit', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  await page.click('[data-back]');
+  await page.waitForSelector('[data-locked-step1="locked"]');
+  const before = await page.locator('[data-locked-grade]').getAttribute('data-locked-grade');
+  await page.click('[data-edit-step1]');
+  await page.click('[data-close-action="edit"]');
+  await page.waitForSelector('[data-locked-step1="editing"]');
+  await page.click('[data-locked-step1] [data-row="row_sweep"] [data-pick="0"]');
+  const preview = await page.locator('[data-locked-grade]').getAttribute('data-locked-grade');
+  expect(preview !== before, `the grade follows the edit (${before} → ${preview})`);
+  await page.click('[data-save-step1]');
+  await page.waitForSelector('[data-locked-step1="edited"]');
+  expect((await page.locator('[data-step1-original]').innerText()).includes(`was ${before}`), 'the original grade is shown');
+  expect(await page.locator('[data-edit-step1]').count() === 0, 'no second edit');
+  const t = await savedTrade(page);
+  expect(t.row_sweep === 0 && t.step1_edited_at && t.step1_original.letter === before && t.decision === 'take', JSON.stringify({ r: t.row_sweep, o: t.step1_original }));
+  const again = await page.evaluate(async (id) => (await fetch(`/api/trades/${id}/step1`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ row_sweep: 2 }) })).status, t.id);
+  expect(again === 400, 'the API refuses a second edit');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });

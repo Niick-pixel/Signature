@@ -67,6 +67,8 @@ const CSV_COLUMNS: Array<keyof Trade> = [
   'htf_origin',
   // Step 1 timings, the pass/miss reasons, the replay day (048).
   'row_times', 'pass_reasons', 'pass_main_reason', 'replay_day_id',
+  // Step 1's one edit (049).
+  'step1_edited_at', 'step1_original',
 ];
 
 function csvCell(v: unknown): string {
@@ -180,7 +182,8 @@ export async function GET() {
     // 25: rubric v2 — the four rows, the decision and its time, the override, the outcome step (046).
     // 26: the singular-gap gate and the HTF origin (047).
     // 27: Step 1 timings, pass/miss reasons, replay days (048).
-    version: 27,
+    // 28: Step 1's one edit — when, and what it said before (049).
+    version: 28,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,
