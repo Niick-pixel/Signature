@@ -1,5 +1,6 @@
 'use client';
 
+import { V2Mark } from '@/components/ui/V2Mark';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { GRADE_COLOR } from '@/lib/grade';
@@ -138,12 +139,12 @@ export function GroupViewer({
                             {' · '}{t.instrument} {t.direction}{' · '}{t.setup_type}
                           </span>
                         </span>
-                        <span className="grid size-7 shrink-0 place-items-center rounded-[calc(9px*var(--rk))] text-[11px] font-semibold"
+                        <span className="flex h-7 min-w-7 shrink-0 items-center justify-center px-1 rounded-[calc(9px*var(--rk))] text-[11px] font-semibold"
                           style={{
-                            color: `rgb(${GRADE_COLOR[t.grade_letter]})`,
-                            background: `rgb(${GRADE_COLOR[t.grade_letter]} / 0.14)`,
+                            color: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']})`,
+                            background: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']} / 0.14)`,
                           }}>
-                          {t.grade_letter}
+                          {t.grade_letter ?? '—'}<V2Mark t={t} />
                         </span>
                       </div>
 

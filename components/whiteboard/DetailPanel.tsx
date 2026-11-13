@@ -1,5 +1,6 @@
 'use client';
 
+import { V2Mark } from '@/components/ui/V2Mark';
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -303,6 +304,7 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                     size="md"
                     triggerFired={trade.trigger_fired}
                   />
+                  <V2Mark t={trade} />
                 </div>
 
                 {/* Rubric 2's gates, stated where they failed. A trade graded

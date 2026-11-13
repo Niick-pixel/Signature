@@ -1,5 +1,6 @@
 'use client';
 
+import { V2Mark } from '@/components/ui/V2Mark';
 import Link from 'next/link';
 import { GRADE_COLOR } from '@/lib/grade';
 import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
@@ -24,6 +25,7 @@ export interface DayTradeSummary {
   r_multiple: number | null;
   pnl_dollars: number | null;
   grade_letter: GradeLetter;
+  rubric_version?: number | null;
   mistake_tags: string[];
 }
 
@@ -86,12 +88,12 @@ export function DayStrip({ trades }: { trades: DayTradeSummary[] }) {
               transition-transform hover:scale-[1.03]"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill-strong)' }}
           >
-            <span className="grid size-5 shrink-0 place-items-center rounded-[calc(6px*var(--rk))] text-[10px] font-semibold"
+            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center px-0.5 rounded-[calc(6px*var(--rk))] text-[10px] font-semibold"
               style={{
-                color: `rgb(${GRADE_COLOR[t.grade_letter]})`,
-                background: `rgb(${GRADE_COLOR[t.grade_letter]} / 0.16)`,
+                color: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']})`,
+                background: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']} / 0.16)`,
               }}>
-              {t.grade_letter}
+              {t.grade_letter ?? '—'}<V2Mark t={t} />
             </span>
             <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>{t.time}</span>
             <span className="tabular-nums text-[11px] font-semibold"

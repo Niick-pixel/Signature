@@ -11,6 +11,7 @@
  *    and how often each would have won. If skips score the same as takes and
  *    win as often, hesitation is the leak; if lower, the filter is working.
  */
+import { onOldScale } from '../decision';
 import { Z80 } from './dist';
 import { resultClass, wilson } from './metrics';
 import { isHypothetical } from '../domain';
@@ -39,8 +40,8 @@ export function missedStats(all: readonly Trade[]): MissedStats {
   const win = wr.filter((v) => v != null && v > 0.1).length; const lose = wr.filter((v) => v != null && v < -0.1).length;
   const reasons = new Map<string, Trade[]>();
   for (const t of rt) { const k = t.skip_reason ?? 'Not given'; reasons.set(k, [...(reasons.get(k) ?? []), t]); }
-  const ss = rt.map((t) => t.checklist_score).filter((v): v is number => v != null);
-  const ts = taken.map((t) => t.checklist_score).filter((v): v is number => v != null);
+  const ss = rt.filter(onOldScale).map((t) => t.checklist_score).filter((v): v is number => v != null);
+  const ts = taken.filter(onOldScale).map((t) => t.checklist_score).filter((v): v is number => v != null);
   const sm = mean(ss); const tm = mean(ts);
   const gap = sm != null && tm != null ? sm - tm : null;
   const se = sm != null && tm != null && ss.length > 1 && ts.length > 1 ? Math.sqrt(varOf(ss, sm) / ss.length + varOf(ts, tm) / ts.length) : null;

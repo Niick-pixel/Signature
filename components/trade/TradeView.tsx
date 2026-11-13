@@ -1,5 +1,6 @@
 'use client';
 
+import { V2Mark } from '@/components/ui/V2Mark';
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { useEffect } from 'react';
 import Link from 'next/link';
@@ -115,7 +116,7 @@ export function TradeView(p: TradeViewProps) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Chip>{accountLabel(t.account)}{t.account_label ? ` · ${t.account_label}` : ''}</Chip>
             <Chip color={outcomeColor}>{outcomeLabel(t)}</Chip>
-            <Chip>Grade {t.grade_letter}{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
+            <Chip>Grade {t.grade_letter ?? '—'}<V2Mark t={t} />{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
             <Chip>{t.session}</Chip>
             {t.status !== 'Settled' && <Chip>{t.status}</Chip>}
           </div>
@@ -138,7 +139,7 @@ export function TradeView(p: TradeViewProps) {
           <div className="flex flex-wrap gap-1.5">
             <Chip>{accountLabel(t.account)}{t.account_label ? ` · ${t.account_label}` : ''}</Chip>
             <Chip color={outcomeColor}>{outcomeLabel(t)}</Chip>
-            <Chip>Grade {t.grade_letter}{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
+            <Chip>Grade {t.grade_letter ?? '—'}<V2Mark t={t} />{t.graded_post_hoc ? ' · after the fact' : ''}</Chip>
             <Chip>{t.session}</Chip>
             {t.status !== 'Settled' && <Chip>{t.status}</Chip>}
           </div>

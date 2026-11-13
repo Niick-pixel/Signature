@@ -18,6 +18,7 @@
  *
  * Every result is labelled an experiment — test it on the next N trades.
  */
+import { onOldScale } from '../decision';
 import { edgeMetrics, type EdgeMetrics } from './metrics';
 import { hashString, seedOf } from './rng';
 import { memo } from './memo';
@@ -46,7 +47,7 @@ export const LAB_FILTERS: LabFilter[] = [
   { id: 'no-diagonal', label: 'No trendline targets', help: 'Removes trades targeting a diagonal / LRLR trendline.', test: (t) => (t.target_type == null ? null : !/trend|diagonal|lrlr/i.test(t.target_type)) },
   { id: 'closure-8', label: 'Closure score 8 or more', help: 'Keeps inversion closures graded A− or better.', test: (t) => { const c = closureScore(t); return c == null ? null : c >= 8; } },
   { id: 'killzone', label: 'Inside the killzone only', help: 'Removes trades marked outside the killzone.', test: (t) => (t.chk_killzone == null ? null : Boolean(t.chk_killzone)) },
-  { id: 'a-grade', label: 'A and A+ only', help: 'Keeps A+ and A grades.', test: (t) => (t.grade_letter ? t.grade_letter === 'A+' || t.grade_letter === 'A' : null) },
+  { id: 'a-grade', label: 'A and A+ only', help: 'Keeps A+ and A grades.', test: (t) => (t.grade_letter && onOldScale(t) ? t.grade_letter === 'A+' || t.grade_letter === 'A' : null) },
   { id: 'max-2', label: 'At most 2 trades a day', help: 'Removes the 3rd trade of a day or session and later.', test: (_t, s) => (s?.tradeNo == null ? null : s.tradeNo <= 2) },
   { id: 'stop-first-loss', label: 'Stop after the first loss of the day', help: 'Removes every trade after a loss that day.', test: (_t, _s, c) => (c.sinceFirstLoss == null ? true : false) },
   { id: 'one-after-loss', label: 'At most 1 trade after a loss', help: 'After the first loss of a day, one more trade, then done.', test: (_t, _s, c) => (c.sinceFirstLoss == null ? true : c.sinceFirstLoss <= 1) },

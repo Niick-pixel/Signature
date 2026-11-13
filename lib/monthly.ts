@@ -1,4 +1,5 @@
 import { adherenceOf } from './adherence';
+import { isRubricV2, rubricName, v2Lines, v2Result } from './decision';
 import type { PathEvent } from './path';
 import { conditions } from './conditions';
 import {
@@ -119,12 +120,20 @@ export function tradeSection(t: Trade, shots: Map<string, Array<{ slot: string; 
   const p = (s: string) => out.push(s);
   const pnl = pnlOf(t);
   const verdict = adherenceOf(t);
-  const outcome = t.outcome === 'Not taken' ? 'Passed' : `${t.outcome} ${r1(t.r_multiple)}${pnl != null && !isHypothetical(t.account) ? ` (${usd(pnl)})` : ''}`;
+  const v2 = isRubricV2(t);
+  const outcome = (v2 ? v2Result(t) : null) ?? (t.outcome === 'Not taken' ? 'Passed' : `${t.outcome} ${r1(t.r_multiple)}${pnl != null && !isHypothetical(t.account) ? ` (${usd(pnl)})` : ''}`);
   h(`### ${when(t)} · ${t.account}${isHypothetical(t.account) ? (countsInStats(t) ? ' (would have, written before)' : ' (would have — Hindsight, not counted)') : ''} · ${t.instrument} ${t.direction} · ${outcome} · \`${ref(t)}\``);
+  if (v2) {
+    // Rubric v2: the rows, the facts and the decision, in place of the checklist's lines.
+    p(`- **Setup:** ${t.setup_type} · ${t.session}`);
+    for (const line of v2Lines(t)) p(line);
+    p(`- **Rules:** ${verdict === 'followed' ? 'followed' : verdict === 'broken' ? '**broken**' : 'not scored'} (computed: the override and my "me" tags)`);
+  } else {
   p(`- **Setup:** ${t.setup_type} · ${t.session} · HTF ${t.htf_bias.toLowerCase()} · ${t.premium_discount} · target ${t.target_type}`);
   p(`- **Why I took it:** ${t.reason}${isHypothetical(t.account) && t.skip_reason ? ` · **why I didn't:** ${t.skip_reason}` : ''}`);
-  p(`- **Grade:** ${t.checklist_score} (${t.grade_letter})${t.grade_at_entry != null && t.grade_at_entry !== t.checklist_score ? `, ${t.grade_at_entry} at entry` : ''} · trigger ${t.trigger_fired ? 'fired' : '**did not fire**'} · rules ${verdict === 'followed' ? 'followed' : verdict === 'broken' ? '**broken**' : 'not scored'}${t.followed_rules != null ? ` (I said ${t.followed_rules ? 'followed' : 'broken'})` : ''}${t.graded_post_hoc ? ' · graded after the fact' : ''}${t.regrade ? ` · re-graded ${t.regrade}` : ''}`);
+  p(`- **Grade:** (${rubricName(t)}) ${t.checklist_score} (${t.grade_letter})${t.grade_at_entry != null && t.grade_at_entry !== t.checklist_score ? `, ${t.grade_at_entry} at entry` : ''} · trigger ${t.trigger_fired ? 'fired' : '**did not fire**'} · rules ${verdict === 'followed' ? 'followed' : verdict === 'broken' ? '**broken**' : 'not scored'}${t.followed_rules != null ? ` (I said ${t.followed_rules ? 'followed' : 'broken'})` : ''}${t.graded_post_hoc ? ' · graded after the fact' : ''}${t.regrade ? ` · re-graded ${t.regrade}` : ''}`);
   p(`- **Checklist:** sweep ${t.sweep_tier ? SWEEP_TIER_SPEC[t.sweep_tier].label : 'not recorded'} · ${CHECKLIST_ITEMS.map((i) => `${t[i.key] === true ? '✓' : t[i.key] === false ? '✗' : i.gate ? '?' : 'n/a'} ${i.label}`).join(' · ')}`);
+  }
   const context = CONTEXT_FLAG_LIST.filter((f) => (t as unknown as Record<string, unknown>)[f.key] === true).map((f) => f.label);
   if (context.length) p(`- **Context present:** ${context.join(', ')}`);
   if (t.mistake_tags.length) p(`- **Mistakes tagged:** ${t.mistake_tags.join(', ')}`);

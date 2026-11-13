@@ -3,6 +3,7 @@ import {
 } from './domain';
 import { GATES_SINCE, gradeUnder } from './rubric';
 import { DEFAULT_RULE_CONFIG, TRADE_RULES } from './ruleBook';
+import { RUBRIC_V2, rulesFollowedV2 } from './decision';
 import type { Trade } from './types';
 
 /**
@@ -24,6 +25,10 @@ export type AdherenceInput = {
   target_type?: string;
   /** Taken below the minimum confidence (026): a rule broken. Null on every older trade. */
   below_min_confidence?: boolean | null;
+  /** Rubric v2 (046). */
+  decision?: string | null;
+  grade_override?: boolean | null;
+  risk_percent?: number | null;
 } & Partial<Record<ChecklistKey | LegacyChecklistKey, ChecklistAnswer>>;
 
 /**
@@ -68,6 +73,12 @@ export type Adherence = 'followed' | 'broken' | 'unscored';
  * model. The tags never decide it (see above).
  */
 export function adherenceOf(t: AdherenceInput): Adherence {
+  // Rubric v2 (046): computed from the override, the "me" tags and risk (lib/decision). Day rules are the review's.
+  if (t.rubric_version === RUBRIC_V2) {
+    if (!t.decision || t.decision !== 'take') return 'unscored';
+    return rulesFollowedV2({ grade_override: t.grade_override, mistake_tags: t.mistake_tags, risk_percent: t.risk_percent },
+      { maxRiskPct: DEFAULT_RULE_CONFIG.maxRiskPct, backtest: true }).followed ? 'followed' : 'broken';
+  }
   if (!isScored(t)) return 'unscored';
   // The rule book's trade rules are the definition (lib/ruleBook.ts): the
   // threshold, the trigger, the model gate and minimum confidence are rules

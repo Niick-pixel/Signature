@@ -190,7 +190,7 @@ test('the journal export lays each page on its day, with the day beside it', () 
   assert.match(md, /### Tuesday 29 September 2026 — 1 page · 1 trade, −1\.0R/);
   assert.match(md, /\*\*Morning:\*\* checked in .* · slept 5h · mind 2\/5 · bias Bullish — daily FVG · news High \(CPI 8:30\) · planned at most 2/);
   assert.match(md, /Decisions: price draws Up; target EQH\/EQL/);
-  assert.match(md, /- 09:41 NQ Long · iFVG · grade C · Loss −1\.0R · why: FOMO · Live · went wrong: Chased/);
+  assert.match(md, /- 09:41 NQ Long · iFVG · grade C \(checklist rubric \d\) · Loss −1\.0R · why: FOMO · Live · went wrong: Chased/);
   assert.match(md, /Lesson: "Waited for nothing and chased it\."/);
   assert.match(md, /#### Page: Chasing again\n\nI \*\*chased\*\* the open\./);
   // Pinned pages from before the range still come along; old unpinned ones do not.

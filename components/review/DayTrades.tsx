@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { V2Mark } from '@/components/ui/V2Mark';
 import { GRADE_COLOR } from '@/lib/grade';
 import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
 import type { Trade } from '@/lib/types';
@@ -60,12 +61,12 @@ export function DayTrades({ trades }: { trades: Trade[] }) {
             className="flex items-center gap-3 rounded-[calc(14px*var(--rk))] border px-3.5 py-2.5 transition-transform hover:scale-[1.01]"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}
           >
-            <span className="grid size-7 shrink-0 place-items-center rounded-[calc(9px*var(--rk))] text-[11px] font-semibold"
+            <span className="flex h-7 min-w-7 shrink-0 items-center justify-center px-1 rounded-[calc(9px*var(--rk))] text-[11px] font-semibold"
               style={{
-                color: `rgb(${GRADE_COLOR[t.grade_letter]})`,
-                background: `rgb(${GRADE_COLOR[t.grade_letter]} / 0.14)`,
+                color: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']})`,
+                background: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']} / 0.14)`,
               }}>
-              {t.grade_letter}
+              {t.grade_letter ?? '—'}<V2Mark t={t} />
             </span>
 
             <span className="min-w-0 flex-1">

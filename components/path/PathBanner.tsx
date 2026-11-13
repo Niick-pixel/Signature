@@ -45,6 +45,12 @@ export function PathBanner({ summary: given, compact = false }: { summary?: Path
     >
       <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: 'rgb(var(--accent))', boxShadow: '0 0 8px rgb(var(--accent) / 0.8)' }} />
       <span className="truncate tabular-nums" style={{ color: 'var(--text-dim)' }}>{summary.banner}</span>
+      {summary.v2 && (
+        <span className="shrink-0 whitespace-nowrap border-l pl-2 tabular-nums" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }} data-v2-sample
+          title="Rubric v2 trades locked at the decision, outcome written, never re-graded">
+          Rubric v2 sample · {summary.v2.n} / {summary.v2.target}
+        </span>
+      )}
     </motion.button>
   );
 }

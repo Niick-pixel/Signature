@@ -144,7 +144,7 @@ export interface StepView extends PathStep {
 const signedR = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)}R`;
 
 /** The grade a trade is held to: the honest re-grade wins when there is one (it can only be harsher). */
-export const effectiveGrade = (t: Pick<Trade, 'grade_letter' | 'regrade'>): string => t.regrade ?? t.grade_letter;
+export const effectiveGrade = (t: Pick<Trade, 'grade_letter' | 'regrade' | 'rubric_version'>): string => (t.rubric_version === 5 ? t.grade_letter : t.regrade ?? t.grade_letter);
 
 /** The trades a criterion is measured over. Taken trades only: a pass is graded, but never priced. */
 export function criterionTrades(c: Criterion, trades: readonly Trade[], step: Pick<PathStep, 'started_at'>): Trade[] {

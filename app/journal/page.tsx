@@ -44,6 +44,7 @@ export default async function JournalRoute({ searchParams }: { searchParams: Pro
       r_multiple: t.r_multiple,
       pnl_dollars: t.pnl_dollars,
       grade_letter: t.grade_letter,
+      rubric_version: t.rubric_version,
       mistake_tags: t.mistake_tags,
     });
   }

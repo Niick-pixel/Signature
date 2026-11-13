@@ -1,6 +1,7 @@
 import { groupRows, table, tradeSection } from './monthly';
 import { aggregate, pnlOf } from './stats';
 import { isHypothetical } from './domain';
+import { RUBRIC_V2_EXPLAINER } from './decision';
 import type { Trade, TradeShot } from './types';
 
 /**
@@ -48,6 +49,8 @@ export function tradesExport(input: TradesExportInput) {
   p('2. Where do my words and my results disagree (I call a trade A+ and it loses, or say I followed the rules and the flags say otherwise)?');
   p('3. Which mistake costs me the most R here, and what single rule would have prevented most of it?');
   p('4. Anything that looks like tilt, revenge or forcing — trades bunched after a loss, size changes, quick logs.');
+  p('');
+  p(`Grades: ${RUBRIC_V2_EXPLAINER} Each trade names its rubric.`);
   p('');
   p("Small samples are small: say how sure you are, and don't treat a handful of trades as proof. Ask me about anything unclear before concluding. Charts, when attached, are named after the trade's `T-` reference.");
 

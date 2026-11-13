@@ -217,3 +217,64 @@ test('old trades are untouched: no decision, graded under the checklist rubric a
   assert.equal(t.rubric_version, 3);
   assert.deepEqual([t.decision, t.row_sweep, t.outcome_at, t.leg_location], [null, null, null, null]);
 });
+
+test('the review reads the "me" tags and the override; old trades\' execution tags count too; market tags never', async () => {
+  const { checkTrade } = await import('../lib/review');
+  const { adherenceOf } = await import('../lib/adherence');
+  const v2 = save({ outcome: 'Loss', r_multiple: -1, status: 'Settled', outcome_at: '2026-11-13T10:00:00.000Z', screenshot_path: 'x.png', mistake_tags: ['Moved stop before BE trigger'], market_tags: ['News spike'],
+    explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) });
+  assert.deepEqual(checkTrade(v2).map((b) => b.short), ['Moved stop before BE trigger']);
+  assert.equal(adherenceOf(v2), 'broken');
+  const clean = save({ outcome: 'Win', r_multiple: 2, status: 'Settled', outcome_at: '2026-11-13T10:00:00.000Z', screenshot_path: 'x.png', market_tags: ['News spike'],
+    explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) });
+  assert.deepEqual(checkTrade(clean), [], 'a v2 trade is never judged by the old checklist rules');
+  assert.equal(adherenceOf(clean), 'followed');
+  const forced = save({ ...rows(2, 0, 2, 2), grade_override: true, outcome: 'Win', r_multiple: 1, status: 'Settled', outcome_at: '2026-11-13T10:00:00.000Z', screenshot_path: 'x.png',
+    explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) });
+  assert.ok(checkTrade(forced).some((b) => b.id === 'override'));
+  // An older trade tagged "Moved stop" now shows it as a rule broken in the weekly review.
+  const r = parseTradeInput({
+    date: '2026-10-01T09:45', instrument: 'NQ', direction: 'Short', session: 'NY AM', reason: 'Rules-based (A+ setup)',
+    setup_type: 'iFVG', htf_bias: 'With bias', premium_discount: 'Premium', target_type: 'EQH/EQL',
+    outcome: 'Loss', r_multiple: -1, account: 'Live', explanation: 'E'.repeat(170), lesson: 'L'.repeat(170),
+    screenshot_path: 'x.png', mistake_tags: ['Moved stop'], market_tags: ['Stopped by a wick'],
+  });
+  if (!r.ok) throw new Error(r.error);
+  const old = createTrade(r.value);
+  const shorts = checkTrade(old).map((b) => b.short);
+  assert.ok(shorts.includes('Moved stop'));
+  assert.ok(!shorts.includes('Stopped by a wick'));
+});
+
+test('stats: v2 records only, by total, row, scenario, time and decision; passes and misses at their hypothetical R', async () => {
+  const { decisionStats } = await import('../lib/decisionStats');
+  const base = { rubric_version: 5, decided_at: 'x', outcome_at: 'y', deleted_at: null, plan_scenario: 'A', decision_limit: 40 };
+  const ts = [
+    { ...base, ...rows(2, 2, 2, 2), decision: 'take', r_multiple: 2, decision_seconds: 12 },
+    { ...base, ...rows(2, 2, 2, 2), decision: 'take', r_multiple: -1, decision_seconds: 25 },
+    { ...base, ...rows(1, 1, 1, 1), decision: 'pass', would_be_r: -1, decision_seconds: 30, plan_scenario: 'B' },
+    { ...base, ...rows(2, 1, 1, 1), decision: 'missed', would_be_r: 3, decision_seconds: 40 },
+    { ...base, ...rows(2, 2, 2, 2), decision: 'take', r_multiple: 5, outcome_at: null, decision_seconds: 5 }, // pending: never counted
+    { rubric_version: 3, decision: null, r_multiple: 9 }, // the old scale: never mixed in
+  ] as never[];
+  const d = decisionStats(ts);
+  assert.equal(d.n, 4);
+  assert.deepEqual(d.byTotal[8].taken, { n: 2, avgR: 0.5 });
+  assert.equal(d.byTotal[4].passed, 1);
+  assert.equal(d.byTotal[5].missed, 1);
+  assert.deepEqual(d.byRow.row_sweep[2], { n: 2, avgR: 0.5 });
+  assert.equal(d.byScenario.find((s) => s.key === 'A')!.cell.n, 2);
+  assert.deepEqual(d.decisions.map((x) => [x.key, x.cell.n, x.cell.avgR]), [['take', 2, 0.5], ['pass', 1, -1], ['missed', 1, 3]]);
+  assert.equal(d.time.missed, 1);
+  assert.equal(d.time.timed, 4);
+  assert.deepEqual(d.time.buckets.map((b) => b.n), [0, 1, 1, 1, 1]);
+});
+
+test('exports: a v2 trade names its rubric and carries its rows, decision and time; an old one names its checklist rubric', () => {
+  const lines = D.v2Lines({ ...rows(2, 2, 1, 2), direction: 'Long', plan_scenario: 'B', leg_location: 'Discount', planned_rr: '2', rubric_version: 5,
+    grade_letter: 'B', decision: 'take', decision_seconds: 18.2, decision_limit: 40, grade_override: false, target_type: 'PDH/PDL', entry_method: 'On inversion close', confidence_at_entry: 4 });
+  assert.match(lines[0], /Rubric v2 \(4 rows\) · Sweep 2 · Inversion 2 · Path 1 · Target 2 = 7\/8 → \*\*B\*\* \(Scenario B/);
+  assert.match(lines[2], /Taken in 18\.2s of 40s/);
+  assert.equal(D.rubricName({ rubric_version: 3 }), 'checklist rubric 3');
+  assert.equal(D.v2Result({ decision: 'missed', outcome_at: 'x', would_be_r: -1 }), 'Missed — too slow · would have −1.0R');
+});

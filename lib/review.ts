@@ -12,6 +12,7 @@ import { isBacktest } from './domain';
 import { EARLY_N, LEAK_MIN_TRADES, THEMES, analyse, themesOf, type ThemeResult } from './insights';
 import { isHypothetical, isTaken } from './domain';
 import type { Trade } from './types';
+import { ME_TAGS, OLD_EXECUTION_TAGS, isRubricV2, onOldScale } from './decision';
 
 export interface BrokenRule { id: string; scope: 'trade' | 'day'; text: string; short: string; kind?: 'trading' | 'logging'; source?: 'auto' | 'self' }
 
@@ -40,15 +41,40 @@ function verdictOf(r: (typeof TRADE_RULES)[number], t: Trade, cfg: RuleConfig, e
   return r.test(t, cfg);
 }
 
+/**
+ * Rubric v2 (046): the checklist rules read fields a v2 trade never fills —
+ * the grade, its gates and caps cover them now. What counts: taking a
+ * no-trade grade (the override), every "me" tag, and risk over the limit.
+ * Day rules are added by the caller (dayBreaks), and skip backtests there.
+ */
+const RISK_RULE = TRADE_RULES.find((r) => r.id === 'risk');
+function v2Breaks(t: Trade, cfg: RuleConfig): BrokenRule[] {
+  const out: BrokenRule[] = [];
+  if (t.grade_override) out.push({ id: 'override', scope: 'trade', short: 'Took a no-trade grade', text: 'Taken although the grade said no trade.' });
+  for (const tag of t.mistake_tags ?? []) {
+    if ((ME_TAGS as readonly string[]).includes(tag)) out.push({ id: `me:${tag}`, scope: 'trade', short: tag, text: `${tag} — what went wrong, me.`, source: 'self' });
+  }
+  if (RISK_RULE && RISK_RULE.test(t, cfg) === false) out.push(asBroken(RISK_RULE));
+  return out;
+}
+
+/** An older trade's execution tags (Moved stop, Cut winner early, …): rules broken too. Market tags never are. */
+const oldExecutionBreaks = (t: Trade): BrokenRule[] => (t.mistake_tags ?? [])
+  .filter((tag) => (OLD_EXECUTION_TAGS as readonly string[]).includes(tag))
+  .map((tag) => ({ id: `tag:${tag}`, scope: 'trade' as const, short: tag, text: `${tag} — tagged on the trade.`, source: 'self' as const }));
+
 /** Every trade rule's verdict on one trade: true kept, false broken, null cannot tell. */
 export function evaluateTrade(t: Trade, cfg: RuleConfig = DEFAULT_RULE_CONFIG): Record<string, Verdict> {
+  // A v2 trade answers only the risk rule of the checklist's book.
+  if (isRubricV2(t)) return Object.fromEntries(TRADE_RULES.map((r) => [r.id, checkable(t) && r.id === 'risk' ? r.test(t, cfg) : null]));
   return Object.fromEntries(TRADE_RULES.map((r) => [r.id, checkable(t) ? r.test(t, cfg) : null]));
 }
 
 /** The trade rules this trade broke, with their text. */
 export function checkTrade(t: Trade, cfg: RuleConfig = DEFAULT_RULE_CONFIG, eras?: Map<string, string>): BrokenRule[] {
   if (!checkable(t)) return [];
-  return TRADE_RULES.filter((r) => verdictOf(r, t, cfg, eras) === false).map(asBroken);
+  if (isRubricV2(t)) return v2Breaks(t, cfg);
+  return [...TRADE_RULES.filter((r) => verdictOf(r, t, cfg, eras) === false).map(asBroken), ...oldExecutionBreaks(t)];
 }
 
 /* ------------------------------------------------------------------ day */
@@ -185,7 +211,7 @@ export function trends(trades: readonly Trade[], ctxFor: (day: string) => DayCon
   // Grade honesty: does a better letter actually pay more?
   const letters = ['A+', 'A', 'B', 'C', 'F'];
   const grades = letters.map((letter) => {
-    const g = ts.filter((t) => t.grade_letter === letter);
+    const g = ts.filter((t) => onOldScale(t) && t.grade_letter === letter);
     return { letter, n: g.length, avgR: round(mean(g.filter((t) => t.r_multiple != null).map((t) => t.r_multiple as number))), early: g.length < EARLY_N };
   }).filter((g) => g.n > 0);
 

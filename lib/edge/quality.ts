@@ -8,6 +8,7 @@
  *    (Blind Re-grade), against the grade at entry, on one scale
  *    (A+ 10, A 9, A− 8, B+ 7, B 6, B− 5, C 3.5, F 1)
  */
+import { onOldScale } from '../decision';
 import { shrinkGroups } from './shrink';
 import { resultClass } from './metrics';
 import { Z80, Z95 } from './dist';
@@ -44,7 +45,7 @@ export interface Quality { clean: GradeTable; exposed: GradeTable; drift: Drift[
 /** Mean R by a grade (the grade at entry, or another: the blind grade), shrunk. */
 export function gradeTable(trades: readonly Trade[], gradeOf: (t: Trade) => string | null = (t) => t.grade_letter): GradeTable {
   const by = new Map<string, Trade[]>();
-  for (const t of trades) { const g = gradeOf(t); if (g) by.set(g, [...(by.get(g) ?? []), t]); }
+  for (const t of trades) { if (!onOldScale(t)) continue; const g = gradeOf(t); if (g) by.set(g, [...(by.get(g) ?? []), t]); }
   const groups = [...by].map(([key, ts]) => { const x = ts.map((t) => t.r_multiple as number); return { key, x, w: x.map(() => 1), wins: x.filter((r) => resultClass(r) === 'W').length, losses: x.filter((r) => resultClass(r) === 'L').length }; });
   if (!groups.length) return { mu: 0, rows: [] };
   const sh = shrinkGroups(groups);
@@ -62,7 +63,7 @@ function drift(trades: readonly Trade[], against: Drift['against']): Drift {
 }
 
 export function spread(trades: readonly Trade[]): Spread {
-  const clean = trades.filter((t) => !t.graded_post_hoc && t.grade_letter);
+  const clean = trades.filter((t) => onOldScale(t) && !t.graded_post_hoc && t.grade_letter);
   const letters = [...new Set(clean.map((t) => t.grade_letter as string))].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
   const grades = letters.map((g) => { const n = clean.filter((t) => t.grade_letter === g).length; return { grade: g, n, share: n / clean.length }; });
   const items = FIELDS.filter((f) => f.points != null).map((f) => {
@@ -71,7 +72,7 @@ export function spread(trades: readonly Trade[]): Spread {
     const share = vals.length ? yes / vals.length : null;
     return { key: f.key, label: f.label, yes, answered: vals.length, share, notFiltering: vals.length >= SPREAD_MIN && share != null && share > NOT_FILTERING };
   });
-  const pre = trades.filter((t) => !t.graded_post_hoc && t.checklist_score != null);
+  const pre = trades.filter((t) => onOldScale(t) && !t.graded_post_hoc && t.checklist_score != null);
   return {
     grades, gradeN: clean.length, oneGrade: clean.length >= 8 && letters.length === 1 ? letters[0] : null, items,
     scores: { n: pre.length, distinct: new Set(pre.map((t) => t.checklist_score)).size, atOrAbove: pre.filter((t) => t.checklist_score >= TAKE_IT_THRESHOLD).length, threshold: TAKE_IT_THRESHOLD },

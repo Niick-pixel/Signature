@@ -5,6 +5,7 @@ import {
   type Account, type ChecklistKey, type MistakeTag, type Reason, type SkipReason,
   type TargetType,
 } from './domain';
+import { onOldScale } from './decision';
 import { adherenceGap, adherenceOf, derivedAdherence, type AdherenceGap } from './adherence';
 import { resultClass } from './edge/metrics';
 import { GRADE_BUCKETS, GRADE_LETTERS } from './grade';
@@ -190,7 +191,8 @@ export function aggregate(trades: Trade[]): Aggregate {
     winRate: decided ? wins / decided : null,
     totalR,
     avgR: taken.length ? totalR / taken.length : null,
-    avgGrade: trades.length ? trades.reduce((s, t) => s + t.checklist_score, 0) / trades.length : null,
+    // The old checklist's scale only: a v2 score (total / 8) is a different measure (lib/decision).
+    avgGrade: (() => { const g = trades.filter(onOldScale); return g.length ? g.reduce((s, t) => s + t.checklist_score, 0) / g.length : null; })(),
   };
 }
 
@@ -230,7 +232,7 @@ export function byGradeBucket(trades: Trade[]): Group<string>[] {
   return GRADE_BUCKETS.map((bucket) => {
     // By the letter the trade was given, not by re-banding its score under
     // today's thresholds — see lib/rubric.ts.
-    const ts = trades.filter((t) => t.grade_letter === bucket.label);
+    const ts = trades.filter((t) => onOldScale(t) && t.grade_letter === bucket.label);
     return { key: bucket.label as string, trades: ts, stats: aggregate(ts) };
   }).filter((g) => g.trades.length > 0);
 }
@@ -637,7 +639,7 @@ export interface BandRow {
 
 export function byGradeBand(trades: Trade[]): BandRow[] {
   return GRADE_BANDS.map((band) => {
-    const ts = trades.filter((t) => t.checklist_score >= band.min && t.checklist_score <= band.max);
+    const ts = trades.filter((t) => onOldScale(t) && t.checklist_score >= band.min && t.checklist_score <= band.max);
     const stats = aggregate(ts);
     const e = edge(ts);
     return {
@@ -854,8 +856,8 @@ export interface PassedSetups {
 
 export function passedSetups(trades: Trade[]): PassedSetups {
   const passed = trades.filter((t) => t.outcome === 'Not taken');
-  const shouldHave = passed.filter((t) => t.checklist_score >= TAKE_IT_THRESHOLD && t.trigger_fired);
-  const rightToPass = passed.filter((t) => t.checklist_score < TAKE_IT_THRESHOLD);
+  const shouldHave = passed.filter((t) => onOldScale(t) && t.checklist_score >= TAKE_IT_THRESHOLD && t.trigger_fired);
+  const rightToPass = passed.filter((t) => onOldScale(t) && t.checklist_score < TAKE_IT_THRESHOLD);
   const sum = (list: Trade[]) =>
     list.reduce((n, t) => n + (t.would_be_r ?? t.r_left_on_table ?? 0), 0);
   return {
@@ -1020,7 +1022,7 @@ export function modelBreakdowns(trades: Trade[], everyAccount: Trade[]): ModelBr
     account: breakdown(everyAccount, (t) => t.account, ACCOUNT_VALUES.map((a) => ({
       key: a, label: isHypothetical(a) ? `${a} (hypothetical)` : isSeparate(a) ? `${accountLabel(a)} (replay)` : a, muted: isSeparate(a),
     }))),
-    entryGrade: breakdown(trades, (t) => t.grade_letter,
+    entryGrade: breakdown(trades.filter(onOldScale), (t) => t.grade_letter,
       GRADE_LETTERS.map((l) => ({ key: l, label: l, always: true }))),
   };
 }

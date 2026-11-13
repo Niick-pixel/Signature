@@ -1,5 +1,6 @@
 'use client';
 
+import { V2Mark } from '@/components/ui/V2Mark';
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 
@@ -39,7 +40,7 @@ export type TradeNodeData = {
 function TradeNodeInner({ data }: NodeProps) {
   const { trade, selected, onOpen, scale = 1, dimPassed = true } = data as unknown as TradeNodeData;
   const outcome = OUTCOME_COLOR[trade.outcome];
-  const grade = GRADE_COLOR[trade.grade_letter];
+  const grade = GRADE_COLOR[trade.grade_letter ?? 'F'];
   const passed = trade.outcome === 'Not taken';
   // Descriptive, never blocking — it was saved exactly as written. The dot
   // just means there is a contradiction worth a look at review time.
@@ -209,7 +210,7 @@ function TradeNodeInner({ data }: NodeProps) {
           boxShadow: `0 0 12px rgb(${grade} / 0.35)`,
         }}
       >
-        {trade.grade_letter}
+        {trade.grade_letter ?? '—'}<V2Mark t={trade} />
       </div>
 
       {/* What went wrong used to sit here as a 9px chip, too small to read

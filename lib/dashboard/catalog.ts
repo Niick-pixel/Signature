@@ -47,7 +47,7 @@ const TIER: Record<string, 1 | 2> = {
   'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
   'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
   'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
-  focus: 2, integrity: 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
 };
 /** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
 const LEAN: Record<string, 'fix' | 'keep'> = {
@@ -467,6 +467,81 @@ add({
   help: 'What would have happened under a stricter rule: expectancy with its interval, the difference against what you took, and P(better). An experiment, never a verdict; none needing more than 200 trades is proposed.',
   select: (v) => ({ kind: 'custom', view: 'rulelab', claim: { n: v.lab.length },
     data: { rows: packRows(v.lab), each: Object.fromEntries(Object.entries(v.labEach).map(([k, r]) => [k, { ...r, curve: [] }])) } }),
+});
+
+/* ───────────── Rubric v2 (4 rows): its trades only, never on the old scale ───────────── */
+
+const V2_EMPTY = (ghost: 'bars' | 'text') => ({ kind: 'text' as const, headline: '', tone: 'neutral' as Tone, tooEarly: { ghost,
+  text: 'No Rubric v2 trades with an outcome yet. Log one: New trade scores the four rows and decides against the clock.', href: '/new', hrefLabel: 'Log a trade' } });
+
+add({
+  id: 'v2-total', title: 'Rubric v2: by total', category: 'chart', kind: 'bars', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Rubric v2 (4 rows) trades only: R per trade taken at each total out of 8, with how many at that total were passed or missed. 8 is A+, 6–7 A, 5 B, 4 or less no trade. If higher totals do not make more, the rows are not reading the setup.',
+  select: (v) => {
+    const d = v.decisions;
+    if (!d.n) return V2_EMPTY('bars');
+    const rows = d.byTotal.filter((r) => r.taken.n + r.passed + r.missed > 0);
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: d.n, level: null },
+      items: rows.map((r) => ({ label: `${r.total}/8`, value: r.taken.avgR ?? 0,
+        display: `${R(r.taken.avgR)} · n ${r.taken.n}${r.passed ? ` · ${r.passed} passed` : ''}${r.missed ? ` · ${r.missed} missed` : ''}`,
+        tone: ((r.taken.avgR ?? 0) >= 0 ? 'accent' : 'bad') as Tone })),
+      caption: `R per trade taken · ${plural(d.n, 'v2 record')} · too early under ${MIN_N} each` };
+  },
+});
+
+add({
+  id: 'v2-rows', title: 'Rubric v2: each row', category: 'chart', kind: 'heat', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Rubric v2 trades taken: R per trade by the score each row got. A row whose 2s do not beat its 1s is not separating good from weak.',
+  select: (v) => {
+    const d = v.decisions;
+    if (!d.n) return V2_EMPTY('text');
+    const keys = ['row_sweep', 'row_inversion', 'row_path', 'row_target'] as const;
+    return { kind: 'heat', rows: ['Sweep', 'Inversion', 'Path', 'Target'], cols: ['0', '1', '2'], claim: { n: d.n },
+      cells: keys.flatMap((k, r) => ([0, 1, 2] as const).map((s) => ({ r, c: s, value: d.byRow[k][s].avgR ?? 0, n: d.byRow[k][s].n, display: d.byRow[k][s].n ? R(d.byRow[k][s].avgR, 1) : '—' }))),
+      caption: 'R per trade taken, by the row\'s score · faded under 5' };
+  },
+});
+
+add({
+  id: 'v2-scenario', title: 'Rubric v2: by scenario', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Rubric v2 trades taken: R per trade with the bias (A), against it (B) and unplanned. B and unplanned are capped at grade B on the form.',
+  select: (v) => {
+    const d = v.decisions;
+    if (!d.n) return V2_EMPTY('bars');
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: d.n, level: null },
+      items: d.byScenario.filter((s) => s.cell.n > 0).map((s) => ({ label: s.label, value: s.cell.avgR ?? 0, display: `${R(s.cell.avgR)} · n ${s.cell.n}`,
+        tone: (s.key === 'none' ? 'watch' : 'accent') as Tone })),
+      caption: 'R per trade taken' };
+  },
+});
+
+add({
+  id: 'v2-time', title: 'Rubric v2: time to decide', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: false, minTrades: 0,
+  settings: {},
+  help: 'Timed decisions only: how long each took, by quarters of the limit, and the ones the clock ran out on (Missed — too slow). The aim is the candle close, inside the time.',
+  select: (v) => {
+    const t = v.decisions.time;
+    if (!t.timed) return V2_EMPTY('bars');
+    return { kind: 'bars', items: t.buckets.map((b) => ({ label: b.label, value: b.n, display: String(b.n), tone: (b.label === 'Missed' ? 'bad' : 'accent') as Tone })),
+      caption: `${Math.round((t.missed / t.timed) * 100)}% missed — too slow · median ${t.median == null ? '—' : `${t.median.toFixed(1)}s`} · ${plural(t.timed, 'timed decision')}` };
+  },
+});
+
+add({
+  id: 'v2-decisions', title: 'Rubric v2: taken, passed, missed', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Every Rubric v2 decision: what the taken trades made, and what the passes and the misses would have made (their hypothetical R, required on the form). Passes that would have lost are the filter working.',
+  select: (v) => {
+    const d = v.decisions;
+    if (!d.n) return V2_EMPTY('bars');
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: d.n, level: null },
+      items: d.decisions.filter((x) => x.cell.n > 0).map((x) => ({ label: x.label, value: x.cell.avgR ?? 0,
+        display: `${R(x.cell.avgR)} · n ${x.cell.n}${x.hypothetical ? ' · would have' : ''}`, tone: (x.key === 'take' ? 'accent' : 'muted') as Tone })),
+      caption: 'R per trade · passes and misses at their hypothetical R' };
+  },
 });
 
 add({

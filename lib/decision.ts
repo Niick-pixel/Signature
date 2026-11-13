@@ -298,3 +298,49 @@ export function scenarioFromPlan(direction: string | null, plans: { aDir: string
   const a = plans.aDir === direction; const b = plans.bDir === direction;
   return a && !b ? 'A' : b && !a ? 'B' : null;
 }
+
+/** Rubric v2's sample on the Path: v2 trades locked at the decision, outcome written, never re-graded. */
+export const V2_SAMPLE_TARGET = 50;
+export function v2SampleCount(trades: ReadonlyArray<{ rubric_version?: number | null; decided_at?: string | null; outcome_at?: string | null; regrade?: string | null; deleted_at?: string | null }>): number {
+  return trades.filter((t) => t.rubric_version === RUBRIC_V2 && t.decided_at && t.outcome_at && !t.regrade && !t.deleted_at).length;
+}
+
+/** The old checklist's scale: every grade not decided under Rubric v2. By-grade stats read only these, so the scales never mix. */
+export const onOldScale = (t: { rubric_version?: number | null }): boolean => t.rubric_version !== RUBRIC_V2;
+
+/* ───────────────────────── for the Markdown exports ───────────────────────── */
+
+const sR = (v: number | null | undefined) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}R`);
+
+/** Which rubric graded the trade, as the exports name it. */
+export const rubricName = (t: { rubric_version?: number | null }): string =>
+  isRubricV2(t) ? RUBRIC_V2_LABEL : `checklist rubric ${t.rubric_version ?? 1}`;
+
+/** One sentence for an export's "how to read" section. */
+export const RUBRIC_V2_EXPLAINER = `**${RUBRIC_V2_LABEL}** trades (from November 2026) are graded differently: four rows scored 0/1/2 — sweep, inversion, path, target — out of 8 (8 = A+, 6–7 A, 5 B, 4 or less no trade; any row at 0 is no trade; scenario B, unplanned or the wrong side of the leg cap at B; planned R under 1.5 is no trade), decided against a clock before the outcome and locked. "No trade" is written F. Their grades are a different scale from the checklist's: never compare an old A with a v2 A.`;
+
+/** The heading's result for a v2 record: the outcome, a pass or a miss at its hypothetical R, or still pending. */
+export function v2Result(t: { decision?: string | null; outcome_at?: string | null; would_be_r?: number | null }): string | null {
+  if (!t.decision) return null;
+  if (!t.outcome_at) return 'outcome pending';
+  if (t.decision === 'pass') return `Passed · would have ${sR(t.would_be_r)}`;
+  if (t.decision === 'missed') return `Missed — too slow · would have ${sR(t.would_be_r)}`;
+  return null;
+}
+
+/** The lines a v2 trade carries in an export, in place of the old checklist's. */
+export function v2Lines(t: V2Input & {
+  rubric_version?: number | null; grade_letter?: string | null; decision?: string | null; decision_seconds?: number | null; decision_limit?: number | null;
+  grade_override?: boolean | null; late_rows?: readonly string[] | null; entry_method?: string | null; target_type?: string | null;
+  confidence_at_entry?: number | null; would_be_mfe_r?: number | null; exit_reason?: string | null; regrade?: string | null;
+}): string[] {
+  const g = gradeV2(t);
+  const letter = V2_LETTER_OF(t.grade_letter) ?? (g.missing.length ? 'unfinished' : g.letter);
+  const rows = ROWS.map((r) => `${r.label} ${t[r.key] ?? '—'}`).join(' · ');
+  const late = t.late_rows?.length ? ` · ${t.late_rows.length} row${t.late_rows.length === 1 ? '' : 's'} scored after the clock` : '';
+  return [
+    `- **Rubric:** ${RUBRIC_V2_LABEL} · ${rows} = ${g.total}/8 → **${letter}**${g.gate || g.caps.length || g.lowR ? ` (${g.reason})` : ''}${t.regrade ? ` · re-graded ${t.regrade} (never counted)` : ''}`,
+    `- **Facts:** scenario ${t.plan_scenario ? SCENARIO_LABEL[t.plan_scenario as Scenario] : '—'} · leg ${t.leg_location ?? '—'} · target ${t.target_type ?? '—'} · entry ${t.entry_method ?? '—'} · planned ${t.planned_rr ? `${t.planned_rr}R` : '—'} · confidence ${t.confidence_at_entry ?? '—'}/5`,
+    `- **Decision:** ${t.decision ? DECISION_LABEL[t.decision as Decision] : '—'} in ${t.decision_seconds ?? '—'}s${t.decision_limit ? ` of ${t.decision_limit}s` : ' (untimed)'}${t.grade_override ? ' · **taken against a no-trade grade**' : ''}${late}${t.decision !== 'take' && t.would_be_mfe_r != null ? ` · would have reached ${sR(t.would_be_mfe_r)} at best` : ''}${t.exit_reason ? ` · exit ${t.exit_reason}` : ''}`,
+  ];
+}

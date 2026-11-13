@@ -9,6 +9,7 @@ import 'server-only';
  * re-checked and new ones recorded (lib/edge/claims), so the engine grades
  * itself as the page is opened.
  */
+import { decisionStats } from '@/lib/decisionStats';
 import { listTrades } from './trades';
 import { countsInStats, isBacktest, isDated, isHypothetical, isSeparate } from '../lib/domain';
 import { accountsInUse, aggregate, deliveryOnlyVerdict, equityCurves, pnlOf, preGradedOnly } from '../lib/stats';
@@ -219,8 +220,12 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
   const prepByDay = new Map(listPreps().map((x) => [x.day, x.data] as const));
   const plans = { scenarios: scenarioSplit(settled, prepByDay), bias: biasSplit(settled, prepByDay) };
 
+  // Rubric v2 (4 rows): its own numbers, never mixed with the checklist's scale (lib/decisionStats).
+  const decisions = decisionStats(trades);
+
   return {
     plans,
+    decisions,
     scoped,
     leftOutWorlds,
     ctxFor,

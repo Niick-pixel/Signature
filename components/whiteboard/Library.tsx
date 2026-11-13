@@ -1,5 +1,6 @@
 'use client';
 
+import { V2Mark } from '@/components/ui/V2Mark';
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { ReviewExport } from '@/components/money/ReviewExport';
 import { usePathname } from 'next/navigation';
@@ -397,10 +398,13 @@ const Row = memo(function Row({ t, first, onOpen, onPeek }: { t: Trade; first: b
       <span className="truncate" style={{ color: 'var(--text-dim)' }}>{accountLabel(t.account)}</span>
       <span className="truncate" style={{ color: 'var(--text-faint)' }}>{t.target_type}</span>
       <span className="text-right font-semibold tabular-nums" style={{ color: `rgb(${out})` }}>
-        {t.r_multiple != null ? signedR(t.r_multiple) : t.outcome === 'Not taken' ? 'Passed' : t.outcome}
+        {t.decision && !t.outcome_at ? <span data-outcome-pending style={{ color: 'rgb(var(--accent))' }}>Outcome pending</span>
+          : t.r_multiple != null ? signedR(t.r_multiple)
+          : t.decision === 'missed' ? `Missed${t.would_be_r != null ? ` · ${signedR(t.would_be_r)}` : ''}`
+          : t.outcome === 'Not taken' ? `Passed${t.would_be_r != null && t.decision ? ` · ${signedR(t.would_be_r)}` : ''}` : t.outcome}
       </span>
-      <span className="grid size-6 place-items-center rounded-[7px] text-[10.5px] font-semibold"
-        style={{ color: `rgb(${GRADE_COLOR[t.grade_letter]})`, background: `rgb(${GRADE_COLOR[t.grade_letter]} / 0.14)` }}>{t.grade_letter}</span>
+      <span className="flex h-6 min-w-6 items-center justify-center rounded-[7px] px-1 text-[10.5px] font-semibold"
+        style={{ color: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']})`, background: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']} / 0.14)` }}>{t.grade_letter ?? '—'}<V2Mark t={t} /></span>
       <span className="truncate text-[11.5px]" style={{ color: 'rgb(var(--outcome-loss))' }} title={t.mistake_tags.join(' · ') || undefined}>{t.mistake_tags.join(' · ')}</span>
       <span aria-label={t.screenshot_path ? 'Has a chart' : undefined} className="text-[11px]" style={{ color: 'var(--text-faint)' }}>{t.screenshot_path ? '▣' : ''}</span>
     </button>

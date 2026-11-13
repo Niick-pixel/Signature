@@ -1,4 +1,5 @@
 import { isBacktest, isHypothetical, isTaken } from './domain';
+import { RUBRIC_V2_EXPLAINER, isRubricV2, rubricName, v2Result } from './decision';
 import { prepMarkdown, type SessionPrep } from './prep';
 import { toMarkdown } from './sanitise';
 import type { DailyReview, JournalPage, Trade } from './types';
@@ -85,6 +86,7 @@ export function journalExport(input: JournalExportInput): { filename: string; ma
   h('### How to read the context');
   p('- **R** is the result in multiples of the risk taken (+2.0R is twice the risk won).');
   p('- **Grades** (A+, A, B, C, F) come from my pre-trade checklist and are frozen at entry. A+ is a perfect checklist; failing the model gate (no nameable sweep, or more than one gap) caps a trade at C.');
+  p(`- ${RUBRIC_V2_EXPLAINER} Each trade names its rubric.`);
   p('- **Missed** trades are setups I saw and did not take, logged with the result they would have had. They are hypothetical and not in any total.');
   p('- **Passed** means I deliberately chose not to take the setup.');
 
@@ -122,9 +124,11 @@ export function journalExport(input: JournalExportInput): { filename: string; ma
       p('**Trades:**');
       for (const t of dayTrades) {
         const time = new Date(t.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-        const result = t.outcome === 'Not taken' ? 'passed' : `${t.outcome}${t.r_multiple != null ? ` ${r1(t.r_multiple)}` : ''}`;
+        const v2 = isRubricV2(t);
+        const result = (v2 ? v2Result(t) : null) ?? (t.outcome === 'Not taken' ? 'passed' : `${t.outcome}${t.r_multiple != null ? ` ${r1(t.r_multiple)}` : ''}`);
         const parts = [
-          `${time} ${t.instrument} ${t.direction}`, t.setup_type, `grade ${t.grade_letter}`, result,
+          `${time} ${t.instrument} ${t.direction}`, t.setup_type, `grade ${t.grade_letter ?? '—'} (${rubricName(t)})`, result,
+          v2 ? `rows ${['row_sweep', 'row_inversion', 'row_path', 'row_target'].map((k) => t[k as 'row_sweep'] ?? '—').join('/')}, scenario ${t.plan_scenario ?? '—'}, decided in ${t.decision_seconds ?? '—'}s${t.grade_override ? ', against a no-trade grade' : ''}` : null,
           `why: ${t.reason}`, isHypothetical(t.account) ? 'MISSED (hypothetical)' : t.account,
           t.mistake_tags.length ? `went wrong: ${t.mistake_tags.join(', ')}` : null,
           (t.worked_tags ?? []).length ? `worked: ${t.worked_tags.join(', ')}` : null,

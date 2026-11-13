@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { listEvents, listPurchases, saveSteps, syncPath, type StepEdit } from '@/db/path';
 import { summarise } from '@/lib/pathSummary';
+import { listTrades } from '@/db/trades';
+import { V2_SAMPLE_TARGET, v2SampleCount } from '@/lib/decision';
+
+const v2Sample = () => ({ n: v2SampleCount(listTrades()), target: V2_SAMPLE_TARGET });
 import type { Commitment, Criterion } from '@/lib/path';
 
 /** The path, settled. ?summary=1 for the banner's few fields. */
 export async function GET(request: Request) {
   const views = syncPath();
-  if (new URL(request.url).searchParams.get('summary')) return NextResponse.json(summarise(views));
-  return NextResponse.json({ steps: views, events: listEvents(), purchases: listPurchases(), summary: summarise(views) });
+  if (new URL(request.url).searchParams.get('summary')) return NextResponse.json(summarise(views, v2Sample()));
+  return NextResponse.json({ steps: views, events: listEvents(), purchases: listPurchases(), summary: summarise(views, v2Sample()) });
 }
 
 const str = (v: unknown, max = 2000) => (typeof v === 'string' ? v.slice(0, max) : '');
