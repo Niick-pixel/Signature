@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Overlay } from '@/components/ui/Overlay';
-import { Help } from '@/components/ui/Help';
-import { press, spring } from '@/lib/motion';
+import { Field, Input } from '@/components/ui/Field';
+import { Segmented } from '@/components/ui/Segmented';
+import { MultiSegmented } from '@/components/ui/MultiSegmented';
+import { Button } from '@/components/ui/Button';
 import {
   CONFIRMS, DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAX_ZONES, NEWS, OPEN_LOCATIONS, OVERNIGHT, RR_BANDS, SCENARIO_C, TOOK, TOOK_LABEL,
   copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, nextWeekday, noBiasCap, playedOf, rrWarning, scenarioLine, targetOptions,
@@ -40,42 +41,31 @@ const dim = { color: 'var(--text-dim)' } as const;
 const fmtDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const today = () => { const d = new Date(); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
-/* ───────────────────────── a group of chips ───────────────────────── */
+/* ───────────────────────── a group of choices ───────────────────────── */
 
+/**
+ * One question, in the app's own controls: a Field label (lit with
+ * "· required" until answered, as on New trade) over a Segmented row, or its
+ * multi-select twin. The lit group — the one the number keys pick in — gets
+ * a soft accent ring and shows its 1–n key range.
+ */
 function Chips<T extends string>({ id, label, options, value, onChange, multi = false, max, focused, onFocus, labelFor, tone, hint, required }: {
   id: string; label: string; options: readonly T[]; value: T | T[] | null; onChange: (v: T | T[] | null) => void;
   multi?: boolean; max?: number; focused: boolean; onFocus: () => void; labelFor?: (v: T) => string;
   tone?: (v: T) => string | undefined; hint?: string; required?: boolean;
 }) {
   const picked = multi ? (value as T[] | null) ?? [] : value != null ? [value as T] : [];
-  const tap = (o: T) => {
-    if (!multi) { onChange(value === o ? null : o); return; }
-    const list = picked.includes(o) ? picked.filter((x) => x !== o) : max && picked.length >= max ? [...picked.slice(1), o] : [...picked, o];
-    onChange(list);
-  };
+  const keys = <span className="rounded-[5px] border px-1 py-px text-[9.5px] font-medium tabular-nums" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)', opacity: focused ? 1 : 0 }}>1–{Math.min(9, options.length)}</span>;
   return (
-    <div data-replay-group={id} onMouseDown={onFocus} className="rounded-[12px] px-2 py-1.5 transition-colors"
-      style={{ boxShadow: focused ? '0 0 0 1px rgb(var(--accent) / 0.45)' : undefined }}>
-      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.07em]" style={{ color: required && !picked.length ? 'rgb(var(--accent))' : 'var(--text-faint)' }}>
-        {required && !picked.length && <span aria-hidden className="size-1.5 rounded-full" style={{ background: 'rgb(var(--accent))' }} />}
-        {label}{multi && <span className="normal-case tracking-normal opacity-70">· {max ? `up to ${max}` : 'any'}</span>}
-        {hint && <Help>{hint}</Help>}
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {options.map((o, i) => {
-          const on = picked.includes(o);
-          const t = tone?.(o) ?? 'var(--accent)';
-          return (
-            <button key={o} type="button" onClick={() => tap(o)} aria-pressed={on} data-chip={o}
-              className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] transition-colors"
-              style={{ borderColor: on ? `rgb(${t} / 0.6)` : 'var(--glass-stroke)', background: on ? `rgb(${t} / 0.13)` : 'transparent', color: on ? `rgb(${t})` : 'var(--text-dim)' }}>
-              {/* The key hint always takes its space (shown only in the lit group): lighting a group must not move a chip under the pointer. */}
-              {i < 9 && <span className="text-[9.5px] tabular-nums" style={{ opacity: focused ? 0.6 : 0 }} aria-hidden>{i + 1}</span>}
-              {labelFor ? labelFor(o) : o}
-            </button>
-          );
-        })}
-      </div>
+    <div data-replay-group={id} onMouseDown={onFocus} className="rounded-[calc(18px*var(--rk))] p-1 transition-shadow"
+      style={{ boxShadow: focused ? '0 0 0 1.5px rgb(var(--accent) / 0.35)' : undefined }}>
+      <Field quiet group label={multi ? `${label}${max ? ` · up to ${max}` : ' · any'}` : label} hint={hint} required={required && !picked.length} badge={keys}>
+        {multi ? (
+          <MultiSegmented value={picked} onChange={(v) => onChange(v)} options={options} max={max} labelFor={labelFor} accentFor={tone} />
+        ) : (
+          <Segmented value={(value as T | null) ?? ('' as T)} onChange={(v) => onChange(value === v ? null : v)} options={options} labelFor={labelFor} accentFor={tone ? (v) => tone(v) ?? 'var(--accent)' : undefined} />
+        )}
+      </Field>
     </div>
   );
 }
@@ -95,7 +85,7 @@ const dirTone = (d: string) => (d === 'Long' ? WIN : LOSS);
 type BuilderProps = { open: boolean; onClose: () => void; last: ReplayDay | null; amend?: ReplayDay | null; instrument?: string | null; onLocked?: (d: ReplayDay) => void };
 export function ReplayBuilder(props: BuilderProps) {
   return (
-    <Overlay open={props.open} onClose={props.onClose} className="w-full max-w-[72rem] rounded-[24px] p-5" surface="color-mix(in srgb, var(--bg-raised) 96%, transparent)">
+    <Overlay open={props.open} onClose={props.onClose} className="max-h-[calc(100dvh-2rem)] w-full max-w-[72rem] overflow-y-auto rounded-[calc(24px*var(--rk))] p-5" surface="color-mix(in srgb, var(--bg-raised) 96%, transparent)">
       {/* Mounted fresh on every opening: it starts from the next date and an empty (or the amended) plan. */}
       {props.open && <BuilderBody {...props} />}
     </Overlay>
@@ -181,9 +171,9 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
   const scenarioCol = (k: 'a' | 'b', sc: ReplayScenario, set: (p: Partial<ReplayScenario>) => void) => {
     const warn = rrWarning(sc.rr);
     return (
-      <div className="rounded-[16px] border p-2" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-replay-scenario={k}>
-        <div className="mb-1 flex items-baseline justify-between px-2">
-          <span className="text-[13px] font-semibold">Scenario {k.toUpperCase()}</span>
+      <div className="flex flex-col gap-2 rounded-[calc(18px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-replay-scenario={k}>
+        <div className="flex items-baseline justify-between px-1">
+          <span className="text-[14px] font-semibold">Scenario {k.toUpperCase()}</span>
           <span className="text-[11.5px]" style={{ color: sc.dir ? `rgb(${dirTone(sc.dir)})` : 'var(--text-faint)' }}>
             {sc.dir ?? 'direction —'}{k === 'a' ? (bias ? ' · with the bias' : ' · no bias: tap it') : ' · the other way'}{!bias && ' · max B'}
           </span>
@@ -201,7 +191,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
           focused={fid === `${k}-target`} onFocus={() => focusOn(`${k}-target`)} required />
         <Chips id={`${k}-rr`} label="Rough R" options={RR_BANDS} value={sc.rr} onChange={(v) => set({ rr: v as ReplayScenario['rr'] })}
           focused={fid === `${k}-rr`} onFocus={() => focusOn(`${k}-rr`)} tone={(o) => (o === '<1.5' ? LOSS : undefined)} required />
-        {warn && <p className="px-2 pb-1 text-[11.5px] font-medium" style={{ color: `rgb(${LOSS})` }} data-rr-warning>{warn}</p>}
+        {warn && <p className="-mt-1 px-2 text-[11.5px] font-medium" style={{ color: `rgb(${LOSS})` }} data-rr-warning>{warn}</p>}
         <Chips id={`${k}-kill`} label="Kill switch" options={KILLS} value={sc.kill} onChange={(v) => set({ kill: v as ReplayScenario['kill'] })}
           focused={fid === `${k}-kill`} onFocus={() => focusOn(`${k}-kill`)} required />
       </div>
@@ -210,42 +200,43 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
 
   return (
       <div data-replay-builder={amend ? 'amend' : 'plan'}>
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-[18px] font-semibold">{amend ? `Amend Day ${amend.sequence}` : 'Plan replay day'}</h2>
-            <p className="text-[12px]" style={dim}>
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-[20px] font-semibold">{amend ? `Amend Day ${amend.sequence}` : 'Plan replay day'} <span className="text-[13px] font-medium" style={faint}>· backtest</span></h1>
+            <p className="mt-0.5 text-[12.5px]" style={dim}>
               {amend ? 'The locked plan stays as it was; this is kept beside it, and the day shows as amended everywhere.'
                 : 'Taps only. Keys: 1–9 pick in the lit group · Tab / ↑ ↓ move · Enter locks.'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-[12px]" style={dim}>
-              Replay date
-              <input type="date" value={date} disabled={!!amend} onChange={(e) => setDate(e.target.value)} data-replay-date
-                className="rounded-full border px-3 py-1 text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)' }} />
-              <span className="tabular-nums" style={faint}>{date ? weekdayOf(date) ?? 'weekend' : ''}</span>
-            </label>
+          <div className="flex items-end gap-2">
+            <div className="w-[12.5rem]">
+              <Field quiet label={`Replay date${date ? ` · ${weekdayOf(date) ?? 'weekend'}` : ''}`}>
+                <Input type="date" value={date} disabled={!!amend} onChange={(e) => setDate(e.target.value)} data-replay-date />
+              </Field>
+            </div>
             {!amend && last && (
-              <button type="button" onClick={() => { const p = copyPlan(last); setContext(p.context); setRaw(p.scenarios); }} data-copy-last
-                className="rounded-full border px-3 py-1 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>Copy last day</button>
+              <Button onClick={() => { const p = copyPlan(last); setContext(p.context); setRaw(p.scenarios); }} data-copy-last>Copy last day</Button>
             )}
           </div>
         </div>
 
         {/* Context. */}
-        <div className="grid gap-1 rounded-[16px] border p-2 md:grid-cols-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
+        <div className="grid gap-x-4 gap-y-2 rounded-[calc(18px*var(--rk))] border p-3 md:grid-cols-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
           <Chips id="h4" label="4H direction" options={H4} value={context.h4} onChange={(v) => setC({ h4: v as ReplayContext['h4'], ...(v === 'None' ? { h1Agrees: null } : {}) })}
             focused={fid === 'h4'} onFocus={() => focusOn('h4')} tone={(o) => (o === 'Bull' ? WIN : o === 'Bear' ? LOSS : undefined)} required />
           {context.h4 && context.h4 !== 'None' ? (
             <Chips id="h1" label="1H agrees with 4H" options={['Yes', 'No'] as const} value={context.h1Agrees == null ? null : context.h1Agrees ? 'Yes' : 'No'}
               onChange={(v) => setC({ h1Agrees: v == null ? null : v === 'Yes' })} focused={fid === 'h1'} onFocus={() => focusOn('h1')} required />
           ) : <div />}
-          <div className="px-2 py-1.5" data-day-bias={bias ?? 'none'}>
-            <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.07em]" style={faint}>Day bias · derived</div>
-            <span className="inline-block rounded-full px-2.5 py-1 text-[12px] font-semibold"
-              style={{ background: bias ? `rgb(${dirTone(bias)} / 0.13)` : 'var(--glass-fill-strong)', color: bias ? `rgb(${dirTone(bias)})` : 'var(--text-dim)' }}>
-              {bias ?? 'No bias — both scenarios max B'}
-            </span>
+          <div className="p-1" data-day-bias={bias ?? 'none'}>
+            <Field quiet label="Day bias · derived" hint="The 4H direction when the 1H agrees; otherwise no bias, and both scenarios are capped at B.">
+              <div className="glass flex rounded-[calc(16px*var(--rk))] p-1">
+                <span className="flex-1 rounded-[calc(12px*var(--rk))] border px-3 py-2 text-center text-[12px] font-semibold"
+                  style={bias ? { color: `rgb(${dirTone(bias)})`, background: `rgb(${dirTone(bias)} / 0.16)`, borderColor: `rgb(${dirTone(bias)} / 0.5)` } : { color: 'var(--text-dim)', borderColor: 'transparent' }}>
+                  {bias ?? 'No bias — both scenarios max B'}
+                </span>
+              </div>
+            </Field>
           </div>
           <Chips id="overnight" label="Overnight" options={OVERNIGHT} value={context.overnight} onChange={(v) => setC({ overnight: v as ReplayContext['overnight'] })}
             focused={fid === 'overnight'} onFocus={() => focusOn('overnight')} required />
@@ -260,20 +251,21 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
           {scenarioCol('a', s.a, setA)}
           {scenarioCol('b', s.b, setB)}
         </div>
-        <p className="mt-2 rounded-[12px] px-3 py-2 text-[12px]" style={{ background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
+        <p className="mt-3 rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
           <b style={{ color: 'var(--text)' }}>Scenario C</b> — {SCENARIO_C}
         </p>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        {/* The footer stays in view while the plan scrolls on a short window. */}
+        <div className="sticky -bottom-5 -mx-5 -mb-5 mt-3 flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3"
+          style={{ borderColor: 'var(--glass-stroke)', background: 'color-mix(in srgb, var(--bg-raised) 96%, transparent)' }} data-builder-footer>
           <p className="min-w-0 text-[11.5px]" style={error ? { color: `rgb(${LOSS})` } : faint} role={error ? 'alert' : undefined}>
             {error ?? (missing.length ? `Still to tap: ${missing.slice(0, 6).join(', ')}${missing.length > 6 ? `, +${missing.length - 6}` : ''}.` : 'Ready to lock.')}
           </p>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="rounded-full border px-4 py-2 text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>Cancel</button>
-            <motion.button type="button" onClick={() => void lock()} disabled={saving} whileTap={press} transition={spring} data-lock-play
-              className="rounded-full px-5 py-2 text-[13px] font-semibold disabled:opacity-50" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={() => void lock()} disabled={saving} data-lock-play>
               {amend ? 'Save amendment' : 'Lock & play'} <span className="opacity-70">↵</span>
-            </motion.button>
+            </Button>
           </div>
         </div>
       </div>
@@ -308,37 +300,23 @@ function CloseDayBody({ day, trades, onClosed }: CloseProps & { day: ReplayDay }
   return (
       <div data-close-day>
         <h2 className="text-[16px] font-semibold">Day {day.sequence} · {day.weekday ?? ''} {fmtDate(day.replay_date)}: what played out?</h2>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {DAY_OUTCOMES.map((o) => (
-            <button key={o} type="button" onClick={() => setOutcome(o)} aria-pressed={outcome === o} data-day-outcome={o}
-              className="rounded-full border px-3 py-1.5 text-[12.5px]"
-              style={outcome === o ? { borderColor: 'rgb(var(--accent))', background: 'rgb(var(--accent) / 0.12)', color: 'rgb(var(--accent))' } : { borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
-              {DAY_OUTCOME_LABEL[o]}
-            </button>
-          ))}
+        <div className="mt-3" data-day-outcomes>
+          <Field quiet group label="What played out today?" required={!outcome}>
+            <Segmented value={outcome ?? ('' as DayOutcome)} onChange={setOutcome} options={DAY_OUTCOMES} labelFor={(o) => DAY_OUTCOME_LABEL[o]} />
+          </Field>
         </div>
         {played.map((k) => (
-          <div key={k} className="mt-3">
-            <div className="mb-1 text-[11.5px]" style={dim}>Scenario {k} played — did I take it? {tookFromTrades(trades, k) && <span style={faint}>(from the day’s trades)</span>}</div>
-            <div className="flex gap-1.5">
-              {TOOK.map((t) => (
-                <button key={t} type="button" onClick={() => setTook((x) => ({ ...x, [k]: t }))} aria-pressed={took[k] === t} data-took={`${k}:${t}`}
-                  className="rounded-full border px-3 py-1 text-[12px]"
-                  style={took[k] === t ? { borderColor: 'rgb(var(--accent))', background: 'rgb(var(--accent) / 0.12)', color: 'rgb(var(--accent))' } : { borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
-                  {TOOK_LABEL[t]}
-                </button>
-              ))}
-            </div>
+          <div key={k} className="mt-3" data-took-for={k}>
+            <Field quiet group label={`Scenario ${k} played — did I take it?${tookFromTrades(trades, k) ? ' · from the day’s trades' : ''}`}>
+              <Segmented value={took[k] ?? ('' as Took)} onChange={(t) => setTook((x) => ({ ...x, [k]: t }))} options={TOOK} labelFor={(t) => TOOK_LABEL[t]}
+                accentFor={(t) => (t === 'yes' ? WIN : t === 'missed' ? LOSS : 'var(--grade-b)')} />
+            </Field>
           </div>
         ))}
         {error && <p className="mt-2 text-[12px]" style={{ color: `rgb(${LOSS})` }} role="alert">{error}</p>}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={() => void save(false)} data-end-sitting className="rounded-full border px-4 py-2 text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
-            Close & end the sitting
-          </button>
-          <button type="button" onClick={() => void save(true)} data-next-day className="rounded-full px-4 py-2 text-[12.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
-            Close & plan the next day
-          </button>
+          <Button onClick={() => void save(false)} data-end-sitting>Close & end the sitting</Button>
+          <Button variant="primary" onClick={() => void save(true)} data-next-day>Close & plan the next day</Button>
         </div>
       </div>
   );
@@ -384,23 +362,57 @@ export function ReplayDayControl({ instrument, onPlanned }: { instrument?: strin
 /* ───────────────────────── Step 1's plan strip ───────────────────────── */
 
 /** The day's two plans, one line each, above the chart. The card matching the trade's direction is outlined — a hint, never a pick. */
-export function PlanStrip({ day, direction }: { day: ReplayDay; direction: 'Long' | 'Short' | null }) {
-  const s = day.scenarios;
-  const capped = noBiasCap(day.context);
+export type PlanCard = { k: 'a' | 'b'; dir: string | null; line: string | null; capped?: boolean };
+
+/**
+ * The plan section on Step 1: always there, always one height, so the chart
+ * under it never moves. A and B side by side when there is a plan; when there
+ * is none, a warning in the same space saying so — and what that means.
+ */
+export function PlanStrip({ cards, direction, title, empty, action }: {
+  cards: PlanCard[] | null; direction: 'Long' | 'Short' | null;
+  /** What the plan is: "Day 2 · Wed Mar 4", "This morning's prep". */
+  title: string;
+  /** No plan: what that means for this trade. */
+  empty: ReactNode;
+  action?: ReactNode;
+}) {
+  if (!cards) {
+    return (
+      <div className="flex h-[3.25rem] items-center justify-between gap-3 rounded-[12px] border px-3 text-[11.5px]" data-plan-strip="none"
+        style={{ borderColor: 'rgb(var(--amber) / 0.5)', background: 'rgb(var(--amber) / 0.08)' }}>
+        <p className="min-w-0 leading-snug" data-no-plan>
+          <b style={{ color: 'rgb(var(--amber))' }}>No plan · </b><span style={dim}>{empty}</span>
+        </p>
+        {action}
+      </div>
+    );
+  }
   return (
-    <div className="grid max-h-[90px] gap-2 md:grid-cols-2" data-plan-strip>
-      {(['a', 'b'] as const).map((k) => {
-        const sc = s[k];
-        const match = direction != null && sc.dir === direction;
+    <div className="grid h-[3.25rem] gap-2 md:grid-cols-2" data-plan-strip="plan" title={title}>
+      {cards.map((c) => {
+        const match = direction != null && c.dir === direction;
         return (
-          <div key={k} className="min-w-0 rounded-[12px] border px-3 py-1.5 text-[11.5px]" data-plan-card={k} data-match={match || undefined}
+          <div key={c.k} className="flex min-w-0 flex-col justify-center rounded-[12px] border px-3 text-[11.5px]" data-plan-card={c.k} data-match={match || undefined}
             style={{ borderColor: match ? 'rgb(var(--accent))' : 'var(--glass-stroke)', background: 'var(--glass-fill)', boxShadow: match ? '0 0 0 1px rgb(var(--accent) / 0.3)' : undefined }}>
-            <span className="font-semibold" style={{ color: sc.dir ? `rgb(${dirTone(sc.dir)})` : 'var(--text)' }}>{k.toUpperCase()}</span>
-            {capped && <span className="ml-1 text-[10px]" style={faint}>max B</span>}
-            <span className="ml-1.5 block truncate" style={dim} title={scenarioLine(sc)}>{scenarioLine(sc)}</span>
+            <span className="truncate text-[10.5px]" style={faint}>
+              <b className="text-[11.5px]" style={{ color: c.dir ? `rgb(${dirTone(c.dir)})` : 'var(--text)' }}>{c.k.toUpperCase()}</b>
+              {c.dir && <span style={{ color: `rgb(${dirTone(c.dir)})` }}> · {c.dir}</span>}
+              {c.capped && ' · max B'} · {title}
+            </span>
+            <span className="block truncate" style={dim} title={c.line ?? undefined}>{c.line ?? 'Not written.'}</span>
           </div>
         );
       })}
     </div>
   );
 }
+
+/** A replay day's A and B, as plan cards. */
+export const replayCards = (day: ReplayDay): PlanCard[] => {
+  // The locked original, as everywhere else (planOf); an amendment only flags the day.
+  const s = day.scenarios;
+  const capped = noBiasCap(day.context);
+  // The card already says the direction; the line starts at the zones.
+  return (['a', 'b'] as const).map((k) => ({ k, dir: s[k].dir, line: scenarioLine(s[k])?.replace(/^(Long|Short) · /, '') ?? null, capped }));
+};

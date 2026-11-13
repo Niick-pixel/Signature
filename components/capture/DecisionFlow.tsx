@@ -15,7 +15,8 @@ import { SessionTally } from './SessionTally';
 import { PathBanner } from '@/components/path/PathBanner';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
 import { CAPTURE_OUTSIDE } from './CaptureSheet';
-import { PlanStrip, ReplayBuilder, ReplayDayControl, useReplay } from '@/components/replay/ReplayPlan';
+import { PlanStrip, ReplayBuilder, ReplayDayControl, replayCards, useReplay, type PlanCard } from '@/components/replay/ReplayPlan';
+import { scenarioLine as prepLine } from '@/lib/prep';
 import { noBiasCap, replayTradeDate } from '@/lib/replay';
 import { closeCapture } from '@/lib/nav';
 import { clearCarry, readCarry, writeCarry } from '@/lib/backtestSession';
@@ -79,6 +80,8 @@ export function DecisionFlow({ trade, onNext }: { trade?: Trade; onNext?: () => 
   const [saved, setSaved] = useState<Trade | null>(trade ?? null);
   // After the decision, Back shows Step 1 as it was locked; Step 2 stays mounted underneath, so nothing typed is lost.
   const [view, setView] = useState<'outcome' | 'locked'>('outcome');
+  // "Start fresh": Step 1 mounted anew — clock from zero, every answer cleared; account, instrument and session kept.
+  const [fresh, setFresh] = useState<{ n: number; keep: Keep | null }>({ n: 0, keep: null });
   return (
     <motion.div {...riseIn} transition={springSoft} data-sheet data-decision-flow={saved ? view : 'decide'}
       // Fills the window below the title bar: the columns stretch to the bottom instead of stopping short.
@@ -90,14 +93,16 @@ export function DecisionFlow({ trade, onNext }: { trade?: Trade; onNext?: () => 
             <OutcomeStep trade={saved} onNext={onNext} onBack={() => setView('locked')} />
           </div>
         </>
-      ) : <DecideStep onSaved={setSaved} />}
+      ) : <DecideStep key={fresh.n} keep={fresh.keep} onSaved={setSaved} onFresh={(keep) => setFresh((f) => ({ n: f.n + 1, keep }))} />}
     </motion.div>
   );
 }
 
 /* ═════════════════════════ Step 1 — Decide ═════════════════════════ */
 
-function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
+type Keep = { account: Account; instrument: string; session: string };
+
+function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; onFresh: (keep: Keep) => void; keep: Keep | null }) {
   const { prefs } = usePreferences();
   // The clock starts the moment the form opens.
   const [startedAt, setStartedAt] = useState(() => Date.now());
@@ -106,16 +111,16 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   useEffect(() => { clearCarry(); }, []);
 
   const [account, setAccount] = useState<Account>(() => {
-    const last = carry?.account ?? read(LAST_ACCOUNT_KEY);
+    const last = keep?.account ?? carry?.account ?? read(LAST_ACCOUNT_KEY);
     return (ACCOUNTS as readonly string[]).includes(last ?? '') ? last as Account : BACKTEST;
   });
   const backtest = account === BACKTEST;
   const [instrument, setInstrument] = useState(() => {
-    const last = carry?.instrument ?? read(LAST_INSTRUMENT_KEY);
+    const last = keep?.instrument ?? carry?.instrument ?? read(LAST_INSTRUMENT_KEY);
     return (INSTRUMENTS as readonly string[]).includes(last ?? '') ? last! : 'NQ';
   });
   // NY AM unless "Save & next" carried the replay's session over.
-  const [session, setSession] = useState<string>(() => carry?.session ?? 'NY AM');
+  const [session, setSession] = useState<string>(() => keep?.session ?? carry?.session ?? 'NY AM');
   const [direction, setDirection] = useState<'Long' | 'Short' | null>(null);
   const [picked, setPicked] = useState<Scenario | null>(null);
   const [leg, setLeg] = useState<LegLocation | null>(null);
@@ -148,8 +153,11 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   // Backtests trade on a replay day: its plan must be locked first, or the trade is taken without one.
   const { state: replay } = useReplay(backtest);
   const day = backtest ? replay?.active ?? null : null;
-  const [noPlan, setNoPlan] = useState(false);
+  const [noPlanChosen, setNoPlan] = useState(false);
+  // "Trade without a plan" holds only until a day is locked (from the header, say): then the plan counts.
+  const noPlan = noPlanChosen && !day;
   const [planning, setPlanning] = useState(false);
+  const [freshAsk, setFreshAsk] = useState(false);
   const gate = backtest && replay != null && !day && !noPlan;
   // The clock waits while the day is planned (or the choice is made), then starts from zero.
   const gated = useRef(false);
@@ -167,7 +175,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   }, []);
 
   // Demo and Live: the morning plan's scenario for this direction, pre-selected. Backtests: always chosen by hand.
-  const [plans, setPlans] = useState<{ aDir: string | null; bDir: string | null } | null>(null);
+  const [plans, setPlans] = useState<{ aDir: string | null; bDir: string | null; aLine: string | null; bLine: string | null } | null>(null);
   useEffect(() => {
     if (backtest) return;
     const d = new Date(); const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -176,7 +184,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       if (!live) return;
       const a = j?.prep?.data.answers;
       const s = (k: string) => (typeof a?.[k] === 'string' ? a[k] as string : null);
-      setPlans(a ? { aDir: s('plans.aDir'), bDir: s('plans.bDir') } : null);
+      setPlans(a ? { aDir: s('plans.aDir'), bDir: s('plans.bDir'), aLine: prepLine(a as never, 'a'), bLine: prepLine(a as never, 'b') } : null);
     }).catch(() => {});
     return () => { live = false; };
   }, [backtest]);
@@ -282,6 +290,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   const touched = Object.keys(rows).length > 0 || gap != null || htfOrigin != null || direction != null || picked != null || leg != null || target != null
     || entry != null || plannedR != null || confidence != null || Object.values(slots).some(Boolean);
   const requestClose = useCallback(() => { if (touched) setClosing(true); else closeCapture(); }, [touched]);
+  const startFresh = () => onFresh({ account, instrument, session });
   useEffect(() => {
     const on = () => { if (!done.current) requestClose(); };
     window.addEventListener(CAPTURE_OUTSIDE, on);
@@ -296,7 +305,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
-      if (document.documentElement.dataset.menuOpen || closing || gate || planning) return;
+      if (document.documentElement.dataset.menuOpen || closing || freshAsk || gate || planning) return;
       const k = e.key.toLowerCase();
       const ours = asking ? ['enter', 't', 'escape'] : ['0', '1', '2', 'arrowdown', 'arrowup', 'l', 's', 'a', 'b', 'u', 'g', 'h', 't', 'p', 'm', 'escape'];
       if (ours.includes(k) || e.key.length === 1) { e.stopPropagation(); if (k !== 'escape') e.preventDefault(); }
@@ -323,7 +332,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [asking, focus, score, decide, save, expired, closing, requestClose, setGap, gate, planning]);
+  }, [asking, focus, score, decide, save, expired, closing, requestClose, setGap, gate, planning, freshAsk]);
 
   return (
     <div data-decide-step className="relative flex flex-1 flex-col">
@@ -338,6 +347,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
         <div className="flex items-center gap-3">
           <Timer timed={timed} left={c.left} elapsed={c.elapsed} limit={limit} tone={c.tone} expired={expired} over={c.over} />
           <GradeChip grade={grade} />
+          <FreshButton onClick={() => (touched ? setFreshAsk(true) : startFresh())} />
           <CloseButton onClick={requestClose} title="Close (Esc, or click outside) — asks first if anything is entered" />
         </div>
       </div>
@@ -405,13 +415,21 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
 
         {/* The chart (paste any time — the clock never stops) and the decision. */}
         <div className="flex min-h-0 flex-1 flex-col gap-3" data-decide>
-          {day && <PlanStrip day={day} direction={direction} />}
-          {noPlan && backtest && (
-            <p className="rounded-[12px] px-3 py-1.5 text-[11.5px]" style={{ background: 'var(--glass-fill)', color: 'var(--text-dim)' }} data-no-plan>
-              No plan for this replay day — this trade is <b>Unplanned</b> (max B).
-            </p>
+          {/* The plan: always here, one height, plan or not — so the chart below never moves. */}
+          {backtest ? (
+            <PlanStrip cards={day ? replayCards(day) : null} direction={direction}
+              title={day ? `Day ${day.sequence}${day.amended_at ? ' · amended' : ''}` : ''}
+              empty={<>no replay day is locked — this trade is <b>Unplanned</b> (max B).</>}
+              action={<button type="button" onClick={() => setPlanning(true)} data-plan-now className="shrink-0 rounded-full border px-3 py-1 text-[11.5px] font-medium"
+                style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.1)', color: 'rgb(var(--accent))' }}>Plan this day</button>} />
+          ) : (
+            <PlanStrip cards={plans && (plans.aDir || plans.bDir || plans.aLine || plans.bLine) ? morningCards(plans) : null} direction={direction}
+              title="this morning’s prep"
+              empty={<>no chart prep today — pick the scenario by hand, or Unplanned (max B).</>} />
           )}
-          <div className="min-h-[14rem] flex-1"><ShotSlots files={slots} onChange={setSlots} grow /></div>
+          {/* The chart box takes only the room the window has left, and the chart is drawn inside it:
+              whatever is pasted, the box keeps its size and nothing below it moves — no scrolling. */}
+          <div className="flex min-h-[10rem] flex-1 flex-col"><ShotSlots files={slots} onChange={setSlots} grow box="min-h-0 flex-1" /></div>
           <div className="grid items-start gap-x-6 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-1.5 md:order-2">
           <div className="relative">
@@ -472,6 +490,13 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
         </div>
       )}
       <ReplayBuilder open={planning} onClose={() => setPlanning(false)} last={replay?.last ?? null} instrument={instrument} />
+      <CloseDialog open={freshAsk} onCancel={() => setFreshAsk(false)}
+        title="Start fresh?"
+        body={`Clears every answer and the charts, and starts the clock from zero.${noPlanChosen && !day ? ' The replay day asks again: plan it, or trade without.' : ''} Account, instrument and session stay. A locked replay plan stays locked — Amend changes it.`}
+        actions={[
+          { label: 'Start fresh', primary: true, data: 'fresh', onClick: startFresh },
+          { label: 'Keep deciding', data: 'keep', onClick: () => setFreshAsk(false) },
+        ]} />
       <CloseDialog open={closing} onCancel={() => setClosing(false)}
         title="Close without deciding?"
         body={expired
@@ -1146,6 +1171,21 @@ function TagBlock({ title, help, children }: { title: string; help?: string; chi
 
 
 /* ═════════════════════════ closing ═════════════════════════ */
+
+function FreshButton({ onClick }: { onClick: () => void }) {
+  return (
+    <motion.button type="button" onClick={onClick} whileTap={press} transition={spring} data-start-fresh title="Start fresh — clear the answers and restart the clock" aria-label="Start fresh"
+      className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px]"
+      style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden><path d="M2 6a4 4 0 1 0 1.2-2.85M2 1.8v2.4h2.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      Start fresh
+    </motion.button>
+  );
+}
+
+/** This morning's prep A and B, as plan cards. */
+const morningCards = (p: { aDir: string | null; bDir: string | null; aLine: string | null; bLine: string | null }): PlanCard[] =>
+  [{ k: 'a', dir: p.aDir, line: p.aLine }, { k: 'b', dir: p.bDir, line: p.bLine }];
 
 function CloseButton({ onClick, title }: { onClick: () => void; title: string }) {
   return (

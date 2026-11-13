@@ -7,7 +7,7 @@ import { nyMinutes as nyMinutesOf } from '@/lib/planMatch';
 import { press, spring, springSoft } from '@/lib/motion';
 import {
   EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, biasSentence, deriveDecisions, gradeCeiling, liveMarks,
-  overnightRead, planChecks, planSummary, prepProgress, scenarioC, stepsOf, withWeeklyTaken,
+  overnightRead, planChecks, planSummary, prepProgress, scenarioC, stepsOf, withWeeklyTaken, wrongSide,
   type Answer, type PrepData, type PrepField, type PrepStep, type SessionPrep,
 } from '@/lib/prep';
 import type { DailyReview } from '@/lib/types';
@@ -319,7 +319,7 @@ function FieldView({ field, value, onChange, hide = [], notes = {} }: {
   return (
     <div data-prep-field={field.id} role="group" aria-label={field.label}>
       <span className="mb-1.5 block text-[10.5px] font-medium uppercase tracking-[0.07em]" style={{ color: 'var(--text-faint)' }}>
-        {field.label}{field.kind === 'many' ? ' — any that apply' : ''}
+        {field.label}{field.kind === 'many' && !field.max ? ' — any that apply' : ''}
       </span>
       {field.kind === 'text' ? (
         <TextAnswer value={typeof value === 'string' ? value : ''} placeholder={field.placeholder} long={field.long} label={field.label} onChange={(v) => onChange(v.trim() ? v : null)} />
@@ -337,7 +337,8 @@ function FieldView({ field, value, onChange, hide = [], notes = {} }: {
                 onClick={() => {
                   if (field.kind === 'many') {
                     const cur = Array.isArray(value) ? value : [];
-                    onChange(on ? cur.filter((x) => x !== o) : [...cur, o]);
+                    const next = on ? cur.filter((x) => x !== o) : [...cur, o];
+                    onChange(field.max ? next.slice(-field.max) : next);
                   } else onChange(on ? null : o);
                 }}
                 animate={{
@@ -475,6 +476,17 @@ function TextAnswer({ value, placeholder, long, label, onChange }: { value: stri
     style={{ ...common.style, fieldSizing: 'content', minHeight: long ? '3.6em' : undefined } as React.CSSProperties} />;
 }
 
+/** What an older prep had written where the taps are now: shown, never asked again. */
+function Written({ answers, keys }: { answers: PrepData['answers']; keys: string[] }) {
+  const lines = keys.map((k) => answers[k]).filter((v): v is string => typeof v === 'string' && v.trim() !== '');
+  if (!lines.length) return null;
+  return (
+    <p className="text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }} data-prep-written>
+      Written before: <span style={{ color: 'var(--text-dim)' }}>{lines.join(' · ')}</span>
+    </p>
+  );
+}
+
 /** A rule to keep, shown where it applies. */
 function Rule({ children }: { children: React.ReactNode }) {
   return (
@@ -495,8 +507,9 @@ function HtfSentence({ data, field }: { data: PrepData; field: FieldFn }) {
       {neutral ? (
         <Rule>No bias you can state honestly: <b>neutral, A+ only</b>. Both scenarios below can only be taken as A+ setups today.</Rule>
       ) : <>
-        {field('because')}
-        {field('inv')}
+        {field('reasons')}
+        {field('invAt')}
+        <Written answers={data.answers} keys={['htf.because', 'htf.inv']} />
       </>}
       {line && <p className="text-[12.5px] italic leading-snug" style={{ color: 'var(--text-dim)' }} data-bias-line>“{line}”</p>}
       {!neutral && <p className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Can’t fill it in honestly? Choose Neutral: A+ only.</p>}
@@ -517,14 +530,14 @@ function Plans({ data, field }: { data: PrepData; field: FieldFn }) {
             style={ceiling.startsWith('Can') ? { borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' } : { borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }}>{ceiling}</span>}
         </div>
         {field(`${k}Dir`)}
-        {field(`${k}Story`)}
-        {field(`${k}Trigger`)}
-        {field(`${k}TriggerNote`)}
-        {field(`${k}Confirm`)}
+        {/* A long waits below price and aims above; a short the other way round. */}
+        {field(`${k}Zones`, { hide: wrongSide(data.answers[`plans.${k}Dir`], 'zone') })}
+        {field(`${k}Confirms`)}
         {field(`${k}Target`)}
-        {field(`${k}TargetNote`)}
+        {field(`${k}TargetAt`, { hide: wrongSide(data.answers[`plans.${k}Dir`], 'target') })}
         {field(`${k}RR`)}
-        {field(`${k}Kill`)}
+        {field(`${k}Kills`)}
+        <Written answers={data.answers} keys={['Story', 'TriggerNote', 'Confirm', 'TargetNote', 'Kill'].map((f) => `plans.${k}${f}`)} />
       </div>
     );
   };
@@ -541,7 +554,8 @@ function Plans({ data, field }: { data: PrepData; field: FieldFn }) {
       )}
       <div className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-scenario="c">
         <p className="text-[12px] font-semibold">Scenario C · neither</p>
-        {field('cutoff')}
+        {field('cutoffAt')}
+        <Written answers={data.answers} keys={['plans.cutoff']} />
         <p className="text-[12.5px] leading-snug" data-scenario-c-line>{scenarioC(data.answers)} Written down, so “no trade” counts as following the plan.</p>
         {field('stop')}
       </div>

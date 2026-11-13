@@ -12,7 +12,7 @@ import path from 'node:path';
 process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signature-prep-'));
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
-const { PREP_STEPS, PANEL_STEPS, LEGACY_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown, answerKey, deriveDecisions, planChecks, gradeCeiling, overnightRead, planSummary } = await import('../lib/prep');
+const { PREP_STEPS, PANEL_STEPS, LEGACY_STEPS, EMPTY_PREP, parsePrepData, prepProgress, prepMarkdown, answerKey, deriveDecisions, planChecks, gradeCeiling, overnightRead, planSummary, wrongSide } = await import('../lib/prep');
 const PM = await import('../lib/planMatch');
 const { savePrep, getPrep, previousPrep, listPreps } = await import('../db/prep');
 const { toMarkdown } = await import('../lib/sanitise');
@@ -30,10 +30,13 @@ test('six steps, top-down, ending in two plans — the decisions keep the keys t
     if (f.kind !== 'text') assert.ok(f.options.length >= 2, `${s.id}.${f.id}`);
   }
   const keys = PREP_STEPS.flatMap((s) => s.fields.map((f) => answerKey(s, f)));
-  for (const k of ['session.news', 'session.stop', 'liquidity.taken', 'panel.above', 'panel.below', 'htf.bias', 'htf.because', 'htf.inv',
-    'plans.aStory', 'plans.aTrigger', 'plans.aKill', 'plans.bKill', 'plans.cutoff']) assert.ok(keys.includes(k), k);
-  // Every field of the scenario table, for both scenarios.
-  for (const k of ['a', 'b']) for (const f of ['Dir', 'Story', 'Trigger', 'TriggerNote', 'Confirm', 'Target', 'TargetNote', 'RR', 'Kill']) assert.ok(keys.includes(`plans.${k}${f}`), `${k}${f}`);
+  for (const k of ['session.news', 'session.stop', 'liquidity.taken', 'panel.above', 'panel.below', 'htf.bias', 'htf.reasons', 'htf.invAt',
+    'plans.aZones', 'plans.aKills', 'plans.bKills', 'plans.cutoffAt']) assert.ok(keys.includes(k), k);
+  // Every field of the scenario table, for both scenarios: tapped now, the written ones kept (hidden) so old preps read.
+  for (const k of ['a', 'b']) for (const f of ['Dir', 'Zones', 'Confirms', 'Target', 'TargetAt', 'RR', 'Kills']) assert.ok(keys.includes(`plans.${k}${f}`), `${k}${f}`);
+  const shown = PREP_STEPS.flatMap((s) => s.fields.filter((f) => !f.hidden));
+  assert.deepEqual(shown.filter((f) => f.kind === 'text').map((f) => f.id), [], 'nothing on the prep is written');
+  for (const k of ['htf.because', 'htf.inv', 'plans.aStory', 'plans.aTrigger', 'plans.aKill', 'plans.cutoff']) assert.ok(keys.includes(k), `${k} still reads`);
   // The two versions before are kept, to read what was saved under them.
   assert.deepEqual(PANEL_STEPS.map((s) => s.id), ['panel', 'heatmap', 'plan']);
   assert.deepEqual(LEGACY_STEPS.map((s) => s.id), ['bias', 'liquidity', 'gaps', 'heatmap', 'draw', 'session']);
@@ -106,6 +109,22 @@ test('overnight: what is still there, and which side was run; the plan reads as 
   assert.equal(rows[1].value, 'Sweep of the Asia low, then long → PDH · 2+R · killed by a 15m close below 21,280');
   assert.match(rows[2].value, /by 9:45/);
   assert.equal(planSummary({}).length, 0);
+});
+
+test('the tapped plan reads as one line; zones are side-specific; shared zones and missing kills are still caught', () => {
+  const t = { 'htf.bias': 'Bearish', 'htf.reasons': ['4H displaced through a level', 'Swept a HTF high or low'], 'htf.invAt': 'The 1H iFVG',
+    'plans.aDir': 'Short', 'plans.aZones': ['PDH', '1H gap'], 'plans.aTargetAt': 'Asia low', 'plans.aRR': '2+', 'plans.aKills': ['15m closes through the zone'], 'plans.cutoffAt': '10:00' };
+  const rows = planSummary(t);
+  assert.equal(rows[0].value, '4H/1H bias is bearish because 4H displaced through a level, swept a HTF high or low. Invalidated by a 1H body close beyond the 1H iFVG.');
+  assert.equal(rows[1].value, 'Short from PDH + 1H gap → Asia low · 2+R · killed by 15m closes through the zone');
+  assert.match(rows[rows.length - 1].value, /by 10:00/);
+  assert.ok(wrongSide('Short', 'zone').includes('PDL') && !wrongSide('Short', 'zone').includes('PDH'));
+  assert.ok(wrongSide('Long', 'target').includes('PDL') && wrongSide(null, 'zone').length === 0);
+  const same = planChecks({ 'plans.aZones': ['PDH'], 'plans.bZones': ['PDH', 'EQH'], 'plans.aKills': ['x'], 'plans.bKills': ['y'] });
+  assert.ok(same.some((c) => /start at PDH/.test(c.text)));
+  assert.ok(planChecks({ 'plans.aZones': ['PDH'] }).some((c) => /Scenario A has no kill switch/.test(c.text)));
+  // The sweep is checked against either tapped zone; the waits come from the zones.
+  assert.deepEqual(deriveDecisions({ 'plans.aDir': 'Short', 'plans.aZones': ['PDH', '1H gap'], 'plans.bDir': 'Long', 'plans.bZones': ['London low'] })['liquidity.wait'], ['PDH', 'London low']);
 });
 
 test('any input reads as a valid prep; answers outside the options are dropped', () => {

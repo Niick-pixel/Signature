@@ -47,6 +47,8 @@ export interface PrepField {
   long?: boolean;
   /** No longer asked; answers already saved still read (plan match, exports). */
   hidden?: boolean;
+  /** For many: at most this many; a tap past it lets go of the oldest. */
+  max?: number;
   /**
    * The answer's stored key, when it is not "step.field": a question that
    * moved to another step keeps the key it was saved under, so everything
@@ -243,17 +245,46 @@ const HIGHS = new Set(['Asia high', 'London high', 'PDH', 'PWH']);
 /** Where a scenario starts: a named level to be swept, or an HTF gap to be delivered into. */
 const TRIGGERS = [...SWEEPABLE, '1H gap', '4H gap'];
 export const RR_BANDS = ['<1.5', '1.5–2', '2+'];
+/*
+  The plans are tapped, not written (049 of the prep, no migration: answers are
+  JSON). Each written question is kept hidden so a prep saved with it still
+  reads — everything below prefers the tapped answer and falls back to the words.
+*/
+/** Trigger zones: a level to sweep or a gap to be delivered into. A long waits below, a short above. */
+export const PREP_ZONES = [...SWEEPABLE, 'ITH', 'ITL', 'Data wick', '5m gap', '15m gap', '1H gap', '4H gap'];
+const LOWS_ONLY = new Set(['PDL', 'PWL', 'Asia low', 'London low', 'EQL', 'ITL']);
+const HIGHS_ONLY = new Set(['PDH', 'PWH', 'Asia high', 'London high', 'EQH', 'ITH']);
+/** The levels on the wrong side for this direction: a long's zone is below price, its target above. */
+export const wrongSide = (dir: unknown, as: 'zone' | 'target'): string[] => {
+  if (dir !== 'Long' && dir !== 'Short') return [];
+  const below = (dir === 'Long') === (as === 'zone');
+  return [...(below ? HIGHS_ONLY : LOWS_ONLY)];
+};
+export const PREP_CONFIRMS = ['Sweep + iFVG close', 'HTF FVG delivery + iFVG close', 'Rejected fast', 'Displacement candle', 'CISD', 'SMT with ES', '5m agrees'];
+/** The first target, named: the opposite side's liquidity, or the gap that ends the move. */
+export const PREP_TARGET_AT = [...SWEEPABLE, 'ITH', 'ITL', 'Session high', 'Session low', 'Data wick', 'Opposing 1H gap', 'Opposing 4H gap'];
+export const PREP_KILLS = ['Never reaches the zone', '5m closes through the zone', '15m closes through the zone', 'Opposing HTF gap forms',
+  'Not triggered by the cutoff', 'Takes the other side’s liquidity first', 'News spike through the zone', 'Bias invalidated'];
+export const HTF_REASONS = ['4H displaced through a level', '1H holding an iFVG', 'HTF FVG respected', 'Swept a HTF high or low',
+  '4H structure: higher highs / lower lows', 'Drawing to a weekly level', 'Daily candle direction', 'Rejected a premium / discount'];
+export const HTF_INV_AT = ['The 1H iFVG', 'The last 1H swing', 'The 4H FVG', 'PDH / PDL', 'The overnight high / low', 'The weekly open'];
+export const CUTOFFS = ['9:45', '10:00', '10:30', '11:00'];
+
 const scenario = (k: 'a' | 'b'): PrepField[] => [
   { id: `${k}Dir`, label: 'Direction', kind: 'one', options: ['Long', 'Short'] },
-  { id: `${k}Story`, label: 'Story', kind: 'text', options: [], long: true,
-    placeholder: k === 'a' ? 'e.g. Judas up into the London high, then short' : 'e.g. Sweep of the Asia low, then long' },
-  { id: `${k}Trigger`, label: 'Trigger zone', kind: 'pick', options: TRIGGERS },
-  { id: `${k}TriggerNote`, label: 'Trigger zone, exactly', kind: 'text', options: [], placeholder: 'The level to be swept and/or the HTF gap delivered into' },
-  { id: `${k}Confirm`, label: 'Confirmation', kind: 'text', options: [], placeholder: 'Rejected fast, displacement, iFVG body close (5m agrees)' },
+  { id: `${k}Zones`, label: 'Trigger zone · up to 2', kind: 'many', options: PREP_ZONES, max: 2 },
+  { id: `${k}Confirms`, label: 'Confirmation', kind: 'many', options: PREP_CONFIRMS },
   { id: `${k}Target`, label: 'First target', kind: 'pick', options: [...TARGET_TYPES] },
-  { id: `${k}TargetNote`, label: 'First target, exactly', kind: 'text', options: [], placeholder: 'The first named liquidity; any opposing HTF gap on the way' },
+  { id: `${k}TargetAt`, label: 'First target, named', kind: 'one', options: PREP_TARGET_AT },
   { id: `${k}RR`, label: 'Rough R', kind: 'one', options: RR_BANDS },
-  { id: `${k}Kill`, label: 'Kill switch', kind: 'text', options: [], placeholder: 'What cancels it, e.g. a 15m close above 21,480' },
+  { id: `${k}Kills`, label: 'Kill switch', kind: 'many', options: PREP_KILLS },
+  // Written, before the plans were tapped: read, never asked.
+  { id: `${k}Story`, label: 'Story', kind: 'text', options: [], long: true, hidden: true },
+  { id: `${k}Trigger`, label: 'Trigger zone', kind: 'pick', options: TRIGGERS, hidden: true },
+  { id: `${k}TriggerNote`, label: 'Trigger zone, exactly', kind: 'text', options: [], hidden: true },
+  { id: `${k}Confirm`, label: 'Confirmation, written', kind: 'text', options: [], hidden: true },
+  { id: `${k}TargetNote`, label: 'First target, exactly', kind: 'text', options: [], hidden: true },
+  { id: `${k}Kill`, label: 'Kill switch, written', kind: 'text', options: [], hidden: true },
 ];
 
 /** The prep as it is asked now: top-down, written down, ending in two plans. */
@@ -270,8 +301,10 @@ export const PREP_STEPS: PrepStep[] = [
     marks: [],
     fields: [
       { id: 'bias', label: '4H/1H bias is', kind: 'one', options: ['Bullish', 'Bearish', 'Neutral'] },
-      { id: 'because', label: 'because', kind: 'text', options: [], placeholder: 'the 4H displaced up through …, 1H holding above …' },
-      { id: 'inv', label: 'Invalidated by a 1H body close beyond', kind: 'text', options: [], placeholder: 'a level, e.g. 21,310 (the 1H iFVG low)' },
+      { id: 'reasons', label: 'because', kind: 'many', options: HTF_REASONS },
+      { id: 'invAt', label: 'Invalidated by a 1H body close beyond', kind: 'one', options: HTF_INV_AT },
+      { id: 'because', label: 'because, written', kind: 'text', options: [], hidden: true },
+      { id: 'inv', label: 'Invalidated beyond, written', kind: 'text', options: [], hidden: true },
     ],
   },
   {
@@ -308,7 +341,8 @@ export const PREP_STEPS: PrepStep[] = [
     fields: [
       ...scenario('a'),
       ...scenario('b'),
-      { id: 'cutoff', label: 'Cutoff', kind: 'text', options: [], placeholder: '9:30' },
+      { id: 'cutoffAt', label: 'Cutoff', kind: 'one', options: CUTOFFS },
+      { id: 'cutoff', label: 'Cutoff, written', kind: 'text', options: [], hidden: true },
       { id: 'stop', key: 'session.stop', label: 'Stop after', kind: 'one', options: ['1 loss', '2 losses', 'Daily limit'] },
     ],
   },
@@ -503,6 +537,11 @@ export function prepMarkdown(prep: SessionPrep): string {
 /* ───────────────────────── the plans ───────────────────────── */
 
 const str = (a: Answer | undefined): string | null => (typeof a === 'string' && a.trim() ? a.trim() : null);
+/** A tapped list, or null when nothing is tapped. */
+const list = (a: Answer | undefined): string[] | null => (Array.isArray(a) && a.length ? a : null);
+/** A scenario's trigger zones: the tapped ones, or the one picked before (an old prep). */
+export const zonesOf = (answers: Record<string, Answer>, k: 'a' | 'b'): string[] =>
+  list(answers[`plans.${k}Zones`]) ?? (str(answers[`plans.${k}Trigger`]) ? [str(answers[`plans.${k}Trigger`])!] : []);
 const DECIDED = ['draw.side', 'draw.direction', 'liquidity.wait', 'draw.target'] as const;
 
 /**
@@ -515,7 +554,7 @@ const DECIDED = ['draw.side', 'draw.direction', 'liquidity.wait', 'draw.target']
 export function deriveDecisions(answers: Record<string, Answer>): Record<string, Answer> {
   const a = (k: string) => str(answers[`plans.${k}`]);
   const dirs = [a('aDir'), a('bDir')].filter((d): d is string => !!d);
-  const triggers = [a('aTrigger'), a('bTrigger')].filter((t): t is string => !!t);
+  const triggers = [...zonesOf(answers, 'a'), ...zonesOf(answers, 'b')];
   if (!dirs.length && !triggers.length && !a('aTarget')) return answers;
   const out: Record<string, Answer> = { ...answers };
   for (const k of DECIDED) delete out[k];
@@ -554,12 +593,15 @@ export interface PlanCheck { level: 'warn' | 'note'; text: string }
 export function planChecks(answers: Record<string, Answer>): PlanCheck[] {
   const a = (k: string) => str(answers[`plans.${k}`]);
   const out: PlanCheck[] = [];
-  const started = (k: 'a' | 'b') => ['Dir', 'Story', 'Trigger', 'TriggerNote', 'Target', 'Kill'].some((f) => a(`${k}${f}`));
-  if (a('aTrigger') && a('aTrigger') === a('bTrigger')) {
-    out.push({ level: 'warn', text: `Both scenarios start at ${a('aTrigger')}. They should differ in which liquidity is taken first — that is the question the open answers.` });
+  const tapped = (k: string) => list(answers[`plans.${k}`]) != null;
+  const started = (k: 'a' | 'b') => ['Dir', 'Story', 'Trigger', 'TriggerNote', 'Target', 'TargetAt', 'Kill'].some((f) => a(`${k}${f}`))
+    || ['Zones', 'Confirms', 'Kills'].some((f) => tapped(`${k}${f}`));
+  const shared = zonesOf(answers, 'a').filter((z) => zonesOf(answers, 'b').includes(z));
+  if (shared.length) {
+    out.push({ level: 'warn', text: `Both scenarios start at ${shared.join(' + ')}. They should differ in which liquidity is taken first — that is the question the open answers.` });
   }
   for (const k of ['a', 'b'] as const) {
-    if (started(k) && !a(`${k}Kill`)) out.push({ level: 'warn', text: `Scenario ${k.toUpperCase()} has no kill switch. If it can't be killed, it's a hope, not a plan.` });
+    if (started(k) && !a(`${k}Kill`) && !tapped(`${k}Kills`)) out.push({ level: 'warn', text: `Scenario ${k.toUpperCase()} has no kill switch. If it can't be killed, it's a hope, not a plan.` });
   }
   if (a('aDir') && a('aDir') === a('bDir')) out.push({ level: 'note', text: `Both scenarios are ${a('aDir')!.toLowerCase()}s. B is usually the other side's story.` });
   const bias = biasOf(answers);
@@ -586,24 +628,29 @@ export function biasSentence(answers: Record<string, Answer>): string | null {
   const bias = biasOf(answers);
   if (!bias) return null;
   if (bias === 'Neutral') return 'Neutral — A+ only today.';
-  const because = str(answers['htf.because']); const inv = str(answers['htf.inv']);
+  const because = list(answers['htf.reasons'])?.map((x) => x.charAt(0).toLowerCase() + x.slice(1)).join(', ') ?? str(answers['htf.because']);
+  const inv = str(answers['htf.invAt'])?.replace(/^The /, 'the ') ?? str(answers['htf.inv']);
   return `4H/1H bias is ${bias.toLowerCase()}${because ? ` because ${because}` : ''}.${inv ? ` Invalidated by a 1H body close beyond ${inv}.` : ''}`;
 }
 
 /** One scenario in a line, for the summary and the dashboard. */
 export function scenarioLine(answers: Record<string, Answer>, k: 'a' | 'b'): string | null {
   const a = (f: string) => str(answers[`plans.${k}${f}`]);
+  const l = (f: string) => list(answers[`plans.${k}${f}`]);
+  const zones = l('Zones')?.join(' + ') ?? a('TriggerNote') ?? a('Trigger');
+  const target = a('TargetAt') ?? a('TargetNote') ?? a('Target');
+  const kill = l('Kills')?.join(' / ') ?? a('Kill');
   const parts = [
-    a('Story') ?? [a('Dir'), a('Trigger') && `from ${a('TriggerNote') ?? a('Trigger')}`].filter(Boolean).join(' '),
-    (a('TargetNote') ?? a('Target')) && `→ ${a('TargetNote') ?? a('Target')}`,
+    a('Story') ?? [a('Dir'), zones && `from ${zones}`].filter(Boolean).join(' '),
+    target && `→ ${target}`,
     a('RR') && `· ${a('RR')}R`,
-    a('Kill') && `· killed by ${a('Kill')}`,
+    kill && `· killed by ${kill.charAt(0).toLowerCase()}${kill.slice(1)}`,
   ].filter(Boolean);
   return parts.length && parts[0] ? parts.join(' ') : null;
 }
 
 export const scenarioC = (answers: Record<string, Answer>) =>
-  `Neither trigger zone reached by ${str(answers['plans.cutoff']) ?? '9:30'}, or price chops through both: no trade.`;
+  `Neither trigger zone reached by ${str(answers['plans.cutoffAt']) ?? str(answers['plans.cutoff']) ?? '9:30'}, or price chops through both: no trade.`;
 
 /** The day's plan in a few rows: what the dashboard shows and the prep ends on. */
 export function planSummary(answers: Record<string, Answer>): Array<{ label: string; value: string }> {

@@ -1,5 +1,5 @@
 import { isBacktest } from './domain';
-import type { PrepData } from './prep';
+import { zonesOf, type PrepData } from './prep';
 import type { Trade } from './types';
 import { wallToUtc } from './traderZone';
 
@@ -74,10 +74,12 @@ export function planMatch(
   if (t.plan_scenario === 'A' || t.plan_scenario === 'B') {
     const k = t.plan_scenario.toLowerCase(); const name = `Scenario ${t.plan_scenario}`;
     const s = (f: string) => (typeof a[`plans.${k}${f}`] === 'string' ? (a[`plans.${k}${f}`] as string) : null);
-    const dir = s('Dir'); const trigger = s('Trigger'); const target = s('Target');
-    if (dir || trigger || target) {
+    const dir = s('Dir'); const target = s('Target');
+    // The tapped zones (up to two), or the one picked before; only named levels can be checked against the sweep.
+    const levels = zonesOf(a, k as 'a' | 'b').filter((z) => !/gap$|wick$/.test(z));
+    if (dir || levels.length || target) {
       if (dir) { if (dir === t.direction) agreed.push(`${name}: ${dir.toLowerCase()}`); else diffs.push(`${name} was a ${dir.toLowerCase()}, took a ${t.direction.toLowerCase()}`); }
-      if (trigger && t.sweep_level && !/gap$/.test(trigger)) { if (trigger === t.sweep_level) agreed.push(`trigger (${trigger})`); else diffs.push(`swept ${t.sweep_level}, ${name} waited for ${trigger}`); }
+      if (levels.length && t.sweep_level) { if (levels.includes(t.sweep_level)) agreed.push(`trigger (${t.sweep_level})`); else diffs.push(`swept ${t.sweep_level}, ${name} waited for ${levels.join(' or ')}`); }
       if (target && t.target_type) { if (target === t.target_type) agreed.push(`target (${target})`); else diffs.push(`aimed at ${t.target_type}, ${name} aimed at ${target}`); }
       return diffs.length ? { status: 'off', diffs, agreed } : { status: 'in', diffs, agreed: agreed.length ? agreed : [name] };
     }

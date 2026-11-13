@@ -304,22 +304,27 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   await page.click('text=Morning check-in'); await page.click('[data-checkin-tab="chart"]'); await page.waitForSelector('[data-chart-prep]');
   const g = (f) => page.locator(`[data-prep-field="${f}"]`);
   const pill = (f, o) => g(f).getByRole('button', { name: o, exact: true }).first().click();
-  const type = (f, t) => g(f).locator('textarea').fill(t);
-  const pick = async (f, o) => { await g(f).getByRole('combobox').click(); await page.getByRole('listbox').last().getByRole('option', { name: o, exact: true }).click(); await page.waitForTimeout(250); };
   const next = async () => { await page.click('[data-prep-next]'); await page.waitForTimeout(350); };
   await page.waitForTimeout(800); await next();                                   // news
-  await pill('bias', 'Bearish'); await type('because', 'the 4H displaced down'); await type('inv', '21,310'); await next();
+  // Taps only: nothing on the prep is written any more.
+  expect(await page.locator('[data-chart-prep] textarea').count() === 0, 'no text boxes');
+  await pill('bias', 'Bearish'); await pill('reasons', '4H displaced through a level'); await pill('reasons', 'Swept a HTF high or low'); await pill('invAt', 'The 1H iFVG'); await next();
   await pill('taken', 'Asia high'); await next();                                 // overnight
   await next(); await pill('zone', 'Premium'); await next();                      // map, location
-  await pill('aDir', 'Short'); await type('aStory', 'Judas up into the PDH, then short'); await pick('aTrigger', 'PDH');
-  await pill('bDir', 'Long'); await pick('bTrigger', 'PDH'); await page.waitForTimeout(300);
+  expect(await page.locator('[data-chart-prep] textarea').count() === 0, 'no text boxes on the plans');
+  await pill('aDir', 'Short');
+  expect(await g('aZones').getByRole('button', { name: 'PDL', exact: true }).count() === 0, 'a short waits above: no lows offered');
+  await pill('aZones', 'PDH'); await pill('aConfirms', 'CISD');
+  await pill('bDir', 'Long'); await pill('bZones', 'London low'); await page.waitForTimeout(300);
+  expect(await g('bZones').getByRole('button', { name: 'PDH', exact: true }).count() === 0, 'a long: no highs offered');
   const notes = await page.locator('[data-plan-checks]').innerText();
-  expect(/differ in which liquidity/.test(notes) && /no kill switch/.test(notes), `the rules were not checked: ${notes}`);
-  await pick('bTrigger', 'London low'); await type('aKill', 'a 15m close above 21,420'); await type('bKill', 'a 15m close below 21,170'); await page.waitForTimeout(300);
+  expect(/no kill switch/.test(notes), `the rules were not checked: ${notes}`);
+  await pill('aKills', '15m closes through the zone'); await pill('bKills', 'Never reaches the zone'); await pill('bKills', 'Bias invalidated');
+  await pill('cutoffAt', '10:00'); await page.waitForTimeout(300);
   expect(await page.locator('[data-plan-checks]').count() === 0, 'the notes clear once the plans are sound');
   await page.click('[data-prep-next]'); await page.waitForSelector('[data-prep-plan]');
   const plan = await page.locator('[data-prep-plan]').innerText();
-  expect(/Scenario A/.test(plan) && /Scenario C/.test(plan) && /bias is bearish/.test(plan), plan.slice(0, 200));
+  expect(/Scenario A/.test(plan) && /Scenario C/.test(plan) && /bias is bearish because 4H displaced/.test(plan) && /from PDH/.test(plan) && /by 10:00/.test(plan), plan.slice(0, 300));
   const day = await page.evaluate(() => new Date().toLocaleDateString('en-CA'));
   const saved = await page.evaluate(async (day) => (await (await fetch(`/api/prep?day=${day}`)).json()).prep.data.answers, day);
   expect(saved['draw.side'] === 'Both ways' && JSON.stringify(saved['liquidity.wait']) === JSON.stringify(['PDH', 'London low']), JSON.stringify(saved).slice(0, 200));
@@ -615,7 +620,7 @@ await check('Replay plan: Step 1 shows the day\'s A and B above the chart; the m
   expect(await page.locator('[data-header-strip] [data-replay-control="active"]').count() === 1, 'the day is shown in the header');
   await page.keyboard.press('s');
   expect(await page.locator('[data-plan-card="b"][data-match]').count() === 1, 'Short outlines B');
-  expect(await page.locator('[data-facts] [data-chip], [data-facts] button[aria-pressed="true"]:has-text("B")').count() === 0, 'and does not pick it');
+  expect(await page.locator('[data-facts] button[aria-pressed="true"][data-option="B"]').count() === 0, 'and does not pick it');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -624,21 +629,52 @@ await check('Replay plan: Next replay day closes the day with one question, and 
   const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
   await page.click('[data-next-replay-day]');
   await page.waitForSelector('[data-close-day]');
-  await page.click('[data-day-outcome="A"]');
-  await page.waitForSelector('[data-took^="A:"]');
-  await page.click('[data-took="A:passed"]');
+  await page.click('[data-day-outcomes] [data-option="A"]');
+  await page.waitForSelector('[data-took-for="A"]');
+  await page.click('[data-took-for="A"] [data-option="passed"]');
   await page.click('[data-next-day]');
   await page.waitForSelector('[data-replay-builder="plan"]');
   expect(await page.inputValue('[data-replay-date]') === '2026-03-04', 'the next weekday after the last replay date');
   await page.click('[data-copy-last]');
-  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-chip="<1.5"]').click();
+  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-option="<1.5"]').click();
   expect(await page.locator('[data-rr-warning]').count() === 1, 'the <1.5R warning');
-  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-chip="2+"]').click();
+  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-option="2+"]').click();
   await page.keyboard.press('Enter');
   await page.waitForSelector('[data-replay-builder]', { state: 'detached' });
   await page.waitForSelector('[data-replay-day="2"]');
   const st = await page.evaluate(async () => (await fetch('/api/replay')).json());
   expect(st.active.sequence === 2 && st.active.replay_date === '2026-03-04' && st.active.locked_at, JSON.stringify({ s: st.active?.sequence, d: st.active?.replay_date }));
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Step 1: the plan section and the chart box keep one size — a tall screenshot moves nothing; Start fresh clears and restarts', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  await page.waitForSelector('[data-plan-strip="plan"]');
+  const box = () => page.locator('[data-shot-slots] > div').first().evaluate((el) => `${el.offsetHeight} px (with the thumbnails ${el.parentElement.offsetHeight})`); // layout size: the paste flash scales, it never resizes
+  const take = () => page.locator('[data-decide-button="take"]').evaluate((el) => Math.round(el.getBoundingClientRect().top));
+  await page.waitForTimeout(1500); // the header and plan settle first
+  const [h0, t0] = [await box(), await take()];
+  // A very tall chart, pasted.
+  await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 900; c.height = 2400;
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const dt = new DataTransfer(); dt.items.add(new File([blob], 'tall.png', { type: 'image/png' }));
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+  });
+  await page.waitForSelector('[data-shot-slots] img');
+  await page.waitForTimeout(1500); // the paste flash settles
+  expect(await box() === h0 && await take() === t0, `the box stays ${h0} and Take stays put (${await box()}, ${t0} → ${await take()})`);
+  // Start fresh: answers gone, the clock from zero.
+  for (const k of ['2', '2']) await page.keyboard.press(k);
+  await page.waitForTimeout(1200);
+  await page.click('[data-start-fresh]');
+  await page.click('[data-close-action="fresh"]');
+  await page.waitForTimeout(300);
+  expect(await page.locator('[data-shot-slots] img').count() === 0, 'the chart is cleared');
+  expect(await page.locator('[data-rubric] [aria-pressed="true"], [data-rubric] [aria-checked="true"]').count() === 0, 'the rows are cleared');
+  const secs = Number((await page.locator('[data-seconds]').innerText()).replace(/\D/g, '')) || 0;
+  expect(secs <= 1 || secs >= 89, `the clock restarted (${secs})`);
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -654,7 +690,7 @@ await check('Replay plan: with no day locked, New trade offers to plan it or tra
   await page.waitForTimeout(1500);
   expect(await page.locator('[data-seconds]').innerText() === t0, 'the clock waits');
   await page.click('[data-gate-noplan]');
-  await page.waitForSelector('[data-no-plan]');
+  await page.waitForSelector('[data-plan-strip="none"] [data-no-plan]');
   for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
   await gateAndR(page);
   expect(await page.locator('[data-grade]').getAttribute('data-grade') === 'B', 'unplanned: max B');

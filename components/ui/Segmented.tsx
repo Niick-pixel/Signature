@@ -41,6 +41,7 @@ export function Segmented<T extends string>({
             type="button"
             title={titleFor?.(option)}
             aria-pressed={active}
+            data-option={option}
             onClick={() => onChange(option)}
             whileTap={press}
             animate={{ color: active ? `rgb(${accent})` : 'var(--text-dim)' }}
