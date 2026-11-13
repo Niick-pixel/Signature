@@ -1058,7 +1058,11 @@ html[data-platform='win32'] [data-wco-pad] { padding-right: 152px; }
   with the same 24px gutters. Wide for boards, tables and charts; reading
   for forms, lists and single columns.
 */
-:root { --page-wide: 88rem; --page-read: 64rem; }
+:root { --page-wide: 88rem; --page-read: 64rem; --page-form: 96rem; }
+/* The one exception: the New trade form is a workspace, four columns wide on a
+   large screen. The sheet over a page and the /new page share it, so starting a
+   fresh form (which loads /new) never changes its width. */
+@media (min-width: 96rem) { :root { --page-form: 132rem; } }
 
 /* The side rail (components/shell/SideRail, Settings → Appearance → Navigation): the page moves over by its width. */
 /* Typed, so a change of width transitions: the rail, the page's left padding

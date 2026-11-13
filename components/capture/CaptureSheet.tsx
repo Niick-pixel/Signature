@@ -47,7 +47,7 @@ export function CaptureSheet({ children }: { children: ReactNode }) {
       style={{ background: 'color-mix(in srgb, var(--bg) 74%, transparent)' }}
     >
       {/* Same column as the full page (app/new/page.tsx) — see the note there. */}
-      <div className="mx-auto w-full max-w-[96rem] px-4 pb-20 pt-4 sm:px-6 2xl:max-w-[132rem] 2xl:pb-10">
+      <div className="mx-auto w-full max-w-[var(--page-form)] px-4 pb-20 pt-4 sm:px-6 2xl:pb-10">
         <InCaptureSheet.Provider value>{children}</InCaptureSheet.Provider>
       </div>
     </div>

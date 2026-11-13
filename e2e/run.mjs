@@ -154,10 +154,10 @@ await check('every screen sits in one of the two page widths, centred in the spa
     await page.goto(`${BASE}${u}`); await page.waitForTimeout(600);
     const r = await page.evaluate(() => {
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      const want = { wide: 88 * rem, read: 64 * rem };
+      const want = { wide: 88 * rem, read: 64 * rem, form: (innerWidth >= 96 * rem ? 132 : 96) * rem };
       const cols = [...document.querySelectorAll('div')].filter((el) => {
         const mw = parseFloat(getComputedStyle(el).maxWidth);
-        return (mw === want.wide || mw === want.read) && el.getBoundingClientRect().width > 0 && !el.closest('[role=dialog]');
+        return (mw === want.wide || mw === want.read || (location.pathname === '/new' && mw === want.form)) && el.getBoundingClientRect().width > 0 && !el.closest('[role=dialog]');
       });
       if (!cols.length) return { none: true };
       const el = cols[0]; const c = el.getBoundingClientRect(); const box = el.parentElement.getBoundingClientRect();
@@ -196,6 +196,25 @@ await check('Dashboard: the four figures, the daily curve, the score with its sc
   expect(scroll <= 1, `the Dashboard still fits the window (${scroll}px over)`);
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
+});
+
+await check('New trade is as wide over a page as on its own page (Start fresh loads /new)', async () => {
+  const { page } = await open({ width: 1920, height: 1080 }, { nav: 'side' });
+  const formW = () => page.evaluate(() => {
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const want = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--page-form')) * rem;
+    const f = [...document.querySelectorAll('div')].find((x) => parseFloat(getComputedStyle(x).maxWidth) === want && x.getBoundingClientRect().width > 0);
+    return f ? Math.round(f.getBoundingClientRect().width) : 0;
+  });
+  await page.goto(`${BASE}/dashboard`); await page.waitForTimeout(800);
+  await page.locator('[data-new-trade]:visible').click(); await page.waitForURL(/\/new/); await page.waitForTimeout(1200);
+  const sheet = await formW();
+  await page.goto(`${BASE}/new`); await page.waitForTimeout(1200);
+  const own = await formW();
+  // The sheet covers the rail; the page sits beside it. Otherwise the same width.
+  const rail = await page.evaluate(() => Math.round(document.querySelector('[data-side-rail]')?.getBoundingClientRect().width ?? 0));
+  expect(sheet > 0 && own > 0 && Math.abs(sheet - own) <= rail + 2, `over a page ${sheet}px, on its own ${own}px (rail ${rail}px)`);
+  await page.context().close();
 });
 
 await check('side rail: every screen has one 44px title bar, its header inside it, nothing spilling out', async () => {
