@@ -12,7 +12,7 @@ import { isBacktest } from './domain';
 import { EARLY_N, LEAK_MIN_TRADES, THEMES, analyse, themesOf, type ThemeResult } from './insights';
 import { isHypothetical, isTaken } from './domain';
 import type { Trade } from './types';
-import { ME_TAGS, OLD_EXECUTION_TAGS, isRubricV2, onOldScale } from './decision';
+import { ALL_ME_TAGS, OLD_EXECUTION_TAGS, isRubricV2, onOldScale } from './decision';
 
 export interface BrokenRule { id: string; scope: 'trade' | 'day'; text: string; short: string; kind?: 'trading' | 'logging'; source?: 'auto' | 'self' }
 
@@ -52,7 +52,7 @@ function v2Breaks(t: Trade, cfg: RuleConfig): BrokenRule[] {
   const out: BrokenRule[] = [];
   if (t.grade_override) out.push({ id: 'override', scope: 'trade', short: 'Took a no-trade grade', text: 'Taken although the grade said no trade.' });
   for (const tag of t.mistake_tags ?? []) {
-    if ((ME_TAGS as readonly string[]).includes(tag)) out.push({ id: `me:${tag}`, scope: 'trade', short: tag, text: `${tag} — what went wrong, me.`, source: 'self' });
+    if (ALL_ME_TAGS.includes(tag)) out.push({ id: `me:${tag}`, scope: 'trade', short: tag, text: `${tag} — what went wrong, me.`, source: 'self' });
   }
   if (RISK_RULE && RISK_RULE.test(t, cfg) === false) out.push(asBroken(RISK_RULE));
   return out;

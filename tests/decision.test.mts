@@ -143,8 +143,8 @@ test('consistency: a stop moved before a 1R trigger the trade reached; "just sho
   assert.equal(D.consistencyFlags({ mistake_tags: ['Moved stop before BE trigger'], reached_1r: true, management: 'BE at 1R' }).length, 1);
   assert.equal(D.consistencyFlags({ mistake_tags: ['Moved stop before BE trigger'], reached_1r: false, management: 'BE at 1R' }).length, 0);
   assert.equal(D.consistencyFlags({ mistake_tags: ['Moved stop before BE trigger'], reached_1r: true, management: 'BE on structure break' }).length, 0);
-  assert.equal(D.consistencyFlags({ market_tags: ['Turned just short of target'], mfe_r: 1.5, planned_rr: '2' }).length, 1);
-  assert.equal(D.consistencyFlags({ market_tags: ['Turned just short of target'], mfe_r: 1.7, planned_rr: '2' }).length, 0);
+  // "Turned just short of target" is computed now, so it never needs a consistency check.
+  assert.equal(D.consistencyFlags({ market_tags: ['Turned just short of target'], mfe_r: 1.5, planned_rr: '2' }).length, 0);
 });
 
 /* ───────────── the record ───────────── */
@@ -340,4 +340,39 @@ test('a pass or a miss owes the hypothetical R and one line; the lesson is optio
   const taken = parseTradeInput({ ...take, outcome: 'Win', r_multiple: 2, status: 'Settled', screenshot_path: 'x.png', explanation: 'Two gaps in the leg, passed.', lesson: '', outcome_at: '2026-11-13T11:00:00.000Z' },
     { previous: { explanation: '', lesson: '', status: 'Live', stored: take as unknown as Record<string, unknown> } });
   assert.equal(taken.ok, false, 'a taken trade still owes 160');
+});
+
+/* ───────────── the tag row: mirrors and computed market tags ───────────── */
+
+test('ME and WORKED: twelve each, every ME tag has its mirror at the same grid position, a tag and its mirror never together', () => {
+  assert.equal(D.ME_TAGS.length, 12);
+  assert.equal(D.WORKED_TAGS_V2.length, 12);
+  for (const [me, worked] of D.MIRRORS) {
+    assert.ok((D.ME_TAGS as readonly string[]).includes(me) && (D.WORKED_TAGS_V2 as readonly string[]).includes(worked), `${me} ↔ ${worked}`);
+  }
+  // Same position on the 3 × 4 grid, except the second entry mistake (it shares "Entered on the trigger close").
+  D.ME_TAGS.forEach((me, i) => {
+    if (me === 'Entered early (before close or open)') return;
+    assert.ok(D.mirrorsOf(me).includes(D.WORKED_TAGS_V2[i]), `${me} sits opposite ${D.WORKED_TAGS_V2[i]}`);
+  });
+  assert.deepEqual(D.mirrorsOf('Entered on the trigger close').sort(), ['Entered early (before close or open)', 'Entered late / chased']);
+  assert.match(D.tagBlocked('Sized correctly', { me: ['Sized wrong'], worked: [] }) ?? '', /opposite/);
+  assert.equal(D.tagBlocked('Sized correctly', { me: ['Missed a level in prep'], worked: [] }), null);
+  assert.ok(D.tagBlocked('Decided within time', { me: [], worked: [] }, { decision: 'take', overTime: true }));
+  assert.equal(D.tagBlocked('Decided within time', { me: [], worked: [] }, { decision: 'take', overTime: false }), null);
+});
+
+test('market: four tapped, two computed — just short of target (Max R ≥ 80% of planned, not at TP) and failed immediately (Max R < 0.3R)', () => {
+  assert.deepEqual(D.autoMarketTags({ mfe_r: 1.7, planned_rr: '2', exit_reason: 'SL' }), ['Turned just short of target']);
+  assert.deepEqual(D.autoMarketTags({ mfe_r: 2.1, planned_rr: '2', exit_reason: 'TP' }), []);
+  assert.deepEqual(D.autoMarketTags({ mfe_r: 0.2, planned_rr: '2', exit_reason: 'SL' }), ['Failed immediately']);
+  assert.deepEqual(D.autoMarketTags({ mfe_r: null, planned_rr: '2', exit_reason: 'SL' }), []);
+  assert.equal(D.MARKET_TAGS_V2.length, 4);
+});
+
+test('retired v2 "me" tags still count as rules broken on the trades that carry them; new ones count too', () => {
+  const cfg = { maxRiskPct: 1, backtest: true };
+  assert.deepEqual(D.rulesFollowedV2({ mistake_tags: ['Oversized'] }, cfg).reasons, ['Oversized']);
+  assert.deepEqual(D.rulesFollowedV2({ mistake_tags: ['No management plan before entry'] }, cfg).reasons, ['No management plan before entry']);
+  assert.equal(D.rulesFollowedV2({ mistake_tags: ['Chop / no follow-through'] }, cfg).followed, true);
 });

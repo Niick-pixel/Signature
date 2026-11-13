@@ -518,6 +518,29 @@ await check('Rubric v2: click outside asks; re-scoring a row keeps the focus san
   expect(!errors.length, errors.join(' | '));
 });
 
+await check('Rubric v2: the tag row — a tag and its mirror never together, the auto market tags follow Max R', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-tags]');
+  await page.click('[data-tag-grid="me"] [data-tag="Sized wrong"]');
+  expect(await page.locator('[data-tag-grid="worked"] [data-tag="Sized correctly"][data-blocked]').count() === 1, 'the mirror is blocked');
+  await page.click('[data-tag-grid="worked"] [data-tag="Sized correctly"]', { force: true });
+  expect(await page.locator('[data-tag-note]').count() === 1, 'a short note says why');
+  expect(await page.locator('[data-tag-grid="worked"] [data-tag="Sized correctly"][aria-pressed="true"]').count() === 0, 'not selected');
+  // Max R 0.2 → "Failed immediately", lit and not tappable.
+  await page.locator('[data-outcome-fields] button:has-text("Loss")').first().click();
+  await page.fill('[data-field="mfe"]', '0.2');
+  expect(await page.locator('[data-tag-grid="market"] [data-tag="Failed immediately"][aria-pressed="true"]').count() === 1, 'computed');
+  expect(await page.locator('[data-tag-grid="market"] [data-tag="Failed immediately"]').isDisabled(), 'not tappable');
+  // Three boxes, one height.
+  const hs = await page.locator('[data-tag-grid]').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+  expect(Math.max(...hs) - Math.min(...hs) <= 2, `same height: ${hs.join(', ')}`);
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
 await check('Trades: unfinished trades wait on their own shelf; deleting one asks only for DELETE', async () => {
   const { page, errors } = await openNewTrade();
   for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);

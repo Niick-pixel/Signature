@@ -408,9 +408,11 @@ export const MISTAKE_TAGS = [
   // setup's own faults (bias, range side, sweep, target, close, confidence,
   // killzone) are read off Step 1 now; tagging them too made the data
   // contradict itself ("Against HTF bias" and "With HTF bias" on one trade).
-  'Entered late / chased', 'Entered before the close', 'Moved stop before BE trigger', 'Moved target (greed)',
-  'Cut winner early', 'Ignored kill switch', "Traded against today's plan", 'Oversized',
-  'Revenge / one more after a loss', 'Stop inside zone',
+  // The second v2 list: twelve, each with its mirror in WORKED_TAGS (lib/decision MIRRORS).
+  'Moved stop before BE trigger', 'Missed a level in prep', 'Forced a reversal after a big move',
+  'Same idea again after a loss', 'Stayed in after it stalled', 'Entered late / chased',
+  'Entered early (before close or open)', 'Greed on target (moved it / refused partial)', 'Stop inside an HTF zone',
+  "Traded against today's plan", 'No management plan before entry', 'Sized wrong',
 ] as const;
 /**
  * No longer offered, still accepted: trades were tagged with them, and a tag
@@ -422,6 +424,9 @@ export const RETIRED_MISTAKE_TAGS = [
   'Long in premium', 'Short in discount', 'Against HTF bias', 'Took it before the sweep',
   "Didn't wait for the close", 'Chased', 'Outside killzone', 'Ignored news', 'No defined target',
   'Moved stop', 'Revenge', 'Overtraded', 'Low confidence entry', 'Opposing HTF gap in path',
+  // Retired by the second v2 list: kept, and still a rule broken, on the trades that carry them.
+  'Entered before the close', 'Moved target (greed)', 'Cut winner early', 'Ignored kill switch', 'Oversized',
+  'Revenge / one more after a loss', 'Stop inside zone',
 ] as const;
 export const MISTAKE_TAG_VALUES = [...MISTAKE_TAGS, ...RETIRED_MISTAKE_TAGS] as const;
 export type MistakeTag = (typeof MISTAKE_TAG_VALUES)[number];
@@ -435,11 +440,15 @@ export type MistakeTag = (typeof MISTAKE_TAG_VALUES)[number];
  * can be told apart from luck.
  */
 export const WORKED_TAGS = [
-  'Decided within time', 'Stop where the idea fails', 'Stop beyond the zone', 'Managed to plan',
-  'Took partials as planned', 'Let the runner run per plan', 'Respected the kill switch',
-  'Stopped at the daily limit', 'Sized correctly',
+  'Stop untouched until BE trigger', 'Every level marked in prep', 'Waited for a structure shift before reversing',
+  'After a loss, only a new setup', 'Exited when it stalled, per plan', 'Entered on the trigger close',
+  'Decided within time', 'Took partials as planned', 'Stop where the idea fails, beyond the zone',
+  "Followed today's plan", 'Management plan set before entry', 'Sized correctly',
 ] as const;
 export const RETIRED_WORKED_TAGS = [
+  // Retired by the second v2 list.
+  'Stop where the idea fails', 'Stop beyond the zone', 'Managed to plan', 'Let the runner run per plan',
+  'Respected the kill switch', 'Stopped at the daily limit',
   'Took only the A+', 'Respected the news', 'Stayed patient', 'Followed the plan exactly',
   // Retired by rubric v2 (046): derived from Step 1, or reworded.
   'Waited for the sweep', 'Waited for the close', 'Entered on the retest', 'Long in discount / short in premium',
@@ -459,7 +468,9 @@ export function tagOptions<T extends string>(offered: readonly T[], carried: rea
  * so Stats can separate process from luck; never a rule break.
  */
 export const MARKET_TAGS = [
-  'Chop / no follow-through', 'News spike', 'Turned just short of target', 'Opposing HTF gap formed after entry',
+  'Chop / no follow-through', 'One side in control all session', 'Opposing HTF gap formed after entry', 'News spike',
+  // Computed on rubric v2 trades (lib/decision autoMarketTags), never tapped there.
+  'Turned just short of target', 'Failed immediately',
 ] as const;
 /** No longer offered, still accepted and kept on the trades that carry them. */
 export const RETIRED_MARKET_TAGS = [

@@ -47,7 +47,7 @@ const TIER: Record<string, 1 | 2> = {
   'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
   'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
   'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
-  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'v2-mirrors': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
 };
 /** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
 const LEAN: Record<string, 'fix' | 'keep'> = {
@@ -531,6 +531,22 @@ add({
       items: rows.map((o) => ({ label: o.key === 'None' ? 'No HTF origin' : o.key, value: o.taken.avgR ?? 0,
         display: `${o.taken.n ? R(o.taken.avgR) : '—'} · ${o.taken.n} taken of ${o.count}`, tone: 'accent' as Tone })),
       caption: 'Expectancy of trades taken · count of decisions' };
+  },
+});
+
+add({
+  id: 'v2-mirrors', title: 'Rubric v2: mistakes and their mirrors', category: 'chart', kind: 'bars', sizes: ['L', 'M'], defaultSize: 'L', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Each "what went wrong — me" tag beside its mirror under "what worked", on Rubric v2 trades taken: R per trade with the mistake, and with the opposite done right. Only pairs seen at least once are shown.',
+  select: (v) => {
+    const pairs = v.decisions.mirrors.filter((p) => p.me_cell.n || p.worked_cell.n);
+    if (!pairs.length) return V2_EMPTY('bars');
+    const items = pairs.flatMap((p) => [
+      ...(p.worked_cell.n ? [{ label: `✓ ${p.worked}`, value: p.worked_cell.avgR ?? 0, display: `${R(p.worked_cell.avgR)} · n ${p.worked_cell.n}`, tone: 'good' as Tone }] : []),
+      ...(p.me_cell.n ? [{ label: `✗ ${p.me}`, value: p.me_cell.avgR ?? 0, display: `${R(p.me_cell.avgR)} · n ${p.me_cell.n}`, tone: 'bad' as Tone }] : []),
+    ]);
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: v.decisions.n, level: null }, items,
+      caption: 'R per trade taken: the mirror done right (✓) against the mistake (✗)' };
   },
 });
 

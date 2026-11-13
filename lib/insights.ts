@@ -122,7 +122,7 @@ export const THEMES: ThemeDef[] = [
     why: 'A stop inside the level price is likely to revisit gets taken by the retest, even when the idea was right.',
     rule: 'If my stop sits inside the HTF FVG, then I move it past the level where the idea completely fails.',
     patterns: patternsFor('stop'),
-    signal: (t) => tag(t, 'Stop inside zone') || t.stop_placement === 'Inside the zone',
+    signal: (t) => tag(t, 'Stop inside zone') || tag(t, 'Stop inside an HTF zone') || t.stop_placement === 'Inside the zone',
   },
   {
     id: 'breakeven',

@@ -6,7 +6,6 @@ import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { Select } from '@/components/ui/Select';
 import { Segmented } from '@/components/ui/Segmented';
 import { Field, Input } from '@/components/ui/Field';
-import { TagPicker } from '@/components/ui/TagPicker';
 import { Help } from '@/components/ui/Help';
 import { ShotSlots, type SlotFiles } from './ShotSlots';
 import { ExplanationField } from './ExplanationField';
@@ -20,7 +19,7 @@ import { closeCapture } from '@/lib/nav';
 import { clearCarry, readCarry, writeCarry } from '@/lib/backtestSession';
 import { press, spring, springSoft, riseIn } from '@/lib/motion';
 import {
-  BACKTEST, BACKTEST_REASON, INSTRUMENTS, MANAGEMENTS, MARKET_TAGS, MISTAKE_TAGS, SESSIONS, SHOT_SLOTS, WORKED_TAGS,
+  BACKTEST, BACKTEST_REASON, INSTRUMENTS, MANAGEMENTS, SESSIONS, SHOT_SLOTS,
   accountLabel, tagOptions, type Account,
 } from '@/lib/domain';
 import { EXIT_REASONS } from '@/lib/anatomy';
@@ -28,6 +27,7 @@ import { REGRADE_HINT, regradeOptions, type GradeLetter } from '@/lib/grade';
 import { MIN_EXPLANATION, MIN_LESSON, MIN_PASS_EXPLANATION, type Trade } from '@/lib/types';
 import { playChime } from '@/lib/chime';
 import {
+  AUTO_MARKET_TAGS, MARKET_TAGS_V2, ME_TAGS, WORKED_TAGS_V2, autoMarketTags, overTime, tagBlocked,
   DECISION_LABEL, HTF_ORIGINS, SINGULAR_GAP_LABEL, SINGULAR_GAP_QUESTION, gapOf, type HtfOrigin, type SingularGap, LEG_HELP, LEG_LOCATIONS, OVERRIDE_PROMPT, ROWS, RUBRIC_V2_LABEL, SCENARIO_LABEL,
   V2_ENTRIES, V2_LETTER_OF, V2_PLANNED_RS, V2_TARGETS, clock, consistencyFlags, gradeV2, lockDecision,
   needsOverride, rulesFollowedV2, scenarioFromPlan,
@@ -597,9 +597,19 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const [explanation, setExplanation] = useState(trade.explanation ?? '');
   const [lesson, setLesson] = useState(trade.lesson ?? '');
   const [me, setMe] = useState<string[]>(trade.mistake_tags ?? []);
-  const [market, setMarket] = useState<string[]>(trade.market_tags ?? []);
+  // Only the tapped market tags live here; the computed two are written on save.
+  const [market, setMarket] = useState<string[]>((trade.market_tags ?? []).filter((m) => !(AUTO_MARKET_TAGS as readonly string[]).includes(m)));
   const [worked, setWorked] = useState<string[]>(trade.worked_tags ?? []);
   const [regrade, setRegrade] = useState(trade.regrade ?? null);
+  const [tagNote, setTagNote] = useState<string | null>(null);
+  const toggleTag = (side: 'me' | 'market' | 'worked', tag: string) => {
+    const [list, set] = side === 'me' ? [me, setMe] : side === 'market' ? [market, setMarket] : [worked, setWorked];
+    if (list.includes(tag)) { set(list.filter((x) => x !== tag)); setTagNote(null); return; }
+    const why = side === 'market' ? null : tagBlocked(tag, { me, worked }, { decision, overTime: overTime(trade) });
+    if (why) { setTagNote(why); return; }
+    setTagNote(null);
+    set([...list, tag]);
+  };
   const [drillKey, setDrillKey] = useState<string | null>(trade.drill_key ?? null);
   const [drillKept, setDrillKept] = useState<DrillKept | null>(trade.drill_kept ?? null);
   const [stage, setStage] = useState<'Live' | 'Settled'>(trade.status === 'Live' && !trade.outcome_at ? 'Settled' : (trade.status === 'Live' ? 'Live' : 'Settled'));
@@ -627,6 +637,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const verdict = rulesFollowedV2({ grade_override: trade.grade_override, mistake_tags: me, risk_percent: trade.risk_percent }, { maxRiskPct: 1, backtest });
   const flags = consistencyFlags({ mistake_tags: me, market_tags: market, reached_1r: reached1R, management, mfe_r: num(mfe), planned_rr: trade.planned_rr });
   const settled = !taken || stage === 'Settled';
+  const autoNow = taken ? autoMarketTags({ mfe_r: num(mfe), planned_rr: trade.planned_rr, exit_reason: exit }) : [];
   // A pass or a miss owes one line of why; the lesson is optional. Taken trades keep 160 + 160.
   const minExplanation = taken ? MIN_EXPLANATION : MIN_PASS_EXPLANATION;
   const lessonRequired = taken && settled;
@@ -682,7 +693,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       exit_reason: taken ? exit : null, management: taken ? management : trade.management,
       would_be_r: taken ? null : num(wouldR), would_be_mfe_r: taken ? null : num(wouldMfe),
       explanation: explanation.trim(), lesson: lesson.trim() || null,
-      mistake_tags: me, market_tags: market, worked_tags: worked,
+      mistake_tags: me, market_tags: [...market, ...autoNow], worked_tags: worked,
       regrade, drill_key: drillKey, drill_kept: drillKey ? drillKept : null,
       // Step 2 is written once settled; a trade still open stays pending.
       outcome_at: draft ? (trade.outcome_at ?? null) : settled ? (trade.outcome_at ?? new Date().toISOString()) : null,
@@ -796,7 +807,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
                 <Field quiet label="Contracts"><Input inputMode="numeric" value={contracts} onChange={(e) => setContracts(e.target.value)} placeholder="—" /></Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field quiet label="Max R (MFE)"><Input inputMode="decimal" value={mfe} onChange={(e) => setMfe(e.target.value)} placeholder="—" /></Field>
+                <Field quiet label="Max R (MFE)"><Input inputMode="decimal" value={mfe} onChange={(e) => setMfe(e.target.value)} placeholder="—" data-field="mfe" /></Field>
                 <Field quiet label="Reached +1R before the stop">
                   <Segmented value={reached1R == null ? '' : reached1R ? 'Yes' : 'No'} onChange={(v) => setReached1R(v === 'Yes')} options={['Yes', 'No']} accentFor={yesNoTone} compact />
                 </Field>
@@ -849,17 +860,22 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
         </div>
       </div>
 
-      {/* The three tag lists, side by side under a rule — the same three columns as above. */}
-      <div className="mt-5 grid gap-x-6 gap-y-4 border-t pt-4 md:grid-cols-3" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
-        <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken.">
-          <TagPicker small value={me} onChange={setMe} options={tagOptions(MISTAKE_TAGS, trade.mistake_tags)} tone="loss" />
+      {/* The three tag lists under a rule: ME and WORKED as mirrored 3 × 4 grids (an opposite sits at the
+          same place on the other side), MARKET between them as 2 × 3 — the same height, side by side. */}
+      <div className="mt-5 grid items-stretch gap-x-6 gap-y-4 border-t pt-4 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
+        <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken. Its opposite sits at the same place under What worked.">
+          <TagGrid cols={3} tone="loss" options={tagOptions(ME_TAGS as readonly string[], trade.mistake_tags)} value={me}
+            onToggle={(tag) => toggleTag('me', tag)} blocked={(tag) => tagBlocked(tag, { me, worked }, { decision, overTime: overTime(trade) })} data="me" />
         </TagBlock>
-        <TagBlock title="What went wrong — market" help="Outside your control. Never a rule broken.">
-          <TagPicker small value={market} onChange={setMarket} options={tagOptions(MARKET_TAGS as readonly string[], trade.market_tags)} tone="market" />
+        <TagBlock title="What went wrong — market" help="Outside your control, never a rule broken. The two marked auto are computed from Max R, the planned R and the exit.">
+          <TagGrid cols={2} tone="market" options={[...tagOptions(MARKET_TAGS_V2 as readonly string[], market), ...AUTO_MARKET_TAGS]} value={[...market, ...autoNow]}
+            auto={AUTO_MARKET_TAGS as readonly string[]} onToggle={(tag) => toggleTag('market', tag)} blocked={() => null} data="market" />
         </TagBlock>
         <TagBlock title="What worked">
-          <TagPicker small value={worked} onChange={setWorked} options={tagOptions(WORKED_TAGS as readonly string[], trade.worked_tags)} tone="win" />
+          <TagGrid cols={3} tone="win" options={tagOptions(WORKED_TAGS_V2 as readonly string[], trade.worked_tags)} value={worked}
+            onToggle={(tag) => toggleTag('worked', tag)} blocked={(tag) => tagBlocked(tag, { me, worked }, { decision, overTime: overTime(trade) })} data="worked" />
         </TagBlock>
+        {tagNote && <p className="text-[11.5px] md:col-span-3" style={{ color: 'rgb(var(--grade-b))' }} role="status" data-tag-note>{tagNote}</p>}
       </div>
 
       {/* Save, along the bottom. */}
@@ -900,9 +916,45 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   );
 }
 
+/**
+ * Tags as an even grid (positions matter: ME and WORKED mirror each other).
+ * A blocked tag is dimmed and says why; an auto tag is computed, never
+ * tapped, and shows lit when it applies.
+ */
+function TagGrid({ options, value, onToggle, blocked, cols, tone, auto = [], data }: {
+  options: readonly string[]; value: readonly string[]; onToggle: (tag: string) => void; blocked: (tag: string) => string | null;
+  cols: 2 | 3; tone: 'loss' | 'win' | 'market'; auto?: readonly string[]; data: string;
+}) {
+  const hue = tone === 'win' ? 'var(--outcome-win)' : tone === 'market' ? 'var(--amber)' : 'var(--outcome-loss)';
+  return (
+    <div className={`grid h-full auto-rows-fr gap-1.5 rounded-[calc(16px*var(--rk))] border p-2 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}
+      style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-tag-grid={data}>
+      {options.map((tag) => {
+        const on = value.includes(tag);
+        const isAuto = auto.includes(tag);
+        const why = on || isAuto ? null : blocked(tag);
+        return (
+          <button key={tag} type="button" disabled={isAuto} aria-pressed={on} data-tag={tag} data-blocked={why ? 'true' : undefined}
+            onClick={() => onToggle(tag)} title={isAuto ? 'Computed from Max R, the planned R and the exit — not tapped' : why ?? undefined}
+            className="relative flex min-h-[2.5rem] items-center justify-center rounded-[calc(11px*var(--rk))] border px-2 py-1.5 text-center text-[11.5px] leading-snug transition-colors"
+            style={{
+              borderColor: on ? `rgb(${hue} / 0.6)` : 'transparent',
+              background: on ? `rgb(${hue} / 0.12)` : 'transparent',
+              color: on ? `rgb(${hue})` : isAuto ? 'var(--text-faint)' : why ? 'var(--text-faint)' : 'var(--text-dim)',
+              opacity: why ? 0.55 : 1,
+            }}>
+            {tag}
+            {isAuto && <span className="absolute right-1 top-0.5 text-[8.5px] font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--text-faint)' }}>auto</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function TagBlock({ title, help, children }: { title: string; help?: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="flex flex-col">
       <span className="mb-1 flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>
         {title}{help && <Help>{help}</Help>}
       </span>

@@ -1,4 +1,4 @@
-import { HTF_ORIGINS, ROWS, gapOf, isRubricV2, overTime, type RowKey } from './decision';
+import { HTF_ORIGINS, MIRRORS, ROWS, gapOf, isRubricV2, overTime, type RowKey } from './decision';
 import type { Trade } from './types';
 
 /**
@@ -22,6 +22,8 @@ export interface DecisionStats {
   byGap: Array<{ key: 'one' | 'many'; label: string; count: number; taken: Cell }>;
   /** The HTF origin (047): the same, per origin. */
   byOrigin: Array<{ key: string; count: number; taken: Cell }>;
+  /** Each ME tag against its WORKED mirror: R per trade taken carrying one or the other. */
+  mirrors: Array<{ me: string; worked: string; me_cell: Cell; worked_cell: Cell }>;
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
@@ -72,5 +74,11 @@ export function decisionStats(trades: readonly Trade[]): DecisionStats {
     return { key, count: at.length, taken: cellOf(at.filter((t) => t.decision === 'take').map((t) => t.r_multiple)) };
   });
 
-  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, over, missed, median }, decisions, byGap, byOrigin };
+  const mirrors = MIRRORS.map(([me, worked]) => ({
+    me, worked,
+    me_cell: cellOf(taken.filter((t) => (t.mistake_tags ?? []).includes(me)).map((t) => t.r_multiple)),
+    worked_cell: cellOf(taken.filter((t) => (t.worked_tags ?? []).includes(worked)).map((t) => t.r_multiple)),
+  }));
+
+  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, over, missed, median }, decisions, byGap, byOrigin, mirrors };
 }

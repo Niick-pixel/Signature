@@ -239,18 +239,80 @@ export const needsOverride = (g: V2Grade): boolean => g.letter === 'No trade';
 /* ───────────────────────── the tags ───────────────────────── */
 
 /** What went wrong, me: execution and management only — every one a rule broken. */
+/*
+  The Step 2 tag row (rubric v2, second version). ME and WORKED are mirror
+  lists laid out on the same 3 × 4 grid: the tag at a position on one side is
+  the other side's opposite at that position. "Entered on the trigger close"
+  mirrors both entry mistakes (it sits beside "Entered late / chased"), and
+  "Decided within time" mirrors the decision "Missed — too slow", not a tag.
+*/
 export const ME_TAGS = [
-  'Entered late / chased', 'Entered before the close', 'Moved stop before BE trigger', 'Moved target (greed)',
-  'Cut winner early', 'Ignored kill switch', "Traded against today's plan", 'Oversized',
+  'Moved stop before BE trigger', 'Missed a level in prep', 'Forced a reversal after a big move',
+  'Same idea again after a loss', 'Stayed in after it stalled', 'Entered late / chased',
+  'Entered early (before close or open)', 'Greed on target (moved it / refused partial)', 'Stop inside an HTF zone',
+  "Traded against today's plan", 'No management plan before entry', 'Sized wrong',
+] as const;
+export const WORKED_TAGS_V2 = [
+  'Stop untouched until BE trigger', 'Every level marked in prep', 'Waited for a structure shift before reversing',
+  'After a loss, only a new setup', 'Exited when it stalled, per plan', 'Entered on the trigger close',
+  'Decided within time', 'Took partials as planned', 'Stop where the idea fails, beyond the zone',
+  "Followed today's plan", 'Management plan set before entry', 'Sized correctly',
+] as const;
+export type MeTag = (typeof ME_TAGS)[number];
+export type WorkedTagV2 = (typeof WORKED_TAGS_V2)[number];
+/** Each ME tag and the WORKED tag that is its opposite. */
+export const MIRRORS: ReadonlyArray<readonly [MeTag, WorkedTagV2]> = [
+  ['Moved stop before BE trigger', 'Stop untouched until BE trigger'],
+  ['Missed a level in prep', 'Every level marked in prep'],
+  ['Forced a reversal after a big move', 'Waited for a structure shift before reversing'],
+  ['Same idea again after a loss', 'After a loss, only a new setup'],
+  ['Stayed in after it stalled', 'Exited when it stalled, per plan'],
+  ['Entered late / chased', 'Entered on the trigger close'],
+  ['Entered early (before close or open)', 'Entered on the trigger close'],
+  ['Greed on target (moved it / refused partial)', 'Took partials as planned'],
+  ['Stop inside an HTF zone', 'Stop where the idea fails, beyond the zone'],
+  ["Traded against today's plan", "Followed today's plan"],
+  ['No management plan before entry', 'Management plan set before entry'],
+  ['Sized wrong', 'Sized correctly'],
+];
+/** The opposite of a tag on the other side, if it has one. */
+export function mirrorsOf(tag: string): string[] {
+  return MIRRORS.flatMap(([me, worked]) => (me === tag ? [worked] : worked === tag ? [me] : []));
+}
+/**
+ * Why a tag cannot be picked on this trade, or null. Its mirror already on
+ * the trade blocks it; "Decided within time" is blocked by a decision made
+ * past the clock or logged as missed.
+ */
+export function tagBlocked(tag: string, picked: { me: readonly string[]; worked: readonly string[] }, decision?: { decision?: string | null; overTime?: boolean }): string | null {
+  const clash = mirrorsOf(tag).find((m) => picked.me.includes(m) || picked.worked.includes(m));
+  if (clash) return `"${clash}" is on this trade — it is the opposite. Remove it first.`;
+  if (tag === 'Decided within time' && (decision?.decision === 'missed' || decision?.overTime)) return 'The decision came after the clock.';
+  return null;
+}
+/** ME tags of the first v2 list (046): retired, still a rule broken on the trades that carry them. */
+export const RETIRED_ME_TAGS = [
+  'Entered before the close', 'Moved target (greed)', 'Cut winner early', 'Ignored kill switch', 'Oversized',
   'Revenge / one more after a loss', 'Stop inside zone',
 ] as const;
-/** What went wrong, market: outside my control, never a rule broken. */
-export const MARKET_TAGS_V2 = ['Chop / no follow-through', 'News spike', 'Turned just short of target', 'Opposing HTF gap formed after entry'] as const;
-export const WORKED_TAGS_V2 = [
-  'Decided within time', 'Stop where the idea fails', 'Stop beyond the zone', 'Managed to plan',
-  'Took partials as planned', 'Let the runner run per plan', 'Respected the kill switch',
-  'Stopped at the daily limit', 'Sized correctly',
+export const RETIRED_WORKED_TAGS_V2 = [
+  'Stop where the idea fails', 'Stop beyond the zone', 'Managed to plan', 'Let the runner run per plan',
+  'Respected the kill switch', 'Stopped at the daily limit',
 ] as const;
+/** Every "me" tag a v2 trade can carry — what rules-followed and the review count. */
+export const ALL_ME_TAGS: readonly string[] = [...ME_TAGS, ...RETIRED_ME_TAGS];
+
+/** What went wrong, market: outside my control, never a rule broken. Four are tapped; two are computed. */
+export const MARKET_TAGS_V2 = ['Chop / no follow-through', 'One side in control all session', 'Opposing HTF gap formed after entry', 'News spike'] as const;
+export const AUTO_MARKET_TAGS = ['Turned just short of target', 'Failed immediately'] as const;
+/** The computed market tags: never tapped, written on save from Max R, the planned R and the exit. */
+export function autoMarketTags(t: { mfe_r?: number | null; planned_rr?: string | null; exit_reason?: string | null }): string[] {
+  const out: string[] = [];
+  const planned = plannedRNumber(t.planned_rr);
+  if (t.mfe_r != null && planned != null && t.mfe_r >= planned * 0.8 && t.exit_reason !== 'TP') out.push('Turned just short of target');
+  if (t.mfe_r != null && t.mfe_r < 0.3) out.push('Failed immediately');
+  return out;
+}
 /** On an older trade, these were execution and count as a rule broken in the weekly review. */
 export const OLD_EXECUTION_TAGS = ['Moved stop', 'Cut winner early', 'Oversized', 'Revenge', 'Chased', 'Overtraded'] as const;
 
@@ -270,7 +332,7 @@ export function rulesFollowedV2(t: {
 }, o: { maxRiskPct: number; dayBreaks?: readonly string[]; backtest: boolean }): RulesVerdict {
   const reasons: string[] = [];
   if (t.grade_override) reasons.push('Took it although the grade said no trade');
-  for (const tag of t.mistake_tags ?? []) if ((ME_TAGS as readonly string[]).includes(tag)) reasons.push(tag);
+  for (const tag of t.mistake_tags ?? []) if (ALL_ME_TAGS.includes(tag)) reasons.push(tag);
   if (t.risk_percent != null && t.risk_percent > o.maxRiskPct) reasons.push(`Risk over ${o.maxRiskPct}%`);
   if (!o.backtest) reasons.push(...(o.dayBreaks ?? []));
   return { followed: reasons.length === 0, reasons };
@@ -289,11 +351,7 @@ export function consistencyFlags(t: {
   if ((t.mistake_tags ?? []).includes('Moved stop before BE trigger') && t.reached_1r === true && beAt1R) {
     out.push('"Moved stop before BE trigger" — but the trade reached +1R, and the BE trigger was 1R.');
   }
-  const planned = plannedRNumber(t.planned_rr);
-  if ((t.market_tags ?? []).includes('Turned just short of target')) {
-    if (planned == null || t.mfe_r == null) out.push('"Turned just short of target" needs Max R and a planned R to check against.');
-    else if (t.mfe_r < planned * 0.8) out.push(`"Turned just short of target" — Max R ${t.mfe_r}R is under 80% of the planned ${planned}R.`);
-  }
+  // "Turned just short of target" is computed now (autoMarketTags), so it cannot contradict Max R.
   return out;
 }
 
