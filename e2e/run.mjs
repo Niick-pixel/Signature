@@ -488,6 +488,36 @@ await check('Rubric v2: Step 2 goes back to a read-only Step 1, and Close offers
   expect(!errors.length, errors.join(' | '));
 });
 
+await check('Rubric v2: click outside asks; re-scoring a row keeps the focus sane; the locked Step 1 keeps its chart area', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  // Untouched: a click on the tint closes.
+  await page.mouse.click(5, 600);
+  await page.waitForSelector('[data-decide-step]', { state: 'detached', timeout: 5000 });
+  await page.locator('[data-new-trade]:visible').click();
+  await page.waitForSelector('[data-decide-step]');
+  await page.keyboard.press('2');
+  await page.mouse.click(5, 600);
+  await page.waitForSelector('[data-close-dialog]');
+  await page.click('[data-close-action="keep"]');
+  await page.waitForSelector('[data-close-dialog]', { state: 'detached', timeout: 3000 });
+  // Sweep scored by key; change Sweep by mouse: the focus goes to the next unscored row (Inversion), not past it.
+  await page.locator('[data-row="row_sweep"] [data-pick="1"]').click();
+  expect(await page.locator('[data-row="row_inversion"][data-focused]').count() === 1, 'focus on the next unscored row');
+  await page.locator('[data-row="row_target"] [data-pick="2"]').click();
+  expect(await page.locator('[data-row="row_inversion"][data-focused]').count() === 1, 'scoring a later row sends the focus back to the open one');
+  for (const k of ['2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  expect(await page.locator('[data-outcome-step] [data-shot-slots]').count() === 0, 'no charts on Step 2');
+  await page.click('[data-back]');
+  await page.waitForSelector('[data-locked-step1] [data-shot-slots]');
+  const h = await page.locator('[data-locked-step1] [data-trade-charts]').evaluate((el) => el.getBoundingClientRect().height);
+  expect(h > 200, `the chart area is there (${h}px)`);
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
 await check('Trades: unfinished trades wait on their own shelf; deleting one asks only for DELETE', async () => {
   const { page, errors } = await openNewTrade();
   for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);

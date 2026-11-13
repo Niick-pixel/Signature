@@ -12,7 +12,8 @@ const KEEP_KEY = 'signature:session-keep-going';
  * W/L, R, rule breaks) and, when the session has run long or the rules are
  * slipping, a suggestion to stop — with "Keep going". Never a lock.
  */
-export function SessionTally() {
+/** `inline`: one row, left-aligned, for a header strip. */
+export function SessionTally({ inline = false }: { inline?: boolean } = {}) {
   const [t, setT] = useState<Tally | null>(null);
   const [kept, setKept] = useState(() => { try { return window.sessionStorage.getItem(KEEP_KEY) === localDay(); } catch { return false; } });
   const live = useLiveTick();
@@ -24,7 +25,7 @@ export function SessionTally() {
   if (!t || t.trades === 0) return null;
   const why = kept ? null : stopSuggestion(t, new Date().getHours());
   return (
-    <div className="flex min-w-0 flex-1 flex-col items-center gap-1 pt-1" data-session-tally={t.trades}>
+    <div className={inline ? 'flex min-w-0 flex-wrap items-center gap-2' : 'flex min-w-0 flex-1 flex-col items-center gap-1 pt-1'} data-session-tally={t.trades}>
       <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] tabular-nums"
         style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
         <b style={{ color: 'rgb(var(--accent))' }}>Session</b>

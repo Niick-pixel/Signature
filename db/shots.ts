@@ -35,6 +35,15 @@ export function shotsForMany(ids: string[]): Map<string, TradeShot[]> {
   return out;
 }
 
+/**
+ * A trade saved without a chart (a rubric v2 decision, charts added later
+ * from Step 1) takes its first added image as its own screenshot_path too —
+ * the image the list, the board and the exports show.
+ */
+export function promoteFirstShot(tradeId: string, path: string): void {
+  getDb().prepare("UPDATE trades SET screenshot_path = ? WHERE id = ? AND (screenshot_path IS NULL OR screenshot_path = '')").run(path, tradeId);
+}
+
 export function addShot(tradeId: string, path: string, slot: ShotSlot): TradeShot {
   const db = getDb();
   const next = (db

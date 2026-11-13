@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { addShot, removeShot, setShotSlot, shotsFor } from '@/db/shots';
+import { addShot, promoteFirstShot, removeShot, setShotSlot, shotsFor } from '@/db/shots';
 import { getTrade } from '@/db/trades';
 import { saveScreenshot } from '@/db/screenshots';
 import { SHOT_SLOTS, type ShotSlot } from '@/lib/domain';
@@ -23,7 +23,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       return NextResponse.json({ error: 'No image supplied.' }, { status: 400 });
     }
     const path = await saveScreenshot(image);
-    return NextResponse.json(addShot(id, path, readSlot(form.get('slot'))), { status: 201 });
+    const shot = addShot(id, path, readSlot(form.get('slot')));
+    promoteFirstShot(id, path);
+    return NextResponse.json(shot, { status: 201 });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Could not add the image.' }, { status: 400 });

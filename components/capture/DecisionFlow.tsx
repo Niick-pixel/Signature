@@ -15,6 +15,7 @@ import { SimilarCard, type SimilarResult } from './SetupAnatomy';
 import { SessionTally } from './SessionTally';
 import { PathBanner } from '@/components/path/PathBanner';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
+import { CAPTURE_OUTSIDE } from './CaptureSheet';
 import { closeCapture } from '@/lib/nav';
 import { clearCarry, readCarry, writeCarry } from '@/lib/backtestSession';
 import { press, spring, springSoft, riseIn } from '@/lib/motion';
@@ -175,8 +176,16 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   ];
   const optional = [leg ? null : 'leg location', htfOrigin ? null : 'HTF origin', target ? null : 'target', entry ? null : 'entry', confidence ? null : 'confidence'].filter(Boolean) as string[];
 
+  // Scoring a row moves the focus to the next row still unscored (in key order, wrapping); when every
+  // row is scored it stays put. Re-scoring an earlier row therefore never drags the focus somewhere odd.
   const score = useCallback((key: RowKey, v: 0 | 1 | 2) => {
-    setRows((r) => ({ ...r, [key]: v }));
+    setRows((r) => {
+      const next = { ...r, [key]: v };
+      const at = ROWS.findIndex((x) => x.key === key);
+      const open = [...ROWS.slice(at + 1), ...ROWS.slice(0, at)].find((x) => next[x.key] == null);
+      setFocus(open ? ROWS.findIndex((x) => x.key === open.key) : at);
+      return next;
+    });
     setScoredAt((s) => ({ ...s, [key]: Date.now() }));
   }, []);
 
@@ -251,6 +260,11 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   const touched = Object.keys(rows).length > 0 || gap != null || htfOrigin != null || direction != null || picked != null || leg != null || target != null
     || entry != null || plannedR != null || confidence != null || Object.values(slots).some(Boolean);
   const requestClose = useCallback(() => { if (touched) setClosing(true); else closeCapture(); }, [touched]);
+  useEffect(() => {
+    const on = () => { if (!done.current) requestClose(); };
+    window.addEventListener(CAPTURE_OUTSIDE, on);
+    return () => window.removeEventListener(CAPTURE_OUTSIDE, on);
+  }, [requestClose]);
 
   // Keyboard: 0/1/2 score the focused row and move on; ↑ ↓ move; L/S direction; A/B/U scenario; T take; P pass.
   // In the capture phase, before the app's own single-key shortcuts (which would navigate away mid-decision);
@@ -273,7 +287,6 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       if (k === '0' || k === '1' || k === '2') {
         e.preventDefault();
         score(ROWS[focus].key, Number(k) as 0 | 1 | 2);
-        setFocus((f) => Math.min(ROWS.length - 1, f + 1));
       } else if (k === 'arrowdown') { e.preventDefault(); setFocus((f) => Math.min(ROWS.length - 1, f + 1)); }
       else if (k === 'arrowup') { e.preventDefault(); setFocus((f) => Math.max(0, f - 1)); }
       else if (k === 'g') setGap((v) => (v === true ? false : true));
@@ -292,8 +305,8 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
 
   return (
     <div data-decide-step className="flex flex-1 flex-col">
-      {/* Header: the step, the clock and the grade, side by side; the Path and close on the right. */}
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+      {/* Header: the step on the left; the clock, the grade and Close together on the right. */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold">New trade <span className="text-[13px] font-medium" style={faint}>· Step 1 of 2 — Decide</span></h1>
           <p className="mt-0.5 text-[12.5px]" style={dim}>
@@ -303,13 +316,11 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
         <div className="flex items-center gap-3">
           <Timer timed={timed} left={c.left} elapsed={c.elapsed} limit={limit} tone={c.tone} expired={expired} over={c.over} />
           <GradeChip grade={grade} />
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          {backtest && <SessionTally />}
-          <PathBanner compact />
-          <CloseButton onClick={requestClose} title="Close (Esc) — asks first if anything is entered" />
+          <CloseButton onClick={requestClose} title="Close (Esc, or click outside) — asks first if anything is entered" />
         </div>
       </div>
+      {/* The session's running tally and the Path: one thin strip under the title. */}
+      <HeaderStrip backtest={backtest} />
 
       {/* Fields and rows keep their own size; only the chart grows, so the card reaches the bottom without stretched boxes. */}
       {/* Column 1: the facts. Columns 2 and 3: the four rows, two each (Sweep and Inversion, then Path and Target),
@@ -366,7 +377,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
           {ROWS.map((r, i) => (
             <RubricRow key={r.key} row={r} value={rows[r.key] ?? null} focused={focus === i} flash={flashing && rows[r.key] == null}
               late={timed && scoredAt[r.key] != null && scoredAt[r.key]! > startedAt + limit * 1000}
-              onFocus={() => setFocus(i)} onPick={(v) => { score(r.key, v); setFocus(Math.min(ROWS.length - 1, i + 1)); }} />
+              onFocus={() => setFocus(i)} onPick={(v) => score(r.key, v)} />
           ))}
         </div>
 
@@ -432,6 +443,15 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
           { label: 'Discard', danger: true, data: 'discard', onClick: () => closeCapture() },
           { label: 'Keep deciding', data: 'keep', onClick: () => setClosing(false) },
         ]} />
+    </div>
+  );
+}
+
+function HeaderStrip({ backtest }: { backtest: boolean }) {
+  return (
+    <div className="mb-4 mt-2 flex min-h-[1.75rem] flex-wrap items-center gap-2" data-header-strip>
+      {backtest && <SessionTally inline />}
+      <PathBanner compact />
     </div>
   );
 }
@@ -505,10 +525,10 @@ function RubricRow({ row, value, focused, late, onFocus, onPick, flash = false, 
   const required = value == null && !readOnly;
   const tone = (v: 0 | 1 | 2) => (v === 2 ? 'rgb(var(--grade-a))' : v === 1 ? 'rgb(var(--grade-b))' : 'rgb(var(--grade-f))');
   return (
-    <div onMouseDown={onFocus} data-row={row.key} data-focused={focused || undefined} data-score={value ?? ''}
+    <div data-row={row.key} data-focused={focused || undefined} data-score={value ?? ''}
       className={`rounded-[calc(16px*var(--rk))] border p-2.5 transition-colors ${flash ? 'need-flash' : ''}`}
-      style={{ borderColor: focused ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: focused ? 'rgb(var(--accent) / 0.05)' : 'var(--glass-fill)' }}>
-      <div className="mb-1.5 flex items-center justify-between px-1">
+      style={{ borderColor: focused ? 'rgb(var(--accent) / 0.6)' : 'var(--glass-stroke)', background: 'var(--glass-fill)', boxShadow: focused ? '0 0 0 1px rgb(var(--accent) / 0.25)' : undefined }}>
+      <div className="mb-1.5 flex cursor-pointer items-center justify-between px-1" onClick={onFocus} title="Focus this row for the 0 / 1 / 2 keys">
         <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: focused || required ? 'rgb(var(--accent))' : 'var(--text-faint)' }}>
           {required && <span aria-hidden className="size-1.5 rounded-full" style={{ background: 'rgb(var(--accent))' }} />}
           {row.label}
@@ -549,6 +569,13 @@ function DecideButton({ label, k, tone, disabled, onClick, data }: { label: stri
 
 const ENDED = ['Win', 'Partial win', 'Loss', 'Breakeven', 'Scratched'] as const;
 type Ended = (typeof ENDED)[number];
+const ENDED_MEANS: Record<Ended, string> = {
+  Win: 'Closed in profit at or past the plan.',
+  'Partial win': 'In profit, but partials or an early exit left part of the plan on the table.',
+  Loss: 'Stopped out, or closed at a loss.',
+  Breakeven: 'Stopped at breakeven, after the stop was moved to entry.',
+  Scratched: 'Closed by hand around entry (about 0R) before the stop or the target — the idea was gone, so you got out flat.',
+};
 const V2_MANAGEMENTS = MANAGEMENTS.filter((m) => m !== 'Other');
 const num = (s: string) => (s.trim() === '' || !Number.isFinite(Number(s)) ? null : Number(s));
 
@@ -576,7 +603,6 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const [drillKey, setDrillKey] = useState<string | null>(trade.drill_key ?? null);
   const [drillKept, setDrillKept] = useState<DrillKept | null>(trade.drill_kept ?? null);
   const [stage, setStage] = useState<'Live' | 'Settled'>(trade.status === 'Live' && !trade.outcome_at ? 'Settled' : (trade.status === 'Live' ? 'Live' : 'Settled'));
-  const [slots, setSlots] = useState<SlotFiles>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
@@ -613,10 +639,14 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   ];
 
   // What has been written since the form opened: closing then asks.
-  const snapshot = JSON.stringify([ended, r, pnl, contracts, mfe, reached1R, exit, management, wouldR, wouldMfe, explanation, lesson, me, market, worked, regrade, stage, drillKept, Object.values(slots).filter(Boolean).length]);
+  const snapshot = JSON.stringify([ended, r, pnl, contracts, mfe, reached1R, exit, management, wouldR, wouldMfe, explanation, lesson, me, market, worked, regrade, stage, drillKept]);
   const [initial] = useState(snapshot);
   const dirty = snapshot !== initial;
   const requestClose = useCallback(() => { if (dirty) setClosing(true); else closeCapture(); }, [dirty]);
+  useEffect(() => {
+    window.addEventListener(CAPTURE_OUTSIDE, requestClose);
+    return () => window.removeEventListener(CAPTURE_OUTSIDE, requestClose);
+  }, [requestClose]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || closing || document.querySelector('[role="listbox"]')) return;
@@ -657,20 +687,13 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       // Step 2 is written once settled; a trade still open stays pending.
       outcome_at: draft ? (trade.outcome_at ?? null) : settled ? (trade.outcome_at ?? new Date().toISOString()) : null,
     };
+    // Charts live on Step 1 (added there, before or after the decision); Step 2 writes only the outcome.
     const body = new FormData();
-    const firstShot = SHOT_SLOTS.find((s) => slots[s]) ?? null;
-    // The trade's first chart, when Step 1 had none; any other goes beside it.
-    if (firstShot && !trade.screenshot_path) body.append('screenshot', slots[firstShot]!);
     body.append('trade', JSON.stringify(payload));
     try {
       const res = await fetch(`/api/trades/${trade.id}`, { method: 'PUT', body });
       const text = await res.text();
       if (!res.ok) { let msg = text.slice(0, 300); try { msg = JSON.parse(text).error ?? msg; } catch { /* raw */ } throw new Error(msg); }
-      for (const s of SHOT_SLOTS) {
-        if (!slots[s] || (s === firstShot && !trade.screenshot_path)) continue;
-        const f = new FormData(); f.append('screenshot', slots[s]!); f.append('slot', s);
-        await fetch(`/api/trades/${trade.id}/shots`, { method: 'POST', body: f }).catch(() => {});
-      }
       window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: trade.id }));
       if (next && onNext) {
         writeCarry({ account: trade.account, accountLabel: trade.account_label ?? '', instrument: trade.instrument, session: trade.session, setupType: trade.setup_type, management, reason: trade.reason });
@@ -686,7 +709,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
 
   return (
     <div data-outcome-step data-decision={decision} className="flex flex-1 flex-col">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold">{first ? 'New trade' : 'Edit trade'} <span className="text-[13px] font-medium" style={faint}>· Step 2 of 2 — Outcome</span></h1>
           <p className="mt-0.5 text-[12.5px]" style={dim}>
@@ -694,8 +717,6 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          {backtest && <SessionTally />}
-          <PathBanner compact />
           <motion.button type="button" onClick={onBack} whileTap={press} transition={spring} data-back title="Step 1, as it was locked"
             className="rounded-full border px-3 py-1.5 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
             ← Step 1
@@ -707,9 +728,10 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               Finish later
             </motion.button>
           )}
-          <CloseButton onClick={requestClose} title="Close (Esc) — asks first if anything was written" />
+          <CloseButton onClick={requestClose} title="Close (Esc, or click outside) — asks first if anything was written" />
         </div>
       </div>
+      <HeaderStrip backtest={backtest} />
 
       {/* Three equal columns: the locked decision, how it ended, the words. The tags run below them, then Save. */}
       <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
@@ -765,7 +787,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               </Field>
               {stage === 'Settled' && (
                 <Field quiet label="How it ended" group required={!ended} className={flashing && !ended ? 'need-flash' : ''}>
-                  <Segmented value={ended ?? ('' as Ended)} onChange={setEnded} options={ENDED} accentFor={endedTone} />
+                  <Segmented value={ended ?? ('' as Ended)} onChange={setEnded} options={ENDED} accentFor={endedTone} titleFor={(e) => ENDED_MEANS[e]} />
                 </Field>
               )}
               <div className="grid grid-cols-3 gap-3">
@@ -799,11 +821,6 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               </div>
             </div>
           )}
-          <div className="flex min-h-0 flex-1 flex-col">
-            <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>Charts · entry and result</span>
-            <div className="min-h-0 flex-1"><ShotSlots files={slots} onChange={setSlots} grow /></div>
-            {trade.screenshot_path && <p className="mt-1 text-[10.5px]" style={faint}>A chart from Step 1 is on the trade; paste more and they join it.</p>}
-          </div>
         </div>
 
         {/* The words, and what they add up to. */}
@@ -961,6 +978,52 @@ function CloseDialog({ open, title, body, actions, onCancel }: {
 
 /* ═════════════════════════ Step 1, locked ═════════════════════════ */
 
+/**
+ * The charts on a decided trade, on Step 1 where they belong: the saved ones
+ * as thumbnails, and the paste area for more. A pasted chart is added at
+ * once (the first becomes the trade's own chart when it had none).
+ */
+function TradeCharts({ tradeId }: { tradeId: string }) {
+  const [saved, setSaved] = useState<Array<{ id: string; path: string; slot: string }>>([]);
+  const [files, setFiles] = useState<SlotFiles>({});
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    void fetch(`/api/trades/${tradeId}/shots`).then((r) => (r.ok ? r.json() : [])).then(setSaved).catch(() => {});
+  }, [tradeId]);
+  useEffect(() => { load(); }, [load]);
+  const add = async (next: SlotFiles) => {
+    setFiles(next);
+    const fresh = SHOT_SLOTS.filter((s) => next[s] && next[s] !== files[s]);
+    if (!fresh.length) return;
+    setBusy(true);
+    for (const s of fresh) {
+      const f = new FormData(); f.append('screenshot', next[s]!); f.append('slot', s);
+      await fetch(`/api/trades/${tradeId}/shots`, { method: 'POST', body: f }).catch(() => {});
+    }
+    setBusy(false);
+    setFiles({});
+    load();
+    window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: tradeId }));
+  };
+  return (
+    <div className="flex min-h-[14rem] flex-1 flex-col gap-2" data-trade-charts={saved.length}>
+      {saved.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {saved.map((s) => (
+            <a key={s.id} href={`/api/screenshots/${s.path}`} target="_blank" rel="noreferrer" className="relative block overflow-hidden rounded-[calc(12px*var(--rk))] border"
+              style={{ borderColor: 'var(--glass-stroke)' }} title={`${s.slot} — open full size`}>
+              <img src={`/api/screenshots/${s.path}?w=480`} alt={`${s.slot} chart`} className="aspect-[16/10] w-full object-cover" />
+              <span className="absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 text-[10.5px]" style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}>{s.slot}</span>
+            </a>
+          ))}
+        </div>
+      )}
+      <div className="min-h-0 flex-1"><ShotSlots files={files} onChange={(n) => void add(n)} grow /></div>
+      {busy && <p className="text-[11px]" style={faint}>Adding…</p>}
+    </div>
+  );
+}
+
 const noop = () => {};
 
 /**
@@ -984,6 +1047,7 @@ function LockedStep1({ trade, onForward }: { trade: Trade; onForward: () => void
             {' '}· nothing here can change.
           </p>
         </div>
+        <div className="flex items-center gap-3">
         <div className="rounded-[calc(16px*var(--rk))] border px-3 py-2" style={{ borderColor: `color-mix(in srgb, ${LETTER_TONE[letter]} 45%, transparent)`, background: `color-mix(in srgb, ${LETTER_TONE[letter]} 9%, transparent)` }}>
           <span className="text-[24px] font-semibold leading-none" style={{ color: LETTER_TONE[letter] }}>{letter}</span>
           <span className="ml-2 text-[12px] tabular-nums" style={faint}>{g.total}/8 · v2</span>
@@ -993,10 +1057,11 @@ function LockedStep1({ trade, onForward }: { trade: Trade; onForward: () => void
           className="rounded-full px-4 py-1.5 text-[12.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
           Step 2 →
         </motion.button>
+        </div>
       </div>
 
-      <div className="pointer-events-none grid flex-1 items-start gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]" aria-readonly>
-        <div className="flex flex-col gap-4">
+      <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
+        <div className="pointer-events-none flex flex-col gap-4" aria-readonly>
           <div className="grid grid-cols-2 gap-3">
             <Field quiet label="Account"><Select value={trade.account} onChange={noop} options={[trade.account]} labelFor={(a) => accountLabel(a as Account)} disabled /></Field>
             <Field quiet label="Instrument"><Select value={trade.instrument} onChange={noop} options={[trade.instrument]} disabled /></Field>
@@ -1015,7 +1080,8 @@ function LockedStep1({ trade, onForward }: { trade: Trade; onForward: () => void
           <Field quiet label="Planned R" group><Segmented value={trade.planned_rr ?? ''} onChange={noop} options={V2_PLANNED_RS} labelFor={(v) => `${v}R`} accentFor={plannedRTone} /></Field>
           <Field quiet label="Confidence" group><Segmented value={trade.confidence_at_entry ? String(trade.confidence_at_entry) : ''} onChange={noop} options={CONFIDENCES} accentFor={confidenceTone} /></Field>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
+        <div className="pointer-events-none flex flex-col gap-4" aria-readonly>
         <GateBar value={gapOf(trade.singular_gap)} onChange={noop} readOnly />
         <div className="grid gap-3 xl:grid-flow-col xl:grid-cols-2 xl:grid-rows-2">
           {ROWS.map((r) => (
@@ -1023,6 +1089,9 @@ function LockedStep1({ trade, onForward }: { trade: Trade; onForward: () => void
               late={(trade.late_rows ?? []).includes(r.key)} />
           ))}
         </div>
+        </div>
+        {/* The charts stay on Step 1: the ones saved, and room to add more — the decision above stays locked. */}
+        <TradeCharts tradeId={trade.id} />
         </div>
       </div>
     </div>

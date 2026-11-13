@@ -19,6 +19,13 @@ import { EASE_BOUNCE, EASE_SOFT } from '@/lib/motion';
 /** True inside the sheet: it plays the entrance, so the form must not play its own. */
 export const InCaptureSheet = createContext(false);
 
+/**
+ * A click on the tint around the form. The form open in the sheet decides
+ * what that means (the two-step form asks before closing, like its Close
+ * button); with no listener, nothing happens.
+ */
+export const CAPTURE_OUTSIDE = 'signature:capture-outside';
+
 export function CaptureSheet({ children }: { children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
 
@@ -41,13 +48,18 @@ export function CaptureSheet({ children }: { children: ReactNode }) {
     <div
       ref={root}
       data-capture-root
+      onMouseDown={(e) => {
+        // Only the tint itself or the empty column around the card — never a click inside it.
+        const el = e.target as HTMLElement;
+        if (el === e.currentTarget || el.dataset.captureColumn != null) window.dispatchEvent(new CustomEvent(CAPTURE_OUTSIDE));
+      }}
       className="fixed inset-x-0 bottom-0 top-11 z-[55] overflow-y-auto"
       // A tint of the ground, not a backdrop blur: the board stays visibly
       // there behind the form, and nothing has to be re-blurred per frame.
       style={{ background: 'color-mix(in srgb, var(--bg) 74%, transparent)' }}
     >
       {/* Same column as the full page (app/new/page.tsx) — see the note there. */}
-      <div className="mx-auto w-full max-w-[var(--page-form)] px-4 pb-20 pt-4 sm:px-6 lg:pb-4">
+      <div className="mx-auto w-full max-w-[var(--page-form)] px-4 pb-20 pt-4 sm:px-6 lg:pb-4" data-capture-column>
         <InCaptureSheet.Provider value>{children}</InCaptureSheet.Provider>
       </div>
     </div>
