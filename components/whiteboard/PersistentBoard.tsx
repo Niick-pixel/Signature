@@ -55,7 +55,7 @@ export function PersistentBoard() {
   useEffect(() => {
     if (trades) return;
     let cancelled = false;
-    const load = () => { fetch('/api/trades').then((r) => (r.ok ? r.json() : null)).then((t) => { if (!cancelled && t) setTrades(t); }).catch(() => {}); };
+    const load = () => { fetch('/api/trades?pending=1').then((r) => (r.ok ? r.json() : null)).then((t) => { if (!cancelled && t) setTrades(t); }).catch(() => {}); };
     if (visible) { load(); return () => { cancelled = true; }; }
     if ('requestIdleCallback' in window) {
       const id = window.requestIdleCallback(load, { timeout: 3000 });

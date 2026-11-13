@@ -67,7 +67,7 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
   const [seen, setSeen] = useState(initial);
   if (seen !== initial) { setSeen(initial); setTrades(initial); }
   const refresh = useCallback(async () => {
-    const res = await fetch('/api/trades');
+    const res = await fetch('/api/trades?pending=1');
     if (res.ok) setTrades(await res.json());
   }, []);
   // A save anywhere (New trade over the board, an edit, a delete) shows up here.

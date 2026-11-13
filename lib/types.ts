@@ -459,6 +459,12 @@ export interface TradeFilters {
   statuses?: TradeStatus[];
   /** 'live' (default) hides soft-deleted rows; 'trash' shows only those. */
   bin?: 'live' | 'trash' | 'all';
+  /**
+   * Rubric v2 (046): a decided trade whose outcome is not written yet is left
+   * out of every list by default — it has no result to count. The Trades list,
+   * the export and the trade's own page ask for it with `pending: true`.
+   */
+  pending?: boolean;
 }
 
 /**

@@ -8,6 +8,10 @@ import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { TRADE_SECTIONS, TRADE_SECTION_LABEL, type Preferences } from '@/lib/preferences';
 import { PLATFORMS, PLATFORM_LABEL, SOURCE_ZONES, SOURCE_ZONE_LABEL } from '@/lib/executions';
 
+import { accountLabel } from '@/lib/domain';
+
+const DECISION_ACCOUNTS = ['Backtest (FX Replay)', 'Demo', 'Live', 'Eval', 'Funded'] as const;
+
 type SectionComp = (p: { title: string; hint?: string; children: React.ReactNode }) => React.ReactElement;
 
 /** Settings → Trade page and Executions import (Phase 2). */
@@ -15,6 +19,23 @@ export function TradeSettings({ Section }: { Section: SectionComp }) {
   const { prefs, update } = usePreferences();
   return (
     <>
+      <Section title="New trade: the decision" hint="Step 1 scores four rows and asks Take or Pass against a clock, to train deciding at the candle close. Untimed accounts get the same step without the clock (trades logged after they end).">
+        <div className="space-y-3" data-settings="decision">
+          <Labeled label="Time to decide">
+            <Segmented<string> value={String(prefs.decisionSeconds)} onChange={(v) => update({ decisionSeconds: Number(v) })}
+              options={['20', '30', '40', '60', '90']} labelFor={(v) => `${v} s`} />
+          </Labeled>
+          <Labeled label="Timed decision, per account">
+            <div className="flex flex-wrap gap-2">
+              {DECISION_ACCOUNTS.map((a) => (
+                <TogglePill key={a} checked={prefs.timedDecision[a] ?? false} label={accountLabel(a)}
+                  onChange={(on) => update({ timedDecision: { ...prefs.timedDecision, [a]: on } })} />
+              ))}
+            </div>
+          </Labeled>
+        </div>
+      </Section>
+
       <Section title="Trade page" hint="Every trade on its own page: the numbers, the plan and confluences, the fills, the chart and the screenshots. ← and → walk through trades; E edits.">
         <div className="space-y-3" data-settings="trade-page">
           <Labeled label="Open a trade from the Dashboard and the Today panel on">

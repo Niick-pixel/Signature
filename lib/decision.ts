@@ -276,3 +276,25 @@ export function consistencyFlags(t: {
   }
   return out;
 }
+
+/* ───────────────────────── facts, inferred ───────────────────────── */
+
+/**
+ * The session a clock time falls in, New York time: Asia 18:00–02:00, London
+ * 02:00–08:30, NY AM 08:30–12:00, NY Lunch 12:00–13:30, NY PM 13:30–18:00.
+ * For a trade logged as it happens; a backtest keeps its replay's session.
+ */
+export function sessionAtNy(minutes: number): 'Asia' | 'London' | 'NY AM' | 'NY Lunch' | 'NY PM' {
+  if (minutes >= 18 * 60 || minutes < 2 * 60) return 'Asia';
+  if (minutes < 8 * 60 + 30) return 'London';
+  if (minutes < 12 * 60) return 'NY AM';
+  if (minutes < 13 * 60 + 30) return 'NY Lunch';
+  return 'NY PM';
+}
+
+/** The scenario the morning plan names for this direction, when exactly one of its plans goes that way. */
+export function scenarioFromPlan(direction: string | null, plans: { aDir: string | null; bDir: string | null } | null): Scenario | null {
+  if (!direction || !plans) return null;
+  const a = plans.aDir === direction; const b = plans.bDir === direction;
+  return a && !b ? 'A' : b && !a ? 'B' : null;
+}

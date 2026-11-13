@@ -366,6 +366,9 @@ function readTrades(filters: TradeFilters): Trade[] {
   if (filters.minGrade != null) { where.push('COALESCE(score_at_entry, checklist_score) >= @minGrade'); params.minGrade = filters.minGrade; }
   if (filters.maxGrade != null) { where.push('COALESCE(score_at_entry, checklist_score) <= @maxGrade'); params.maxGrade = filters.maxGrade; }
 
+  // A decided trade still owing its outcome (Step 2) counts nowhere until it has one.
+  if (!filters.pending) where.push('NOT (decision IS NOT NULL AND outcome_at IS NULL)');
+
   // Soft-deleted trades are hidden everywhere unless the Trash asks for them.
   const bin = filters.bin ?? 'live';
   if (bin === 'live') where.push('deleted_at IS NULL');

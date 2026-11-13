@@ -143,7 +143,7 @@ ${body}
  * and neither is one that restores the trades but forgets where the account was.
  */
 export async function GET() {
-  const trades = listTrades({ bin: 'all' });
+  const trades = listTrades({ bin: 'all', pending: true });
   const cash = listCashEvents();
   const journal = listJournalPages();
   /*

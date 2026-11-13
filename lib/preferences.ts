@@ -77,6 +77,10 @@ export interface Preferences {
   tradeSections: Record<TradeSection, boolean>;
   /** Minutes of chart shown before entry and after exit. */
   chartPad: 15 | 30 | 60 | 120;
+  /** Rubric v2: seconds Step 1 gives to decide. */
+  decisionSeconds: number;
+  /** Rubric v2: the clock per account. On for backtests; off where trades are logged after they end. */
+  timedDecision: Record<string, boolean>;
   /** How the whiteboard arranges its groups (lib/layout ARRANGEMENTS). */
   boardArrangement: 'grid' | 'orbit' | 'sizes' | 'columns';
   /** Executions import: the platform (or detect), the clock its file is written in, and how to match. */
@@ -291,6 +295,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   openTradeIn: 'page',
   tradeSections: { metrics: true, chips: true, chart: true, executions: true, shots: true, rules: true, notes: true },
   chartPad: 30,
+  decisionSeconds: 40,
+  timedDecision: { 'Backtest (FX Replay)': true, Demo: false, Live: false, Eval: false, Funded: false },
   boardArrangement: 'grid',
   importPlatform: 'auto',
   importZone: 'journal',
@@ -389,6 +395,8 @@ export function readPreferences(): Preferences {
       dashRow: saved.processRowAdded ? parseDashRow(saved.dashRow, saved.dashBlocks) : withProcess(parseDashRow(saved.dashRow, saved.dashBlocks)),
       processRowAdded: true,
       scoreAxes: { ...DEFAULT_PREFERENCES.scoreAxes, ...(saved.scoreAxes ?? {}) },
+      timedDecision: { ...DEFAULT_PREFERENCES.timedDecision, ...(saved.timedDecision ?? {}) },
+      decisionSeconds: typeof saved.decisionSeconds === 'number' && saved.decisionSeconds >= 10 && saved.decisionSeconds <= 300 ? saved.decisionSeconds : DEFAULT_PREFERENCES.decisionSeconds,
       sidebarSections: { ...DEFAULT_PREFERENCES.sidebarSections, ...(saved.sidebarSections ?? {}) },
       tradeSections: { ...DEFAULT_PREFERENCES.tradeSections, ...(saved.tradeSections ?? {}) },
       // The first version's sources: classic → quotes, both → traders and tips.

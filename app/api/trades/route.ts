@@ -27,6 +27,8 @@ export async function GET(request: Request) {
     sessions: list('session') as Session[],
     minGrade: int('minGrade'),
     maxGrade: int('maxGrade'),
+    // The Trades list shows decided trades still owing their outcome (?pending=1); every count leaves them out.
+    pending: q.get('pending') === '1' || undefined,
   }));
 }
 
