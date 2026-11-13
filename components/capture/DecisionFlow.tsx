@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { Select } from '@/components/ui/Select';
 import { Segmented } from '@/components/ui/Segmented';
 import { Field, Input } from '@/components/ui/Field';
 import { Help } from '@/components/ui/Help';
-import { dialogIsOpen } from '@/components/ui/Overlay';
 import { Button } from '@/components/ui/Button';
 import { ShotSlots, type SlotFiles } from './ShotSlots';
 import { ExplanationField } from './ExplanationField';
@@ -309,13 +308,17 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
   // Keyboard: 0/1/2 score the focused row and move on; ↑ ↓ move; L/S direction; A/B/U scenario; T take; P pass.
   // In the capture phase, before the app's own single-key shortcuts (which would navigate away mid-decision);
   // every other single key is swallowed while Step 1 is open, for the same reason.
-  useEffect(() => {
+  // A layout effect: the listener is on before Step 1 is painted. A passive effect can run after the
+  // paint on a slow machine, and the first keys typed at a Step 1 already on screen went nowhere.
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
-      // A dialog over Step 1 (the plan view, Amend, Next replay day) owns the keys while it is open.
-      if (document.documentElement.dataset.menuOpen || closing || freshAsk || gate || planning || dialogIsOpen()) return;
+      // A dialog over Step 1 (the plan view, Amend, Next replay day) owns the keys while it is open. It says
+      // so itself (dataset.replayDialog, as a dropdown sets menuOpen): asking the page for "any dialog"
+      // also caught one fading out on a slow machine and dropped the first keys of a fresh Step 1.
+      if (document.documentElement.dataset.menuOpen || document.documentElement.dataset.replayDialog || closing || freshAsk || gate || planning) return;
       const k = e.key.toLowerCase();
       const ours = asking ? ['enter', 't', 'escape'] : ['0', '1', '2', 'arrowdown', 'arrowup', 'l', 's', 'a', 'b', 'u', 'g', 'h', 't', 'p', 'm', 'escape'];
       if (ours.includes(k) || e.key.length === 1) { e.stopPropagation(); if (k !== 'escape') e.preventDefault(); }

@@ -378,6 +378,13 @@ export function ReplayDayControl({ instrument, onPlanned }: { instrument?: strin
   const [amending, setAmending] = useState(false);
   const [closing, setClosing] = useState(false);
   const [viewing, setViewing] = useState(false);
+  // While one of these is open over Step 1, its keys are the dialog's (DecisionFlow reads this).
+  const anyOpen = building || amending || closing || viewing;
+  useEffect(() => {
+    if (!anyOpen) return;
+    document.documentElement.dataset.replayDialog = '1';
+    return () => { delete document.documentElement.dataset.replayDialog; };
+  }, [anyOpen]);
   if (!state) return null;
   const d = state.active;
   const chip = 'rounded-full border px-3 py-1 text-[11.5px]';
