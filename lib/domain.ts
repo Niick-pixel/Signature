@@ -71,12 +71,14 @@ export const TARGET_TYPES = [
   'HTF FVG (1H/4H)',
   'ITH/ITL',
   'LRLR (trendline)',
+  // 050: a 1H+ swing that started a displacement leg, still untaken after several sessions.
+  'Major swing H/L',
 ] as const;
 
 /** The six classes the targets fall into, strongest first, with why. */
 export const TARGET_CLASSES = [
   {
-    key: 'external', label: 'External liquidity', members: ['PDH/PDL', 'Weekly high/low', 'Session high/low'],
+    key: 'external', label: 'External liquidity', members: ['PDH/PDL', 'Weekly high/low', 'Session high/low', 'Major swing H/L'],
     why: 'External liquidity that everyone watches. Lots of stops rest there, and they are the levels large players most need to fill size against. A session level left untouched is a strong draw for the next session.',
   },
   {

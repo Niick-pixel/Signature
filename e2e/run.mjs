@@ -623,6 +623,14 @@ await check('Replay plan: Step 1 shows the day\'s A and B above the chart; the m
   expect(await page.locator('[data-header-strip] [data-replay-control="active"]').count() === 1, 'the day is shown in the header');
   await page.keyboard.press('s');
   expect(await page.locator('[data-plan-card="b"][data-match]').count() === 1, 'Short outlines B');
+  // The day chip opens the plan, read-only; keys behind it do nothing while it is open.
+  await page.click('[data-header-strip] [data-replay-day]');
+  await page.waitForSelector('[data-plan-view]');
+  expect(await page.locator('[data-plan-view-scenario]').count() === 2 && await page.locator('[data-plan-view] input, [data-plan-view] [data-option]').count() === 0, 'A and B, nothing to tap');
+  await page.keyboard.press('2');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-plan-view]', { state: 'detached' });
+  expect(await page.locator('[data-row="row_sweep"]').getAttribute('data-score') === '', 'no row was scored behind it');
   expect(await page.locator('[data-facts] button[aria-pressed="true"][data-option="B"]').count() === 0, 'and does not pick it');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
@@ -639,6 +647,17 @@ await check('Replay plan: Next replay day closes the day with one question, and 
   await page.waitForSelector('[data-replay-builder="plan"]');
   expect(await page.inputValue('[data-replay-date]') === '2026-03-04', 'the next weekday after the last replay date');
   await page.click('[data-copy-last]');
+  // Copy keeps the plan, never yesterday's taken levels: asked again, and each one taken leaves the zones and targets.
+  expect(/taken before the open/.test(await page.locator('[data-builder-footer]').innerText()), 'taken is asked again');
+  const aDir = await page.locator('[data-replay-scenario="a"]').getAttribute('data-replay-scenario');
+  const side = (await page.locator('[data-day-bias]').getAttribute('data-day-bias')) === 'Short' ? 'high' : 'low';
+  const lvl = `Asia ${side}`;
+  expect(await page.locator(`[data-replay-scenario="a"] [data-replay-group="a-zones"] [data-option="${lvl}"]`).count() === 1, `${lvl} offered first (${aDir})`);
+  await page.click(`[data-replay-group="taken"] [data-option="${lvl}"]`);
+  expect(await page.locator(`[data-replay-scenario="a"] [data-replay-group="a-zones"] [data-option="${lvl}"]`).count() === 0, `${lvl} taken: no longer a zone`);
+  expect(await page.locator('[data-overnight]').getAttribute('data-overnight') === (side === 'high' ? 'Highs run' : 'Lows run'), 'overnight follows');
+  expect(await page.locator('[data-replay-scenario="a"] [data-replay-group="a-zones"] [data-option^="Major swing"]').getAttribute('title') !== null, 'the major swing tooltip');
+  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-zones"] [data-option^="PW"]').click();
   await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-option="<1.5"]').click();
   expect(await page.locator('[data-rr-warning]').count() === 1, 'the <1.5R warning');
   await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-option="2+"]').click();

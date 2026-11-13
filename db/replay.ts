@@ -18,9 +18,10 @@ const json = <T,>(v: unknown, fallback: T): T => {
 const read = (r: Record<string, unknown>): ReplayDay => ({
   id: r.id as string, sitting_id: r.sitting_id as string, sequence: r.sequence as number, replay_date: r.replay_date as string,
   weekday: (r.weekday as string | null) ?? null, instrument: (r.instrument as string | null) ?? null,
-  context: json(r.context, emptyContext()), scenarios: json(r.scenarios, emptyScenarios()),
+  // A day planned before the taken levels were asked reads with taken: null (not answered).
+  context: { ...emptyContext(), ...json(r.context, emptyContext()) }, scenarios: json(r.scenarios, emptyScenarios()),
   locked_at: (r.locked_at as string | null) ?? null, amended_at: (r.amended_at as string | null) ?? null,
-  amended_context: r.amended_context ? json(r.amended_context, null) : null,
+  amended_context: r.amended_context ? { ...emptyContext(), ...json(r.amended_context, emptyContext()) } : null,
   amended_scenarios: r.amended_scenarios ? json(r.amended_scenarios, null) : null,
   outcome: (r.outcome as DayOutcome | null) ?? null, took_a: (r.took_a as Took | null) ?? null, took_b: (r.took_b as Took | null) ?? null,
   closed_at: (r.closed_at as string | null) ?? null, ends_sitting: r.ends_sitting === 1, created_at: r.created_at as string,
@@ -67,6 +68,27 @@ export function amendReplayDay(id: string, context: ReplayContext, scenarios: Re
   if (!d) throw new Error('No such replay day.');
   getDb().prepare('UPDATE replay_days SET amended_at = ?, amended_context = ?, amended_scenarios = ? WHERE id = ?')
     .run(now(), JSON.stringify(context), JSON.stringify(scenarios), id);
+  return getReplayDay(id)!;
+}
+
+/**
+ * A wrong replay date, put right: the day moves, and its trades move with it
+ * (same time of day; each change in the trade's edit log). The plan is not
+ * touched, so the day is not flagged amended.
+ */
+export function redateReplayDay(id: string, replayDate: string): ReplayDay {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(replayDate)) throw new Error('The replay date is YYYY-MM-DD.');
+  const d = getReplayDay(id);
+  if (!d) throw new Error('No such replay day.');
+  if (d.replay_date === replayDate) return d;
+  const db = getDb();
+  db.prepare('UPDATE replay_days SET replay_date = ?, weekday = ? WHERE id = ?').run(replayDate, weekdayOf(replayDate), id);
+  const log = db.prepare('INSERT INTO trade_edits (trade_id, field, old_value, new_value) VALUES (?, ?, ?, ?)');
+  for (const t of db.prepare('SELECT id, date FROM trades WHERE replay_day_id = ?').all(id) as Array<{ id: string; date: string }>) {
+    const next = `${replayDate}${t.date.slice(10)}`;
+    db.prepare('UPDATE trades SET date = ? WHERE id = ?').run(next, t.id);
+    log.run(t.id, 'date', t.date, next);
+  }
   return getReplayDay(id)!;
 }
 

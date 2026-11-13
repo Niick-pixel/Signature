@@ -25,7 +25,7 @@ export const ROWS: ReadonlyArray<{ key: RowKey; label: string; defs: Record<RowS
   {
     key: 'row_sweep', label: 'Sweep',
     defs: {
-      2: 'Named level taken: PDH/PDL, Asia/London high or low, data wick, EQH/EQL',
+      2: 'Named level taken: PDH/PDL, PWH/PWL, Asia/London high or low, data wick, EQH/EQL, major swing high/low',
       1: 'Internal swing (ITH/ITL)',
       0: 'No sweep',
     },
@@ -69,9 +69,13 @@ export const LEG_HELP = 'Measured on the leg that made the sweep — its low to 
 export const V2_TARGETS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'Data wick', label: 'Data wick' },
   { value: 'PDH/PDL', label: 'PDH/PDL' },
+  // The schema's "Weekly high/low" is last week's high or low.
+  { value: 'Weekly high/low', label: 'PWH/PWL' },
   { value: 'Session high/low', label: 'Session H/L (Asia, London, NY)' },
   { value: 'EQH/EQL', label: 'EQH/EQL' },
   { value: 'ITH/ITL', label: 'ITH/ITL' },
+  // 050: a 1H+ swing that started a displacement leg, still untaken after several sessions.
+  { value: 'Major swing H/L', label: 'Major swing H/L' },
   { value: 'HTF FVG (1H/4H)', label: 'HTF FVG' },
   { value: 'Other', label: 'Other' },
 ];

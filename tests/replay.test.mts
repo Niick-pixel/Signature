@@ -15,7 +15,7 @@ process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 const R = await import('../lib/replay');
 const DB = await import('../db/replay');
 const D = await import('../lib/decision');
-const { createTrade } = await import('../db/trades');
+const { createTrade, getTrade } = await import('../db/trades');
 const { parseTradeInput } = await import('../lib/validate');
 const { applyRules } = await import('../db/rules');
 
@@ -123,4 +123,71 @@ test('the trades export groups backtests under their replay day, with the plan; 
   const lines = R.replayDayLines(DB.listReplayDays()[0]);
   assert.match(lines.heading, /AMENDED/);
   assert.ok(lines.lines.some((l) => /Amended after locking/.test(l)));
+});
+
+test('weekly levels and major swings: each on its side, as zones and targets; the Sweep row names them', () => {
+  assert.ok(R.zoneOptions('Short', 'None').includes('PWH') && R.zoneOptions('Short', 'None').includes('Major swing high'));
+  assert.ok(!R.zoneOptions('Short', 'None').includes('PWL') && !R.zoneOptions('Short', 'None').includes('Major swing low'));
+  assert.ok(R.zoneOptions('Long', 'None').includes('PWL') && R.zoneOptions('Long', 'None').includes('Major swing low'));
+  assert.ok(R.zoneOptions(null, 'None').includes('PWH/PWL') && R.zoneOptions(null, 'None').includes('Major swing H/L'));
+  assert.ok(R.targetOptions('None').includes('PWH/PWL') && R.targetOptions('None').includes('Major swing H/L'));
+  assert.match(R.MAJOR_SWING_HELP, /1H\+ swing that started a displacement leg/);
+  assert.match(D.ROWS[0].defs[2], /PWH\/PWL.*major swing high\/low/);
+  assert.ok(D.V2_TARGETS.some((t) => t.label === 'PWH/PWL' && t.value === 'Weekly high/low'));
+  assert.ok(D.V2_TARGETS.some((t) => t.value === 'Major swing H/L'));
+  // A plan with them parses back as it was.
+  const c = ctx({ taken: [] });
+  const s = R.parseScenarios({ a: sc({ zones: ['PWL', 'Major swing low'], target: 'Major swing H/L' }), b: sc({ zones: ['PWH'], target: 'PWH/PWL' }) }, c);
+  assert.deepEqual([s.a.zones, s.a.target, s.b.zones, s.b.target], [['PWL', 'Major swing low'], 'Major swing H/L', ['PWH'], 'PWH/PWL']);
+});
+
+test('taken before the open: never a zone, never a target on that side; overnight follows; the plan lets go; copy asks again', () => {
+  assert.equal(R.overnightOf([]), 'Neither');
+  assert.equal(R.overnightOf(['Asia low', 'PDL']), 'Lows run');
+  assert.equal(R.overnightOf(['Asia high', 'London low']), 'Both');
+  const taken = ['Asia low', 'PDL', 'PWH'];
+  const long = R.zoneOptions('Long', 'None', taken);
+  assert.ok(!long.includes('Asia low') && !long.includes('PDL') && long.includes('London low') && long.includes('PWL'));
+  assert.ok(!R.zoneOptions('Short', 'None', taken).includes('PWH'));
+  // A long aims above: PWH run, so PWH/PWL is gone for a long, still there for a short (PWL untouched).
+  assert.ok(!R.targetOptions('None', 'Long', taken).includes('PWH/PWL'));
+  assert.ok(R.targetOptions('None', 'Short', taken).includes('PWH/PWL'));
+  assert.ok(!R.targetOptions('None', 'Short', taken).includes('PDH/PDL'), 'a short aims at PDL — run');
+  assert.ok(R.targetOptions('None', 'Short', ['Asia low']).includes('Session H/L'), 'one session low left is still a target');
+  assert.ok(!R.targetOptions('None', 'Short', ['Asia low', 'London low']).includes('Session H/L'));
+  // The plan follows: a picked zone or target that is now taken is let go.
+  const c = ctx({ taken });
+  const tidy = R.tidyScenarios(c, R.withDirections(c, { a: sc({ zones: ['PDL', 'London low'], target: 'PWH/PWL' }), b: sc({ zones: ['PDH'] }) }));
+  assert.deepEqual(tidy.a.zones, ['London low']);
+  assert.equal(tidy.a.target, null);
+  assert.ok(R.lockMissing(c, { a: sc({ zones: ['PDL'] }), b: sc({ zones: ['PDH'] }) }).includes('A: trigger zone'), 'a taken zone does not count');
+  // Not answered: owed. Parsed: overnight from the taps.
+  assert.ok(R.lockMissing(ctx({ overnight: null, taken: null }), { a: sc(), b: sc({ zones: ['PDH'] }) }).includes('taken before the open'));
+  assert.equal(R.parseContext({ ...ctx(), taken: ['PDH', 'nonsense'] }).overnight, 'Highs run');
+  assert.deepEqual(R.parseContext({ ...ctx(), taken: ['PDH', 'nonsense'] }).taken, ['PDH']);
+  // Copy last day: the plan, never yesterday's taken levels.
+  const copy = R.copyPlan({ context: ctx({ taken: ['PDH'] }), scenarios: { a: sc(), b: sc() } });
+  assert.equal(copy.context.taken, null);
+  assert.equal(copy.context.overnight, null);
+});
+
+test('replay plans in Stats count the new zones like any other', async () => {
+  const { replayStats } = await import('../lib/replayStats');
+  const day = { ...R.emptyScenarios(), id: 'd1', closed_at: 'x', outcome: 'A', amended_at: null, scenarios: { a: sc({ zones: ['Major swing low', 'PWL'] }), b: sc({ zones: ['PWH'] }) } } as never;
+  const { BACKTEST } = await import('../lib/domain');
+  const trade = { id: 't', account: BACKTEST, decision: 'take', r_multiple: 2, replay_day_id: 'd1', deleted_at: null, plan_scenario: 'A' } as never;
+  const z = replayStats([day], [trade]).zones;
+  assert.deepEqual(z.map((x) => x.label).sort(), ['Major swing low', 'PWH', 'PWL']);
+  assert.ok(z.every((x) => x.win === 1));
+});
+
+test('a wrong replay date is put right: the day and its trades move, the plan is not amended', () => {
+  const last = DB.lastReplayDay();
+  if (last && !last.closed_at) DB.closeReplayDay(last.id, { outcome: 'C', took_a: null, took_b: null, ends_sitting: true });
+  const d = DB.lockReplayDay({ replay_date: '2026-11-13', instrument: 'NQ', context: ctx({ taken: [] }), scenarios: { a: sc(), b: sc({ zones: ['PDH'] }) } });
+  const t = save({ date: '2026-11-13T09:45', replay_day_id: d.id });
+  const moved = DB.redateReplayDay(d.id, '2023-09-12');
+  assert.deepEqual([moved.replay_date, moved.weekday, moved.amended_at], ['2023-09-12', 'Tue', null]);
+  assert.equal(getTrade(t.id)!.date, '2023-09-12T09:45');
+  assert.throws(() => DB.redateReplayDay(d.id, 'soon'), /YYYY-MM-DD/);
 });

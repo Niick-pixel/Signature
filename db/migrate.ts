@@ -34,17 +34,44 @@ export function migrate(db: DatabaseSync): void {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
 
-    // node:sqlite has no transaction() helper, so drive it by hand — and roll
-    // back on failure so a half-applied migration can never be recorded.
+    runSqlFile(db, sql, () => { record.run(file); });
+    console.log(`[signature] applied migration ${file}`);
+  }
+}
+
+/** A migration or rollback that rebuilds a table other tables point at asks for this on its first line. */
+export const FOREIGN_KEYS_OFF = '-- signature: foreign-keys-off';
+
+/**
+ * One migration or rollback file, all or nothing. node:sqlite has no
+ * transaction() helper, so it is driven by hand — and rolled back on failure
+ * so a half-applied file can never be recorded.
+ *
+ * A file that rebuilds a table (the CHECK lists cannot be altered in place)
+ * starts with FOREIGN_KEYS_OFF: dropping the old table with foreign keys on
+ * would run the ON DELETE actions of every table pointing at it — executions,
+ * bars and study notes would go with it. So keys are switched off around the
+ * transaction (the pragma does nothing inside one), checked before it commits,
+ * and switched back on whatever happens: SQLite's documented rebuild order.
+ */
+export function runSqlFile(db: DatabaseSync, sql: string, inside?: () => void): void {
+  const keysOff = sql.trimStart().startsWith(FOREIGN_KEYS_OFF);
+  if (keysOff) db.exec('PRAGMA foreign_keys = OFF');
+  try {
     db.exec('BEGIN');
     try {
       db.exec(sql);
-      record.run(file);
+      if (keysOff) {
+        const broken = db.prepare('PRAGMA foreign_key_check').all();
+        if (broken.length) throw new Error(`The rebuild would leave ${broken.length} broken reference(s); nothing was changed.`);
+      }
+      inside?.();
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
       throw err;
     }
-    console.log(`[signature] applied migration ${file}`);
+  } finally {
+    if (keysOff) db.exec('PRAGMA foreign_keys = ON');
   }
 }

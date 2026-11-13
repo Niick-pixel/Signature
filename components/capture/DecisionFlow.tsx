@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { Segmented } from '@/components/ui/Segmented';
 import { Field, Input } from '@/components/ui/Field';
 import { Help } from '@/components/ui/Help';
+import { dialogIsOpen } from '@/components/ui/Overlay';
 import { Button } from '@/components/ui/Button';
 import { ShotSlots, type SlotFiles } from './ShotSlots';
 import { ExplanationField } from './ExplanationField';
@@ -306,7 +307,8 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
-      if (document.documentElement.dataset.menuOpen || closing || freshAsk || gate || planning) return;
+      // A dialog over Step 1 (the plan view, Amend, Next replay day) owns the keys while it is open.
+      if (document.documentElement.dataset.menuOpen || closing || freshAsk || gate || planning || dialogIsOpen()) return;
       const k = e.key.toLowerCase();
       const ours = asking ? ['enter', 't', 'escape'] : ['0', '1', '2', 'arrowdown', 'arrowup', 'l', 's', 'a', 'b', 'u', 'g', 'h', 't', 'p', 'm', 'escape'];
       if (ours.includes(k) || e.key.length === 1) { e.stopPropagation(); if (k !== 'escape') e.preventDefault(); }

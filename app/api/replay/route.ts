@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { activeReplayDay, amendReplayDay, closeReplayDay, lastReplayDay, listReplayDays, lockReplayDay } from '@/db/replay';
+import { activeReplayDay, amendReplayDay, redateReplayDay, closeReplayDay, lastReplayDay, listReplayDays, lockReplayDay } from '@/db/replay';
 import { listTrades } from '@/db/trades';
 import { DAY_OUTCOMES, TOOK, lockMissing, parseContext, parseScenarios, type DayOutcome, type Took } from '@/lib/replay';
 
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       }
       return NextResponse.json(amendReplayDay(String(b.id ?? ''), context, scenarios));
     }
+    if (b.action === 'redate') return NextResponse.json(redateReplayDay(String(b.id ?? ''), String(b.replay_date ?? '')));
     if (b.action === 'close') {
       const outcome = (DAY_OUTCOMES as readonly string[]).includes(b.outcome as string) ? b.outcome as DayOutcome : null;
       if (!outcome) return NextResponse.json({ error: 'What played out today?' }, { status: 400 });
