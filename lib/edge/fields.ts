@@ -17,7 +17,7 @@
 import { CHECKLIST_PHASES, HTF_BIASES, PREMIUM_DISCOUNTS, SESSIONS, SETUP_TYPES, TARGET_TYPES, isBacktest, isHypothetical } from '../domain';
 import {
   BIAS_TIMEFRAMES, EMOTIONS_AFTER, ENTRY_METHODS, EXIT_REASONS, FVG_QUALITIES, LIQUIDITY_EVENTS, MAE_BUCKETS, MFE_BUCKETS,
-  MOVED_TO_BE, PLANNED_RRS, PLANNED_RR_VALUES, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS, closureLetter, closureScore,
+  MOVED_TO_BE, PLANNED_RR_VALUES, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS, closureLetter, closureScore,
 } from '../anatomy';
 import type { Trade } from '../types';
 import type { TradeState } from './state';

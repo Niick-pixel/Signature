@@ -327,6 +327,72 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   expect(!errors.length, errors.join(' | '));
 });
 
+/* ───────────── Rubric v2: the two-step New trade ───────────── */
+
+async function openNewTrade(prefs = {}) {
+  const { page, errors } = await open({ width: 1920, height: 1080 }, { nav: 'side', ...prefs });
+  await page.evaluate(() => localStorage.setItem('signature.lastAccount', 'Backtest (FX Replay)'));
+  await page.locator('[data-new-trade]:visible').click();
+  await page.waitForSelector('[data-decide-step]');
+  return { page, errors };
+}
+const savedTrade = async (page) => page.evaluate(async () => {
+  const list = await (await fetch('/api/trades?pending=1')).json();
+  return list.filter((t) => t.rubric_version === 5).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+});
+
+await check('Rubric v2: four rows, direction and scenario, and Take — keyboard only, inside 40 s', async () => {
+  const { page, errors } = await openNewTrade();
+  expect(await page.locator('[data-timer]').getAttribute('data-timer') === 'calm', 'the clock runs on a backtest');
+  for (const k of ['2', '2', '1', '2', 'l', 'a']) await page.keyboard.press(k);
+  expect(await page.locator('[data-grade]').getAttribute('data-grade') === 'A', 'seven of eight with scenario A is an A');
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  const t = await savedTrade(page);
+  expect(t.decision === 'take' && t.decision_seconds < 40 && t.decision_limit === 40 && t.grade_letter === 'A' && t.outcome_at === null,
+    `saved as decided: ${JSON.stringify({ d: t.decision, s: t.decision_seconds, g: t.grade_letter })}`);
+  expect(await page.locator('[data-similar]').count() === 1, 'similar setups appear only now, in Step 2');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Rubric v2: the clock runs out → Missed — too slow, the late rows marked, a hypothetical outcome waiting', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 10 });
+  for (const k of ['2', '2']) await page.keyboard.press(k);
+  await page.waitForSelector('[data-missed]', { timeout: 15000 });
+  expect(await page.locator('[data-decide-button="take"]').isDisabled(), 'no Take after the clock');
+  for (const k of ['1', '2']) await page.keyboard.press(k);
+  await page.click('[data-save-missed]');
+  await page.waitForSelector('[data-outcome-step][data-decision="missed"]');
+  expect(await page.locator('[data-hypothetical]').count() === 1, 'the hypothetical outcome is asked');
+  const t = await savedTrade(page);
+  expect(t.decision === 'missed' && t.decision_seconds === 10 && JSON.stringify(t.late_rows) === JSON.stringify(['row_path', 'row_target']),
+    JSON.stringify({ d: t.decision, s: t.decision_seconds, late: t.late_rows }));
+  // Step 2 refuses to finish without what it would have done.
+  await page.click('[data-save-outcome]');
+  expect(/what it would have done/.test(await page.locator('[data-outcome-step] [role="alert"]').innerText()), 'the hypothetical R is required');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Rubric v2: Discard only while nothing is scored; Step 1 locked after the decision', async () => {
+  const { page } = await openNewTrade();
+  expect(!(await page.locator('[data-discard]').isDisabled()), 'discard while empty');
+  await page.keyboard.press('2');
+  expect(await page.locator('[data-discard]').isDisabled(), 'no discard once a row is scored');
+  for (const k of ['2', '2', '2', 's', 'b', 'p']) await page.keyboard.press(k);
+  await page.waitForSelector('[data-outcome-step][data-decision="pass"]');
+  const t = await savedTrade(page);
+  // An edit that tries to change the rows keeps the locked ones.
+  const res = await page.evaluate(async (t) => {
+    const f = new FormData(); f.append('trade', JSON.stringify({ ...t, row_sweep: 0, would_be_r: -1, outcome_at: new Date().toISOString(), explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) }));
+    const r = await fetch(`/api/trades/${t.id}`, { method: 'PUT', body: f });
+    return { ok: r.ok, t: await r.json() };
+  }, t);
+  expect(res.ok && res.t.row_sweep === 2 && res.t.grade_letter === 'B', `Step 1 stays as locked: ${JSON.stringify({ ok: res.ok, sweep: res.t.row_sweep, g: res.t.grade_letter })}`);
+  await page.context().close();
+});
+
 await browser.close();
 console.log(`\n${passed} passed, ${failures.length} failed`);
 stop();

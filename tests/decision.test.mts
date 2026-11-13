@@ -14,7 +14,7 @@ process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signatur
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
 const D = await import('../lib/decision');
-const { createTrade, getTrade, updateTrade } = await import('../db/trades');
+const { createTrade, updateTrade } = await import('../db/trades');
 const { parseTradeInput } = await import('../lib/validate');
 const { applyRules } = await import('../db/rules');
 

@@ -49,7 +49,7 @@ const read = (k: string) => { try { return window.localStorage.getItem(k); } cat
 const write = (k: string, v: string) => { try { window.localStorage.setItem(k, v); } catch { /* fine */ } };
 const pad = (n: number) => String(n).padStart(2, '0');
 const localNow = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-const LETTER_TONE: Record<string, string> = { 'A+': 'var(--grade-aplus)', A: 'var(--grade-a)', B: 'var(--grade-b)', 'No trade': 'var(--grade-f)' };
+const LETTER_TONE: Record<string, string> = { 'A+': 'rgb(var(--grade-aplus))', A: 'rgb(var(--grade-a))', B: 'rgb(var(--grade-b))', 'No trade': 'rgb(var(--grade-f))' };
 
 export function DecisionFlow({ trade, onNext }: { trade?: Trade; onNext?: () => void }) {
   const [saved, setSaved] = useState<Trade | null>(trade ?? null);
@@ -329,11 +329,11 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
               {asking && (
                 <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={spring}
                   className="absolute inset-0 z-10 flex flex-col justify-center gap-2 rounded-[calc(16px*var(--rk))] border px-3 py-2"
-                  style={{ background: 'var(--bg-raised)', borderColor: 'var(--grade-f)' }} data-override role="alertdialog" aria-label={OVERRIDE_PROMPT}>
-                  <p className="text-[12.5px] font-semibold" style={{ color: 'var(--grade-f)' }}>{OVERRIDE_PROMPT}</p>
+                  style={{ background: 'var(--bg-raised)', borderColor: 'rgb(var(--grade-f))' }} data-override role="alertdialog" aria-label={OVERRIDE_PROMPT}>
+                  <p className="text-[12.5px] font-semibold" style={{ color: 'rgb(var(--grade-f))' }}>{OVERRIDE_PROMPT}</p>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => { setAsking(false); void save('take', true); }} className="flex-1 rounded-full px-3 py-1.5 text-[12px] font-semibold"
-                      style={{ background: 'var(--grade-f)', color: 'var(--bg-raised)' }} data-override-take>Take anyway <span className="opacity-70">↵</span></button>
+                      style={{ background: 'rgb(var(--grade-f))', color: 'var(--bg-raised)' }} data-override-take>Take anyway <span className="opacity-70">↵</span></button>
                     <button type="button" onClick={() => setAsking(false)} className="flex-1 rounded-full border px-3 py-1.5 text-[12px]"
                       style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>Back <span className="opacity-70">Esc</span></button>
                   </div>
@@ -343,8 +343,8 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
           </div>
           {expired ? (
             <div className="rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" data-missed
-              style={{ borderColor: 'var(--grade-f)', background: 'color-mix(in srgb, var(--grade-f) 8%, transparent)' }}>
-              <b style={{ color: 'var(--grade-f)' }}>Missed — too slow.</b>{' '}
+              style={{ borderColor: 'rgb(var(--grade-f))', background: 'color-mix(in srgb, rgb(var(--grade-f)) 8%, transparent)' }}>
+              <b style={{ color: 'rgb(var(--grade-f))' }}>Missed — too slow.</b>{' '}
               <span style={dim}>Finish the rows ({Math.ceil(c.graceLeft)} s) so the grade is complete; it saves itself.</span>
               <button type="button" onClick={() => void save('missed')} disabled={saving} className="mt-1.5 block text-[11.5px] font-medium underline underline-offset-2" style={{ color: 'rgb(var(--accent))' }} data-save-missed>
                 Save it now
@@ -356,7 +356,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
               {optional.length > 0 && <> Not set: {optional.join(', ')}.</>}
             </p>
           )}
-          {error && <p className="text-[12px]" style={{ color: 'var(--grade-f)' }} role="alert">{error}</p>}
+          {error && <p className="text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
           <p className="text-[10.5px]" style={faint}>{RUBRIC_V2_LABEL} · locks at the decision · Similar setups and expected R come in Step 2.</p>
         </div>
       </div>
@@ -371,7 +371,7 @@ function Key({ k }: { k: string }) {
 function Timer({ timed, left, elapsed, limit, tone, expired, graceLeft }: {
   timed: boolean; left: number; elapsed: number; limit: number; tone: 'calm' | 'amber' | 'red'; expired: boolean; graceLeft: number;
 }) {
-  const color = !timed ? 'var(--text-dim)' : expired || tone === 'red' ? 'var(--grade-f)' : tone === 'amber' ? 'var(--grade-b)' : 'var(--text)';
+  const color = !timed ? 'var(--text-dim)' : expired || tone === 'red' ? 'rgb(var(--grade-f))' : tone === 'amber' ? 'rgb(var(--grade-b))' : 'var(--text)';
   const share = timed ? left / limit : 1;
   const R = 26; const C = 2 * Math.PI * R;
   return (
@@ -385,8 +385,8 @@ function Timer({ timed, left, elapsed, limit, tone, expired, graceLeft }: {
           {timed ? (expired ? Math.ceil(graceLeft) : Math.ceil(left)) : Math.floor(elapsed)}
         </span>
       </div>
-      <span className="text-[10.5px] leading-tight" style={{ color: expired ? 'var(--grade-f)' : 'var(--text-faint)' }}>
-        {timed ? (expired ? <>too slow<br />grace</> : <>seconds<br />to decide</>) : <>untimed<br />elapsed</>}
+      <span className="text-[10.5px] leading-tight" style={{ color: expired ? 'rgb(var(--grade-f))' : 'var(--text-faint)' }}>
+        {timed ? (expired ? <>s left to<br />finish rows</> : <>seconds<br />to decide</>) : <>untimed<br />elapsed</>}
       </span>
     </div>
   );
@@ -401,7 +401,7 @@ function GradeChip({ grade }: { grade: V2Grade }) {
         <span className="text-[24px] font-semibold leading-none" style={{ color: tone }}>{grade.letter}</span>
         <span className="text-[12px] tabular-nums" style={faint}>{grade.total}/8{grade.missing.length ? ` · ${grade.missing.length} to score` : ''}</span>
       </div>
-      <p className="mt-0.5 text-[10.5px] leading-snug" style={dim} data-grade-reason>{grade.missing.length === ROWS.length ? 'Score the rows.' : grade.reason}</p>
+      <p className="mt-0.5 text-[10.5px] leading-snug" style={dim} data-grade-reason>{grade.missing.length === ROWS.length ? 'Score the rows.' : /^\d+\/8\.$/.test(grade.reason) ? (grade.missing.length ? 'Partial — finish the rows.' : 'No gate or cap.') : grade.reason}</p>
     </div>
   );
 }
@@ -409,7 +409,7 @@ function GradeChip({ grade }: { grade: V2Grade }) {
 function RubricRow({ row, value, focused, late, onFocus, onPick }: {
   row: (typeof ROWS)[number]; value: 0 | 1 | 2 | null; focused: boolean; late: boolean; onFocus: () => void; onPick: (v: 0 | 1 | 2) => void;
 }) {
-  const tone = (v: 0 | 1 | 2) => (v === 2 ? 'var(--grade-a)' : v === 1 ? 'var(--grade-b)' : 'var(--grade-f)');
+  const tone = (v: 0 | 1 | 2) => (v === 2 ? 'rgb(var(--grade-a))' : v === 1 ? 'rgb(var(--grade-b))' : 'rgb(var(--grade-f))');
   return (
     <div onMouseDown={onFocus} data-row={row.key} data-focused={focused || undefined} data-score={value ?? ''}
       className="rounded-[calc(16px*var(--rk))] border p-2 transition-colors"
@@ -582,9 +582,9 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>Decision · locked</div>
-                <div className="mt-0.5 text-[16px] font-semibold" style={{ color: decision === 'missed' ? 'var(--grade-f)' : 'var(--text)' }} data-decision-label>
+                <div className="mt-0.5 text-[16px] font-semibold" style={{ color: decision === 'missed' ? 'rgb(var(--grade-f))' : 'var(--text)' }} data-decision-label>
                   {DECISION_LABEL[decision]}
-                  {trade.grade_override && <span className="ml-1.5 rounded-full px-1.5 py-px text-[10px]" style={{ background: 'color-mix(in srgb, var(--grade-f) 15%, transparent)', color: 'var(--grade-f)' }}>override</span>}
+                  {trade.grade_override && <span className="ml-1.5 rounded-full px-1.5 py-px text-[10px]" style={{ background: 'color-mix(in srgb, rgb(var(--grade-f)) 15%, transparent)', color: 'rgb(var(--grade-f))' }}>override</span>}
                 </div>
                 <div className="text-[11.5px] tabular-nums" style={dim}>
                   {trade.decision_seconds != null ? `${trade.decision_seconds}s` : '—'}{trade.decision_limit ? ` of ${trade.decision_limit}s` : ' · untimed'}
@@ -603,7 +603,7 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
                 return (
                   <div key={row.key} className="rounded-[10px] border px-1.5 py-1 text-center" style={{ borderColor: 'var(--glass-stroke)' }} title={v == null ? 'Not scored' : row.defs[v as 0 | 1 | 2]}>
                     <div className="text-[9.5px] uppercase tracking-[0.06em]" style={faint}>{row.label}</div>
-                    <div className="text-[15px] font-semibold tabular-nums" style={{ color: v === 2 ? 'var(--grade-a)' : v === 1 ? 'var(--grade-b)' : v === 0 ? 'var(--grade-f)' : 'var(--text-faint)' }}>{v ?? '—'}</div>
+                    <div className="text-[15px] font-semibold tabular-nums" style={{ color: v === 2 ? 'rgb(var(--grade-a))' : v === 1 ? 'rgb(var(--grade-b))' : v === 0 ? 'rgb(var(--grade-f))' : 'var(--text-faint)' }}>{v ?? '—'}</div>
                   </div>
                 );
               })}
@@ -686,17 +686,17 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
             <div className="rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" data-rules-followed={verdict.followed ? 'yes' : 'no'}
               style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
               <span className="font-semibold">Followed all rules: </span>
-              <span style={{ color: verdict.followed ? 'var(--grade-a)' : 'var(--grade-f)' }}>{verdict.followed ? 'Yes' : 'No'}</span>
+              <span style={{ color: verdict.followed ? 'rgb(var(--grade-a))' : 'rgb(var(--grade-f))' }}>{verdict.followed ? 'Yes' : 'No'}</span>
               {!verdict.followed && <span style={dim}> — {verdict.reasons.join('; ')}</span>}
               <span className="block text-[10.5px]" style={faint}>Computed: the override and the &ldquo;me&rdquo; tags here; day rules{backtest ? ' do not apply to backtests' : ' are added on save'}.</span>
             </div>
           )}
           {flags.length > 0 && (
             <ul className="space-y-1 text-[11.5px]" data-consistency>
-              {flags.map((f) => <li key={f} className="rounded-[10px] px-2.5 py-1.5" style={{ background: 'color-mix(in srgb, var(--grade-b) 12%, transparent)', color: 'var(--text)' }}>⚠ {f}</li>)}
+              {flags.map((f) => <li key={f} className="rounded-[10px] px-2.5 py-1.5" style={{ background: 'color-mix(in srgb, rgb(var(--grade-b)) 12%, transparent)', color: 'var(--text)' }}>⚠ {f}</li>)}
             </ul>
           )}
-          {error && <p className="text-[12px]" style={{ color: 'var(--grade-f)' }} role="alert">{error}</p>}
+          {error && <p className="text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <motion.button type="button" onClick={() => void save(false)} disabled={saving} whileTap={press} transition={spring} data-save-outcome
               className="flex-1 rounded-full px-4 py-2.5 text-[13.5px] font-semibold disabled:opacity-50"
