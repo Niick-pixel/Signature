@@ -433,6 +433,17 @@ await check('Rubric v2: G answers the gate; more than one gap is No trade; Take 
   expect(!errors.length, errors.join(' | '));
 });
 
+await check('Rubric v2: keys typed faster than a render each land on the next row', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  // Four keydowns in one tick: no render in between (what a quick hand on a slow machine does).
+  await page.evaluate(() => { for (const key of ['2', '1', '2', '0']) window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); });
+  await page.waitForTimeout(300);
+  const scores = await page.locator('[data-decide-step] [data-row]').evaluateAll((els) => Object.fromEntries(els.map((e) => [e.getAttribute('data-row'), e.getAttribute('data-score')])));
+  expect(JSON.stringify(scores) === JSON.stringify({ row_sweep: '2', row_inversion: '1', row_path: '2', row_target: '0' }), JSON.stringify(scores));
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
 await check('Rubric v2: the clock runs out → a chime, nothing decided; Missed is logged by hand, with a hypothetical outcome waiting', async () => {
   const { page, errors } = await openNewTrade({ decisionSeconds: 10 });
   for (const k of ['2', '2']) await page.keyboard.press(k);

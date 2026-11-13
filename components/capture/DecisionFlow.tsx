@@ -140,7 +140,15 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
     setGapValue(v);
     setScoredAt((s) => ({ ...s, singular_gap: Date.now() }));
   }, []);
-  const [focus, setFocus] = useState(0);
+  const [focus, setFocusState] = useState(0);
+  // The focus and the rows, also kept in refs and updated at once: two keys pressed faster than a
+  // render (0 1 2 typed quickly, or a slow machine) must each land on the next row, not both on one.
+  const focusRef = useRef(0);
+  const rowsRef = useRef<Partial<Record<RowKey, 0 | 1 | 2>>>({});
+  const setFocus = useCallback((f: number | ((x: number) => number)) => {
+    focusRef.current = typeof f === 'function' ? f(focusRef.current) : f;
+    setFocusState(focusRef.current);
+  }, []);
   const [slots, setSlots] = useState<SlotFiles>({});
   const [asking, setAsking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -210,15 +218,14 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
   // Scoring a row moves the focus to the next row still unscored (in key order, wrapping); when every
   // row is scored it stays put. Re-scoring an earlier row therefore never drags the focus somewhere odd.
   const score = useCallback((key: RowKey, v: 0 | 1 | 2) => {
-    setRows((r) => {
-      const next = { ...r, [key]: v };
-      const at = ROWS.findIndex((x) => x.key === key);
-      const open = [...ROWS.slice(at + 1), ...ROWS.slice(0, at)].find((x) => next[x.key] == null);
-      setFocus(open ? ROWS.findIndex((x) => x.key === open.key) : at);
-      return next;
-    });
+    const next = { ...rowsRef.current, [key]: v };
+    rowsRef.current = next;
+    setRows(next);
+    const at = ROWS.findIndex((x) => x.key === key);
+    const open = [...ROWS.slice(at + 1), ...ROWS.slice(0, at)].find((x) => next[x.key] == null);
+    setFocus(open ? ROWS.findIndex((x) => x.key === open.key) : at);
     setScoredAt((s) => ({ ...s, [key]: Date.now() }));
-  }, []);
+  }, [setFocus]);
 
   const save = useCallback(async (choice: Decision, override = false, thenClose = false) => {
     if (done.current) return;
@@ -320,7 +327,7 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
       }
       if (k === '0' || k === '1' || k === '2') {
         e.preventDefault();
-        score(ROWS[focus].key, Number(k) as 0 | 1 | 2);
+        score(ROWS[focusRef.current].key, Number(k) as 0 | 1 | 2);
       } else if (k === 'arrowdown') { e.preventDefault(); setFocus((f) => Math.min(ROWS.length - 1, f + 1)); }
       else if (k === 'arrowup') { e.preventDefault(); setFocus((f) => Math.max(0, f - 1)); }
       else if (k === 'g') setGap((v) => (v === true ? false : true));
@@ -335,7 +342,7 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [asking, focus, score, decide, save, expired, closing, requestClose, setGap, gate, planning, freshAsk]);
+  }, [asking, focus, score, decide, save, expired, closing, requestClose, setGap, gate, planning, freshAsk, setFocus]);
 
   return (
     <div data-decide-step className="relative flex flex-1 flex-col">
