@@ -26,6 +26,7 @@ import { EXIT_REASONS } from '@/lib/anatomy';
 import { REGRADE_HINT, regradeOptions, type GradeLetter } from '@/lib/grade';
 import { MIN_EXPLANATION, MIN_LESSON, type Trade } from '@/lib/types';
 import { nyMinutes } from '@/lib/planMatch';
+import { playChime } from '@/lib/chime';
 import {
   DECISION_LABEL, LEG_HELP, LEG_LOCATIONS, OVERRIDE_PROMPT, ROWS, RUBRIC_V2_LABEL, SCENARIO_LABEL,
   V2_ENTRIES, V2_LETTER_OF, V2_PLANNED_RS, V2_TARGETS, canDiscard, clock, consistencyFlags, gradeV2, lockDecision,
@@ -49,13 +50,20 @@ const read = (k: string) => { try { return window.localStorage.getItem(k); } cat
 const write = (k: string, v: string) => { try { window.localStorage.setItem(k, v); } catch { /* fine */ } };
 const pad = (n: number) => String(n).padStart(2, '0');
 const localNow = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+// Built once: a list made inside the component is a new array every tick of the clock.
+const TARGET_VALUES = V2_TARGETS.map((t) => t.value);
+const targetLabel = (v: string) => V2_TARGETS.find((t) => t.value === v)?.label ?? v;
+const ENTRY_VALUES = V2_ENTRIES.map((t) => t.value);
+const entryLabel = (v: string) => V2_ENTRIES.find((t) => t.value === v)?.label ?? v;
+const CONFIDENCES = ['1', '2', '3', '4', '5'] as const;
 const LETTER_TONE: Record<string, string> = { 'A+': 'rgb(var(--grade-aplus))', A: 'rgb(var(--grade-a))', B: 'rgb(var(--grade-b))', 'No trade': 'rgb(var(--grade-f))' };
 
 export function DecisionFlow({ trade, onNext }: { trade?: Trade; onNext?: () => void }) {
   const [saved, setSaved] = useState<Trade | null>(trade ?? null);
   return (
     <motion.div {...riseIn} transition={springSoft} data-sheet data-decision-flow={saved ? 'outcome' : 'decide'}
-      className="glass mx-auto rounded-[calc(28px*var(--rk))] p-5 sm:p-6">
+      // Fills the window below the title bar: the columns stretch to the bottom instead of stopping short.
+      className="glass mx-auto flex flex-col rounded-[calc(28px*var(--rk))] p-5 sm:p-6 lg:min-h-[calc(100dvh-var(--titlebar-h,2.75rem)-2rem)]">
       {saved ? <OutcomeStep trade={saved} onNext={onNext} /> : <DecideStep onSaved={setSaved} />}
     </motion.div>
   );
@@ -191,16 +199,20 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
 
   const owedText = owed.join(', ');
   const decide = useCallback((choice: 'take' | 'pass') => {
-    if (expired || saving || done.current) return;
+    if (saving || done.current) return;
     if (!ready) { setError(`Still to answer: ${owedText}.`); return; }
     if (choice === 'take' && needsOverride(grade)) { setAsking(true); return; }
     void save(choice);
-  }, [expired, saving, ready, owedText, grade, save]);
+  }, [saving, ready, owedText, grade, save]);
 
-  // The clock runs out: a miss. The rows can still be finished in the grace, then it saves itself.
+  // The clock runs out: a soft chime, once. It decides nothing — the clock keeps counting, and
+  // Take, Pass or Missed stays your call; the time it took is stored either way.
+  const chimed = useRef(false);
   useEffect(() => {
-    if (timed && c.graceOver && !done.current) void save('missed');
-  }, [timed, c.graceOver, save]);
+    if (!expired || chimed.current || done.current) return;
+    chimed.current = true;
+    if (prefs.decisionChime) playChime();
+  }, [expired, prefs.decisionChime]);
 
   // Keyboard: 0/1/2 score the focused row and move on; ↑ ↓ move; L/S direction; A/B/U scenario; T take; P pass.
   // In the capture phase, before the app's own single-key shortcuts (which would navigate away mid-decision);
@@ -212,7 +224,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
       if (document.querySelector('[role="listbox"]')) return;
       const k = e.key.toLowerCase();
-      const ours = asking ? ['enter', 't', 'escape'] : ['0', '1', '2', 'arrowdown', 'arrowup', 'l', 's', 'a', 'b', 'u', 't', 'p', 'escape'];
+      const ours = asking ? ['enter', 't', 'escape'] : ['0', '1', '2', 'arrowdown', 'arrowup', 'l', 's', 'a', 'b', 'u', 't', 'p', 'm', 'escape'];
       if (ours.includes(k) || e.key.length === 1) { e.stopPropagation(); if (k !== 'escape') e.preventDefault(); }
       if (!ours.includes(k)) return;
       if (asking) {
@@ -231,25 +243,26 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       else if (k === 'a' || k === 'b' || k === 'u') setScenario(k === 'a' ? 'A' : k === 'b' ? 'B' : 'none');
       else if (k === 't') { e.preventDefault(); decide('take'); }
       else if (k === 'p') { e.preventDefault(); decide('pass'); }
+      else if (k === 'm' && expired) { e.preventDefault(); void save('missed'); }
       else if (k === 'escape' && canDiscard(rows)) { e.preventDefault(); closeCapture(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [asking, focus, score, decide, save, rows]);
+  }, [asking, focus, score, decide, save, rows, expired]);
 
   const discardable = canDiscard(rows);
   return (
-    <div data-decide-step>
+    <div data-decide-step className="flex flex-1 flex-col">
       {/* Header: the step, the clock and the grade, side by side; the Path and close on the right. */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold">New trade <span className="text-[13px] font-medium" style={faint}>· Step 1 of 2 — Decide</span></h1>
           <p className="mt-0.5 text-[12.5px]" style={dim}>
-            Score the four rows at the candle close, then Take or Pass. <span className="hidden sm:inline" style={faint}>Keys: 0 1 2 · ↑ ↓ · L S · A B U · T P</span>
+            Score the four rows at the candle close, then Take or Pass. <span className="hidden sm:inline" style={faint}>Keys: 0 1 2 · ↑ ↓ · L S · A B U · T P{expired ? ' · M missed' : ''}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Timer timed={timed} left={c.left} elapsed={c.elapsed} limit={limit} tone={c.tone} expired={expired} graceLeft={c.graceLeft} />
+          <Timer timed={timed} left={c.left} elapsed={c.elapsed} limit={limit} tone={c.tone} expired={expired} over={c.over} />
           <GradeChip grade={grade} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -265,9 +278,12 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
         </div>
       </div>
 
-      <div className="grid items-start gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.85fr)]">
+      {/* Fields and rows keep their own size; only the chart grows, so the card reaches the bottom without stretched boxes. */}
+      {/* Column 1: the facts. Columns 2 and 3: the four rows, two each (Sweep and Inversion, then Path and Target),
+          and the chart across both underneath — wide enough to read — with Take and Pass below it. */}
+      <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
         {/* The facts. */}
-        <div className="space-y-3" data-facts>
+        <div className="flex flex-col gap-4" data-facts>
           <div className="grid grid-cols-2 gap-3">
             <Field quiet label="Account" hint="Remembered from the last trade. The clock runs on accounts set to Timed decision (Settings → Trades).">
               <Select value={account} onChange={(v) => setAccount(v as Account)} options={ACCOUNTS} labelFor={accountLabel} />
@@ -292,38 +308,39 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field quiet label="Target type">
-              <Select value={target} onChange={setTarget} placeholder="Which…" options={V2_TARGETS.map((t) => t.value)} labelFor={(v) => V2_TARGETS.find((t) => t.value === v)?.label ?? v} />
+              <Select value={target} onChange={setTarget} placeholder="Which…" options={TARGET_VALUES} labelFor={targetLabel} />
             </Field>
             <Field quiet label="Entry type">
-              <Select value={entry} onChange={setEntry} placeholder="How…" options={V2_ENTRIES.map((t) => t.value)} labelFor={(v) => V2_ENTRIES.find((t) => t.value === v)?.label ?? v} />
+              <Select value={entry} onChange={setEntry} placeholder="How…" options={ENTRY_VALUES} labelFor={entryLabel} />
             </Field>
           </div>
+          <Field quiet label="Planned R" hint="Under 1.5R is no trade.">
+            <Segmented value={plannedR ?? ''} onChange={setPlannedR} options={V2_PLANNED_RS} labelFor={(v) => `${v}R`} />
+          </Field>
+          <Field quiet label="Confidence" hint="Before the outcome — it predicts better than the old checklist did.">
+            <Segmented value={confidence ? String(confidence) : ''} onChange={(v) => setConfidence(Number(v))} options={CONFIDENCES} />
+          </Field>
         </div>
 
-        {/* The rubric: four rows, one tap each, each option's definition on it. */}
-        <div className="space-y-2.5" data-rubric>
+        <div className="flex min-w-0 flex-col gap-4">
+        {/* The rubric: four rows, one tap each, each option's definition on it. Column by column, in key order. */}
+        <div className="grid gap-3 xl:grid-flow-col xl:grid-cols-2 xl:grid-rows-2" data-rubric>
           {ROWS.map((r, i) => (
             <RubricRow key={r.key} row={r} value={rows[r.key] ?? null} focused={focus === i}
               late={timed && scoredAt[r.key] != null && scoredAt[r.key]! > startedAt + limit * 1000}
               onFocus={() => setFocus(i)} onPick={(v) => { score(r.key, v); setFocus(Math.min(ROWS.length - 1, i + 1)); }} />
           ))}
-          <div className="grid gap-3 pt-1 sm:grid-cols-2">
-            <Field quiet label="Planned R" hint="Under 1.5R is no trade.">
-              <Segmented value={plannedR ?? ''} onChange={setPlannedR} options={V2_PLANNED_RS} labelFor={(v) => `${v}R`} compact />
-            </Field>
-            <Field quiet label="Confidence" hint="Before the outcome — it predicts better than the old checklist did.">
-              <Segmented value={confidence ? String(confidence) : ''} onChange={(v) => setConfidence(Number(v))} options={['1', '2', '3', '4', '5']} compact />
-            </Field>
-          </div>
         </div>
 
         {/* The chart (paste any time — the clock never stops) and the decision. */}
-        <div className="space-y-3 lg:col-span-2 xl:col-span-1" data-decide>
-          <ShotSlots files={slots} onChange={setSlots} />
+        <div className="flex min-h-0 flex-1 flex-col gap-3" data-decide>
+          <div className="min-h-[14rem] flex-1"><ShotSlots files={slots} onChange={setSlots} grow /></div>
+          <div className="grid items-start gap-x-6 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="space-y-1.5 md:order-2">
           <div className="relative">
             <div className="grid grid-cols-2 gap-2">
-              <DecideButton label="Take" k="T" tone="win" disabled={expired || saving || !ready} onClick={() => decide('take')} data="take" />
-              <DecideButton label="Pass" k="P" tone="dim" disabled={expired || saving || !ready} onClick={() => decide('pass')} data="pass" />
+              <DecideButton label="Take" k="T" tone="win" disabled={saving || !ready} onClick={() => decide('take')} data="take" />
+              <DecideButton label="Pass" k="P" tone="dim" disabled={saving || !ready} onClick={() => decide('pass')} data="pass" />
             </div>
             <AnimatePresence>
               {asking && (
@@ -341,13 +358,16 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
               )}
             </AnimatePresence>
           </div>
+          {error && <p className="text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
+          </div>
+          <div className="space-y-1.5 md:order-1">
           {expired ? (
             <div className="rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" data-missed
-              style={{ borderColor: 'rgb(var(--grade-f))', background: 'color-mix(in srgb, rgb(var(--grade-f)) 8%, transparent)' }}>
-              <b style={{ color: 'rgb(var(--grade-f))' }}>Missed — too slow.</b>{' '}
-              <span style={dim}>Finish the rows ({Math.ceil(c.graceLeft)} s) so the grade is complete; it saves itself.</span>
+              style={{ borderColor: 'rgb(var(--grade-f) / 0.6)', background: 'color-mix(in srgb, rgb(var(--grade-f)) 6%, transparent)' }}>
+              <b style={{ color: 'rgb(var(--grade-f))' }}>Time&rsquo;s up.</b>{' '}
+              <span style={dim}>Still your call: Take or Pass stores the real time it took ({Math.round(limit + c.over)} s of {limit} s), or log it as missed.</span>
               <button type="button" onClick={() => void save('missed')} disabled={saving} className="mt-1.5 block text-[11.5px] font-medium underline underline-offset-2" style={{ color: 'rgb(var(--accent))' }} data-save-missed>
-                Save it now
+                Missed — too slow <span className="no-underline opacity-70">(M)</span>
               </button>
             </div>
           ) : (
@@ -356,8 +376,10 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
               {optional.length > 0 && <> Not set: {optional.join(', ')}.</>}
             </p>
           )}
-          {error && <p className="text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
           <p className="text-[10.5px]" style={faint}>{RUBRIC_V2_LABEL} · locks at the decision · Similar setups and expected R come in Step 2.</p>
+          </div>
+          </div>
+        </div>
         </div>
       </div>
     </div>
@@ -368,8 +390,8 @@ function Key({ k }: { k: string }) {
   return <span className="rounded-[5px] border px-1 py-px text-[9.5px] font-medium tabular-nums" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)' }}>{k}</span>;
 }
 
-function Timer({ timed, left, elapsed, limit, tone, expired, graceLeft }: {
-  timed: boolean; left: number; elapsed: number; limit: number; tone: 'calm' | 'amber' | 'red'; expired: boolean; graceLeft: number;
+function Timer({ timed, left, elapsed, limit, tone, expired, over }: {
+  timed: boolean; left: number; elapsed: number; limit: number; tone: 'calm' | 'amber' | 'red'; expired: boolean; over: number;
 }) {
   const color = !timed ? 'var(--text-dim)' : expired || tone === 'red' ? 'rgb(var(--grade-f))' : tone === 'amber' ? 'rgb(var(--grade-b))' : 'var(--text)';
   const share = timed ? left / limit : 1;
@@ -378,15 +400,15 @@ function Timer({ timed, left, elapsed, limit, tone, expired, graceLeft }: {
     <div className="flex items-center gap-2.5" data-timer={timed ? (expired ? 'expired' : tone) : 'untimed'}>
       <div className="relative size-[64px]">
         <svg viewBox="0 0 64 64" className="size-full -rotate-90" aria-hidden>
-          <circle cx="32" cy="32" r={R} fill="none" stroke="var(--glass-stroke)" strokeWidth="5" />
-          {timed && <circle cx="32" cy="32" r={R} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${share * C} ${C}`} style={{ transition: 'stroke-dasharray 100ms linear, stroke 200ms' }} />}
+          <circle cx="32" cy="32" r={R} fill="none" stroke={expired ? 'rgb(var(--grade-f) / 0.35)' : 'var(--glass-stroke)'} strokeWidth="5" />
+          {timed && !expired && <circle cx="32" cy="32" r={R} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${share * C} ${C}`} style={{ transition: 'stroke-dasharray 100ms linear, stroke 200ms' }} />}
         </svg>
-        <span className="absolute inset-0 grid place-items-center text-[24px] font-semibold tabular-nums" style={{ color }} data-seconds>
-          {timed ? (expired ? Math.ceil(graceLeft) : Math.ceil(left)) : Math.floor(elapsed)}
+        <span className={`absolute inset-0 grid place-items-center font-semibold tabular-nums ${expired ? 'text-[18px]' : 'text-[24px]'}`} style={{ color }} data-seconds>
+          {timed ? (expired ? `+${Math.floor(over)}` : Math.ceil(left)) : Math.floor(elapsed)}
         </span>
       </div>
       <span className="text-[10.5px] leading-tight" style={{ color: expired ? 'rgb(var(--grade-f))' : 'var(--text-faint)' }}>
-        {timed ? (expired ? <>s left to<br />finish rows</> : <>seconds<br />to decide</>) : <>untimed<br />elapsed</>}
+        {timed ? (expired ? <>over<br />time</> : <>seconds<br />to decide</>) : <>untimed<br />elapsed</>}
       </span>
     </div>
   );
@@ -412,21 +434,21 @@ function RubricRow({ row, value, focused, late, onFocus, onPick }: {
   const tone = (v: 0 | 1 | 2) => (v === 2 ? 'rgb(var(--grade-a))' : v === 1 ? 'rgb(var(--grade-b))' : 'rgb(var(--grade-f))');
   return (
     <div onMouseDown={onFocus} data-row={row.key} data-focused={focused || undefined} data-score={value ?? ''}
-      className="rounded-[calc(16px*var(--rk))] border p-2 transition-colors"
+      className="rounded-[calc(16px*var(--rk))] border p-2.5 transition-colors"
       style={{ borderColor: focused ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: focused ? 'rgb(var(--accent) / 0.05)' : 'var(--glass-fill)' }}>
       <div className="mb-1.5 flex items-center justify-between px-1">
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: focused ? 'rgb(var(--accent))' : 'var(--text-faint)' }}>{row.label}</span>
         <span className="text-[10px]" style={faint}>{late ? 'scored after the clock' : focused ? 'press 2 · 1 · 0' : ''}</span>
       </div>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-3 gap-2">
         {([2, 1, 0] as const).map((v) => {
           const on = value === v;
           return (
             <button key={v} type="button" onClick={() => onPick(v)} aria-pressed={on} data-pick={v}
-              className="rounded-[calc(12px*var(--rk))] border px-2 py-1.5 text-left transition-colors"
+              className="flex h-full min-h-[4.25rem] flex-col justify-start rounded-[calc(12px*var(--rk))] border px-3 py-2 text-left transition-colors"
               style={{ borderColor: on ? tone(v) : 'var(--glass-stroke)', background: on ? `color-mix(in srgb, ${tone(v)} 14%, transparent)` : 'transparent' }}>
-              <span className="block text-[14px] font-semibold tabular-nums" style={{ color: on ? tone(v) : 'var(--text-dim)' }}>{v}</span>
-              <span className="block text-[10.5px] leading-snug" style={{ color: on ? 'var(--text)' : 'var(--text-faint)' }}>{row.defs[v]}</span>
+              <span className="block text-[15px] font-semibold tabular-nums" style={{ color: on ? tone(v) : 'var(--text-dim)' }}>{v}</span>
+              <span className="block mt-0.5 text-[11.5px] leading-snug" style={{ color: on ? 'var(--text)' : 'var(--text-faint)' }}>{row.defs[v]}</span>
             </button>
           );
         })}
@@ -509,6 +531,12 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
     ...(settled && lesson.trim().length < MIN_LESSON ? [`lesson (${MIN_LESSON}+)`] : []),
   ];
 
+  // The trade as written so far, for a drill measured from the fields.
+  const draft: Partial<Trade> = {
+    ...trade, exit_reason: taken ? exit : null, mfe_r: taken ? num(mfe) : null, would_be_r: taken ? null : num(wouldR),
+  };
+  const onDrill = useCallback((k: string | null, v: DrillKept | null) => { setDrillKey(k); setDrillKept(v); }, []);
+
   async function save(next = false) {
     if (owed.length) { setError(`Still to write: ${owed.join(', ')}.`); return; }
     setSaving(true);
@@ -557,7 +585,7 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
   }
 
   return (
-    <div data-outcome-step data-decision={decision}>
+    <div data-outcome-step data-decision={decision} className="flex flex-1 flex-col">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold">{first ? 'New trade' : 'Edit trade'} <span className="text-[13px] font-medium" style={faint}>· Step 2 of 2 — Outcome</span></h1>
@@ -575,9 +603,10 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
         </div>
       </div>
 
-      <div className="grid items-start gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,1fr)]">
+      {/* Three equal columns: the locked decision, how it ended, the words. The tags run below them, then Save. */}
+      <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
         {/* Step 1, read-only: the decision and its grade. */}
-        <div className="space-y-3" data-step1-summary>
+        <div className="flex flex-col gap-3" data-step1-summary>
           <div className="rounded-[calc(18px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -616,11 +645,11 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
             <Select value={regrade} onChange={setRegrade} placeholder="Not re-graded" options={regrades} />
           </Field>
           <SimilarCard s={similar} loading={simLoading} />
-          <DrillChip drillKey={drillKey} value={drillKept} onChange={(k, v) => { setDrillKey(k); setDrillKept(v); }} />
+          <DrillChip drillKey={drillKey} value={drillKept} onChange={onDrill} draft={draft} />
         </div>
 
         {/* How it ended — or, for a pass or a miss, what it would have done. */}
-        <div className="space-y-3" data-outcome-fields>
+        <div className="flex flex-col gap-3" data-outcome-fields>
           {taken ? (
             <>
               <Field quiet label="Stage" hint="Still open: save it and write the result later.">
@@ -662,33 +691,24 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
               </div>
             </div>
           )}
-          <div>
+          <div className="flex min-h-0 flex-1 flex-col">
             <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>Charts · entry and result</span>
-            <ShotSlots files={slots} onChange={setSlots} />
+            <div className="min-h-0 flex-1"><ShotSlots files={slots} onChange={setSlots} grow /></div>
             {trade.screenshot_path && <p className="mt-1 text-[10.5px]" style={faint}>A chart from Step 1 is on the trade; paste more and they join it.</p>}
           </div>
         </div>
 
-        {/* The words and the tags. */}
-        <div className="space-y-3 lg:col-span-2 xl:col-span-1" data-words>
-          <Field quiet label="Explanation"><ExplanationField value={explanation} onChange={setExplanation} placeholder="What you saw and why you decided as you did." minRows={3} /></Field>
-          <Field quiet label="Lesson"><ExplanationField value={lesson} onChange={setLesson} placeholder="What would you do differently?" minChars={MIN_LESSON} minRows={2} required={settled} /></Field>
-          <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken.">
-            <TagPicker small value={me} onChange={setMe} options={tagOptions(MISTAKE_TAGS, trade.mistake_tags)} tone="loss" />
-          </TagBlock>
-          <TagBlock title="What went wrong — market" help="Outside your control. Never a rule broken.">
-            <TagPicker small value={market} onChange={setMarket} options={tagOptions(MARKET_TAGS as readonly string[], trade.market_tags)} tone="market" />
-          </TagBlock>
-          <TagBlock title="What worked">
-            <TagPicker small value={worked} onChange={setWorked} options={tagOptions(WORKED_TAGS as readonly string[], trade.worked_tags)} tone="win" />
-          </TagBlock>
+        {/* The words, and what they add up to. */}
+        <div className="flex flex-col gap-3 lg:col-span-2 xl:col-span-1" data-words>
+          <Field quiet label="Explanation"><ExplanationField value={explanation} onChange={setExplanation} placeholder="What you saw and why you decided as you did." minRows={4} /></Field>
+          <Field quiet label="Lesson"><ExplanationField value={lesson} onChange={setLesson} placeholder="What would you do differently?" minChars={MIN_LESSON} minRows={3} required={settled} /></Field>
           {taken && (
             <div className="rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" data-rules-followed={verdict.followed ? 'yes' : 'no'}
               style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
               <span className="font-semibold">Followed all rules: </span>
               <span style={{ color: verdict.followed ? 'rgb(var(--grade-a))' : 'rgb(var(--grade-f))' }}>{verdict.followed ? 'Yes' : 'No'}</span>
               {!verdict.followed && <span style={dim}> — {verdict.reasons.join('; ')}</span>}
-              <span className="block text-[10.5px]" style={faint}>Computed: the override and the &ldquo;me&rdquo; tags here; day rules{backtest ? ' do not apply to backtests' : ' are added on save'}.</span>
+              <span className="block text-[10.5px]" style={faint}>Computed: the override and the &ldquo;me&rdquo; tags below; day rules{backtest ? ' do not apply to backtests' : ' are added on save'}.</span>
             </div>
           )}
           {flags.length > 0 && (
@@ -696,23 +716,42 @@ function OutcomeStep({ trade, onNext }: { trade: Trade; onNext?: () => void }) {
               {flags.map((f) => <li key={f} className="rounded-[10px] px-2.5 py-1.5" style={{ background: 'color-mix(in srgb, rgb(var(--grade-b)) 12%, transparent)', color: 'var(--text)' }}>⚠ {f}</li>)}
             </ul>
           )}
+        </div>
+      </div>
+
+      {/* The three tag lists, side by side under a rule — the same three columns as above. */}
+      <div className="mt-5 grid gap-x-6 gap-y-4 border-t pt-4 md:grid-cols-3" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
+        <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken.">
+          <TagPicker small value={me} onChange={setMe} options={tagOptions(MISTAKE_TAGS, trade.mistake_tags)} tone="loss" />
+        </TagBlock>
+        <TagBlock title="What went wrong — market" help="Outside your control. Never a rule broken.">
+          <TagPicker small value={market} onChange={setMarket} options={tagOptions(MARKET_TAGS as readonly string[], trade.market_tags)} tone="market" />
+        </TagBlock>
+        <TagBlock title="What worked">
+          <TagPicker small value={worked} onChange={setWorked} options={tagOptions(WORKED_TAGS as readonly string[], trade.worked_tags)} tone="win" />
+        </TagBlock>
+      </div>
+
+      {/* Save, along the bottom. */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: 'var(--glass-stroke)' }}>
+        <div className="min-w-0 text-[11px] leading-snug" style={faint}>
           {error && <p className="text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
-          <div className="flex flex-wrap gap-2">
-            <motion.button type="button" onClick={() => void save(false)} disabled={saving} whileTap={press} transition={spring} data-save-outcome
-              className="flex-1 rounded-full px-4 py-2.5 text-[13.5px] font-semibold disabled:opacity-50"
-              style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
-              {saving ? 'Saving…' : 'Save'}
+          {owed.length > 0 && <p>Still to write: {owed.join(', ')}.</p>}
+          <p className="text-[10.5px]">{RUBRIC_V2_LABEL} · the decision and its grade stay as they were locked.</p>
+        </div>
+        <div className="flex gap-2">
+          {backtest && onNext && first && (
+            <motion.button type="button" onClick={() => void save(true)} disabled={saving} whileTap={press} transition={spring} data-save-next
+              className="rounded-full border px-5 py-2.5 text-[13px] font-medium disabled:opacity-50"
+              style={{ borderColor: 'rgb(var(--accent) / 0.5)', color: 'rgb(var(--accent))' }}>
+              Save &amp; next
             </motion.button>
-            {backtest && onNext && first && (
-              <motion.button type="button" onClick={() => void save(true)} disabled={saving} whileTap={press} transition={spring} data-save-next
-                className="rounded-full border px-4 py-2.5 text-[13px] font-medium disabled:opacity-50"
-                style={{ borderColor: 'rgb(var(--accent) / 0.5)', color: 'rgb(var(--accent))' }}>
-                Save &amp; next
-              </motion.button>
-            )}
-          </div>
-          {owed.length > 0 && <p className="text-[11px]" style={faint}>Still to write: {owed.join(', ')}.</p>}
-          <p className="text-[10.5px]" style={faint}>{RUBRIC_V2_LABEL} · the decision and its grade stay as they were locked.</p>
+          )}
+          <motion.button type="button" onClick={() => void save(false)} disabled={saving} whileTap={press} transition={spring} data-save-outcome
+            className="min-w-[12rem] rounded-full px-6 py-2.5 text-[13.5px] font-semibold disabled:opacity-50"
+            style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
+            {saving ? 'Saving…' : 'Save'}
+          </motion.button>
         </div>
       </div>
     </div>

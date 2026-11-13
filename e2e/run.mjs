@@ -356,21 +356,52 @@ await check('Rubric v2: four rows, direction and scenario, and Take — keyboard
   expect(!errors.length, errors.join(' | '));
 });
 
-await check('Rubric v2: the clock runs out → Missed — too slow, the late rows marked, a hypothetical outcome waiting', async () => {
+await check('Rubric v2: the clock runs out → a chime, nothing decided; Missed is logged by hand, with a hypothetical outcome waiting', async () => {
   const { page, errors } = await openNewTrade({ decisionSeconds: 10 });
   for (const k of ['2', '2']) await page.keyboard.press(k);
   await page.waitForSelector('[data-missed]', { timeout: 15000 });
-  expect(await page.locator('[data-decide-button="take"]').isDisabled(), 'no Take after the clock');
+  await page.waitForTimeout(1500);
+  expect(await page.locator('[data-decide-step]').count() === 1, 'still on Step 1 after the clock');
+  expect(/^\+\d/.test(await page.locator('[data-seconds]').innerText()), 'the clock counts on past the limit');
   for (const k of ['1', '2']) await page.keyboard.press(k);
-  await page.click('[data-save-missed]');
+  await page.keyboard.press('m');
   await page.waitForSelector('[data-outcome-step][data-decision="missed"]');
   expect(await page.locator('[data-hypothetical]').count() === 1, 'the hypothetical outcome is asked');
   const t = await savedTrade(page);
-  expect(t.decision === 'missed' && t.decision_seconds === 10 && JSON.stringify(t.late_rows) === JSON.stringify(['row_path', 'row_target']),
+  expect(t.decision === 'missed' && t.decision_seconds > 10 && JSON.stringify(t.late_rows) === JSON.stringify(['row_path', 'row_target']),
     JSON.stringify({ d: t.decision, s: t.decision_seconds, late: t.late_rows }));
   // Step 2 refuses to finish without what it would have done.
   await page.click('[data-save-outcome]');
   expect(/what it would have done/.test(await page.locator('[data-outcome-step] [role="alert"]').innerText()), 'the hypothetical R is required');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Rubric v2: a Take after the clock is still a take, stored over time', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 10 });
+  for (const k of ['2', '2', '1', '2', 'l', 'a']) await page.keyboard.press(k);
+  await page.locator('[data-facts] button', { hasText: /^2R$/ }).click();
+  await page.waitForSelector('[data-missed]', { timeout: 15000 });
+  expect(!(await page.locator('[data-decide-button="take"]').isDisabled()), 'Take stays available');
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step][data-decision="take"]');
+  const t = await savedTrade(page);
+  expect(t.decision === 'take' && t.decision_seconds >= 10 && t.decision_limit === 10, JSON.stringify({ d: t.decision, s: t.decision_seconds }));
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Rubric v2: a dropdown keeps its highlight under the pointer while the clock runs, and a click picks', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  const trig = page.locator('[data-facts] [role="combobox"]').nth(3);
+  await trig.click();
+  const opt = page.locator('[role="option"]:has-text("HTF FVG")');
+  await opt.hover();
+  await page.waitForTimeout(600);
+  const bg = await opt.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bg !== 'rgba(0, 0, 0, 0)', `the hovered option stays highlighted (${bg})`);
+  await opt.click();
+  expect((await trig.innerText()).includes('HTF FVG'), 'picked');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -391,6 +422,27 @@ await check('Rubric v2: Discard only while nothing is scored; Step 1 locked afte
   }, t);
   expect(res.ok && res.t.row_sweep === 2 && res.t.grade_letter === 'B', `Step 1 stays as locked: ${JSON.stringify({ ok: res.ok, sweep: res.t.row_sweep, g: res.t.grade_letter })}`);
   await page.context().close();
+});
+
+await check('Trades: unfinished trades wait on their own shelf; deleting one asks only for DELETE', async () => {
+  const { page, errors } = await openNewTrade();
+  for (const k of ['2', '2', '2', '2', 'l', 'a', 'p']) await page.keyboard.press(k);
+  await page.waitForSelector('[data-outcome-step]');
+  await page.click('[data-finish-later]');
+  await page.goto(`${BASE}/`);
+  await page.waitForSelector('[data-library-unfinished]');
+  const t = await savedTrade(page);
+  expect(await page.locator(`[data-unfinished-row="${t.id}"]`).count() === 1, 'on the shelf');
+  expect(await page.locator(`[data-library-row="${t.id}"]`).count() === 0, 'not in the journal list');
+  await page.locator(`[data-unfinished-row="${t.id}"] [data-unfinished-delete]`).click();
+  await page.waitForSelector('[data-delete-dialog="type"]');
+  await page.locator('[data-delete-dialog="type"] input').fill('DELETE');
+  await page.locator('[data-delete-dialog="type"] input').press('Enter');
+  await page.waitForFunction((id) => !document.querySelector(`[data-unfinished-row="${id}"]`), t.id, { timeout: 5000 });
+  const gone = await page.evaluate(async (id) => (await fetch(`/api/trades/${id}`)).json().catch(() => null), t.id);
+  expect(!gone || gone.deleted_at, 'in the Trash');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
 });
 
 await browser.close();

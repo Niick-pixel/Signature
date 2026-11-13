@@ -31,6 +31,10 @@ type Step = 'confirm' | 'why' | 'type';
  * and a sentence, kept with the trade), and type DELETE. It still only moves
  * the trade to the Trash, from where it can come back.
  *
+ * An unfinished trade — decided in Step 1, outcome never written ("Finish
+ * later") — is not a day being rewritten, so it skips straight to typing
+ * DELETE; it still goes to the Trash.
+ *
  * `mode="purge"` is the Trash's permanent delete: the reason already given is
  * shown again, and PURGE has to be typed.
  */
@@ -49,17 +53,18 @@ export function DeleteTradeDialog({ trade, open, onClose, onDone, mode = 'trash'
   const [error, setError] = useState<string | null>(null);
   const typeRef = useRef<HTMLInputElement>(null);
 
-  // Every opening starts from the first question.
+  const unfinished = Boolean(trade && mode === 'trash' && trade.decided_at && !trade.outcome_at);
+  // Every opening starts from the first question (an unfinished trade has only the last).
   useEffect(() => {
     if (!open) return;
-    setStep('confirm'); setReason(null); setNote(''); setTyped(''); setError(null); setBusy(false);
-  }, [open]);
+    setStep(unfinished ? 'type' : 'confirm'); setReason(null); setNote(''); setTyped(''); setError(null); setBusy(false);
+  }, [open, unfinished]);
   useEffect(() => { if (step === 'type') window.setTimeout(() => typeRef.current?.focus(), 250); }, [step]);
 
   if (!trade) return null;
   const purge = mode === 'purge';
   const word = purge ? 'PURGE' : 'DELETE';
-  const steps: Step[] = purge ? ['confirm', 'type'] : ['confirm', 'why', 'type'];
+  const steps: Step[] = purge ? ['confirm', 'type'] : unfinished ? ['type'] : ['confirm', 'why', 'type'];
   const at = steps.indexOf(step);
   const loss = trade.outcome === 'Loss' || (trade.r_multiple ?? 0) < 0;
   const noteOk = note.trim().length >= MIN_WORDS;
@@ -73,7 +78,7 @@ export function DeleteTradeDialog({ trade, open, onClose, onDone, mode = 'trash'
     const res = await fetch(`/api/trades/${trade.id}${purge ? '?purge=1' : ''}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason: `${reason}: ${note.trim()}` }),
+      body: JSON.stringify({ reason: unfinished ? 'Unfinished: the outcome was never written' : `${reason}: ${note.trim()}` }),
     }).catch(() => null);
     setBusy(false);
     if (!res || !res.ok) {
@@ -213,12 +218,12 @@ export function DeleteTradeDialog({ trade, open, onClose, onDone, mode = 'trash'
 
             {step === 'type' && (
               <>
-                <h2 className="text-[17px] font-semibold tracking-tight">Last check</h2>
+                <h2 className="text-[17px] font-semibold tracking-tight">{unfinished ? 'Delete this unfinished trade?' : 'Last check'}</h2>
                 <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: 'var(--text-dim)' }}>
                   Type <strong style={{ color: 'rgb(var(--outcome-loss))' }}>{word}</strong> to
                   {purge ? ' destroy it permanently.' : ' move it to the Trash.'}
                 </p>
-                {!purge && (
+                {!purge && !unfinished && (
                   <p className="mt-2 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
                     Because: {reason} — {note.trim()}
                   </p>
@@ -239,7 +244,7 @@ export function DeleteTradeDialog({ trade, open, onClose, onDone, mode = 'trash'
                 />
                 {error && <p className="mt-2 text-[11.5px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{error}</p>}
                 <div className="mt-5 flex justify-between gap-2">
-                  <Button onClick={() => setStep(purge ? 'confirm' : 'why')}>Back</Button>
+                  {unfinished ? <span /> : <Button onClick={() => setStep(purge ? 'confirm' : 'why')}>Back</Button>}
                   <div className="flex gap-2">
                     <Button variant="primary" onClick={onClose}>Keep it</Button>
                     <Button variant="danger" disabled={!typedOk || busy} onClick={() => void finish()}>

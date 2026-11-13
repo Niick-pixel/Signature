@@ -81,6 +81,8 @@ export interface Preferences {
   decisionSeconds: number;
   /** Rubric v2: the clock per account. On for backtests; off where trades are logged after they end. */
   timedDecision: Record<string, boolean>;
+  /** Rubric v2: a soft chime when the clock runs out (it never decides for you). */
+  decisionChime: boolean;
   /** How the whiteboard arranges its groups (lib/layout ARRANGEMENTS). */
   boardArrangement: 'grid' | 'orbit' | 'sizes' | 'columns';
   /** Executions import: the platform (or detect), the clock its file is written in, and how to match. */
@@ -297,6 +299,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   chartPad: 30,
   decisionSeconds: 40,
   timedDecision: { 'Backtest (FX Replay)': true, Demo: false, Live: false, Eval: false, Funded: false },
+  decisionChime: true,
   boardArrangement: 'grid',
   importPlatform: 'auto',
   importZone: 'journal',

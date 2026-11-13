@@ -22,7 +22,8 @@ export function nextSlot(files: SlotFiles): ShotSlot {
  * two charts out of TradingView is paste, paste — no labelling. (More can be
  * added on the trade itself afterwards.)
  */
-export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (next: SlotFiles) => void }) {
+/** `grow`: fill the height the parent gives (a column that reaches the bottom of the window). */
+export function ShotSlots({ files, onChange, grow = false }: { files: SlotFiles; onChange: (next: SlotFiles) => void; grow?: boolean }) {
   const [selected, setSelected] = useState<ShotSlot | null>(null);
   const [flash, setFlash] = useState<ShotSlot | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -78,7 +79,7 @@ export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (ne
   };
 
   return (
-    <div data-shot-slots>
+    <div data-shot-slots className={grow ? 'flex h-full flex-col' : undefined}>
       <motion.div
         onDragEnter={(e) => { e.preventDefault(); dragDepth.current += 1; setDragging(true); }}
         onDragOver={(e) => e.preventDefault()}
@@ -97,13 +98,13 @@ export function ShotSlots({ files, onChange }: { files: SlotFiles; onChange: (ne
           scale: flash ? 1.012 : 1,
         }}
         transition={spring}
-        className="glass relative grid h-[118px] cursor-pointer place-items-center overflow-hidden rounded-[calc(24px*var(--rk))] p-4"
+        className={`glass relative grid ${grow ? 'min-h-[118px] flex-1' : 'h-[118px]'} cursor-pointer place-items-center overflow-hidden rounded-[calc(24px*var(--rk))] p-4`}
       >
         <AnimatePresence mode="wait">
           {shown ? (
             <motion.div key={shownSlot} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96, transition: exitQuick }} transition={springBouncy} className="relative w-full">
-              <img src={shown} alt={`${shownSlot} chart`} className="max-h-[86px] w-full rounded-[calc(12px*var(--rk))] object-contain" />
+              <img src={shown} alt={`${shownSlot} chart`} className={`${grow ? 'max-h-[min(60vh,520px)]' : 'max-h-[86px]'} w-full rounded-[calc(12px*var(--rk))] object-contain`} />
               <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
                 style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}>{shownSlot}</span>
             </motion.div>

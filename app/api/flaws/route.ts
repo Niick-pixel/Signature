@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
-import { activeWork, drillFor, listWork, setDrill, setStatus, settledCount, snooze, startFlaw } from '@/db/flaws';
+import { activeWork, drillFor, flawDeck, listWork, setDrill, setStatus, settledCount, snooze, startFlaw } from '@/db/flaws';
+import { GRADUATE_AFTER, GRADUATE_KEPT, dataGroupOf, describeKey } from '@/lib/edge/flaws';
+import type { DrillInfo } from '@/lib/drill';
 
 /**
- * GET — the active drill, for the trade form's chip: { key, drill } or null.
- *   ?key=… — that drill's words instead (editing a trade logged under an older drill).
+ * GET — the active drill for the trade form's card (lib/drill DrillInfo: the words, what it is
+ *   measured on, and its progress to graduation) or null.
+ *   ?key=… — that drill instead (editing a trade logged under an older drill).
  * POST — what the Flaw Deck's buttons do:
  *   { action: 'start', key, drill? }   work on this flaw (pauses the current one)
  *   { action: 'snooze', key }          not now: back after 20 more trades
@@ -12,12 +15,23 @@ import { activeWork, drillFor, listWork, setDrill, setStatus, settledCount, snoo
  */
 export async function GET(request: Request) {
   const asked = new URL(request.url).searchParams.get('key');
-  if (asked) {
-    const last = listWork().filter((w) => w.flaw_key === asked).pop();
-    return NextResponse.json({ key: asked, drill: last?.drill_text ?? drillFor(asked) });
-  }
-  const w = activeWork();
-  return NextResponse.json(w ? { key: w.flaw_key, drill: w.drill_text } : null);
+  const active = activeWork();
+  const key = asked ?? active?.flaw_key ?? null;
+  if (!key) return NextResponse.json(null);
+  const last = listWork().filter((w) => w.flaw_key === key).pop();
+  // "this week" crept into some drills; a drill runs until it graduates, not for a week.
+  const drill = (last?.drill_text ?? drillFor(key)).replace(/ this week(?=\.?$)/i, '');
+  const group = dataGroupOf(key);
+  const card = active?.flaw_key === key ? flawDeck('all').active : null;
+  const info: DrillInfo = {
+    key, drill, title: card?.title ?? describeKey(key).title,
+    active: active?.flaw_key === key,
+    started_at: last?.started_at ?? null,
+    measured: group ? { group: group.key, label: group.label } : null,
+    progress: card ? card.progress : null,
+    need: { clean: GRADUATE_AFTER, kept: GRADUATE_KEPT },
+  };
+  return NextResponse.json(info);
 }
 
 const KEY = /^[a-z][\w:.-]{0,79}$/i;

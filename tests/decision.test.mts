@@ -75,14 +75,14 @@ test('stored: no trade as F, the score as total over 8', () => {
 
 /* ───────────── the clock and the decision ───────────── */
 
-test('the clock: amber at 10 s, red at 5 s, expired at the limit, the grace 15 s after', () => {
+test('the clock: amber at 10 s, red at 5 s, expired at the limit, then counting what is over', () => {
   const t0 = 1_000_000;
   assert.equal(D.clock(t0, t0 + 29_000, 40).tone, 'calm');
   assert.equal(D.clock(t0, t0 + 30_000, 40).tone, 'amber');
   assert.equal(D.clock(t0, t0 + 35_500, 40).tone, 'red');
   assert.equal(D.clock(t0, t0 + 40_000, 40).expired, true);
-  assert.equal(D.clock(t0, t0 + 54_000, 40).graceOver, false);
-  assert.equal(D.clock(t0, t0 + 55_000, 40).graceOver, true);
+  assert.equal(D.clock(t0, t0 + 39_000, 40).over, 0);
+  assert.equal(D.clock(t0, t0 + 55_000, 40).over, 15);
 });
 
 test('take and pass before the limit store the time taken; the override only on a no-trade take', () => {
@@ -99,7 +99,7 @@ test('take and pass before the limit store the time taken; the override only on 
   assert.equal(D.lockDecision({ choice: 'pass', startedAt: t0, at: t0 + 9000, limit: 40, grade: bad, override: true }).grade_override, false);
 });
 
-test('timer expiry → missed — too slow, at the full limit, rows scored after it marked late', () => {
+test('time running out decides nothing: Take, Pass or Missed is chosen, with the real time and the late rows', () => {
   const t0 = 9_000_000;
   const g = D.gradeV2({ ...rows(2, 2, 1, 2), ...facts });
   const m = D.lockDecision({
@@ -107,10 +107,14 @@ test('timer expiry → missed — too slow, at the full limit, rows scored after
     scoredAt: { row_sweep: t0 + 10_000, row_inversion: t0 + 20_000, row_path: t0 + 44_000, row_target: t0 + 51_000 },
   });
   assert.equal(m.decision, 'missed');
-  assert.equal(m.decision_seconds, 40);
+  assert.equal(m.decision_seconds, 52);
   assert.deepEqual(m.late_rows, ['row_path', 'row_target']);
-  // A take that arrives after the limit is a miss, whatever was pressed.
-  assert.equal(D.lockDecision({ choice: 'take', startedAt: t0, at: t0 + 41_000, limit: 40, grade: g }).decision, 'missed');
+  // A take after the limit stays a take — stored with the time it really took, and read as over time.
+  const late = D.lockDecision({ choice: 'take', startedAt: t0, at: t0 + 47_000, limit: 40, grade: g });
+  assert.deepEqual([late.decision, late.decision_seconds], ['take', 47]);
+  assert.equal(D.overTime(late), true);
+  assert.equal(D.overTime(m), false, 'a miss is its own bucket');
+  assert.equal(D.overTime({ decision: 'take', decision_seconds: 30, decision_limit: 40 }), false);
   // Untimed (Demo, Live): no limit, no miss, nothing late.
   const live = D.lockDecision({ choice: 'take', startedAt: t0, at: t0 + 300_000, limit: null, grade: g });
   assert.deepEqual([live.decision, live.decision_seconds, live.decision_limit, live.late_rows], ['take', 300, null, null]);
@@ -267,7 +271,8 @@ test('stats: v2 records only, by total, row, scenario, time and decision; passes
   assert.deepEqual(d.decisions.map((x) => [x.key, x.cell.n, x.cell.avgR]), [['take', 2, 0.5], ['pass', 1, -1], ['missed', 1, 3]]);
   assert.equal(d.time.missed, 1);
   assert.equal(d.time.timed, 4);
-  assert.deepEqual(d.time.buckets.map((b) => b.n), [0, 1, 1, 1, 1]);
+  assert.deepEqual(d.time.buckets.map((b) => [b.label, b.n]), [['0–10s', 0], ['10–20s', 1], ['20–30s', 1], ['30–40s', 1], ['Over time', 0], ['Missed', 1]]);
+  assert.equal(d.time.over, 0);
 });
 
 test('exports: a v2 trade names its rubric and carries its rows, decision and time; an old one names its checklist rubric', () => {

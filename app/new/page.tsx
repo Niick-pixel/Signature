@@ -46,7 +46,7 @@ export default async function NewTradePage({
             between fitting and not.
           */}
           <div className="mx-auto w-full max-w-[var(--page-form)] px-4 pb-20 pt-4 sm:px-6
-            2xl:pb-10">
+            lg:pb-4">
             {/* Two sets, one per world: a backtest is shown what earlier
                 backtests taught, a real trade what real trades did. */}
             <NewTradeForm trade={trade ?? undefined}

@@ -101,9 +101,15 @@ export function Select<T extends string>({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
 
+  // Where the highlight starts: on the chosen option, once per opening. Only
+  // on opening — a parent that re-renders often (a running clock) hands over a
+  // new options array each time, and resetting then pulled the highlight off
+  // the option under the pointer.
+  const startAt = useRef(0);
+  startAt.current = Math.max(0, value ? options.indexOf(value) : 0);
   useEffect(() => {
-    if (open) setActive(Math.max(0, value ? options.indexOf(value) : 0));
-  }, [open, value, options]);
+    if (open) setActive(startAt.current);
+  }, [open]);
 
   const commit = (option: T) => { onChange(option); setOpen(false); };
 

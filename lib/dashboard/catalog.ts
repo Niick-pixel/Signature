@@ -18,7 +18,7 @@ import { rollingExpectancy, underwater, gradeShift, exitReasons } from '../edge/
 import { rHistogram, whenHeatmap } from '../stats';
 import { packRows } from '../edge/ruleLab';
 import { sourceOf } from '../edge/fields';
-import { DATA_GROUPS, fills } from '../edge/flaws';
+import { DATA_GROUPS, fillsGroup } from '../edge/flaws';
 import { trialLine } from '../stats';
 import { drillMilestone, flawNews, integrityNews, ruleToday, type Attention } from './attention';
 import { TRIAL_RUBRIC } from '../rubric';
@@ -521,12 +521,12 @@ add({
 add({
   id: 'v2-time', title: 'Rubric v2: time to decide', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: false, minTrades: 0,
   settings: {},
-  help: 'Timed decisions only: how long each took, by quarters of the limit, and the ones the clock ran out on (Missed — too slow). The aim is the candle close, inside the time.',
+  help: 'Timed decisions only: how long each took, by quarters of the limit; then the ones decided after the clock chimed (Over time), and the ones you logged as Missed — too slow. The aim is the candle close, inside the time.',
   select: (v) => {
     const t = v.decisions.time;
     if (!t.timed) return V2_EMPTY('bars');
-    return { kind: 'bars', items: t.buckets.map((b) => ({ label: b.label, value: b.n, display: String(b.n), tone: (b.label === 'Missed' ? 'bad' : 'accent') as Tone })),
-      caption: `${Math.round((t.missed / t.timed) * 100)}% missed — too slow · median ${t.median == null ? '—' : `${t.median.toFixed(1)}s`} · ${plural(t.timed, 'timed decision')}` };
+    return { kind: 'bars', items: t.buckets.map((b) => ({ label: b.label, value: b.n, display: String(b.n), tone: (b.label === 'Missed' ? 'bad' : b.label === 'Over time' ? 'watch' : 'accent') as Tone })),
+      caption: `${Math.round((t.missed / t.timed) * 100)}% missed · ${Math.round((t.over / t.timed) * 100)}% over time · median ${t.median == null ? '—' : `${t.median.toFixed(1)}s`} · ${plural(t.timed, 'timed decision')}` };
   },
 });
 
@@ -731,11 +731,11 @@ add({
   help: 'How many of your last 30 trades have each group of fields the engine reads. Under half, every flaw it finds is partly a guess.',
   select: (v) => {
     const recent = v.settled.slice(-30);
-    const rings = DATA_GROUPS.map((g) => { const f = recent.filter((t) => fills(t, g.fields)).length; const share = recent.length ? f / recent.length : 0;
-      return { label: g.label, share, sub: `${f} of ${recent.length}`, tone: (share >= 0.8 ? 'good' : share >= 0.5 ? 'watch' : 'bad') as Tone }; });
+    const rings = DATA_GROUPS.map((g) => { const f = recent.filter((t) => fillsGroup(t, g)).length; const share = recent.length ? f / recent.length : 0;
+      return { key: g.key, label: g.label, share, sub: `${f} of ${recent.length}`, tone: (share >= 0.8 ? 'good' : share >= 0.5 ? 'watch' : 'bad') as Tone }; });
     const worst = [...rings].sort((a, b) => a.share - b.share)[0];
     return { kind: 'rings', rings, footer: 'Last 30 settled trades',
-      action: worst && worst.share < 0.5 ? { label: 'Work on this', key: 'data', drill: `I fill in ${worst.label} on every trade this week.` } : undefined };
+      action: worst && worst.share < 0.5 ? { label: 'Work on this', key: worst.key === 'setup' ? 'data' : `data:${worst.key}`, drill: `I fill in ${worst.label} on every trade.` } : undefined };
   },
 });
 

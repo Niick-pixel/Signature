@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Segmented } from '@/components/ui/Segmented';
 import { TogglePill } from '@/components/ui/TogglePill';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
+import { playChime } from '@/lib/chime';
 import { TRADE_SECTIONS, TRADE_SECTION_LABEL, type Preferences } from '@/lib/preferences';
 import { PLATFORMS, PLATFORM_LABEL, SOURCE_ZONES, SOURCE_ZONE_LABEL } from '@/lib/executions';
 
@@ -31,6 +32,14 @@ export function TradeSettings({ Section }: { Section: SectionComp }) {
                 <TogglePill key={a} checked={prefs.timedDecision[a] ?? false} label={accountLabel(a)}
                   onChange={(on) => update({ timedDecision: { ...prefs.timedDecision, [a]: on } })} />
               ))}
+            </div>
+          </Labeled>
+          <Labeled label="When time is up">
+            <div className="flex flex-wrap items-center gap-2">
+              <TogglePill checked={prefs.decisionChime} label="Soft chime" onChange={(decisionChime) => update({ decisionChime })} />
+              <button type="button" onClick={() => playChime()} className="rounded-full border px-2.5 py-1 text-[11.5px]"
+                style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>Play it</button>
+              <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>The clock keeps counting; Take, Pass or Missed stays your call.</span>
             </div>
           </Labeled>
         </div>

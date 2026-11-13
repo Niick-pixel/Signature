@@ -19,6 +19,9 @@ import { DetailPanel } from './DetailPanel';
 import { EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
 import { OUTCOME_COLOR } from './TradeNode';
 import { RiskBanner } from './RiskBanner';
+import { DeleteTradeDialog } from './DeleteTradeDialog';
+import { navigate } from '@/lib/nav';
+import { DECISION_LABEL, type Decision } from '@/lib/decision';
 import { isReal } from '@/lib/domain';
 
 /**
@@ -107,8 +110,12 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
   const visible = useMemo(() => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const keep = applyFilters(filters);
-    return trades.filter((t) => !t.deleted_at && keep(t) && (!words.length || words.every((w) => haystack(t).includes(w))));
+    return trades.filter((t) => !t.deleted_at && !unfinishedTrade(t) && keep(t) && (!words.length || words.every((w) => haystack(t).includes(w))));
   }, [trades, filters, q]);
+  // Decided, outcome not written yet ("Finish later"): their own shelf above the list, newest first.
+  const unfinished = useMemo(() => trades.filter((t) => !t.deleted_at && unfinishedTrade(t))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at)), [trades]);
+  const [deleting, setDeleting] = useState<Trade | null>(null);
   /*
     Grouped by reason (the board's groups, the same totals), and the group
     with the most recently added trade comes first — what you just logged is
@@ -268,6 +275,10 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
           )}
         </div>
 
+        {unfinished.length > 0 && (
+          <Unfinished trades={unfinished} onDelete={setDeleting} />
+        )}
+
         {groups.length === 0 ? (
           <p className="mt-16 text-center text-[13px]" style={{ color: 'var(--text-faint)' }}>{trades.length ? 'No trade matches these filters.' : 'No trades yet — press N to log the first one.'}</p>
         ) : (
@@ -286,10 +297,56 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
         </div>
       )}
 
+      <DeleteTradeDialog trade={deleting} open={deleting != null} onClose={() => setDeleting(null)}
+        onDone={() => { setDeleting(null); void refresh(); }} />
+
       <DetailPanel trade={open} onClose={() => setOpenId(null)} onChanged={() => void refresh()}
         onStep={(dir) => { const n = dir < 0 ? prev : next; if (n) setOpenId(n.id); }}
         prevLabel={prev ? label(prev) : null} nextLabel={next ? label(next) : null} />
     </div>
+  );
+}
+
+const unfinishedTrade = (t: Trade) => Boolean(t.decided_at && !t.outcome_at);
+
+/**
+ * Unfinished: decided in Step 1, the outcome never written. They count nowhere
+ * until it is, so they wait here, apart from the journal — Continue opens Step 2,
+ * Delete asks only for DELETE.
+ */
+function Unfinished({ trades, onDelete }: { trades: Trade[]; onDelete: (t: Trade) => void }) {
+  return (
+    <section className="mt-5 rounded-[calc(18px*var(--rk))] border p-3" data-library-unfinished
+      style={{ borderColor: 'rgb(var(--accent) / 0.35)', background: 'rgb(var(--accent) / 0.04)' }}>
+      <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+        <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--accent))' }}>
+          Unfinished · {trades.length}
+        </h2>
+        <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Outcome not written yet — they count nowhere until it is.</span>
+      </div>
+      <ul className="divide-y" style={{ borderColor: 'var(--glass-stroke)' }}>
+        {trades.map((t) => (
+          <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-2 text-[12.5px]" data-unfinished-row={t.id}>
+            <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{tradeDay(t, { month: 'short', day: 'numeric' })} {t.date.slice(11, 16)}</span>
+            <span className="font-medium">{t.instrument} {t.direction}</span>
+            <span style={{ color: 'var(--text-dim)' }}>{accountLabel(t.account)}</span>
+            <span style={{ color: 'var(--text-dim)' }}>{t.decision ? DECISION_LABEL[t.decision as Decision] : '—'}</span>
+            <span className="rounded-full px-1.5 text-[11px] font-semibold"
+              style={{ color: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']})`, background: `rgb(${GRADE_COLOR[t.grade_letter ?? 'F']} / 0.14)` }}>{t.grade_letter ?? '—'}<V2Mark t={t} /></span>
+            <span className="ml-auto flex gap-1.5">
+              <button type="button" onClick={() => navigate(`/new?edit=${t.id}`)} data-unfinished-continue
+                className="rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
+                Continue
+              </button>
+              <button type="button" onClick={() => onDelete(t)} data-unfinished-delete
+                className="rounded-full border px-3 py-1 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>
+                Delete
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

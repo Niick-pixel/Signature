@@ -24,6 +24,7 @@ import type { TradeState } from './state';
 import { sourceOf } from './fields';
 import { FLAW_TEXT, ruleText, themeText, type FlawType } from './flawText';
 import { THEMES } from '../insights';
+import { DATA_GROUPS, dataGroupOf, fillsGroup } from '../drill';
 import { RULES } from '../ruleBook';
 import type { Trade } from '../types';
 
@@ -364,18 +365,16 @@ export function hitTest(key: string, i: Pick<FlawInputs, 'themesOf' | 'breaksOf'
   if (key === 'tilt:second-plus') return (t) => (i.states.get(t.id)?.tradeNo ?? 0) >= 2;
   if (key === 'exec:early-be') { const s = new Set(i.exec.earlyBe.ids); return (t) => s.has(t.id) || (t.moved_to_be != null && t.moved_to_be !== 'No' && t.exit_reason === 'BE stop' && t.target_hit_later === 'Yes'); }
   if (key === 'exec:never-positive') return (t) => (t.r_multiple ?? 0) < -0.1 && t.mfe_bucket === '0';
-  if (key === 'data') return (t) => !logsAll(t);
+  // "Fix your data": 'data' is Setup detail (the library's drill); 'data:<group>' another group.
+  if (key === 'data' || key.startsWith('data:')) {
+    const g = dataGroupOf(key);
+    return g ? (t) => !fillsGroup(t, g) : (t) => !DATA_GROUPS.every((x) => fillsGroup(t, x));
+  }
   return () => false;
 }
 
-/** The fields the engine reads, by group: the Fix your data card counts these. */
-export const DATA_GROUPS: ReadonlyArray<{ key: string; label: string; fields: ReadonlyArray<keyof Trade> }> = [
-  { key: 'setup', label: 'Setup detail', fields: ['liquidity_event', 'entry_method', 'candle_strength', 'planned_rr'] },
-  { key: 'outcome', label: 'Outcome detail', fields: ['exit_reason', 'mfe_bucket', 'moved_to_be'] },
-  { key: 'stop', label: 'Stop and gap', fields: ['stop_placement', 'opposing_htf_gap'] },
-];
-export const fills = (t: Trade, fields: ReadonlyArray<keyof Trade>) => fields.every((k) => t[k] != null && (t[k] as unknown) !== '');
-const logsAll = (t: Trade) => DATA_GROUPS.every((g) => fills(t, g.fields));
+// The data groups live in lib/drill (the trade form reads them too).
+export { DATA_GROUPS, dataGroupOf, fills, fillsGroup, groupFields, type DataGroup } from '../drill';
 
 /**
  * Some flaws are not in any one trade: a filter that says yes to everything is
@@ -423,5 +422,7 @@ export function describeKey(key: string): { title: string; drill: string } {
     const id = key.slice(5); const short = RULES.find((r) => r.id === id)?.short ?? id;
     return { title: `Breaking: ${short}`, drill: (FLAW_TEXT[key] ?? ruleText(short)).drill };
   }
+  const group = key.startsWith('data:') ? dataGroupOf(key) : null;
+  if (group) return { title: `Fix your data: ${group.label}`, drill: `I fill in ${group.label} on every trade.` };
   return { title: FIXED_TITLES[key] ?? key, drill: FLAW_TEXT[key]?.drill ?? '' };
 }

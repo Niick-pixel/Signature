@@ -158,11 +158,9 @@ export const V2_LETTER_OF = (stored: string | null | undefined): V2Letter | null
 export type Decision = 'take' | 'pass' | 'missed';
 export const DECISION_LABEL: Record<Decision, string> = { take: 'Taken', pass: 'Passed', missed: 'Missed — too slow' };
 export const DEFAULT_DECISION_SECONDS = 40;
-/** After the clock runs out, the rows can still be finished for this long. */
-export const GRACE_SECONDS = 15;
 export const OVERRIDE_PROMPT = 'Grade says no trade — take anyway?';
 
-/** Seconds left, the colour band, and whether the grace has begun or ended. */
+/** Seconds left, the colour band, whether the limit has passed, and by how much. */
 export function clock(startedAt: number, now: number, limit: number) {
   const elapsed = Math.max(0, (now - startedAt) / 1000);
   const left = Math.max(0, limit - elapsed);
@@ -170,8 +168,8 @@ export function clock(startedAt: number, now: number, limit: number) {
     elapsed, left,
     tone: left <= 5 ? 'red' as const : left <= 10 ? 'amber' as const : 'calm' as const,
     expired: elapsed >= limit,
-    graceLeft: Math.max(0, limit + GRACE_SECONDS - elapsed),
-    graceOver: elapsed >= limit + GRACE_SECONDS,
+    /** Seconds past the limit: the clock keeps counting after it chimes. */
+    over: Math.max(0, elapsed - limit),
   };
 }
 
@@ -188,9 +186,10 @@ export interface DecisionRecord {
 }
 
 /**
- * The record Step 1 locks with. A Take or a Pass before the limit stores the
- * time it took; the clock running out stores a miss at the full limit, with
- * any row scored after it marked late.
+ * The record Step 1 locks with. Running out of time does not decide for you:
+ * the clock chimes and keeps counting, and Take, Pass or "Missed — too slow"
+ * is still your call. Whatever you choose stores the real time it took, so a
+ * decision past the limit shows as one; rows scored after it are marked late.
  */
 export function lockDecision(o: {
   choice: Decision; startedAt: number; at: number; limit: number | null;
@@ -199,19 +198,22 @@ export function lockDecision(o: {
   scoredAt?: Partial<Record<RowKey, number>>;
 }): DecisionRecord {
   const seconds = Math.round(((o.at - o.startedAt) / 1000) * 10) / 10;
-  const expired = o.limit != null && seconds >= o.limit;
-  const decision: Decision = o.choice === 'missed' || expired ? 'missed' : o.choice;
+  const decision: Decision = o.choice;
   const deadline = o.limit != null ? o.startedAt + o.limit * 1000 : null;
   const late = deadline == null ? [] : ROWS.map((r) => r.key).filter((k) => (o.scoredAt?.[k] ?? 0) > deadline);
   return {
     decision,
     decided_at: new Date(o.at).toISOString(),
-    decision_seconds: decision === 'missed' && o.limit != null ? o.limit : seconds,
+    decision_seconds: seconds,
     decision_limit: o.limit,
     grade_override: decision === 'take' && o.grade.letter === 'No trade' && Boolean(o.override),
     late_rows: late.length ? late : null,
   };
 }
+
+/** A decision made after the clock ran out (a miss is its own thing). */
+export const overTime = (t: { decision?: string | null; decision_seconds?: number | null; decision_limit?: number | null }): boolean =>
+  t.decision !== 'missed' && t.decision_limit != null && t.decision_seconds != null && t.decision_seconds > t.decision_limit;
 
 /** Whether a Take needs the one-time question first. */
 export const needsOverride = (g: V2Grade): boolean => g.letter === 'No trade';

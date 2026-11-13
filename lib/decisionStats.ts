@@ -1,4 +1,4 @@
-import { ROWS, isRubricV2, type RowKey } from './decision';
+import { ROWS, isRubricV2, overTime, type RowKey } from './decision';
 import type { Trade } from './types';
 
 /**
@@ -15,8 +15,8 @@ export interface DecisionStats {
   byTotal: Array<{ total: number; taken: Cell; passed: number; missed: number }>;
   byRow: Record<RowKey, Record<0 | 1 | 2, Cell>>;
   byScenario: Array<{ key: 'A' | 'B' | 'none'; label: string; cell: Cell }>;
-  /** Seconds to decide, in buckets of the limit's quarters (timed decisions only), and the misses. */
-  time: { buckets: Array<{ label: string; n: number }>; timed: number; missed: number; median: number | null };
+  /** Seconds to decide, in buckets of the limit's quarters (timed decisions only), then the ones past the limit, and the misses. */
+  time: { buckets: Array<{ label: string; n: number }>; timed: number; over: number; missed: number; median: number | null };
   decisions: Array<{ key: 'take' | 'pass' | 'missed'; label: string; cell: Cell; hypothetical: boolean }>;
 }
 
@@ -46,10 +46,11 @@ export function decisionStats(trades: readonly Trade[]): DecisionStats {
   const q = limit / 4;
   const buckets = [0, 1, 2, 3].map((i) => ({
     label: `${Math.round(i * q)}–${Math.round((i + 1) * q)}s`,
-    n: timed.filter((t) => t.decision !== 'missed' && (t.decision_seconds as number) >= i * q && ((t.decision_seconds as number) < (i + 1) * q || (i === 3 && (t.decision_seconds as number) <= limit))).length,
+    n: timed.filter((t) => t.decision !== 'missed' && !overTime(t) && (t.decision_seconds as number) >= i * q && ((t.decision_seconds as number) < (i + 1) * q || (i === 3 && (t.decision_seconds as number) <= limit))).length,
   }));
+  const over = timed.filter(overTime).length;
   const missed = timed.filter((t) => t.decision === 'missed').length;
-  buckets.push({ label: 'Missed', n: missed });
+  buckets.push({ label: 'Over time', n: over }, { label: 'Missed', n: missed });
   const secs = timed.filter((t) => t.decision !== 'missed').map((t) => t.decision_seconds as number).sort((a, b) => a - b);
   const median = secs.length ? secs[Math.floor(secs.length / 2)] : null;
 
@@ -58,5 +59,5 @@ export function decisionStats(trades: readonly Trade[]): DecisionStats {
     cell: cellOf(v2.filter((t) => t.decision === key).map(v2R)), hypothetical: key !== 'take',
   }));
 
-  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, missed, median }, decisions };
+  return { n: v2.length, byTotal, byRow, byScenario, time: { buckets, timed: timed.length, over, missed, median }, decisions };
 }
