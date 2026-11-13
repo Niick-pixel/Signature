@@ -107,12 +107,14 @@ export interface V2Input {
   row_sweep?: number | null; row_inversion?: number | null; row_path?: number | null; row_target?: number | null;
   /** true: one gap; false: more than one. */
   singular_gap?: boolean | null;
+  /** Traded on a replay day whose plan had no bias (048): both scenarios are capped at B. */
+  no_bias_day?: boolean | null;
   direction?: 'Long' | 'Short' | string | null;
   plan_scenario?: Scenario | string | null;
   leg_location?: LegLocation | string | null;
   planned_rr?: string | null;
 }
-export interface V2Cap { id: 'scenario-b' | 'unplanned' | 'leg'; message: string }
+export interface V2Cap { id: 'scenario-b' | 'unplanned' | 'leg' | 'no-bias'; message: string }
 export interface V2Grade {
   /** Sum of the rows scored so far (out of 8). */
   total: number;
@@ -142,6 +144,7 @@ export function gradeV2(a: V2Input): V2Grade {
   const caps: V2Cap[] = [];
   if (a.plan_scenario === 'B') caps.push({ id: 'scenario-b', message: 'Scenario B (against the bias) — max B.' });
   if (a.plan_scenario === 'none') caps.push({ id: 'unplanned', message: 'Unplanned — max B.' });
+  if (a.no_bias_day && a.plan_scenario === 'A') caps.push({ id: 'no-bias', message: 'No-bias replay day — max B.' });
   if ((a.direction === 'Long' && a.leg_location === 'Premium') || (a.direction === 'Short' && a.leg_location === 'Discount')) {
     caps.push({ id: 'leg', message: `${a.direction} in ${a.leg_location === 'Premium' ? 'premium' : 'discount'} of the leg — max B.` });
   }

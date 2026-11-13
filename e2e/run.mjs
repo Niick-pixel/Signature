@@ -329,6 +329,17 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
 
 /* ───────────── Rubric v2: the two-step New trade ───────────── */
 
+/** A locked replay day (a biased Long day), so backtests open straight on Step 1. */
+const lockDay = () => fetch(`${BASE}/api/replay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+  action: 'lock', replay_date: '2026-03-03', instrument: 'NQ',
+  context: { h4: 'Bull', h1Agrees: true, overnight: 'Lows run', news: 'Data at 8:30 ET', open: 'Discount' },
+  scenarios: {
+    a: { zones: ['PDL'], confirm: ['Sweep + iFVG close'], target: 'PDH/PDL', rr: '2+', kill: 'Not triggered by 10:30' },
+    b: { zones: ['PDH'], confirm: ['CISD'], target: 'Session H/L', rr: '1.5–2', kill: '5m closes through the zone' },
+  },
+}) });
+await lockDay();
+
 async function openNewTrade(prefs = {}) {
   const { page, errors } = await open({ width: 1920, height: 1080 }, { nav: 'side', ...prefs });
   await page.evaluate(() => localStorage.setItem('signature.lastAccount', 'Backtest (FX Replay)'));
@@ -570,6 +581,67 @@ await check('Rubric v2: a pass shows "Why I passed" instead of the tags; a reaso
   expect(t && t.pass_main_reason === 'Doubt or fear' && t.pass_reasons.length === 2 && t.mistake_tags.length === 0, JSON.stringify(t && { m: t.pass_main_reason, r: t.pass_reasons }));
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
+});
+
+await check('Replay plan: Step 1 shows the day\'s A and B above the chart; the matching card is outlined, never picked', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  await page.waitForSelector('[data-plan-strip]');
+  const h = await page.locator('[data-plan-strip]').evaluate((el) => el.getBoundingClientRect().height);
+  expect(h <= 90, `the strip stays under 90 px (${h})`);
+  await page.waitForSelector('[data-header-strip] [data-replay-control="active"]', { timeout: 5000 }).catch(() => {});
+  expect(await page.locator('[data-header-strip] [data-replay-control="active"]').count() === 1, 'the day is shown in the header');
+  await page.keyboard.press('s');
+  expect(await page.locator('[data-plan-card="b"][data-match]').count() === 1, 'Short outlines B');
+  expect(await page.locator('[data-facts] [data-chip], [data-facts] button[aria-pressed="true"]:has-text("B")').count() === 0, 'and does not pick it');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Replay plan: Next replay day closes the day with one question, and the builder locks the next one from taps', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  await page.click('[data-next-replay-day]');
+  await page.waitForSelector('[data-close-day]');
+  await page.click('[data-day-outcome="A"]');
+  await page.waitForSelector('[data-took^="A:"]');
+  await page.click('[data-took="A:passed"]');
+  await page.click('[data-next-day]');
+  await page.waitForSelector('[data-replay-builder="plan"]');
+  expect(await page.inputValue('[data-replay-date]') === '2026-03-04', 'the next weekday after the last replay date');
+  await page.click('[data-copy-last]');
+  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-chip="<1.5"]').click();
+  expect(await page.locator('[data-rr-warning]').count() === 1, 'the <1.5R warning');
+  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-chip="2+"]').click();
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[data-replay-builder]', { state: 'detached' });
+  await page.waitForSelector('[data-replay-day="2"]');
+  const st = await page.evaluate(async () => (await fetch('/api/replay')).json());
+  expect(st.active.sequence === 2 && st.active.replay_date === '2026-03-04' && st.active.locked_at, JSON.stringify({ s: st.active?.sequence, d: st.active?.replay_date }));
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Replay plan: with no day locked, New trade offers to plan it or trade without — unplanned, capped at B', async () => {
+  const { page, errors } = await open({ width: 1920, height: 1080 }, { nav: 'side', decisionSeconds: 90 });
+  const st = await page.evaluate(async () => (await fetch('/api/replay')).json());
+  await page.evaluate(async (id) => fetch('/api/replay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', id, outcome: 'C', ends_sitting: true }) }), st.active.id);
+  await page.evaluate(() => localStorage.setItem('signature.lastAccount', 'Backtest (FX Replay)'));
+  await page.locator('[data-new-trade]:visible').click();
+  await page.waitForSelector('[data-replay-gate]');
+  const t0 = await page.locator('[data-seconds]').innerText();
+  await page.waitForTimeout(1500);
+  expect(await page.locator('[data-seconds]').innerText() === t0, 'the clock waits');
+  await page.click('[data-gate-noplan]');
+  await page.waitForSelector('[data-no-plan]');
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  expect(await page.locator('[data-grade]').getAttribute('data-grade') === 'B', 'unplanned: max B');
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  const t = await savedTrade(page);
+  expect(t.plan_scenario === 'none' && t.grade_letter === 'B' && t.replay_day_id === null, JSON.stringify({ s: t.plan_scenario, g: t.grade_letter }));
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+  await lockDay();
 });
 
 await check('Trades: unfinished trades wait on their own shelf; deleting one asks only for DELETE', async () => {

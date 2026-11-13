@@ -1,6 +1,7 @@
 'use client';
 
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
+import { ReplayDayControl } from '@/components/replay/ReplayPlan';
 import { Reveal } from '@/components/ui/Motion';
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
@@ -72,6 +73,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           <Chip onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data="customize">
             Customize
           </Chip>
+          {prefs.dashWorld !== 'real' && <ReplayDayControl />}
 </div>
         </MergedHeader>}
         inline={
@@ -97,6 +99,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           <Chip onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data="customize">
             Customize
           </Chip>
+          {prefs.dashWorld !== 'real' && <ReplayDayControl />}
         </div>
       </header>
         } />

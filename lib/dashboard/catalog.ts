@@ -47,7 +47,7 @@ const TIER: Record<string, 1 | 2> = {
   'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
   'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
   'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
-  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'v2-mirrors': 2, 'v2-pass-reasons': 2, 'v2-fear-rule': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'v2-mirrors': 2, 'v2-pass-reasons': 2, 'v2-fear-rule': 2, 'replay-outcomes': 2, 'replay-scenarios': 2, 'replay-not-taken': 2, 'replay-zones': 2, 'replay-kills': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
 };
 /** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
 const LEAN: Record<string, 'fix' | 'keep'> = {
@@ -579,6 +579,66 @@ add({
       caption: 'Would-have-made R per pass' };
   },
 });
+
+const REPLAY_EMPTY = { kind: 'text' as const, headline: '', tone: 'neutral' as Tone, tooEarly: { ghost: 'bars' as const,
+  text: 'No replay days closed yet. On a backtest, plan the day (New trade → Plan replay day), trade it, then "Next replay day".', href: '/new', hrefLabel: 'Log a backtest' } };
+
+add({
+  id: 'replay-outcomes', title: 'Replay plans: what played out', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: false, minTrades: 0,
+  settings: {},
+  help: 'Backtests only. Each closed replay day: did A, B, neither (C), something unplanned, or both play out? Amended days are counted apart, in the caption.',
+  select: (v) => {
+    const r = v.replayPlans;
+    if (!r.days) return REPLAY_EMPTY;
+    const plain = r.days - r.amended;
+    return { kind: 'bars', items: r.outcomes.map((o) => ({ label: o.label, value: o.n, display: plain ? `${o.n} · ${Math.round((o.n / plain) * 100)}%` : String(o.n), tone: 'accent' as Tone })),
+      caption: `${plain} replay day${plain === 1 ? '' : 's'}${r.amended ? ` · ${r.amended} amended, counted apart (${r.outcomes.filter((o) => o.amended).map((o) => `${o.label} ${o.amended}`).join(', ')})` : ''}` };
+  },
+});
+
+add({
+  id: 'replay-scenarios', title: 'Replay plans: R by scenario', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Backtests only: R per trade taken as Scenario A, Scenario B, or unplanned (no plan, or something the plan did not have).',
+  select: (v) => {
+    const rows = v.replayPlans.byScenario.filter((s) => s.cell.n > 0);
+    if (!rows.length) return REPLAY_EMPTY;
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: rows.reduce((s, x) => s + x.cell.n, 0), level: null },
+      items: rows.map((s) => ({ label: s.label, value: s.cell.avgR ?? 0, display: `${R(s.cell.avgR)} · n ${s.cell.n}`, tone: (s.key === 'none' ? 'watch' : 'accent') as Tone })),
+      caption: 'R per trade taken' };
+  },
+});
+
+add({
+  id: 'replay-not-taken', title: 'Replay plans: played, but not taken', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: false, minTrades: 0,
+  settings: {},
+  help: 'Backtests only: when a planned scenario played out, how often it was taken, passed or missed.',
+  select: (v) => {
+    const rows = v.replayPlans.notTaken.filter((s) => s.played > 0);
+    if (!rows.length) return REPLAY_EMPTY;
+    return { kind: 'bars', horizontal: true, items: rows.flatMap((s) => [
+      { label: `${s.key}: taken`, value: s.taken, display: `${s.taken} of ${s.played}`, tone: 'good' as Tone },
+      { label: `${s.key}: passed`, value: s.passed, display: `${s.passed} of ${s.played}`, tone: 'watch' as Tone },
+      { label: `${s.key}: missed`, value: s.missed, display: `${s.missed} of ${s.played}`, tone: 'bad' as Tone },
+    ]), caption: 'Days the scenario played out' };
+  },
+});
+
+const zoneWidget = (id: string, title: string, key: 'zones' | 'kills', what: string) => add({
+  id, title, category: 'chart', kind: 'bars', sizes: ['M', 'L'], defaultSize: 'M', claims: false, minTrades: 0,
+  settings: {},
+  help: `Backtests only: the ${what} in the plans of winning days and of losing days (a day's net R over its trades taken; days without trades are left out).`,
+  select: (v) => {
+    const r = v.replayPlans; const rows = r[key].slice(0, 8);
+    if (!rows.length) return REPLAY_EMPTY;
+    return { kind: 'bars', horizontal: true, items: rows.flatMap((z) => [
+      { label: `${z.label} · win days`, value: z.win, display: String(z.win), tone: 'good' as Tone },
+      { label: `${z.label} · loss days`, value: z.loss, display: String(z.loss), tone: 'bad' as Tone },
+    ]), caption: `${r.winDays} winning and ${r.lossDays} losing replay days` };
+  },
+});
+zoneWidget('replay-zones', 'Replay plans: trigger zones on winning vs losing days', 'zones', 'trigger zones');
+zoneWidget('replay-kills', 'Replay plans: kill switches on winning vs losing days', 'kills', 'kill switches');
 
 add({
   id: 'v2-scenario', title: 'Rubric v2: by scenario', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,

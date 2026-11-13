@@ -1,4 +1,5 @@
 import { groupRows, table, tradeSection } from './monthly';
+import { replayDayLines, type ReplayDay } from './replay';
 import { aggregate, pnlOf } from './stats';
 import { isHypothetical } from './domain';
 import { RUBRIC_V2_EXPLAINER } from './decision';
@@ -17,6 +18,8 @@ export interface TradesExportInput {
   /** What the list was showing, in words ("Demo · Losses · search “fvg”"). */
   view?: string;
   now?: Date;
+  /** Replay days (048): backtests traded on one are grouped under it, with its plan. */
+  replayDays?: ReplayDay[];
 }
 
 const r1 = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}R`;
@@ -65,7 +68,19 @@ export function tradesExport(input: TradesExportInput) {
 
   h('## Every trade');
   p('Oldest first. Missed trades are marked; their R is what they would have made.');
-  for (const t of trades) out.push(...tradeSection(t, input.shots, charts));
+  // Backtests on a replay day are grouped under it, with the plan they were traded against; the rest follow.
+  const days = new Map((input.replayDays ?? []).map((d) => [d.id, d] as const));
+  const onDay = (id: string) => trades.filter((t) => t.replay_day_id === id);
+  const grouped = [...days.values()].filter((d) => onDay(d.id).length).sort((a, b) => a.replay_date.localeCompare(b.replay_date) || a.sequence - b.sequence);
+  for (const d of grouped) {
+    const { heading, lines } = replayDayLines(d);
+    h(`### ${heading}`);
+    p(lines.join('\n'));
+    for (const t of onDay(d.id)) out.push(...tradeSection(t, input.shots, charts));
+  }
+  const rest = trades.filter((t) => !t.replay_day_id || !days.has(t.replay_day_id));
+  if (grouped.length && rest.length) h('### Not on a replay day');
+  for (const t of rest) out.push(...tradeSection(t, input.shots, charts));
   if (!trades.length) p('_No trades in this view._');
 
   const stamp = now.toISOString().slice(0, 10);

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { listReplayDays } from '@/db/replay';
 import path from 'node:path';
 import { listTrades } from '@/db/trades';
 import { shotsForMany } from '@/db/shots';
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     trades,
     shots: shotsForMany(trades.map((t) => t.id)),
     view: typeof body?.view === 'string' ? body.view.slice(0, 300) : undefined,
+    replayDays: listReplayDays(),
   });
 
   if (body?.format !== 'zip') {

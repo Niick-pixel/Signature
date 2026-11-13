@@ -1,4 +1,6 @@
 import 'server-only';
+import { replayStats } from '../lib/replayStats';
+import { listReplayDays } from './replay';
 /**
  * Everything the Stats page computes, in one place: the engine's outputs for a
  * scope (accounts, period, filters from the URL). The page — and from phase 2
@@ -222,10 +224,13 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
 
   // Rubric v2 (4 rows): its own numbers, never mixed with the checklist's scale (lib/decisionStats).
   const decisions = decisionStats(trades);
+  // Replay plans (048), backtests only; amended days counted apart (lib/replayStats).
+  const replayPlans = replayStats(listReplayDays(), trades);
 
   return {
     plans,
     decisions,
+    replayPlans,
     scoped,
     leftOutWorlds,
     ctxFor,

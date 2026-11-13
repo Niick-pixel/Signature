@@ -1,4 +1,5 @@
 import { isBacktest, isHypothetical, isTaken } from './domain';
+import { replayDayLines, type ReplayDay } from './replay';
 import { RUBRIC_V2_EXPLAINER, isRubricV2, rubricName, v2Result } from './decision';
 import { prepMarkdown, type SessionPrep } from './prep';
 import { toMarkdown } from './sanitise';
@@ -22,6 +23,8 @@ export const JOURNAL_RANGES: Array<{ id: JournalRange; label: string; note: stri
 ];
 
 export interface JournalExportInput {
+  /** Replay days (048): a backtest replay date carries its plan. */
+  replayDays?: ReplayDay[];
   range: JournalRange;
   pages: JournalPage[];
   trades: Trade[];
@@ -120,6 +123,12 @@ export function journalExport(input: JournalExportInput): { filename: string; ma
     }
     const prep = preps.get(day);
     if (prep) { p('**Chart prep:**'); p(prepMarkdown(prep)); }
+    // Backtests replaying this date were traded against a replay plan (048): the plan first, then its trades below.
+    for (const rd of (input.replayDays ?? []).filter((x) => x.replay_date === day)) {
+      const { heading, lines } = replayDayLines(rd);
+      p(`**${heading}:**`);
+      p(lines.join('\n'));
+    }
     if (dayTrades.length) {
       p('**Trades:**');
       for (const t of dayTrades) {

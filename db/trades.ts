@@ -4,6 +4,8 @@ import type { SQLInputValue } from 'node:sqlite';
 import { MISTAKE_TAG_VALUES, WORKED_TAG_VALUES, MARKET_TAG_VALUES, type MistakeTag } from '../lib/domain';
 import { CURRENT_RUBRIC, gradeUnder } from '../lib/rubric';
 import { RUBRIC_V2, gradeV2, storedGrade, type RowKey } from '../lib/decision';
+import { getReplayDay } from './replay';
+import { noBiasCap } from '../lib/replay';
 import { GRADE_LETTERS } from '../lib/grade';
 import { getDb } from './index';
 import { sanitizeOverrides } from '../lib/overrides';
@@ -230,7 +232,9 @@ function frozen(input: TradeInput, version: number): Record<string, SQLInputValu
   // Rubric v2 (4 rows): the rows and the facts, not the old boxes. An unfinished
   // grade (a miss with rows left empty) stores no letter rather than a wrong one.
   if (version === RUBRIC_V2) {
-    const g = gradeV2(input);
+    // A replay day with no bias caps both of its scenarios at B (lib/replay noBiasCap).
+    const day = input.replay_day_id ? getReplayDay(input.replay_day_id) : null;
+    const g = gradeV2({ ...input, no_bias_day: day ? noBiasCap(day.context) : false });
     const s = storedGrade(g);
     return {
       rubric_version: RUBRIC_V2, score_at_entry: g.missing.length ? null : s.score, letter_at_entry: g.missing.length ? null : s.letter,

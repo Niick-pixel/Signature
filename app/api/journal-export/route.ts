@@ -1,4 +1,5 @@
 import { listTrades } from '@/db/trades';
+import { listReplayDays } from '@/db/replay';
 import { listJournalPages } from '@/db/journal';
 import { listDailyReviews } from '@/db/reviews';
 import { listPreps } from '@/db/prep';
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
   const asked = new URL(request.url).searchParams.get('range') ?? '30';
   const range: JournalRange = asked === '90' || asked === 'all' ? asked : '30';
   const doc = journalExport({
-    range, pages: listJournalPages(), trades: listTrades(), reviews: listDailyReviews(), preps: listPreps(),
+    range, pages: listJournalPages(), trades: listTrades(), reviews: listDailyReviews(), preps: listPreps(), replayDays: listReplayDays(),
   });
   return new Response(doc.markdown, {
     headers: {

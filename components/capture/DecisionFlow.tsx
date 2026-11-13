@@ -15,6 +15,8 @@ import { SessionTally } from './SessionTally';
 import { PathBanner } from '@/components/path/PathBanner';
 import { TRADE_SAVED } from '@/components/review/SavedNotice';
 import { CAPTURE_OUTSIDE } from './CaptureSheet';
+import { PlanStrip, ReplayBuilder, ReplayDayControl, useReplay } from '@/components/replay/ReplayPlan';
+import { noBiasCap, replayTradeDate } from '@/lib/replay';
 import { closeCapture } from '@/lib/nav';
 import { clearCarry, readCarry, writeCarry } from '@/lib/backtestSession';
 import { press, spring, springSoft, riseIn } from '@/lib/motion';
@@ -98,7 +100,7 @@ export function DecisionFlow({ trade, onNext }: { trade?: Trade; onNext?: () => 
 function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   const { prefs } = usePreferences();
   // The clock starts the moment the form opens.
-  const [startedAt] = useState(() => Date.now());
+  const [startedAt, setStartedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
   const [carry] = useState(() => (typeof window === 'undefined' ? null : readCarry()));
   useEffect(() => { clearCarry(); }, []);
@@ -143,7 +145,19 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
 
   const timed = prefs.timedDecision[account] ?? false;
   const limit = prefs.decisionSeconds;
-  const c = clock(startedAt, now, limit);
+  // Backtests trade on a replay day: its plan must be locked first, or the trade is taken without one.
+  const { state: replay } = useReplay(backtest);
+  const day = backtest ? replay?.active ?? null : null;
+  const [noPlan, setNoPlan] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const gate = backtest && replay != null && !day && !noPlan;
+  // The clock waits while the day is planned (or the choice is made), then starts from zero.
+  const gated = useRef(false);
+  useEffect(() => {
+    if (gate) { gated.current = true; return; }
+    if (gated.current) { gated.current = false; setStartedAt(Date.now()); }
+  }, [gate]);
+  const c = clock(startedAt, gate || planning ? startedAt : now, limit);
   const expired = timed && c.expired;
 
   // A tenth of a second is fine enough for a clock read in whole seconds.
@@ -167,10 +181,11 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
     return () => { live = false; };
   }, [backtest]);
   // Chosen by hand wins; otherwise, off backtests, the morning plan's scenario for this direction.
-  const scenario: Scenario | null = picked ?? (backtest ? null : scenarioFromPlan(direction, plans));
+  // No plan for this replay day: the trade is Unplanned (max B), not A or B.
+  const scenario: Scenario | null = noPlan && backtest ? 'none' : picked ?? (backtest ? null : scenarioFromPlan(direction, plans));
   const setScenario = (s: Scenario) => setPicked(s);
 
-  const input = { ...rows, singular_gap: gap, direction, plan_scenario: scenario, leg_location: leg, planned_rr: plannedR };
+  const input = { ...rows, no_bias_day: day ? noBiasCap(day.context) : false, singular_gap: gap, direction, plan_scenario: scenario, leg_location: leg, planned_rr: plannedR };
   const grade: V2Grade = gradeV2(input);
   // Planned R is required too: the Target row's thresholds (1.5R, 2R) are read against it.
   // Target type too: with no default, "not picked" and a real "Other" can be told apart (the drill reads it).
@@ -204,7 +219,8 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
     const rec = lockDecision({ choice, startedAt, at, limit: timed ? limit : null, grade, override, scoredAt });
     const reason = backtest ? BACKTEST_REASON : grade.letter === 'A+' || grade.letter === 'A' ? 'Rules-based (A+ setup)' : 'Rules-based (B setup)';
     const payload = {
-      date: localNow(), undated: false, instrument, direction: direction ?? 'Long', session,
+      // On a replay day the trade carries the replayed date, at the session's usual time.
+      date: day ? replayTradeDate(day.replay_date, session) : localNow(), undated: false, replay_day_id: day?.id ?? null, instrument, direction: direction ?? 'Long', session,
       macro_time: false, macro_time_auto: true, reason, setup_type: carry?.setupType ?? 'iFVG',
       htf_bias: scenario === 'A' ? 'With bias' : scenario === 'B' ? 'Against bias' : 'No bias defined',
       premium_discount: leg === 'EQ' || !leg ? 'Equilibrium' : leg,
@@ -239,7 +255,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       setSaving(false);
       setError(e instanceof Error ? e.message : 'Could not save the decision.');
     }
-  }, [startedAt, timed, limit, grade, scoredAt, backtest, instrument, direction, session, carry, scenario, leg, target, rows, plannedR, entry, confidence, account, slots, onSaved, gap, htfOrigin]);
+  }, [startedAt, timed, limit, grade, scoredAt, backtest, instrument, direction, session, carry, scenario, leg, target, rows, plannedR, entry, confidence, account, slots, onSaved, gap, htfOrigin, day]);
 
   const owedText = owed.join(', ');
   const decide = useCallback((choice: 'take' | 'pass') => {
@@ -280,7 +296,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
-      if (document.documentElement.dataset.menuOpen || closing) return;
+      if (document.documentElement.dataset.menuOpen || closing || gate || planning) return;
       const k = e.key.toLowerCase();
       const ours = asking ? ['enter', 't', 'escape'] : ['0', '1', '2', 'arrowdown', 'arrowup', 'l', 's', 'a', 'b', 'u', 'g', 'h', 't', 'p', 'm', 'escape'];
       if (ours.includes(k) || e.key.length === 1) { e.stopPropagation(); if (k !== 'escape') e.preventDefault(); }
@@ -307,10 +323,10 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [asking, focus, score, decide, save, expired, closing, requestClose, setGap]);
+  }, [asking, focus, score, decide, save, expired, closing, requestClose, setGap, gate, planning]);
 
   return (
-    <div data-decide-step className="flex flex-1 flex-col">
+    <div data-decide-step className="relative flex flex-1 flex-col">
       {/* Header: the step on the left; the clock, the grade and Close together on the right. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
@@ -325,8 +341,8 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
           <CloseButton onClick={requestClose} title="Close (Esc, or click outside) — asks first if anything is entered" />
         </div>
       </div>
-      {/* The session's running tally and the Path: one thin strip under the title. */}
-      <HeaderStrip backtest={backtest} />
+      {/* The session's running tally, the replay day and the Path: one thin strip under the title. */}
+      <HeaderStrip backtest={backtest} replay={backtest ? <ReplayDayControl instrument={instrument} /> : null} />
 
       {/* Fields and rows keep their own size; only the chart grows, so the card reaches the bottom without stretched boxes. */}
       {/* Column 1: the facts. Columns 2 and 3: the four rows, two each (Sweep and Inversion, then Path and Target),
@@ -350,7 +366,7 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
           </Field>
           <Field quiet label="Scenario" badge={<Key k="A / B / U" />} required={!scenario} group className={flashing && !scenario ? 'need-flash' : ''}
             hint={backtest ? 'Chosen every time: A with the bias, B against it, or Unplanned (max B).' : 'Pre-selected from this morning’s plan when its direction matches. Unplanned caps at B.'}>
-            <Segmented value={scenario ?? ('' as Scenario)} onChange={setScenario}
+            <Segmented value={scenario ?? ('' as Scenario)} onChange={(v) => { if (!(noPlan && backtest)) setScenario(v); }}
               options={['A', 'B', 'none'] as const} labelFor={(v) => (v === 'none' ? 'Unplanned' : v)} titleFor={(v) => SCENARIO_LABEL[v]} accentFor={scenarioTone} />
           </Field>
           <Field quiet label="Leg location" hint={LEG_HELP}>
@@ -389,6 +405,12 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
 
         {/* The chart (paste any time — the clock never stops) and the decision. */}
         <div className="flex min-h-0 flex-1 flex-col gap-3" data-decide>
+          {day && <PlanStrip day={day} direction={direction} />}
+          {noPlan && backtest && (
+            <p className="rounded-[12px] px-3 py-1.5 text-[11.5px]" style={{ background: 'var(--glass-fill)', color: 'var(--text-dim)' }} data-no-plan>
+              No plan for this replay day — this trade is <b>Unplanned</b> (max B).
+            </p>
+          )}
           <div className="min-h-[14rem] flex-1"><ShotSlots files={slots} onChange={setSlots} grow /></div>
           <div className="grid items-start gap-x-6 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-1.5 md:order-2">
@@ -437,6 +459,19 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
         </div>
         </div>
       </div>
+      {gate && (
+        <div className="absolute inset-0 z-20 grid place-items-center rounded-[calc(28px*var(--rk))]" style={{ background: 'color-mix(in srgb, var(--bg-raised) 82%, transparent)' }} data-replay-gate>
+          <div className="max-w-[30rem] rounded-[20px] border p-5 text-center" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--bg-raised)', boxShadow: 'var(--shadow-panel)' }}>
+            <h2 className="text-[16px] font-semibold">No replay day is planned</h2>
+            <p className="mt-1 text-[12.5px]" style={dim}>Plan A and B for the day you are replaying (30 seconds of taps), or trade it unplanned — capped at B. The clock starts after.</p>
+            <div className="mt-4 flex justify-center gap-2">
+              <button type="button" onClick={() => setPlanning(true)} data-gate-plan className="rounded-full px-4 py-2 text-[12.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>Plan this day</button>
+              <button type="button" onClick={() => setNoPlan(true)} data-gate-noplan className="rounded-full border px-4 py-2 text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>Trade without a plan</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <ReplayBuilder open={planning} onClose={() => setPlanning(false)} last={replay?.last ?? null} instrument={instrument} />
       <CloseDialog open={closing} onCancel={() => setClosing(false)}
         title="Close without deciding?"
         body={expired
@@ -453,9 +488,10 @@ function DecideStep({ onSaved }: { onSaved: (t: Trade) => void }) {
   );
 }
 
-function HeaderStrip({ backtest }: { backtest: boolean }) {
+function HeaderStrip({ backtest, replay }: { backtest: boolean; replay?: React.ReactNode }) {
   return (
     <div className="mb-4 mt-2 flex min-h-[1.75rem] flex-wrap items-center gap-2" data-header-strip>
+      {replay}
       {backtest && <SessionTally inline />}
       <PathBanner compact />
     </div>
