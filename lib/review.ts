@@ -58,8 +58,13 @@ function v2Breaks(t: Trade, cfg: RuleConfig): BrokenRule[] {
   return out;
 }
 
-/** An older trade's execution tags (Moved stop, Cut winner early, …): rules broken too. Market tags never are. */
-const oldExecutionBreaks = (t: Trade): BrokenRule[] => (t.mistake_tags ?? [])
+/**
+ * An older trade's execution tags (Moved stop, Cut winner early, …), read as
+ * rules broken by the weekly review only (lib/weekly). Kept out of checkTrade:
+ * Rules kept, the rings and the score judge an old trade by its own rule book,
+ * as they always did. Market tags never count.
+ */
+export const oldExecutionBreaks = (t: Trade): BrokenRule[] => (t.mistake_tags ?? [])
   .filter((tag) => (OLD_EXECUTION_TAGS as readonly string[]).includes(tag))
   .map((tag) => ({ id: `tag:${tag}`, scope: 'trade' as const, short: tag, text: `${tag} — tagged on the trade.`, source: 'self' as const }));
 
@@ -74,7 +79,7 @@ export function evaluateTrade(t: Trade, cfg: RuleConfig = DEFAULT_RULE_CONFIG): 
 export function checkTrade(t: Trade, cfg: RuleConfig = DEFAULT_RULE_CONFIG, eras?: Map<string, string>): BrokenRule[] {
   if (!checkable(t)) return [];
   if (isRubricV2(t)) return v2Breaks(t, cfg);
-  return [...TRADE_RULES.filter((r) => verdictOf(r, t, cfg, eras) === false).map(asBroken), ...oldExecutionBreaks(t)];
+  return TRADE_RULES.filter((r) => verdictOf(r, t, cfg, eras) === false).map(asBroken);
 }
 
 /* ------------------------------------------------------------------ day */

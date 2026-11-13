@@ -6,7 +6,8 @@
  */
 import { isBacktest, isHypothetical, isTaken } from './domain';
 import { THEMES, analyse, themesOf } from './insights';
-import { brokenFor, dayBreaksByTrade, fieldEras, LEAK_RULES, loggedDay, trends } from './review';
+import { brokenFor, dayBreaksByTrade, fieldEras, LEAK_RULES, loggedDay, oldExecutionBreaks, trends } from './review';
+import { isRubricV2 } from './decision';
 import { RULES, type DayContext, type RuleConfig, DEFAULT_RULE_CONFIG } from './ruleBook';
 import type { Trade } from './types';
 
@@ -52,7 +53,10 @@ export function weekReview(trades: readonly Trade[], monday: string, ctxFor: (da
   const breaks = dayBreaksByTrade(trades, ctxFor, cfg);
   const eras = fieldEras(trades);
   const counts = new Map<string, number>();
-  for (const t of week) for (const b of brokenFor(t, breaks, cfg, eras)) counts.set(b.short, (counts.get(b.short) ?? 0) + 1);
+  // An old trade's execution tags count here too (a v2 trade's "me" tags are already in brokenFor).
+  for (const t of week) {
+    for (const b of [...brokenFor(t, breaks, cfg, eras), ...(isRubricV2(t) ? [] : oldExecutionBreaks(t))]) counts.set(b.short, (counts.get(b.short) ?? 0) + 1);
+  }
 
   const line = (t: Trade | undefined): TradeLine | null => (t ? {
     id: t.id, date: t.date.slice(0, 10), account: t.account, setup: t.setup_type, direction: t.direction, target: t.target_type,

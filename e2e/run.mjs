@@ -406,11 +406,23 @@ await check('Rubric v2: a dropdown keeps its highlight under the pointer while t
   expect(!errors.length, errors.join(' | '));
 });
 
-await check('Rubric v2: Discard only while nothing is scored; Step 1 locked after the decision', async () => {
+await check('Rubric v2: Close shuts an untouched form, asks once something is entered; Step 1 locked after the decision', async () => {
   const { page } = await openNewTrade();
-  expect(!(await page.locator('[data-discard]').isDisabled()), 'discard while empty');
+  await page.click('[data-close]');
+  await page.waitForSelector('[data-decide-step]', { state: 'detached', timeout: 5000 });
+  await page.locator('[data-new-trade]:visible').click();
+  await page.waitForSelector('[data-decide-step]');
+  expect((await page.locator('[data-facts] [role="combobox"]').nth(2).innerText()).includes('NY AM'), 'session defaults to NY AM');
   await page.keyboard.press('2');
-  expect(await page.locator('[data-discard]').isDisabled(), 'no discard once a row is scored');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-close-dialog]');
+  expect(await page.locator('[data-close-action="pass"]').count() === 0, 'no "save as passed" before the answers are in');
+  await page.click('[data-close-action="keep"]');
+  await page.waitForSelector('[data-close-dialog]', { state: 'detached', timeout: 3000 });
+  expect(await page.locator('[data-decide-step]').count() === 1, 'kept deciding');
+  // Take with answers missing: the missing ones are marked required and blink.
+  await page.click('[data-decide-button="take"]', { force: true }).catch(() => {});
+  expect(await page.locator('[data-required="true"]').count() >= 2, 'direction and scenario marked required');
   for (const k of ['2', '2', '2', 's', 'b', 'p']) await page.keyboard.press(k);
   await page.waitForSelector('[data-outcome-step][data-decision="pass"]');
   const t = await savedTrade(page);
@@ -422,6 +434,26 @@ await check('Rubric v2: Discard only while nothing is scored; Step 1 locked afte
   }, t);
   expect(res.ok && res.t.row_sweep === 2 && res.t.grade_letter === 'B', `Step 1 stays as locked: ${JSON.stringify({ ok: res.ok, sweep: res.t.row_sweep, g: res.t.grade_letter })}`);
   await page.context().close();
+});
+
+await check('Rubric v2: Step 2 goes back to a read-only Step 1, and Close offers to save what is written as unfinished', async () => {
+  const { page, errors } = await openNewTrade();
+  for (const k of ['2', '2', '1', '2', 'l', 'a', 'p']) await page.keyboard.press(k);
+  await page.waitForSelector('[data-outcome-step]');
+  await page.fill('[data-field="would-r"]', '1.5');
+  await page.click('[data-back]');
+  await page.waitForSelector('[data-locked-step1]');
+  expect(await page.locator('[data-locked-step1] [data-row="row_path"][data-score="1"]').count() === 1, 'the locked rows are shown');
+  await page.click('[data-forward]');
+  expect(await page.inputValue('[data-field="would-r"]') === '1.5', 'what was typed in Step 2 is still there');
+  await page.click('[data-close]');
+  await page.waitForSelector('[data-close-dialog]');
+  await page.click('[data-close-action="draft"]');
+  await page.waitForSelector('[data-outcome-step]', { state: 'detached', timeout: 5000 });
+  const t = await savedTrade(page);
+  expect(t.would_be_r === 1.5 && !t.outcome_at, JSON.stringify({ w: t.would_be_r, at: t.outcome_at }));
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
 });
 
 await check('Trades: unfinished trades wait on their own shelf; deleting one asks only for DELETE', async () => {

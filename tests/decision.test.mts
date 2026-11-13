@@ -222,8 +222,8 @@ test('old trades are untouched: no decision, graded under the checklist rubric a
   assert.deepEqual([t.decision, t.row_sweep, t.outcome_at, t.leg_location], [null, null, null, null]);
 });
 
-test('the review reads the "me" tags and the override; old trades\' execution tags count too; market tags never', async () => {
-  const { checkTrade } = await import('../lib/review');
+test('the review reads the "me" tags and the override; old trades\' execution tags count in the weekly review only; market tags never', async () => {
+  const { checkTrade, oldExecutionBreaks } = await import('../lib/review');
   const { adherenceOf } = await import('../lib/adherence');
   const v2 = save({ outcome: 'Loss', r_multiple: -1, status: 'Settled', outcome_at: '2026-11-13T10:00:00.000Z', screenshot_path: 'x.png', mistake_tags: ['Moved stop before BE trigger'], market_tags: ['News spike'],
     explanation: 'E'.repeat(170), lesson: 'L'.repeat(170) });
@@ -245,9 +245,11 @@ test('the review reads the "me" tags and the override; old trades\' execution ta
   });
   if (!r.ok) throw new Error(r.error);
   const old = createTrade(r.value);
-  const shorts = checkTrade(old).map((b) => b.short);
-  assert.ok(shorts.includes('Moved stop'));
-  assert.ok(!shorts.includes('Stopped by a wick'));
+  const weekly = oldExecutionBreaks(old).map((b) => b.short);
+  assert.ok(weekly.includes('Moved stop'));
+  assert.ok(!weekly.includes('Stopped by a wick'));
+  // Rules kept, the rings and the score judge the old trade by its own rule book, as before rubric v2.
+  assert.ok(!checkTrade(old).some((b) => b.short === 'Moved stop'), 'not in checkTrade');
 });
 
 test('stats: v2 records only, by total, row, scenario, time and decision; passes and misses at their hypothetical R', async () => {

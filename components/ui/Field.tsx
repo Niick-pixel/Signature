@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { spring } from '@/lib/motion';
 
 export function Field({
-  label, hint, children, className = '', group = false, pending = false, quiet = false, badge,
+  label, hint, children, className = '', group = false, pending = false, quiet = false, badge, required = false,
 }: {
   label: string; hint?: string; children: React.ReactNode; className?: string;
   /** A word or two at the end of the label row — said there so it adds no height. */
@@ -22,6 +22,8 @@ export function Field({
    * is never mistaken for an answer. Never blocks anything.
    */
   pending?: boolean;
+  /** Required and not answered yet: lit like `pending`, with a small "required" after the label. */
+  required?: boolean;
   /**
    * For a row of buttons rather than one control. A <label> labels only its
    * FIRST labelable descendant — so around five buttons it named the first
@@ -32,14 +34,17 @@ export function Field({
 }) {
   const Tag = group ? 'div' : 'label';
   const gap = quiet ? 'mb-1.5' : 'mb-2';
+  const lit = pending || required;
   const caption = (
     <span
       data-pending={pending ? 'true' : undefined}
-      title={[pending && 'Still on its default — pick an option to confirm it', quiet && hint].filter(Boolean).join('\n\n') || undefined}
+      data-required={required ? 'true' : undefined}
+      title={[pending && 'Still on its default — pick an option to confirm it', required && 'Required', quiet && hint].filter(Boolean).join('\n\n') || undefined}
       className={`${badge ? 'whitespace-nowrap' : gap} flex items-center gap-1.5 text-[11px] uppercase tracking-[0.07em] transition-[color,font-weight] duration-300`}
-      style={{ color: pending ? 'rgb(var(--accent))' : 'var(--text-faint)', fontWeight: pending ? 700 : 500 }}>
-      {pending && <span aria-hidden className="size-1.5 rounded-full" style={{ background: 'rgb(var(--accent))' }} />}
+      style={{ color: lit ? 'rgb(var(--accent))' : 'var(--text-faint)', fontWeight: lit ? 700 : 500 }}>
+      {lit && <span aria-hidden className="size-1.5 rounded-full" style={{ background: 'rgb(var(--accent))' }} />}
       {label}
+      {required && <span className="normal-case tracking-normal opacity-75" style={{ fontWeight: 500 }}>· required</span>}
       {quiet && hint && <span aria-hidden className="cursor-help normal-case opacity-60">ⓘ</span>}
     </span>
   );
