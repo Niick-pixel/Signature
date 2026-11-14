@@ -12,6 +12,8 @@ import { scenarioLine, type ReplayDay } from '@/lib/replay';
 import { PLAN_LABEL, type PlanMatch } from '@/lib/planMatch';
 import { DecisionReplay } from '@/components/capture/DecisionFlow';
 import { Help } from '@/components/ui/Help';
+import { useRouter } from 'next/navigation';
+import { tradeWhen } from '@/lib/when';
 
 /*
   The trade summary for a Rubric v2 trade (046–049): the grade as v2 gives it
@@ -80,7 +82,7 @@ export function V2GradeBlock({ trade }: { trade: Trade }) {
   );
 }
 
-export function V2Summary({ trade, plan }: { trade: Trade; plan: PlanMatch | null }) {
+export function V2Summary({ trade, plan, onChanged }: { trade: Trade; plan: PlanMatch | null; onChanged?: () => void }) {
   const decision = (trade.decision ?? 'take') as Decision;
   const taken = decision === 'take';
   const g = gradeV2(trade);
@@ -170,6 +172,7 @@ export function V2Summary({ trade, plan }: { trade: Trade; plan: PlanMatch | nul
       {/* 2. The decision, and the facts it was made on. */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Section title="The decision" data="decision">
+          <WhenRow trade={trade} onChanged={onChanged} />
           <Row label="Decision" value={DECISION_LABEL[decision]} tone={taken ? undefined : 'var(--text-dim)'} />
           <Row label="Time" value={<>{trade.decision_seconds ?? '—'}s{trade.decision_limit ? ` of ${trade.decision_limit}s` : ' · untimed'}{over ? ' · over the limit' : ''}</>}
             tone={over ? 'rgb(var(--amber))' : undefined} />
@@ -240,6 +243,46 @@ export function V2Summary({ trade, plan }: { trade: Trade; plan: PlanMatch | nul
         <Row label="Honest re-grade" value={trade.regrade ? `${V2_LETTER_OF(trade.grade_letter) ?? '—'} → ${trade.regrade}` : null} />
         {fill.optional.length > 0 && <p className="pt-1 text-[10.5px]" style={faint} data-v2-optional>Not set: {fill.optional.join(', ')}.</p>}
       </Section>
+    </div>
+  );
+}
+
+/**
+ * When it happened, with Change: a date is never locked. A backtest's date is
+ * the replayed day; one on a replay day moves alone here (Fix replay dates
+ * moves the whole day with its trades).
+ */
+function WhenRow({ trade, onChanged }: { trade: Trade; onChanged?: () => void }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(trade.date.slice(0, 16));
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setError(null);
+    const r = await fetch(`/api/trades/${trade.id}/date`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: value }) }).catch(() => null);
+    if (!r || !r.ok) { setError((await r?.json().catch(() => null))?.error ?? 'Could not change the date.'); return; }
+    setEditing(false);
+    onChanged?.();
+    router.refresh();
+  };
+  if (!editing) {
+    return (
+      <Row label="When" value={<span data-v2-when>
+        {trade.undated ? <span style={{ color: 'rgb(var(--amber))' }}>Undated</span> : tradeWhen(trade)}
+        <button type="button" onClick={() => { setValue(trade.date.slice(0, 16)); setEditing(true); }} className="ml-2 text-[11px] underline underline-offset-2" style={{ color: 'rgb(var(--accent))' }} data-change-date>Change</button>
+      </span>} />
+    );
+  }
+  return (
+    <div className="py-1" data-v2-when-edit>
+      <div className="flex items-center justify-end gap-2">
+        <input type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} aria-label="When the trade happened"
+          className="rounded-[10px] border bg-transparent px-2 py-1 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} />
+        <button type="button" onClick={() => void save()} className="rounded-full px-3 py-1 text-[11.5px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-save-date>Save</button>
+        <button type="button" onClick={() => setEditing(false)} className="text-[11.5px]" style={dim}>Cancel</button>
+      </div>
+      {trade.replay_day_id && <p className="mt-1 text-right text-[10.5px]" style={faint}>Moves this trade only. To move its whole replay day: Fix replay dates (Calendar → Backtest).</p>}
+      {error && <p className="mt-1 text-right text-[11px]" style={{ color: `rgb(${LOSS})` }} role="alert">{error}</p>}
     </div>
   );
 }

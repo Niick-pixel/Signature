@@ -4,12 +4,15 @@ import { motion } from 'framer-motion';
 import { openTrade } from '@/components/trade/openTrade';
 import { stagger } from '@/lib/motion';
 import type { StudyPlan } from '@/db/studyHub';
-import type { CardStats } from './Flashcards';
+import { useDailyQuestion } from './DailyQuestion';
+import { APP_TIME } from '@/components/shell/AppTimeTracker';
+import { localDay } from '@/lib/day';
+import { useEffect, useState } from 'react';
 import type { StudyTotals } from '@/lib/study';
 import { StudyToday } from './StudyToday';
 import { Card, Faint, Head, Pill, rTone, shotSrc, signedR } from './shared';
 
-export type HubTab = 'today' | 'cards' | 'lessons' | 'drills' | 'notes' | 'later';
+export type HubTab = 'today' | 'question' | 'lessons' | 'drills' | 'notes' | 'later';
 
 /**
  * Today in the study room: what to study, from what costs you most. The
@@ -17,15 +20,17 @@ export type HubTab = 'today' | 'cards' | 'lessons' | 'drills' | 'notes' | 'later
  * trades, drill them as flashcards, write the rule down — never a setup to
  * take, and never a reason to break a written rule.
  */
-export function TodayTab({ plan, cards, drillsThisWeek, waiting, go, writePlaybook, totals, reloadTotals }: {
-  plan: StudyPlan | null; cards: CardStats | null; drillsThisWeek: number | null; waiting: number | null;
+export function TodayTab({ plan, drillsThisWeek, waiting, go, writePlaybook, totals, reloadTotals }: {
+  plan: StudyPlan | null; drillsThisWeek: number | null; waiting: number | null;
   go: (t: HubTab) => void; writePlaybook: (title: string, body: string) => void;
   totals: StudyTotals | null; reloadTotals: () => void;
 }) {
   const leak = plan?.leak;
+  const { data: question } = useDailyQuestion();
+  const appSeconds = useAppTime();
   const steps = leak ? [
     { n: 1, title: `Look at the ${Math.min(leak.tradeIds.length, 6)} most recent`, body: 'Open each one. What did the chart show before you did it?', done: false },
-    { n: 2, title: 'Drill them as flashcards', body: 'They come first in today’s cards — recall the lesson before you turn each one.', action: () => go('cards'), label: 'Start cards' },
+    { n: 2, title: 'Grade them blind', body: 'Re-grade the entry candle without the outcome — does the grade still say take?', action: () => go('drills'), label: 'Blind re-grade' },
     { n: 3, title: 'Write the rule that stops it', body: leak.experiment ? `A starting point: ${leak.experiment}` : 'One line, in your words, you can check before every entry.', action: () => writePlaybook(`Stop: ${leak.label}`, `${leak.label}\n\nWhat it costs: about ${Math.abs(leak.costR).toFixed(2)}R each time (${leak.n} trades).\n\nThe rule:\n\nHow I will check it before an entry:\n`), label: 'Write it' },
   ] : [];
 
@@ -69,7 +74,12 @@ export function TodayTab({ plan, cards, drillsThisWeek, waiting, go, writePlaybo
       </Card>
       <div className="space-y-4">
         <StudyToday t={totals} onChange={reloadTotals} />
-        <Tile title="Flashcards" value={cards ? `${cards.due + cards.fresh}` : '—'} sub={cards ? `${cards.due} due · ${cards.fresh} new · ${cards.deck} in the deck` : ''} onClick={() => go('cards')} data="cards" />
+        <Tile title="Today’s question" value={!question ? '—' : question.answered ? (question.answered.correct ? '✓' : '✕') : '?'}
+          sub={!question ? '' : question.answered ? `${question.stats.streak} day${question.stats.streak === 1 ? '' : 's'} right in a row · a new one tomorrow` : `${question.question.topic} — one answer, final`}
+          onClick={() => go('question')} data="question" />
+        <Tile title="Time in the app" value={appSeconds == null ? '—' : fmtTime(appSeconds)}
+          sub={totals?.blocks?.some((b) => b.id.startsWith('app:')) || !(totals?.blocks?.length) ? 'today · counts as study time until you log one' : 'today · your logged study counts instead'}
+          onClick={() => {}} data="app-time" />
         <Tile title="Blind re-grade" value={drillsThisWeek == null ? '—' : `${drillsThisWeek}/10`} sub="graded this week" onClick={() => go('drills')} data="drills" />
         <Tile title="Watch later" value={waiting == null ? '—' : String(waiting)} sub="videos waiting" onClick={() => go('later')} data="later" />
       </div>
@@ -89,3 +99,17 @@ function Tile({ title, value, sub, onClick, data }: { title: string; value: stri
     </motion.button>
   );
 }
+
+/** Seconds in the app today (db/appTime), live from the tracker's reports. */
+function useAppTime(): number | null {
+  const [seconds, setSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    const day = localDay();
+    void fetch(`/api/app-time?day=${day}`).then((r) => (r.ok ? r.json() : null)).then((j: { seconds: number } | null) => { if (j) setSeconds(j.seconds); }).catch(() => {});
+    const on = (e: Event) => { const d = (e as CustomEvent<{ day: string; seconds: number }>).detail; if (d?.day === localDay()) setSeconds(d.seconds); };
+    window.addEventListener(APP_TIME, on);
+    return () => window.removeEventListener(APP_TIME, on);
+  }, []);
+  return seconds;
+}
+const fmtTime = (s: number) => { const m = Math.floor(s / 60); return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`; };

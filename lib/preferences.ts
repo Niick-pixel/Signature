@@ -249,10 +249,11 @@ export const DASH_BLOCK_LABEL: Record<DashBlock, string> = {
 };
 export const SCORE_AXIS_KEYS = ['rules', 'honesty', 'consistency', 'profitFactor', 'avgR', 'winRate'] as const;
 export type ScoreAxis = (typeof SCORE_AXIS_KEYS)[number];
-export const SIDEBAR_SECTIONS = ['rings', 'plan', 'grade', 'checklist', 'goals', 'focus', 'rules', 'prop', 'recent'] as const;
+// The plan, plan grade, checklist and focus left the panel (the plan is in the check-in, the focus on the Path); notifications came in.
+export const SIDEBAR_SECTIONS = ['rings', 'notifications', 'goals', 'rules', 'prop', 'recent'] as const;
 export type SidebarSection = (typeof SIDEBAR_SECTIONS)[number];
 export const SIDEBAR_SECTION_LABEL: Record<SidebarSection, string> = {
-  rings: 'Process rings and the streak', plan: "Today's plan (from the chart prep)", grade: 'Plan grade (the plan against the day)', goals: 'Goals', checklist: 'Pre-entry checklist', focus: "This week's focus rule",
+  rings: 'Process rings and the streak', notifications: 'Notifications (they stay until done)', goals: 'Goals',
   rules: 'Rules kept today', prop: 'Prop accounts: room left', recent: 'Recent trades',
 };
 export const DEFAULT_CHECKLIST = [
@@ -292,7 +293,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dashRow: DEFAULT_DASH_ROW,
   scoreAxes: { rules: true, honesty: true, consistency: true, profitFactor: true, avgR: true, winRate: true },
   sidebar: 'dashboard',
-  sidebarSections: { rings: true, plan: true, grade: true, checklist: true, goals: true, focus: true, rules: true, prop: true, recent: true },
+  sidebarSections: { rings: true, notifications: true, goals: true, rules: true, prop: true, recent: true },
   checklistItems: DEFAULT_CHECKLIST,
   openTradeIn: 'page',
   tradeSections: { metrics: true, chips: true, chart: true, executions: true, shots: true, rules: true, notes: true },

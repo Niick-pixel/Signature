@@ -2,6 +2,7 @@ import type { Trade } from '@/lib/types';
 import { isTaken } from '@/lib/domain';
 import { money } from '@/lib/stats';
 import { CountUp } from '@/components/ui/CountUp';
+import { ReplayDatesButton } from '@/components/replay/ReplayDates';
 
 const usd = (v: number) =>
   `${v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -18,7 +19,7 @@ export function BacktestNote({ undated, where }: { undated: number; where: 'stat
       Backtest. Replayed trades, kept apart from every real figure — the All stats, the balances, the risk
       limits and the streaks. On the whiteboard they sit in a group of their own.
       {where === 'stats' && undated > 0 && ` ${undated} ${undated === 1 ? 'is' : 'are'} undated, so ${undated === 1 ? 'it sits' : 'they sit'} out of the weekday and hour heatmap and the day counts.`}
-      {where === 'calendar' && ' Each backtest sits on the day you logged it.'}
+      {where === 'calendar' && ' Each backtest sits on the day it replays (its replay day’s date). Days on the wrong date? Fix replay dates, on the card below.'}
       {where === 'calendar' && undated > 0 && ` ${undated} saved with no date ${undated === 1 ? 'is' : 'are'} left off the squares but counted above.`}
     </p>
   );
@@ -45,9 +46,13 @@ export function BacktestCard({ trades }: { trades: Trade[] }) {
 
   return (
     <div data-backtest-card className="glass rounded-[calc(24px*var(--rk))] p-6">
-      <span className="text-[11px] font-medium uppercase tracking-[0.07em]" style={{ color: 'var(--text-faint)' }}>
-        Backtest — replayed trades
-      </span>
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-[11px] font-medium uppercase tracking-[0.07em]" style={{ color: 'var(--text-faint)' }}>
+          Backtest — replayed trades
+        </span>
+        {/* Replay days planned while the date defaulted to today sit on the real calendar: put them back. */}
+        <ReplayDatesButton />
+      </div>
       <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <span className="tabular-nums text-[40px] font-semibold leading-none tracking-tight"
           style={{ color: totalR > 0 ? 'rgb(var(--outcome-win))' : totalR < 0 ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>

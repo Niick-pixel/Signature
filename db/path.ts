@@ -310,6 +310,12 @@ export function weekendReviewDone(week: string): boolean {
   return row?.value === week;
 }
 
+/** A weekend review written for this week or a later one: an older week's reminder has nothing left to ask. */
+export function weekendReviewedSince(week: string): boolean {
+  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get(WEEKEND_KEY) as { value: string } | undefined;
+  return row?.value != null && row.value >= week;
+}
+
 export function markWeekendReview(week: string): void {
   getDb().prepare('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
     .run(WEEKEND_KEY, week);

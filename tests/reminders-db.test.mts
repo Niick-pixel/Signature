@@ -76,3 +76,37 @@ test('Done takes it out of the bell for good', () => {
   assert.ok(N.actOnNotification({ id: t.id, action: 'done' }, new Date('2026-11-04T15:02:00Z')));
   assert.equal(N.listNotifications(new Date('2026-11-04T15:03:00Z')).some((n) => n.id === t.id), false);
 });
+
+test('a reminder clears when its thing is done, whenever it is done: last week’s review written on Tuesday; a past day’s prep; a video watched', async () => {
+  const { addWatchLater, startWatching } = await import('../db/studyHub');
+  // An earlier test turned weekly reminders off and set quiet hours: back to the defaults.
+  N.setNotifySettings({ kinds: { ...N.getNotifySettings().kinds, weekly: true }, quietFrom: null, quietTo: null });
+  // Saturday: last week's weekly review is due (week of Nov 9).
+  const saturday = new Date('2026-11-14T17:00:00Z');
+  N.tickReminders(saturday);
+  assert.ok(N.listNotifications(saturday).some((n) => n.id === 'weekly:2026-11-09'));
+  // Tuesday of the next week: still open (not written yet), then written — it clears, though it is no longer that week.
+  const tuesday = new Date('2026-11-17T18:00:00Z');
+  N.tickReminders(tuesday);
+  assert.ok(N.listNotifications(tuesday).some((n) => n.id === 'weekly:2026-11-09'), 'not done yet: still there');
+  saveWeeklyReview('2026-11-09', 'Done late, done all the same.', []);
+  N.tickReminders(tuesday);
+  assert.equal(N.listNotifications(tuesday).some((n) => n.id === 'weekly:2026-11-09'), false, 'written on Tuesday: cleared');
+  // A past day's prep reminder ended with its day.
+  assert.equal(N.listNotifications(tuesday).some((n) => n.id === 'prep:2026-11-04'), false, 'a past day’s prep: expired');
+  // A video on the watch-later list: reminded (snoozable to tomorrow), cleared once watched.
+  const v = addWatchLater('https://example.com/v', 'Liquidity, explained', 'for the sweep row');
+  N.tickReminders(tuesday);
+  assert.ok(N.listNotifications(tuesday).some((n) => n.id === `watch:${v.id}` && n.kind === 'watch'));
+  N.actOnNotification({ id: `watch:${v.id}`, action: 'snooze', minutes: 24 * 60 }, tuesday);
+  assert.ok(N.listNotifications(tuesday).find((n) => n.id === `watch:${v.id}`)?.snoozed_until, 'snoozed a day');
+  startWatching(v.id);
+  N.tickReminders(tuesday);
+  assert.equal(N.listNotifications(tuesday).some((n) => n.id === `watch:${v.id}`), false, 'watched: cleared');
+});
+
+test('every reminder kind says what clears it', async () => {
+  const { DONE_WHEN } = await import('../lib/reminders');
+  const { REMINDER_KINDS } = await import('../lib/notify');
+  for (const k of REMINDER_KINDS) assert.ok(DONE_WHEN[k.kind]?.startsWith('Clears'), k.kind);
+});

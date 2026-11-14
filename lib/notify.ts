@@ -5,7 +5,7 @@
 import { utcToWall } from './traderZone';
 import { isTradingDay, marketHoliday } from './marketHolidays';
 
-export type ReminderKind = 'prep' | 'before' | 'news' | 'stop' | 'cooldown' | 'journal' | 'evening' | 'redday' | 'weekly' | 'weekend' | 'prop' | 'backup' | 'consistency';
+export type ReminderKind = 'prep' | 'before' | 'news' | 'stop' | 'cooldown' | 'journal' | 'evening' | 'redday' | 'weekly' | 'weekend' | 'prop' | 'backup' | 'consistency' | 'watch';
 export const REMINDER_KINDS: ReadonlyArray<{ kind: ReminderKind; label: string; hint: string; live: boolean }> = [
   { kind: 'prep', label: 'Prep not done', hint: 'Before the NY open, if the morning check-in or chart prep is not finished.', live: false },
   { kind: 'before', label: 'Before you trade', hint: 'The morning of a trading day, before the first trade: the #1 leak, the last session, the rule behind it.', live: false },
@@ -20,6 +20,7 @@ export const REMINDER_KINDS: ReadonlyArray<{ kind: ReminderKind; label: string; 
   { kind: 'prop', label: 'Prop accounts', hint: 'Little daily-loss or drawdown room left; a payout you can request.', live: true },
   { kind: 'consistency', label: 'Sunday consistency report', hint: 'Sunday morning: your week in process — the rings, the streak, the one to work on.', live: false },
   { kind: 'backup', label: 'Backup health', hint: 'No second backup folder, or the last backup zip failed.', live: false },
+  { kind: 'watch', label: 'Watch later', hint: 'A video on your watch-later list, until it is watched or removed. Snooze puts it off a day.', live: false },
 ];
 
 export const SOUND_IDS = ['rise', 'pings', 'low', 'bell', 'ticks', 'fall', 'arpeggio', 'alert', 'blip', 'chord'] as const;
@@ -60,7 +61,7 @@ export interface NotifySettings {
 export const DEFAULT_NOTIFY: NotifySettings = {
   enabled: true,
   sound: true, volume: 60, sounds: { ...DEFAULT_SOUNDS },
-  kinds: { prep: true, before: true, redday: true, weekend: true, news: true, stop: true, cooldown: true, journal: true, evening: true, weekly: true, prop: true, backup: true, consistency: true },
+  kinds: { prep: true, before: true, redday: true, weekend: true, news: true, stop: true, cooldown: true, journal: true, evening: true, weekly: true, prop: true, backup: true, consistency: true, watch: true },
   quietFrom: null, quietTo: null, tradingDaysOnly: true, holdWhileLive: true, prepLead: 30, newsLead: 15, eveningAt: '19:00',
 };
 

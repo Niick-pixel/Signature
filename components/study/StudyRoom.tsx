@@ -18,13 +18,13 @@ import type { StudyPlan } from '@/db/studyHub';
 import { motion } from 'framer-motion';
 import { springSnappy } from '@/lib/motion';
 import { TodayTab, type HubTab } from './hub/TodayTab';
-import { Flashcards, type CardStats } from './hub/Flashcards';
+import { DailyQuestion } from './hub/DailyQuestion';
 import { Lessons } from './hub/Lessons';
 import { Drills } from './hub/Drills';
 import { WatchLater } from './hub/WatchLater';
 
-const TABS: HubTab[] = ['today', 'cards', 'lessons', 'drills', 'notes', 'later'];
-const TAB_LABEL: Record<HubTab, string> = { today: 'Today', cards: 'Flashcards', lessons: 'Lessons', drills: 'Drills', notes: 'Notes', later: 'Watch later' };
+const TABS: HubTab[] = ['today', 'question', 'lessons', 'drills', 'notes', 'later'];
+const TAB_LABEL: Record<HubTab, string> = { today: 'Today', question: 'Question', lessons: 'Lessons', drills: 'Drills', notes: 'Notes', later: 'Watch later' };
 const TAB_KEY = 'signature:study-tab';
 
 interface LinkedTrade { id: string; role: 'example' | 'counter'; date: string; undated: boolean; setup: string; direction: string; account: string; outcome: string; r: number | null; grade: string; shot: string | null }
@@ -59,10 +59,12 @@ export function StudyRoom() {
   // The server renders Today; the remembered tab is applied after hydration (no mismatch).
   const [tab, setTab] = useState<HubTab>('today');
   const [plan, setPlan] = useState<StudyPlan | null>(null);
-  const [cardStats, setCardStats] = useState<CardStats | null>(null);
   const [drillsWeek, setDrillsWeek] = useState<number | null>(null);
   const [waiting, setWaiting] = useState<number | null>(null);
   useEffect(() => {
+    // ?tab= (a notification's link) wins over the remembered tab.
+    const asked = new URLSearchParams(window.location.search).get('tab') as HubTab | null;
+    if (asked && TABS.includes(asked)) { setTab(asked); return; }
     try { const v = window.localStorage.getItem(TAB_KEY) as HubTab | null; if (v && TABS.includes(v)) setTab(v); } catch { /* fresh */ }
   }, []);
   // The plan (the leak from Stats): reloads when trades change, not when you study.
@@ -71,13 +73,11 @@ export function StudyRoom() {
   }, []);
   useEffect(() => { loadPlan(); }, [loadPlan]);
   useLive(loadPlan, { ignore: ['/api/study', '/api/blind'], focus: false });
-  const focusIds = useMemo(() => plan?.leak?.tradeIds ?? [], [plan]);
   // The counts on the tabs and tiles: after every change — a card rated, a drill graded, a video saved.
   const loadCounts = useCallback(() => {
     const today = localDay();
     fetch(`/api/study/drills?today=${today}`).then((r) => r.json()).then((d) => setDrillsWeek(d.counter.thisWeek)).catch(() => {});
     fetch('/api/study/later').then((r) => r.json()).then((d) => setWaiting(d.items.filter((w: { done_at: string | null }) => !w.done_at).length)).catch(() => {});
-    fetch(`/api/study/cards?today=${today}`).then((r) => r.json()).then((j) => setCardStats(j.stats)).catch(() => {});
   }, []);
   useEffect(() => { loadCounts(); }, [loadCounts]);
   useLive(loadCounts);
@@ -114,7 +114,7 @@ export function StudyRoom() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Study room</h1>
-          <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>Study what costs you: your own trades as flashcards, your lessons, drills, notes and videos.</p>
+          <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>Study what costs you: a hard question a day, your lessons, drills, notes and videos.</p>
         </div>
         <div className="flex items-center gap-4">
           {totals && (
@@ -154,7 +154,7 @@ export function StudyRoom() {
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3" data-study-tabs>
         <nav className="glass flex flex-wrap gap-1 rounded-full p-1" aria-label="Study room">
           {TABS.map((t) => {
-            const n = t === 'cards' && cardStats ? cardStats.due + cardStats.fresh : t === 'later' ? waiting : null;
+            const n = t === 'later' ? waiting : null;
             const on = tab === t;
             return (
               <button key={t} type="button" onClick={() => go(t)} data-study-tab={t} aria-current={on}
@@ -169,8 +169,8 @@ export function StudyRoom() {
 
       <div className="mt-4">
         <SwapIn k={tab}>
-        {tab === 'today' && <TodayTab totals={totals} reloadTotals={() => void loadTotals()} plan={plan} cards={cardStats} drillsThisWeek={drillsWeek} waiting={waiting} go={go} writePlaybook={writePlaybook} />}
-        {tab === 'cards' && <Flashcards focus={focusIds} onStats={setCardStats} />}
+        {tab === 'today' && <TodayTab totals={totals} reloadTotals={() => void loadTotals()} plan={plan} drillsThisWeek={drillsWeek} waiting={waiting} go={go} writePlaybook={writePlaybook} />}
+        {tab === 'question' && <DailyQuestion />}
         {tab === 'lessons' && <Lessons />}
         {tab === 'drills' && <Drills />}
         {tab === 'later' && <WatchLater onOpenNote={openNote} />}

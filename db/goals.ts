@@ -4,6 +4,7 @@ import { getDb } from './index';
 import { listTrades } from './trades';
 import { getPrep } from './prep';
 import { listSessions } from './study';
+import { withAppTime } from './appTime';
 import { prepProgress } from '../lib/prep';
 import { goalProgress, type Goal, type GoalCheckin, type GoalKind, type GoalParams } from '../lib/goals';
 
@@ -46,7 +47,7 @@ export function saveCheckin(c: { goal_id: string; week: string; rating: number |
 /** Every goal with its progress, worked out from the journal now. */
 export function goalsWithProgress(today: string) {
   const trades = listTrades();
-  const sessions = listSessions();
+  const sessions = withAppTime(listSessions());
   const studyWeek = (monday: string) => {
     const end = new Date(`${monday}T12:00:00Z`); end.setUTCDate(end.getUTCDate() + 6);
     const sun = end.toISOString().slice(0, 10);

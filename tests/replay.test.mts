@@ -191,3 +191,18 @@ test('a wrong replay date is put right: the day and its trades move, the plan is
   assert.equal(getTrade(t.id)!.date, '2023-09-12T09:45');
   assert.throws(() => DB.redateReplayDay(d.id, 'soon'), /YYYY-MM-DD/);
 });
+
+test('backtests on no replay day move by the day they were logged, in one go: two groups can even swap days', async () => {
+  const { BACKTEST } = await import('../lib/domain');
+  const mk = (date: string) => { const r = parseTradeInput({ ...step1(), account: BACKTEST, date, replay_day_id: null }); if (!r.ok) throw new Error(r.error); return createTrade(applyRules(r.value, null)); };
+  const a = mk('2026-11-02T09:45'); const b = mk('2026-11-03T10:10');
+  const before = DB.looseBacktestDays();
+  assert.ok(before.some((g) => g.day === '2026-11-02') && before.some((g) => g.day === '2026-11-03'));
+  // A swap: the 2nd's trades to the 3rd and the 3rd's to the 2nd — picked before moved, so neither drags the other along.
+  DB.redateLooseBacktests([{ from: '2026-11-02', to: '2026-11-03' }, { from: '2026-11-03', to: '2026-11-02' }]);
+  assert.equal(getTrade(a.id)!.date.slice(0, 16), '2026-11-03T09:45');
+  assert.equal(getTrade(b.id)!.date.slice(0, 16), '2026-11-02T10:10');
+  DB.redateLooseBacktests([{ from: '2026-11-03', to: '2023-09-12' }]);
+  assert.equal(getTrade(a.id)!.date.slice(0, 16), '2023-09-12T09:45', 'time of day kept');
+  assert.throws(() => DB.redateLooseBacktests([{ from: 'x', to: '2023-09-12' }]), /YYYY-MM-DD/);
+});

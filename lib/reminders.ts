@@ -44,6 +44,8 @@ export interface ReminderSnapshot {
   weekendDue?: boolean;
   /** On Sundays: the week's closed days, for the consistency report. */
   weekClosed?: { closed: number; of: number } | null;
+  /** The watch-later list, oldest first: what is still to watch. */
+  watchLater?: Array<{ id: string; title: string; url: string }>;
 }
 
 const PREP_STEPS_DONE = 4;
@@ -167,6 +169,14 @@ function candidates(s: ReminderSnapshot): Reminder[] {
     }
   }
 
+  // 17. Watch later: the three oldest videos still to watch, each its own reminder (snooze: a day).
+  //     Not before 10:00 local, and outside the session's busy hours.
+  if (c.localMins >= 10 * 60 && !(c.nyMins >= NY_OPEN - 60 && c.nyMins < NY_AM_CLOSE)) {
+    for (const v of (s.watchLater ?? []).slice(0, 3)) {
+      add({ id: `watch:${v.id}`, kind: 'watch', title: 'Watch later', body: v.title || v.url, route: '/study?tab=later', urgent: false });
+    }
+  }
+
   // 12. Backup health.
   if (!s.backup.folder) add({ id: `backup-folder:${mondayOf(c.localDay)}`, kind: 'backup', title: 'Backups: no second copy', body: 'Your only backups are on the same disk as the journal. Settings → Journal & data → choose a backup folder.', route: 'settings:data', urgent: false });
   if (s.backup.lastError) add({ id: `backup-error:${c.localDay}`, kind: 'backup', title: 'Backup zip failed', body: s.backup.lastError, route: 'settings:data', urgent: false });
@@ -204,6 +214,46 @@ export function resolvedIds(s: ReminderSnapshot, ids: readonly string[]): string
     if (kind === 'before') return key === c.localDay && done.length > 0;
     if (kind === 'redday') return !s.redDay || s.redDay.day !== key;
     if (kind === 'weekend') return s.weekendDue === false;
+    return false;
+  });
+}
+
+/**
+ * What clears each reminder by itself — shown on it, so it is clear that
+ * doing the thing is enough (no need to tick it off as well).
+ */
+export const DONE_WHEN: Record<ReminderKind, string> = {
+  prep: 'Clears when the check-in and the chart prep are done, or the day is over.',
+  before: 'Clears with the day’s first trade, or when the day is over.',
+  news: 'Clears once the release is out.',
+  stop: 'Clears when the day is over.',
+  cooldown: 'Clears when the day is over.',
+  journal: 'Clears when that day’s trades are finished: no quick logs, every lesson written, executions linked.',
+  evening: 'Clears when that day has a journal page or a day review.',
+  redday: 'Clears when the red-day page is written or skipped.',
+  weekly: 'Clears when that week’s review is written — whenever you write it.',
+  weekend: 'Clears when that weekend review is written.',
+  prop: 'Clears when the day is over.',
+  backup: 'Clears when a backup folder is set, or the next backup works.',
+  consistency: 'Clears when the next week starts.',
+  watch: 'Clears when the video is watched or removed from the list.',
+};
+
+/**
+ * The ones that ended with their day or week: a reminder about Tuesday's prep
+ * means nothing on Wednesday. Pure: the id's key against the clock. (What a
+ * past day or week still owes — its journal, its review — is checked against
+ * the records in db/notify.)
+ */
+export function expiredIds(c: Pick<Clock, 'localDay' | 'nyDay'>, ids: readonly string[]): string[] {
+  const thisMonday = mondayOf(c.nyDay);
+  return ids.filter((id) => {
+    const kind = id.slice(0, id.indexOf(':'));
+    const key = id.slice(id.indexOf(':') + 1);
+    const day = key.match(/\d{4}-\d{2}-\d{2}$/)?.[0] ?? null;
+    // Keyed by the day they were about (the id's prefix, which is not always the kind: prop-daily, maxtrades).
+    if (['prep', 'before', 'stop', 'maxtrades', 'backup-error', 'prop-daily', 'prop-room'].includes(kind)) return day != null && day < c.localDay && day < c.nyDay;
+    if (kind === 'consistency') return key < thisMonday;
     return false;
   });
 }

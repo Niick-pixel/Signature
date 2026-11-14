@@ -21,6 +21,8 @@ export const RAW_TABLES = [
   'flaw_work', 'flaw_drills',
   // 043: the Stats dashboard's boards (layout and look, versioned).
   'dashboard_boards',
+  // 051: the daily question's answers and the time spent in the app.
+  'daily_answers', 'app_time',
 ] as const;
 
 export function exportRawTables(): { raw_tables: Record<string, Record<string, unknown>[]> } {

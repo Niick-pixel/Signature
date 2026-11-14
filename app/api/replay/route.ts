@@ -1,5 +1,6 @@
+import { isBacktest } from '@/lib/domain';
 import { NextResponse } from 'next/server';
-import { activeReplayDay, amendReplayDay, redateReplayDay, closeReplayDay, lastReplayDay, listReplayDays, lockReplayDay } from '@/db/replay';
+import { activeReplayDay, amendReplayDay, looseBacktestDays, redateLooseBacktests, redateReplayDay, closeReplayDay, lastReplayDay, listReplayDays, lockReplayDay } from '@/db/replay';
 import { listTrades } from '@/db/trades';
 import { DAY_OUTCOMES, TOOK, lockMissing, parseContext, parseScenarios, type DayOutcome, type Took } from '@/lib/replay';
 
@@ -13,7 +14,14 @@ export const dynamic = 'force-dynamic';
  *        { action: 'amend', id, context, scenarios }
  *        { action: 'close', id, outcome, took_a, took_b, ends_sitting }
  */
-export async function GET() {
+export async function GET(request?: Request) {
+  // ?all=1: every replay day, oldest first, with how many trades each holds (Fix replay dates).
+  if (request && new URL(request.url).searchParams.get('all') === '1') {
+    const counts: Record<string, number> = {};
+    for (const t of listTrades({ pending: true })) if (t.replay_day_id && !t.deleted_at) counts[t.replay_day_id] = (counts[t.replay_day_id] ?? 0) + 1;
+    const loose = listTrades({ pending: true }).filter((t) => isBacktest(t.account) && !t.replay_day_id && !t.deleted_at).length;
+    return NextResponse.json({ days: listReplayDays(), counts, loose, looseDays: looseBacktestDays() });
+  }
   const active = activeReplayDay();
   const trades = active
     ? listTrades({ pending: true }).filter((t) => t.replay_day_id === active.id && !t.deleted_at).map((t) => ({ id: t.id, plan_scenario: t.plan_scenario, decision: t.decision, r: t.r_multiple }))
@@ -34,6 +42,10 @@ export async function POST(request: Request) {
         return NextResponse.json(lockReplayDay({ replay_date: String(b.replay_date ?? ''), instrument: typeof b.instrument === 'string' ? b.instrument : null, context, scenarios }));
       }
       return NextResponse.json(amendReplayDay(String(b.id ?? ''), context, scenarios));
+    }
+    if (b.action === 'redate-loose') {
+      const moves = Array.isArray(b.moves) ? (b.moves as Array<Record<string, unknown>>).map((m) => ({ from: String(m?.from ?? ''), to: String(m?.to ?? '') })) : [];
+      return NextResponse.json({ moved: redateLooseBacktests(moves) });
     }
     if (b.action === 'redate') return NextResponse.json(redateReplayDay(String(b.id ?? ''), String(b.replay_date ?? '')));
     if (b.action === 'close') {

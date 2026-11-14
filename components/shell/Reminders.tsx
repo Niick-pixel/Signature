@@ -21,7 +21,9 @@ export interface BellItem {
   created_at: string; read_at: string | null; snoozed_until: string | null;
 }
 
-const COUNT = 'signature:reminders-count';
+/** Fired with the unread count after every poll and every action: the bell and the Today panel both listen. */
+export const REMINDERS_CHANGED = 'signature:reminders-count';
+const COUNT = REMINDERS_CHANGED;
 const POLL_MS = 60_000;
 let lastCount = 0;
 
@@ -99,7 +101,7 @@ export function ReminderPoller() {
   return null;
 }
 
-const ago = (iso: string) => {
+export const ago = (iso: string) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60_000);
   if (m < 1) return 'now';
   if (m < 60) return `${m} min`;
@@ -107,7 +109,7 @@ const ago = (iso: string) => {
   return `${Math.round(m / 1440)} d`;
 };
 
-const patch = async (body: Record<string, unknown>) => {
+export const patchReminder = async (body: Record<string, unknown>) => {
   const res = await fetch('/api/reminders', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await res.json().catch(() => null) as { unread?: number } | null;
   if (typeof j?.unread === 'number') announce(j.unread);
@@ -140,7 +142,7 @@ export function NotificationBell() {
 
   const act = async (n: BellItem, action: 'read' | 'dismiss' | 'snooze' | 'done', minutes?: number) => {
     setItems((xs) => (action === 'read' ? xs?.map((x) => (x.id === n.id ? { ...x, read_at: x.read_at ?? 'now' } : x)) : xs?.filter((x) => x.id !== n.id)) ?? null);
-    await patch({ id: n.id, action, minutes });
+    await patchReminder({ id: n.id, action, minutes });
   };
   const go = (n: BellItem) => { void act(n, 'read'); setOpen(false); openReminderRoute(n.route); };
 
@@ -180,7 +182,7 @@ export function NotificationBell() {
               <span className="text-[10.5px] font-medium uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Reminders</span>
               <div className="flex items-center gap-3 text-[11px]">
                 {items?.some((x) => !x.read_at) && (
-                  <button type="button" data-bell-readall onClick={() => { setItems((xs) => xs?.map((x) => ({ ...x, read_at: x.read_at ?? 'now' })) ?? null); void patch({ action: 'readAll' }); }}
+                  <button type="button" data-bell-readall onClick={() => { setItems((xs) => xs?.map((x) => ({ ...x, read_at: x.read_at ?? 'now' })) ?? null); void patchReminder({ action: 'readAll' }); }}
                     style={{ color: 'var(--text-dim)' }}>Mark all read</button>
                 )}
                 <button type="button" onClick={() => { setOpen(false); openReminderRoute('settings:notifications'); }} style={{ color: 'var(--text-dim)' }}>Settings</button>
@@ -210,6 +212,7 @@ export function NotificationBell() {
                       {!snoozed && <>
                         <Mini onClick={() => act(n, 'snooze', 15)}>15 min</Mini>
                         <Mini onClick={() => act(n, 'snooze', 60)}>1 hour</Mini>
+                        <Mini onClick={() => act(n, 'snooze', 24 * 60)}>Tomorrow</Mini>
                       </>}
                       <Mini onClick={() => act(n, 'dismiss')} data-bell-dismiss>Dismiss</Mini>
                     </div>

@@ -21,9 +21,10 @@ import { consistencyWeek } from './consistency';
 import { reviewInputs } from './review';
 import { beforeYouTrade } from '../lib/review';
 import { pendingRedDay } from './redDays';
-import { weekendReviewDone } from './path';
+import { weekendReviewDone, weekendReviewedSince } from './path';
 import { clockAt, parseNotify, type NotifySettings } from '../lib/notify';
-import { dueReminders, resolvedIds, type Reminder, type ReminderSnapshot } from '../lib/reminders';
+import { dueReminders, expiredIds, resolvedIds, type Reminder, type ReminderSnapshot } from '../lib/reminders';
+import { listWatchLater } from './studyHub';
 
 const KEY = 'notify';
 
@@ -80,6 +81,7 @@ export function reminderSnapshot(now: Date = new Date()): ReminderSnapshot {
     })(),
     redDay: (() => { const r = pendingRedDay(day); return r ? { day: r.day, netR: r.netR, trades: r.trades } : null; })(),
     weekendDue: clock.nyWeekday === 6 || clock.nyWeekday === 0 ? !weekendReviewDone(mondayOf(day)) : undefined,
+    watchLater: listWatchLater().filter((w) => !w.done_at).sort((a, b) => a.added_at.localeCompare(b.added_at)).map((w) => ({ id: w.id, title: w.title, url: w.url })),
     weekClosed: clock.nyWeekday === 0 ? (() => { const w = consistencyWeek(mondayOf(clock.nyDay), day); return { closed: w.closedDays, of: w.tradingDays }; })() : null,
   };
 }
@@ -113,8 +115,11 @@ export function tickReminders(now: Date = new Date()): { show: StoredNotificatio
     .all(iso) as Array<{ id: string }>).map((r) => r.id);
   if (woke.length) db.prepare(`UPDATE notifications SET snoozed_until = NULL, read_at = NULL WHERE id IN (${woke.map(() => '?').join(',')})`).run(...woke);
 
-  const open = (db.prepare('SELECT id FROM notifications WHERE resolved_at IS NULL AND dismissed_at IS NULL').all() as Array<{ id: string }>).map((r) => r.id);
-  const gone = resolvedIds(snap, open);
+  const openRows = db.prepare('SELECT id, created_at FROM notifications WHERE resolved_at IS NULL AND dismissed_at IS NULL').all() as Array<{ id: string; created_at: string }>;
+  const open = openRows.map((r) => r.id);
+  // Cleared by themselves: today's reason gone (lib/reminders), their day or week over, or the record they
+  // asked for written — whenever it was written (a week reviewed on Tuesday clears last Friday's reminder).
+  const gone = [...new Set([...resolvedIds(snap, open), ...expiredIds(snap.clock, open), ...doneByRecord(openRows, snap)])];
   if (gone.length) db.prepare(`UPDATE notifications SET resolved_at = ? WHERE id IN (${gone.map(() => '?').join(',')})`).run(iso, ...gone);
 
   const ids = [...fresh, ...woke].filter((id) => !gone.includes(id));
@@ -122,6 +127,32 @@ export function tickReminders(now: Date = new Date()): { show: StoredNotificatio
     ? (db.prepare(`SELECT * FROM notifications WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Record<string, unknown>[]).map(hydrate)
     : [];
   return { show, unread: unreadCount() };
+}
+
+/**
+ * The reminders whose thing has been done, read from the records rather than
+ * from today's snapshot: a reminder about another day or week is cleared by
+ * that day's or week's own record.
+ */
+function doneByRecord(rows: ReadonlyArray<{ id: string; created_at: string }>, snap: ReminderSnapshot): string[] {
+  const today = snap.clock.localDay;
+  const watch = new Map(listWatchLater().map((w) => [w.id, w]));
+  const realTradesOn = (day: string) => listTrades().filter((t) => isReal(t.account) && !t.deleted_at && t.date?.slice(0, 10) === day);
+  const localDayOf = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  return rows.filter(({ id, created_at }) => {
+    const kind = id.slice(0, id.indexOf(':'));
+    const key = id.slice(id.indexOf(':') + 1);
+    switch (kind) {
+      case 'weekly': return Boolean(getWeeklyReview(key));
+      case 'weekend': return weekendReviewDone(key) || weekendReviewedSince(key);
+      case 'evening': return key < today && (listJournalPages().some((p) => p.day === key) || (() => { const r = getDailyReview(key); return Boolean(r?.what_happened?.trim() || r?.notes?.trim()); })());
+      case 'journal': return key < today && realTradesOn(key).every((t) => !t.quick_log && (t.status === 'Live' || t.outcome === 'Not taken' || Boolean(t.lesson?.trim())));
+      case 'watch': { const w = watch.get(key); return !w || Boolean(w.done_at); }
+      // Of their moment only: the release is out, the cooldown long over, once the day has turned.
+      case 'news': case 'cooldown': return localDayOf(created_at) < today;
+      default: return false;
+    }
+  }).map((r) => r.id);
 }
 
 /** What the bell lists: the last two weeks, not dismissed or resolved, snoozed ones last. */

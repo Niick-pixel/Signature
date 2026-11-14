@@ -1,6 +1,7 @@
 import 'server-only';
 import crypto from 'node:crypto';
 import { getDb } from './index';
+import { BACKTEST } from '../lib/domain';
 import { emptyContext, emptyScenarios, weekdayOf, type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenarios, type Took } from '../lib/replay';
 
 /*
@@ -90,6 +91,31 @@ export function redateReplayDay(id: string, replayDate: string): ReplayDay {
     log.run(t.id, 'date', t.date, next);
   }
   return getReplayDay(id)!;
+}
+
+/**
+ * Backtests logged before replay days existed carry the day they were logged.
+ * Grouped by that day, a group is moved at once to the day it replayed (same
+ * time of day, each change in the trade's edit log).
+ */
+export function looseBacktestDays(): Array<{ day: string; count: number }> {
+  return getDb().prepare(`SELECT substr(date, 1, 10) AS day, count(*) AS count FROM trades
+    WHERE account = ? AND replay_day_id IS NULL AND deleted_at IS NULL GROUP BY day ORDER BY day`).all(BACKTEST) as Array<{ day: string; count: number }>;
+}
+export function redateLooseBacktests(moves: ReadonlyArray<{ from: string; to: string }>): number {
+  if (!moves.every((m) => [m.from, m.to].every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))) throw new Error('The dates are YYYY-MM-DD.');
+  const db = getDb();
+  const pick = db.prepare('SELECT id, date FROM trades WHERE account = ? AND replay_day_id IS NULL AND deleted_at IS NULL AND substr(date, 1, 10) = ?');
+  // Every group's trades are picked before any moves: a group landing on another group's day never drags it along.
+  const plan = moves.flatMap((m) => (pick.all(BACKTEST, m.from) as Array<{ id: string; date: string }>).map((t) => ({ ...t, to: m.to })));
+  const log = db.prepare('INSERT INTO trade_edits (trade_id, field, old_value, new_value) VALUES (?, ?, ?, ?)');
+  const set = db.prepare('UPDATE trades SET date = ?, undated = 0 WHERE id = ?');
+  db.exec('BEGIN');
+  try {
+    for (const t of plan) { const next = `${t.to}${t.date.slice(10)}`; set.run(next, t.id); log.run(t.id, 'date', t.date, next); }
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return plan.length;
 }
 
 /** "Next replay day" or ending the sitting: what played out, and whether each played scenario was taken. */

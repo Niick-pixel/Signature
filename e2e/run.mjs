@@ -769,6 +769,72 @@ await check('Trade summary: a Rubric v2 trade reads as v2 (rows, gate, how it is
   expect(!errors.length, errors.join(' | '));
 });
 
+await check('Today panel: no plan, grade, checklist or focus; notifications stay there until done, snooze to tomorrow; recent trades show the trade’s own date', async () => {
+  const { page, errors } = await open({ width: 1600, height: 1000 }, { sidebar: 'dashboard' });
+  await page.goto(`${BASE}/dashboard`);
+  await page.waitForSelector('[data-today="open"]');
+  expect(await page.locator('[data-today-plan], [data-today-grade], [data-today-checklist]').count() === 0, 'the removed sections are gone');
+  await page.waitForSelector('[data-today-notifications]');
+  // One notification, raised now (the Settings test one): it lands in the panel and stays.
+  await page.evaluate(() => fetch('/api/reminders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true }) }));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  const item = page.locator('[data-today-notification^="test:"]').first();
+  await item.waitFor({ timeout: 5000 });
+  await item.locator('button[aria-expanded]').click();
+  await item.locator('[data-notification-action="snooze-day"]').click();
+  await page.waitForSelector('[data-today-notification^="test:"]', { state: 'detached', timeout: 5000 });
+  expect(/snoozed/.test(await page.locator('[data-notifications-snoozed]').innerText()), 'snoozed to tomorrow, said so');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Study: the daily question replaces the flashcards — answered once, then the answer and why', async () => {
+  const { page, errors } = await open({ width: 1440, height: 900 });
+  await page.goto(`${BASE}/study?tab=question`);
+  await page.waitForSelector('[data-daily-question="open"]');
+  expect(await page.locator('[data-study-tab="cards"]').count() === 0 && await page.locator('[data-study-tab="question"]').count() === 1, 'Question, not Flashcards');
+  await page.click('[data-option-index="2"]');
+  await page.click('[data-question-submit]');
+  await page.waitForSelector('[data-question-why]');
+  expect(['right', 'wrong'].includes(await page.locator('[data-daily-question]').getAttribute('data-daily-question')), 'answered');
+  expect(await page.locator('[data-option-index]:not([disabled])').count() === 0, 'no second answer');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Dates: a trade’s date is changed from its summary; Fix replay dates moves whole days, filling down one trading day at a time', async () => {
+  const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  await page.click('[data-finish-later]');
+  const t = await savedTrade(page);
+  await page.evaluate((id) => sessionStorage.setItem('signature:open-trade', id), t.id);
+  await page.goto(`${BASE}/`);
+  await page.waitForSelector('[data-v2-when]');
+  await page.click('[data-change-date]');
+  await page.fill('[data-v2-when-edit] input', '2023-09-14T09:45');
+  await page.click('[data-save-date]');
+  await page.waitForSelector('[data-v2-when]');
+  const after = await page.evaluate(async (id) => (await (await fetch(`/api/trades/${id}`)).json()).date, t.id);
+  expect(after.startsWith('2023-09-14T09:45'), `moved (${after})`);
+  // The replay days: set the first, fill down, move them all.
+  await page.goto(`${BASE}/calendar?account=${encodeURIComponent('Backtest (FX Replay)')}`);
+  await page.click('[data-fix-replay-dates]');
+  await page.waitForSelector('[data-replay-date-row="1"]');
+  const rows = await page.locator('[data-replay-date-row]').count();
+  await page.locator('[data-replay-date-row]').first().locator('input').fill('2023-09-11');
+  if (rows > 1) await page.locator('[data-replay-date-row]').first().locator('[data-fill-down]').click();
+  else expect(await page.locator('[data-fill-down]').isDisabled(), 'one day: nothing to fill down');
+  await page.click('[data-save-replay-dates]');
+  await page.waitForSelector('[data-replay-dates]', { state: 'detached' });
+  const days = await page.evaluate(async () => (await (await fetch('/api/replay?all=1')).json()).days.map((d) => d.replay_date));
+  expect(days[0] === '2023-09-11' && (rows < 2 || days[1] === '2023-09-12'), JSON.stringify(days));
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
 await check('Replay plan: with no day locked, New trade offers to plan it or trade without — unplanned, capped at B', async () => {
   const { page, errors } = await open({ width: 1920, height: 1080 }, { nav: 'side', decisionSeconds: 90 });
   const st = await page.evaluate(async () => (await fetch('/api/replay')).json());

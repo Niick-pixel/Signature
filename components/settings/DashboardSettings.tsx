@@ -3,10 +3,9 @@
 import { Labeled } from '@/components/ui/Help';
 import { Segmented } from '@/components/ui/Segmented';
 import { TogglePill } from '@/components/ui/TogglePill';
-import { Button } from '@/components/ui/Button';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import {
-  DASH_FIXED_BLOCKS, DASH_BLOCK_LABEL, DEFAULT_CHECKLIST, SIDEBAR_SECTIONS, SIDEBAR_SECTION_LABEL, type Preferences,
+  DASH_FIXED_BLOCKS, DASH_BLOCK_LABEL, SIDEBAR_SECTIONS, SIDEBAR_SECTION_LABEL, type Preferences,
 } from '@/lib/preferences';
 import { SCORE_AXES } from '@/lib/dashboard';
 import { DashRowEditor } from '@/components/dashboard/DashRow';
@@ -14,8 +13,6 @@ import { DashRowEditor } from '@/components/dashboard/DashRow';
 /** Settings → Dashboard and Today panel (Phase 1): everything on those two screens, customizable. */
 export function DashboardSettings({ Section }: { Section: (p: { title: string; hint?: string; children: React.ReactNode }) => React.ReactElement }) {
   const { prefs, update } = usePreferences();
-  const items = prefs.checklistItems;
-  const setItems = (next: string[]) => update({ checklistItems: next });
   return (
     <>
       <Section title="Dashboard" hint="What the Dashboard counts, how it leads, and which blocks it shows. Press 0 to open it.">
@@ -52,7 +49,7 @@ export function DashboardSettings({ Section }: { Section: (p: { title: string; h
         </div>
       </Section>
 
-      <Section title="Today panel" hint="The panel on the right: the morning's plan, a checklist, this week's focus, rules kept today, recent trades. It folds to a thin tab at any time.">
+      <Section title="Today panel" hint="The panel on the right: the process rings, your notifications (each clears itself once done), goals, rules kept today, recent trades. It folds to a thin tab at any time.">
         <div className="space-y-3" data-settings="today">
           <Labeled label="Show it">
             <Segmented<Preferences['sidebar']> value={prefs.sidebar} onChange={(sidebar) => update({ sidebar })}
@@ -64,24 +61,6 @@ export function DashboardSettings({ Section }: { Section: (p: { title: string; h
                 onChange={(on) => update({ sidebarSections: { ...prefs.sidebarSections, [k]: on } })} />
             ))}
           </div>
-          <Labeled label="Pre-entry checklist — ticked fresh each day">
-            <ul className="space-y-1.5" data-settings-checklist>
-              {items.map((it, i) => (
-                <li key={i} className="flex items-center gap-1.5">
-                  <input value={it} onChange={(e) => setItems(items.map((x, j) => (j === i ? e.target.value : x)))}
-                    aria-label={`Checklist item ${i + 1}`}
-                    className="min-w-0 flex-1 rounded-[calc(10px*var(--rk))] border px-2.5 py-1.5 text-[12px] outline-none"
-                    style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)' }} />
-                  <button type="button" onClick={() => setItems(items.filter((_, j) => j !== i))} aria-label="Remove"
-                    className="grid size-6 place-items-center rounded-full text-[12px]" style={{ color: 'var(--text-faint)' }}>✕</button>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-2 flex gap-2">
-              <Button onClick={() => setItems([...items, ''])}>Add a question</Button>
-              <Button onClick={() => setItems(DEFAULT_CHECKLIST)}>Back to the default</Button>
-            </div>
-          </Labeled>
         </div>
       </Section>
     </>

@@ -310,7 +310,7 @@ export function DetailPanel({ trade, onClose, onChanged, onStep, prevLabel, next
                   <V2Mark t={trade} /></>}
                 </div>
 
-                {v2 ? <V2Summary trade={trade} plan={plan} /> : <>
+                {v2 ? <V2Summary trade={trade} plan={plan} onChanged={onChanged} /> : <>
                 {/* An older trade: graded on the checklist, kept as it was. */}
                 <p data-legacy-banner className="mb-4 rounded-[calc(14px*var(--rk))] border px-4 py-2.5 text-[12px] leading-snug"
                   style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>

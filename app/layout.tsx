@@ -1,3 +1,4 @@
+import { AppTimeTracker } from '@/components/shell/AppTimeTracker';
 import { THEME_BOOTSTRAP } from '@/lib/themes';
 import type { Metadata } from 'next';
 import './globals.css';
@@ -59,6 +60,7 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           </BottomLeftControls>
           <MorningCheckIn />
           <ReminderPoller />
+          <AppTimeTracker />
           <GoalsSheet />
           <BeforeSheet />
           <LiveRefresh />

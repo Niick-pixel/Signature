@@ -40,7 +40,8 @@ export async function GET(request: Request) {
   }
   const recent = trades.filter((t) => !t.deleted_at && !isHypothetical(t.account) && isTaken(t.outcome) && t.status !== 'Planned')
     .sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 6)
-    .map((t) => ({ id: t.id, at: t.created_at, account: t.account, setup: t.setup_type, direction: t.direction, outcome: t.outcome, r: t.r_multiple, money: pnlOf(t) }));
+    // The newest logged first, each with the day it HAPPENED (its date — a backtest, the replayed day), not when it was logged.
+    .map((t) => ({ id: t.id, at: t.date, undated: Boolean(t.undated), account: t.account, setup: t.setup_type, direction: t.direction, outcome: t.outcome, r: t.r_multiple, money: pnlOf(t) }));
   // The plan graded against the day (lib/dayGrade), today and the last trading days.
   const settings = getRuleSettings();
   const gradeOf = (day: string) => { const p = getPrep(day)?.data ?? null; return dayGrade(day, trades, p, getDailyReview(day), stopAfterFor(p, settings), day === today); };

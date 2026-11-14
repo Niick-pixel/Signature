@@ -515,6 +515,21 @@ export function editStep1(id: string, patch: Step1Answers): Trade {
   return getTrade(id)!;
 }
 
+/**
+ * A trade's date put right: when it happened (a backtest, the replayed day and
+ * time). Dates are never locked; the change goes in the edit log like any
+ * other, and a dated trade stays dated.
+ */
+export function setTradeDate(id: string, date: string): Trade {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}:00`))) throw new Error('The date is YYYY-MM-DDTHH:mm.');
+  const before = getTrade(id);
+  if (!before) throw new Error('No such trade.');
+  if (before.date.slice(0, 16) === date && !before.undated) return before;
+  getDb().prepare('UPDATE trades SET date = ?, undated = 0 WHERE id = ?').run(date, id);
+  getDb().prepare('INSERT INTO trade_edits (trade_id, field, old_value, new_value) VALUES (?, ?, ?, ?)').run(id, 'date', before.undated ? 'Undated' : before.date, date);
+  return getTrade(id)!;
+}
+
 /** Everything that has ever changed on one trade, newest first. */
 export function tradeHistory(id: string): TradeEdit[] {
   return getDb()
