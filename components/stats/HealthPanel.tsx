@@ -4,7 +4,7 @@ import { TIERS, type Maturity } from '@/lib/edge/maturity';
 import { VERDICT_LABEL, type VerdictLevel, type Thresholds } from '@/lib/edge/verdict';
 import type { Brier, HitRate, StoredClaim } from '@/lib/edge/claims';
 
-const STATUS_COLOR: Record<StoredClaim['status'], string> = { open: 'var(--text-faint)', held: 'rgb(var(--accent))', faded: 'var(--text-dim)', reversed: 'rgb(var(--amber))' };
+const STATUS_COLOR: Record<StoredClaim['status'], string> = { open: 'var(--text-faint)', held: 'rgb(var(--accent))', faded: 'var(--text-dim)', reversed: 'rgb(var(--amber))', retired: 'var(--text-faint)' };
 
 /** Section O: the engine grades itself — its ledger, its hit rates, its thresholds, its data. */
 export function HealthPanel({ claims, rates, brier, thresholds, base, changes, completeness, mat, blind, labelOf }: {
@@ -46,15 +46,20 @@ export function HealthPanel({ claims, rates, brier, thresholds, base, changes, c
 
       <div>
         <div className="mb-1" style={{ color: 'var(--text-dim)' }}>The insight ledger</div>
+        {claims.some((c) => c.status === 'retired') && (
+          <p className="mb-1.5 text-[11px]" style={{ color: 'var(--text-faint)' }} data-retired-note>
+            {claims.filter((c) => c.status === 'retired').length} legacy claim{claims.filter((c) => c.status === 'retired').length === 1 ? ' was' : 's were'} still open when the checklist rubric was frozen: closed — rubric retired. Listed, but out of the hit rate and the thresholds; new claims are made on Rubric v2 only.
+          </p>
+        )}
         {!claims.length ? <p style={{ color: 'var(--text-faint)' }}>Nothing claimed yet — every row is still Too early. Claims are recorded the first time they pass Hint, then re-checked on the 30 trades logged after them.</p> : (
           <div className="overflow-x-auto"><table className="w-full min-w-[30rem]">
-            <thead><tr className="text-left" style={{ color: 'var(--text-faint)' }}><th className={th}>Claim</th><th className={th}>Said</th><th className={`${th} text-right`}>At n</th><th className={th}>Now</th></tr></thead>
+            <thead><tr className="text-left" style={{ color: 'var(--text-faint)' }}><th className={th}>Claim</th><th className={th}>Said</th><th className={`${th} text-right`}>At n</th><th className={`${th} pl-4`}>Now</th></tr></thead>
             <tbody>{[...claims].reverse().slice(0, 12).map((c) => (
               <tr key={c.id} className="border-t" style={{ borderColor: 'var(--glass-stroke)' }} data-claim={c.status}>
-                <td className="py-1.5">{labelOf(c.field)} = {c.level}: {c.direction === 'positive' ? 'better' : 'worse'} by {Math.abs(c.size).toFixed(2)}R</td>
+                <td className="py-1.5"><span className="mr-1 rounded-full border px-1 text-[9.5px] font-semibold" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)' }} data-claim-family={c.family ?? 'legacy'}>{c.family === 'v2' ? 'v2' : 'Legacy'}</span>{labelOf(c.field)} = {c.level}: {c.direction === 'positive' ? 'better' : 'worse'} by {Math.abs(c.size).toFixed(2)}R</td>
                 <td>{VERDICT_LABEL[c.verdict as VerdictLevel] ?? c.verdict} · {c.created_at.slice(0, 10)}</td>
                 <td className="text-right tabular-nums">{c.n_at}</td>
-                <td style={{ color: STATUS_COLOR[c.status] }}>{c.status === 'open' ? 'waiting for 30 new trades' : `${c.status}${c.eval_size != null ? ` (${c.eval_size >= 0 ? '+' : '−'}${Math.abs(c.eval_size).toFixed(2)}R on ${c.eval_n})` : ''}`}</td>
+                <td className="pl-4" style={{ color: STATUS_COLOR[c.status] }}>{c.status === 'retired' ? 'closed — rubric retired' : c.status === 'open' ? 'waiting for 30 new trades' : `${c.status}${c.eval_size != null ? ` (${c.eval_size >= 0 ? '+' : '−'}${Math.abs(c.eval_size).toFixed(2)}R on ${c.eval_n})` : ''}`}</td>
               </tr>
             ))}</tbody>
           </table></div>

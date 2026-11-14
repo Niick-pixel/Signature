@@ -879,3 +879,76 @@ Reports and Analytics are no longer pages of their own: each of their tabs is a 
 
 - **Open one large without putting it on the board:** Stats → **Deep dives** (in the ⋯ menu with the side rail), or `/stats?open=<widget id>`. The others are one tap away at the top; "Add to the board" pins it.
 - `/reports` and `/analytics` (and keys R and A, and every old link) redirect to the matching deep dive. Analytics' Tilt tab opens the Tilt widget.
+
+
+# Rubric families (Stats Pass 1)
+
+## 64. Two families, never mixed
+
+Every trade belongs to one **rubric family** (`rubricFamily` in `lib/decision.ts`, the one function that decides it):
+
+- **v2:** `rubric_version` 5, the timed decision of Rubric v2 (4 rows).
+- **legacy:** everything else: the checklist rubrics 1 to 3, the liquidity trial 4, and trades with no version.
+
+**Legacy is frozen.** No new trade is graded under it: the New trade form always opens the decision flow (`formFor`), and only an existing legacy trade, opened to edit, keeps the old form. Its data stays, as it was, for looking back.
+
+A grade from one family means nothing on the other's scale. An old checklist A was ticked boxes; a v2 A is 6 or 7 of 8 rows scored under a clock. Pooling them answers neither question, and can show a trend that neither family has (Simpson's paradox). So the rubric-dependent numbers read one family at a time.
+
+## 65. Which widgets depend on the rubric
+
+Each widget says so in its settings (`settings.family` in `lib/dashboard/catalog.ts`; `familyOf` in `lib/dashboard/registry.ts`):
+
+- **Rubric-agnostic (no `family`):** every trade. Results, curves, risk, rules followed, rule breaks, tilt, excursions, exits, plans and replays, Day and hour, the flaw deck, lists, Data checks and Engine health.
+- **Rubric-dependent (`family: 'toggle'`):** one family, with a **v2 | Legacy** control in the tile's header. v2 by default; the choice is saved with the widget in the board's layout. These are Grade calibration, Grade before vs after, Does your filter filter?, Learned weights, Setup anatomy, Rule Lab, Backtest vs live, Fix first, Keep doing, This week's experiment, Missed setups and Hesitation.
+- **About Rubric v2 (`family: 'v2'`):** the Rubric v2 widgets. They read v2 trades only, with no control.
+
+A Legacy view says what it is under its title: **Legacy rubric · frozen · n trades · first–last**.
+
+Under the hood each family is its own engine run: `?family=v2|legacy` in `db/statsEngine.ts` filters the trades before anything is computed. That covers the maturity tier, the claims, the missed-setup scores and the backtests used as a prior. The board keeps one view per source, period, last N and family (`MAX_SCOPES`, now 6).
+
+## 66. What each family shows
+
+- **Grade calibration, grade drift:** per family. On v2, "No trade" is the F row. A v2 grade counts as given before the outcome unless Step 1 was edited after it (049).
+- **Does your filter filter?** On v2: each row's 0 / 1 / 2 spread. A row scored 2/2 on more than 90% of 10 or more trades is flagged, by the same rule as a checklist item ticked yes. The gates are counted apart: more than one gap, and planned R under 1.5.
+- **Learned weights:** fitted on legacy trades only (`scoreModel` filters them itself). A v2 trade has no checklist answers, and filling them with averages would teach the model that a v2 setup is an average checklist one. On v2 the tile reads "v2 learned score unlocks at 100 v2 trades (n/100)" (`V2_SCORE_UNLOCK`).
+- **Rule Lab:** filters on a grade or checklist answer belong to one family (`LabFilter.family`). Each judges only its own family's trades, and a view offers only its own family's filters (`labFiltersFor`): legacy has A and A+ only, killzone, closure 8+, with the bias and liquidity event; v2 has A and A+ only and Scenario A only. An all-trades view offers neither.
+- **Setup anatomy:** compares within the family in view.
+- **Missed setups and hesitation:** skip and take scores are compared on the family's own scale (the checklist score, or the v2 total as a percentage).
+- **Similar setups:** a trade is matched with its own family only (`similarInFamily`). A v2 trade shows "Not enough v2 trades yet (n/10)" until 10 match.
+- **The flaw deck** is rubric-agnostic. Its "filter" flaw, which flags one grade for everything or rows always at the top, reads Rubric v2: the legacy checklist can no longer be worked on.
+
+## 67. The v2 decision fields
+
+Registered in `lib/edge/fields.ts` as `timing: 'pre'` predictors:
+
+| Field | Objective |
+|---|---|
+| The four rows (`row_sweep`, `row_inversion`, `row_path`, `row_target`, 0/1/2) | no: judgements scored under a clock |
+| Singular gap (`fvg_overlap`) | yes |
+| Planned R (`planned_rr`) | yes |
+| Scenario (`plan_scenario`) | yes |
+| Capped at B by (`v2_cap`, derived from `gradeV2`) | yes |
+| Leg location (`leg_location`) | yes |
+| HTF origin (`htf_origin`) | yes |
+| Target type (`target_type`) | yes |
+| Entry type (`entry_method`) | yes |
+
+Confidence (`confidence_at_entry`) is registered as a pre field, a judgement, and not a predictor until its own calibration pass.
+
+**Unset at decision stays null.** A field left empty at the decision is never filled in: not by a mean, not by a default. A Rubric v2 miss saved before a target was picked reads "Other" in its column, which cannot be empty; the registry reads it as null. Data checks counts these: "Unset at decision on n Rubric v2 trades: leg location 3, HTF origin 5…" (`unsetAtDecision`, `V2_DECISION_FIELDS`).
+
+## 68. The insight ledger by family (migration 052)
+
+- Every claim records its family. New claims are made on Rubric v2 views only. An all-trades view pools the rubrics, and nothing new can ever re-check a legacy claim.
+- Claims still open when the legacy rubric was frozen are **closed — rubric retired** (status `retired`). They stay listed in Engine health, marked Legacy, and are left out of the hit rate and of the thresholds. Checked claims keep their result.
+- A backup from before 052 restores the same way: its claims are legacy, and its open ones come back retired.
+- Rollback (`db/rollback/052_claims_family.sql`) puts retired claims back to open and drops the column.
+
+## 69. Small fixes that came with it
+
+- **Day and hour** (the widget and Analytics' time tab) leave out backtests with no replay date. A backtest has one if it was traded on a replay day or moved to the day it replayed (Fix replay dates, When → Change); otherwise its date is the day it was logged. Log time is never read as market time. The caption says "N backtests left out — no replay date" (`whenTrades` in `lib/stats.ts`).
+- **The Stats board's source:** the board opens on the source you last picked (saved with the board, `sourceSet`). Until you pick one, it opens on the source with the most trades logged in the last 14 days (`busiestSource` in `lib/statsScope.ts`), with real winning ties.
+
+## 70. Built so the next pass can use it
+
+Taken vs passed at the same v2 score, confidence calibration, decision time vs outcome and the v2 learned score will all read the v2 view and the registered v2 fields. `V2_SCORE_UNLOCK` is the sample the learned score waits for.

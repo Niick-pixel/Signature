@@ -11,6 +11,7 @@ import { CHIP } from '@/components/stats/EdgeUI';
 import { VERDICT_LABEL } from '@/lib/edge/verdict';
 import { Overlay } from '@/components/ui/Overlay';
 import { WidgetBody } from './renderers';
+import { legacyLabel } from '@/lib/dashboard/registry';
 
 /**
  * One grid slot: a widget, or a stack of them (the Smart Stack). The wheel
@@ -46,8 +47,10 @@ export interface TileEdit {
 
 const PENDING: WidgetState = { vm: { kind: 'text', headline: 'Drawing…', tone: 'neutral' }, title: '', scope: null, mixed: false };
 
-export function Tile({ tile, widgets, states, reduce, index, edit, rotate, tint = true }: {
+export function Tile({ tile, widgets, states, reduce, index, edit, rotate, tint = true, onFamily }: {
   tile: TileT; widgets: Record<string, WidgetInfo>; states: Record<string, WidgetState>; reduce: boolean; index: number; edit?: TileEdit;
+  /** A rubric-dependent widget's v2 | Legacy control: saved with the widget (its layout settings). */
+  onFamily?: (uid: string, family: 'v2' | 'legacy') => void;
   /** The board's "tint flaws and strengths". */
   tint?: boolean;
   /** Smart Rotate's pick for when the page opens (lib/dashboard/attention): which widget, and why. */
@@ -105,12 +108,20 @@ export function Tile({ tile, widgets, states, reduce, index, edit, rotate, tint 
       {/* Folded into a tooltip, never gone: a claim always keeps its n and interval. */}
       {claim && !vm.tooEarly && cfg.stats === 'tooltip' && <Chip text={`n ${claim.n}`} style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)' }} title={claimText(claim)} />}
       <span className="ml-auto flex shrink-0 items-center gap-1">
+        {st.family?.toggle && <FamilySwitch value={st.family.value} disabled={!onFamily || !!edit} onPick={(f) => onFamily?.(front.uid, f)} />}
         {cfg.showHelp !== false && <TileHelp text={info.help} />}
         {!big && <button type="button" onClick={() => setExpanded(true)} aria-label={`Open ${title} large`} title="Open large" data-expand
           className="grid size-5 place-items-center rounded-full text-[12px] opacity-60 transition-opacity hover:opacity-100" style={{ color: 'var(--text-dim)' }}>↗</button>}
       </span>
     </div>
   );
+  // Legacy views say what they are: the checklist rubric is retired, its numbers frozen.
+  const legacy = st.family?.value === 'legacy' ? (
+    <div className="truncate text-[10.5px] font-medium" style={{ color: 'rgb(var(--amber))' }} data-legacy-label
+      title="These trades were graded under the old checklist rubric (rubric 4 or below). It is retired: no new trade is graded under it, and its numbers never mix with Rubric v2's.">
+      {legacyLabel(st.family.span)}
+    </div>
+  ) : null;
   const footer = claim && !vm.tooEarly && tile.size !== 'W' && cfg.stats !== 'tooltip' && (
     <div className="truncate pt-1 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }} data-claim>{claimText(claim)}</div>
   );
@@ -146,6 +157,7 @@ export function Tile({ tile, widgets, states, reduce, index, edit, rotate, tint 
           style={{ background: `linear-gradient(180deg, rgb(var(${info.lean === 'fix' ? '--sem-bad' : '--sem-good'}) / 0.06), transparent 55%)`, zIndex: -1 }} />
       )}
       {header()}
+      {legacy}
       <div className="relative mt-1.5 min-h-0 flex-1" style={tile.size === 'W' ? { marginTop: 2 } : undefined}>
         <AnimatePresence initial={false} mode="popLayout" custom={s.dir}>
           <motion.div key={front.uid} custom={s.dir} className="absolute inset-0 flex min-h-0 flex-col" data-front data-widget={front.widget}
@@ -204,11 +216,28 @@ export function Tile({ tile, widgets, states, reduce, index, edit, rotate, tint 
       <Overlay open={expanded} onClose={() => setExpanded(false)} className="h-[min(82vh,760px)] w-[min(1200px,92vw)] p-6">
         <div className="flex h-full min-h-0 flex-col" data-expanded={front.widget}>
           {header(true)}
+          {legacy}
           <div className="mt-3 min-h-0 flex-1"><WidgetBody vm={vm} size={expandSize} cfg={front.cfg} /></div>
           {claim && !vm.tooEarly && <div className="pt-2 text-[11.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{claimText(claim)}</div>}
         </div>
       </Overlay>
     </motion.div>
+  );
+}
+
+/** v2 | Legacy: which rubric family a rubric-dependent widget reads. One at a time, never both. */
+function FamilySwitch({ value, onPick, disabled }: { value: 'v2' | 'legacy'; onPick: (f: 'v2' | 'legacy') => void; disabled: boolean }) {
+  return (
+    <span role="radiogroup" aria-label="Rubric" className="flex rounded-full p-px text-[10px] font-semibold" style={{ background: 'var(--glass-fill)' }} data-family-switch={value}>
+      {(['v2', 'legacy'] as const).map((f) => (
+        <button key={f} type="button" role="radio" aria-checked={value === f} disabled={disabled} onClick={() => value !== f && onPick(f)} data-family={f}
+          title={f === 'v2' ? 'Rubric v2 trades only' : 'Legacy-rubric trades only (frozen)'}
+          className="rounded-full px-1.5 py-px transition-colors disabled:cursor-default"
+          style={value === f ? { background: 'var(--bg-raised)', color: 'var(--text)', boxShadow: 'var(--shadow-card)' } : { color: 'var(--text-faint)' }}>
+          {f === 'v2' ? 'v2' : 'Legacy'}
+        </button>
+      ))}
+    </span>
   );
 }
 

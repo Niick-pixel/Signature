@@ -27,6 +27,11 @@ export interface SettingsSchema {
   numberFormats?: readonly NumberFormat[];
   /** Can its source / period / last-N be overridden? (Not for widgets that are about one source, like Real vs backtest.) */
   scope?: boolean;
+  /**
+   * Rubric families (lib/decision rubricFamily). Absent: rubric-agnostic, every trade. 'toggle': rubric-dependent,
+   * one family at a time with a v2 | Legacy control (v2 by default, saved in cfg.family). 'v2': about Rubric v2 only.
+   */
+  family?: 'toggle' | 'v2';
   fields?: readonly SettingField[];
 }
 
@@ -109,6 +114,20 @@ export function withDefaults(def: Pick<WidgetMeta, 'settings'>, cfg: WidgetCfg):
     numberFormat: cfg.numberFormat && def.settings.numberFormats?.includes(cfg.numberFormat) ? cfg.numberFormat : def.settings.numberFormats?.[0],
     extra,
   };
+}
+
+/** Which trades a widget reads by rubric: every trade, or one family. */
+export type FamilyScope = 'all' | 'v2' | 'legacy';
+export function familyOf(def: Pick<WidgetMeta, 'settings'>, cfg: WidgetCfg): FamilyScope {
+  if (def.settings.family === 'toggle') return cfg.family === 'legacy' ? 'legacy' : 'v2';
+  return def.settings.family === 'v2' ? 'v2' : 'all';
+}
+
+/** What a Legacy view says about itself: "Legacy rubric · frozen · n trades · first–last". */
+export function legacyLabel(span: { n: number; first: string | null; last: string | null } | null): string {
+  const n = span?.n ?? 0;
+  const dates = span?.first && span.last ? ` · ${span.first}${span.last !== span.first ? `–${span.last}` : ''}` : '';
+  return `Legacy rubric · frozen · ${n} trade${n === 1 ? '' : 's'}${dates}`;
 }
 
 /** The scope a widget reads: the board's, unless it overrides it (then a chip says so). */

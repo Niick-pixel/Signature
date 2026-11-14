@@ -6,7 +6,7 @@ import { flawDeck, type Deck } from './flaws';
 import { registry, type View } from '../lib/dashboard/catalog';
 import { DEFAULT_BOARDS, LEGACY_BOARDS } from '../lib/dashboard/defaults';
 import { defaultSettings } from '../lib/dashboard/schema';
-import { scopeFor, withDefaults, type WidgetMeta } from '../lib/dashboard/registry';
+import { familyOf, scopeFor, withDefaults, type FamilyScope, type WidgetMeta } from '../lib/dashboard/registry';
 import type { Source, Tile } from '../lib/dashboard/types';
 import type { Kind, TooEarly, ViewModel } from '../lib/dashboard/vm';
 import { accountsInUse } from '../lib/stats';
@@ -14,6 +14,7 @@ import { BACKTEST, countsInStats, isReal } from '../lib/domain';
 import { sourceOf } from '../lib/edge/fields';
 import { pickFront, type Attention } from '../lib/dashboard/attention';
 import { localDay } from '../lib/day';
+import { busiestSource } from '../lib/statsScope';
 
 /**
  * Everything the Stats board needs, built on the server: the boards, the one
@@ -21,13 +22,15 @@ import { localDay } from '../lib/day';
  * over its scope. The engine runs once per distinct scope on the board.
  */
 
-export const MAX_SCOPES = 4;
+export const MAX_SCOPES = 6;
 const SOURCES: Source[] = ['real', 'backtest', 'all'];
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 export const catalog = { supports: registry.supports, known: registry.known };
 
 export interface WidgetInfo { id: string; title: string; help: string; kind: Kind; view?: string; sizes: readonly string[]; category: string; claims: boolean; settings: WidgetMeta['settings']; defaultSize: string; tier: 1 | 2 | 3; lean: 'fix' | 'keep' | null }
-export interface WidgetState { vm: ViewModel; title: string; scope: string | null; mixed: boolean }
+/** A rubric-dependent widget's family: which one it reads, whether it has the v2 | Legacy control, and the legacy label's numbers. */
+export interface WidgetFamily { value: 'v2' | 'legacy'; toggle: boolean; span: { n: number; first: string | null; last: string | null } | null }
+export interface WidgetState { vm: ViewModel; title: string; scope: string | null; mixed: boolean; family?: WidgetFamily }
 export interface BoardPage {
   boards: Array<{ id: string; name: string }>;
   board: StoredBoard;
@@ -63,13 +66,13 @@ function makeViews(filters: Record<string, string>) {
   const realAccounts = accounts.filter((a) => isReal(a));
   const has = { real: realAccounts.length > 0, backtest: accounts.includes(BACKTEST) };
   const views = new Map<string, View | null>();
-  const viewFor = (s: Source, period: string | undefined, lastN: number | null): View | null => {
-    const key = `${s}|${period ?? ''}|${lastN ?? ''}`;
+  const viewFor = (s: Source, period: string | undefined, lastN: number | null, family: FamilyScope = 'all'): View | null => {
+    const key = `${s}|${period ?? ''}|${lastN ?? ''}|${family}`;
     if (views.has(key)) return views.get(key)!;
     if (views.size >= MAX_SCOPES) return null;
     const account = s === 'real' ? realAccounts.join(',') : s === 'backtest' ? BACKTEST : 'All';
     if (!account || (s === 'backtest' && !has.backtest)) { views.set(key, null); return null; }
-    const p: StatsParams = { ...filters, account, ...(period ? { period } : {}), ...(lastN ? { last: String(lastN) } : {}) };
+    const p: StatsParams = { ...filters, account, ...(period ? { period } : {}), ...(lastN ? { last: String(lastN) } : {}), ...(family !== 'all' ? { family } : {}) };
     let deck: Deck | null = null; let deckAll: Deck | null = null;
     const deckSource = s === 'real' ? 'real' : s === 'backtest' ? 'backtest' : 'all';
     const v: View = Object.assign(statsEngine(p, undefined), {
@@ -88,7 +91,9 @@ function widgetState(def: WidgetMeta, itCfg: import('../lib/dashboard/types').Wi
   viewFor: ReturnType<typeof makeViews>['viewFor'], has: { real: boolean; backtest: boolean }, today?: string): WidgetState & { attention?: Attention | null } {
   const cfg = withDefaults(def, itCfg);
   const scope = scopeFor(boardScope, cfg, def.settings.scope === true, () => false);
-  const view = viewFor(scope.source, scope.period === 'all' ? undefined : scope.period, scope.lastN);
+  // Rubric-dependent widgets read one rubric family (v2 by default, or Legacy, saved with the widget); the rest every trade.
+  const family = familyOf(def, cfg);
+  const view = viewFor(scope.source, scope.period === 'all' ? undefined : scope.period, scope.lastN, family);
   const mixed = !!view && view.source === 'all' && view.settled.some((x) => sourceOf(x.account) === 'backtest') && view.settled.some((x) => sourceOf(x.account) !== 'backtest' && sourceOf(x.account) !== 'missed');
   let vm: ViewModel;
   if (!view) {
@@ -107,7 +112,8 @@ function widgetState(def: WidgetMeta, itCfg: import('../lib/dashboard/types').Wi
   if (today && view && def.attention && vm.kind !== 'none' && !vm.tooEarly) {
     try { attention = def.attention(view as never, today); } catch { attention = null; }
   }
-  return { vm, title: cfg.title || def.title, scope: scope.override, mixed, ...(today ? { attention } : {}) };
+  const fam = family === 'all' ? undefined : { value: family, toggle: def.settings.family === 'toggle', span: view?.familySpan ?? null };
+  return { vm, title: cfg.title || def.title, scope: scope.override, mixed, ...(fam ? { family: fam } : {}), ...(today ? { attention } : {}) };
 }
 
 /** Every widget in the catalog over the board's scope: the gallery's live previews. */
@@ -115,7 +121,9 @@ export function galleryPreviews(params: StatsParams): Record<string, WidgetState
   const boards = listBoards(catalog);
   const board = boards.find((b) => b.id === one(params.board)) ?? boards[0];
   const src = one(params.src);
-  const source: Source = SOURCES.includes(src as Source) ? (src as Source) : board?.settings.source ?? 'real';
+  const source: Source = SOURCES.includes(src as Source) ? (src as Source)
+    : board && !board.settings.sourceSet && board.id === 'stats' ? busiestSource(listTrades().filter((t) => !t.deleted_at))
+      : board?.settings.source ?? 'real';
   const filters = sharedFilters(params);
   const { viewFor, has } = makeViews(filters);
   return Object.fromEntries(registry.all().map((d) => [d.id, widgetState(d, {}, { source, period: filters.period ?? 'all' }, viewFor, has)]));
@@ -128,7 +136,11 @@ export function boardPage(params: StatsParams): BoardPage {
   const asked = one(params.board);
   const board = boards.find((b) => b.id === asked) ?? boards[0];
   const src = one(params.src);
-  const source: Source = SOURCES.includes(src as Source) ? (src as Source) : board.settings.source;
+  // The source asked for; else the one you last picked on this board; else, on the Stats board's first run, the
+  // source with the most trades logged in the last 14 days.
+  const source: Source = SOURCES.includes(src as Source) ? (src as Source)
+    : !board.settings.sourceSet && board.id === 'stats' ? busiestSource(listTrades().filter((t) => !t.deleted_at))
+      : board.settings.source;
   const filters = sharedFilters(params);
 
   const { viewFor, has } = makeViews(filters);

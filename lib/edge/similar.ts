@@ -14,6 +14,7 @@
 import { PREDICTORS, type FieldDef, type FieldValue } from './fields';
 import { resultClass } from './metrics';
 import type { Trade } from '../types';
+import { rubricFamily } from '../decision';
 
 export const SIMILAR_MODEL = 'knn-gower-v1';
 const PRIOR = 20;
@@ -26,6 +27,24 @@ export interface Similar {
   neighbours: Neighbour[];
   /** Pre fields the draft has recorded — few fields, weak match. */
   fieldsUsed: number;
+  /** A Rubric v2 trade: how many v2 matches it has, of the V2_MIN_MATCHES it needs before an expected R is shown. */
+  v2?: { have: number; need: number };
+}
+
+/** A Rubric v2 trade is compared with v2 trades only, and shows nothing until this many match. */
+export const V2_MIN_MATCHES = 10;
+
+/**
+ * Similar setups within the trade's own rubric family (lib/decision rubricFamily): a v2 trade against v2
+ * trades only, a legacy trade against legacy trades only. Under V2_MIN_MATCHES v2 matches, a count and no
+ * expected R, win chance or neighbours.
+ */
+export function similarInFamily(draft: Trade, pool: readonly Trade[]): Similar {
+  const family = rubricFamily(draft);
+  const result = similarSetups(draft, pool.filter((t) => rubricFamily(t) === family));
+  if (family !== 'v2') return result;
+  const v2 = { have: result.n, need: V2_MIN_MATCHES };
+  return result.n < V2_MIN_MATCHES ? { ...result, meanR: null, shrunkR: null, pWin: null, neighbours: [], v2 } : { ...result, v2 };
 }
 
 export function gower(a: Trade, b: Trade, fields: readonly FieldDef[] = PREDICTORS): { d: number; shared: number } {

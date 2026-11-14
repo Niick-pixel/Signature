@@ -30,6 +30,10 @@ as an Electron desktop app) for one trader: NQ/MNQ, DodgysDD's iFVG model.
    open, edit and export unchanged. Bump the export `version`
    (`app/api/export/route.ts`) when fields change.
 10. **Fully local.** No cloud, no telemetry, no external AI calls.
+11. **Rubric families.** Legacy-rubric data (rubric ≤ 4) is frozen. Rubric-dependent
+    stats run on one rubric family at a time and never mix legacy and v2 trades.
+    Unset decision fields stay null — never imputed. (`rubricFamily` in
+    `lib/decision.ts`; docs/edge-engine.md §64–70.)
 
 Also from earlier sessions:
 

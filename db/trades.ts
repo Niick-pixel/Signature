@@ -297,6 +297,11 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
 }
 
 
+/** Trades whose date was changed by hand or by Fix replay dates (their edit history says so). */
+export function redatedTradeIds(): Set<string> {
+  return new Set((getDb().prepare("SELECT DISTINCT trade_id FROM trade_edits WHERE field = 'date'").all() as Array<{ trade_id: string }>).map((r) => r.trade_id));
+}
+
 export function createTrade(input: TradeInput): Trade {
   const db = getDb();
   const id = crypto.randomUUID();

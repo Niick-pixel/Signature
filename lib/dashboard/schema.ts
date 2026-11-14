@@ -121,5 +121,6 @@ export function migrateSettings(raw: unknown, source: Source = 'real'): BoardSet
     semantic: { good: color(sem.good, d.semantic.good), bad: color(sem.bad, d.semantic.bad), watch: color(sem.watch, d.semantic.watch) },
     tint: typeof raw.tint === 'boolean' ? raw.tint : d.tint,
     width: pick(raw.width, ['app', 'full'] as const, d.width),
+    ...(raw.sourceSet === true ? { sourceSet: true } : {}),
   };
 }

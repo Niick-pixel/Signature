@@ -3,6 +3,8 @@ import { getNewsSettings, listNews } from '@/db/news';
 import { confluences, newsView, psychology, timeView } from '@/lib/analytics';
 import { mistakeCost, tilt } from '@/lib/behaviour';
 import { localDay } from '@/lib/day';
+import { whenTrades } from '@/lib/stats';
+import { redatedTradeIds } from '@/db/trades';
 import { analyticsInputs, num, sinceOf } from './shared';
 
 /**
@@ -20,7 +22,8 @@ export async function GET(request: Request) {
   const settings = getNewsSettings();
   return NextResponse.json({
     world, count: trades.length, minN,
-    time: timeView(trades, q.get('clock') === 'local' ? 'local' : 'ny', minN),
+    // Backtests with no replay date carry the day they were logged: left out of the clock, and counted.
+    time: (() => { const w = whenTrades(trades, redatedTradeIds()); return { ...timeView(w.trades, q.get('clock') === 'local' ? 'local' : 'ny', minN), noReplayDate: w.noReplayDate }; })(),
     confluences: confluences(trades, minN),
     psychology: psychology(trades, { lateHour: num(q.get('late'), 13, 0, 23), words }),
     mistakes: mistakeCost(trades, sinceOf(q.get('since'), localDay()), localDay()),

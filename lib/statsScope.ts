@@ -1,5 +1,5 @@
 import {
-  ACCOUNT_VALUES, DIRECTIONS, SESSIONS, isDated, isHypothetical, isReal, marketDay,
+  ACCOUNT_VALUES, DIRECTIONS, SESSIONS, isBacktest, isDated, isHypothetical, isReal, marketDay,
   type Account, type Direction, type Session,
 } from './domain';
 import { localDay } from './day';
@@ -104,6 +104,18 @@ export function applyStatsScope(trades: Trade[], scope: StatsScope, now = new Da
       && (!scope.sessions.length || scope.sessions.includes(t.session))
       && (!scope.directions.length || scope.directions.includes(t.direction));
   });
+}
+
+/**
+ * The Stats board's first-run source: the one with the most trades logged in the last 14 days (real accounts
+ * against backtests; missed setups never count). Ties, or nothing logged, go to real. Once you pick a source,
+ * the board keeps it (BoardSettings.sourceSet).
+ */
+export function busiestSource(trades: ReadonlyArray<Pick<Trade, 'account' | 'created_at'>>, now = new Date()): 'real' | 'backtest' {
+  const since = new Date(now.getTime() - 14 * 86_400_000).toISOString();
+  const recent = trades.filter((t) => t.created_at >= since && !isHypothetical(t.account));
+  const bt = recent.filter((t) => isBacktest(t.account)).length;
+  return bt > recent.length - bt ? 'backtest' : 'real';
 }
 
 /** The URL value for a set of accounts: 'All' when it is every one. */

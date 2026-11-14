@@ -110,8 +110,9 @@ export function flawDeck(source: DeckSource = 'all'): Deck {
   const states = tradeStates(settled, ei.ctxFor);
   const ledger = ledgerV2(settled, ei.breaksOf, { words: ei.themeWords, thresholds: ei.thresholds });
   const exec = execution(settled);
-  const quality = setupQuality(settled);
-  const missed = source === 'backtest' ? null : missedStats(counted.filter((t) => isHypothetical(t.account) || inSource(t)));
+  // The filter flaw reads Rubric v2 only: the legacy checklist is frozen (lib/decision rubricFamily).
+  const quality = setupQuality(settled, 'v2');
+  const missed = source === 'backtest' ? null : missedStats(counted.filter((t) => isHypothetical(t.account) || inSource(t)), 'v2');
   const themesOf = (t: Trade) => themesWith(t, ei.themeWords);
   const inputs = { settled, ledger, exec, states, spread: quality.spread, missed, themesOf, breaksOf: ei.breaksOf };
 

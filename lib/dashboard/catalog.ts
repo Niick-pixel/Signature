@@ -22,6 +22,7 @@ import { DATA_GROUPS, fillsGroup } from '../edge/flaws';
 import { trialLine } from '../stats';
 import { drillMilestone, flawNews, integrityNews, ruleToday, type Attention } from './attention';
 import { TRIAL_RUBRIC } from '../rubric';
+import { V2_SCORE_UNLOCK } from '../decision';
 import type { DeckFlaw } from '../../db/flaws';
 import type { FlawVM, ListRow } from './vm';
 
@@ -312,31 +313,34 @@ add({
   settings: { scope: true },
   help: 'Average R by weekday and entry hour (New York time). Faded where fewer than 5 trades: a cell that small is noise, not a schedule.',
   select: (v) => {
-    const cells = whenHeatmap(v.settled.filter((t) => sourceOf(t.account) !== 'backtest' || v.source === 'backtest'));
+    // Backtests only on a backtest view, and only those with a replay date: the rest carry the day they were logged.
+    const pool = v.when.trades.filter((t) => sourceOf(t.account) !== 'backtest' || v.source === 'backtest');
+    const leftOut = v.source === 'backtest' ? v.when.noReplayDate : 0;
+    const cells = whenHeatmap(pool);
     const hours = [...new Set(cells.map((c) => c.hour))].sort((a, b) => a - b);
     const days = [1, 2, 3, 4, 5];
     return { kind: 'heat', rows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], cols: hours.map((h) => `${h}:00`), claim: { n: cells.reduce((a, c) => a + c.count, 0) },
       cells: cells.filter((c) => days.includes(c.day)).map((c) => ({ r: days.indexOf(c.day), c: hours.indexOf(c.hour), value: c.totalR / c.count, n: c.count, display: R(c.totalR / c.count, 1) })),
-      caption: 'Average R per trade · faded under 5 trades' };
+      caption: `Average R per trade · faded under 5 trades${leftOut ? ` · ${leftOut} backtest${leftOut === 1 ? '' : 's'} left out — no replay date` : ''}` };
   },
 });
 
 add({
   id: 'grade-calibration', title: 'Grade calibration', category: 'chart', kind: 'bars', sizes: ['M'], defaultSize: 'M', claims: true, minTrades: 8,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'What each grade made, from grades locked before the outcome only, shrunk toward your mean with its 80% interval. Better grades should earn more; if they don\'t, the grade isn\'t reading the setup.',
   select: (v) => {
     const rows = v.quality.clean.rows;
     if (!rows.length) return { kind: 'bars', items: [], tooEarly: { text: 'Needs trades graded before the outcome.', ghost: 'bars', ...LOG } };
     return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: v.quality.cleanN, ci: 80 },
-      items: rows.map((r) => ({ label: r.grade, value: r.shrunk, display: `${R(r.shrunk)} · n ${r.n}`, tone: 'accent', lo: r.lo80, hi: r.hi80 })),
-      caption: 'Graded before the outcome · shrunk, 80% interval' };
+      items: rows.map((r) => ({ label: v.quality.family === 'v2' && r.grade === 'F' ? 'No trade' : r.grade, value: r.shrunk, display: `${R(r.shrunk)} · n ${r.n}`, tone: 'accent', lo: r.lo80, hi: r.hi80 })),
+      caption: v.quality.family === 'v2' ? 'Rubric v2 grade, locked at the decision · shrunk, 80% interval' : 'Graded before the outcome · shrunk, 80% interval' };
   },
 });
 
 add({
   id: 'grade-shift', title: 'Grade before vs after', category: 'chart', kind: 'bars', sizes: ['M'], defaultSize: 'M', minTrades: 3,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'Your grade at entry against the honest re-grade after the close. Re-grades can only be harsher; many graded down means the grade at entry is generous.',
   select: (v) => {
     const s = gradeShift(v.settled);
@@ -348,11 +352,19 @@ add({
 
 add({
   id: 'spread', title: 'Does your filter filter?', category: 'chart', kind: 'bars', sizes: ['M', 'T'], defaultSize: 'M', minTrades: 8,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'How often each checklist item is ticked yes, before the outcome. An item yes on more than 90% of trades cannot separate good setups from bad.',
   select: (v) => {
     const sp = v.quality.spread;
     const items = sp.items.filter((i) => i.share != null);
+    if (sp.family === 'v2') {
+      // Rubric v2: each row's 0 / 1 / 2 spread; amber where 2/2 on more than 90% of 10+ trades. The gates apart.
+      if (!items.length) return { kind: 'bars', items: [], tooEarly: { text: 'Needs Rubric v2 trades with their rows scored.', ghost: 'bars', ...LOG } };
+      const g = sp.gates;
+      return { kind: 'bars', horizontal: true, max: 1, marker: { value: 0.9, label: '90%' }, claim: { n: sp.gradeN },
+        caption: `${sp.oneGrade ? `Every v2 trade graded ${sp.oneGrade === 'F' ? 'No trade' : sp.oneGrade} · ` : ''}Share scored 2/2 · amber above 90%${g ? ` · gates failed: more than one gap ${g.manyGaps}, planned R < 1.5 ${g.lowR}` : ''}`,
+        items: items.map((i) => ({ label: i.label, value: i.share!, display: `${P(i.share)} · ${i.dist ? `0:${i.dist[0]} 1:${i.dist[1]} 2:${i.dist[2]}` : ''}`, tone: i.notFiltering ? 'watch' : 'accent' })) };
+    }
     if (!items.length) return { kind: 'bars', items: [], tooEarly: { text: 'Needs checklist answers on 10+ trades.', ghost: 'bars', ...LOG } };
     return { kind: 'bars', horizontal: true, max: 1, marker: { value: 0.9, label: '90%' }, claim: { n: sp.gradeN },
       caption: sp.oneGrade ? `Every pre-graded trade is ${sp.oneGrade}` : 'Share ticked yes · amber above 90%',
@@ -361,17 +373,23 @@ add({
 });
 
 add({
-  id: 'weights', title: 'Learned weights', category: 'chart', kind: 'custom', view: 'quality', sizes: ['L'], defaultSize: 'L', claims: true, minTrades: 8,
-  settings: { scope: true },
+  id: 'weights', title: 'Learned weights', category: 'chart', kind: 'custom', view: 'quality', sizes: ['L'], defaultSize: 'L', claims: true, minTrades: 0,
+  settings: { family: 'toggle', scope: true },
   help: 'Do your grades mean anything? Grades locked before the outcome against those given after it, grade drift, and a score learned from your own trades — tested out of sample.',
-  select: (v) => ({ kind: 'custom', view: 'quality', claim: { n: v.settled.length },
+  select: (v) => v.family === 'v2' ? {
+    // Pass 1: the learned score is fitted on legacy trades only; v2 gets its own once it has the sample.
+    kind: 'text', headline: `v2 learned score unlocks at ${V2_SCORE_UNLOCK} v2 trades (${Math.min(v.settled.length, V2_SCORE_UNLOCK)}/${V2_SCORE_UNLOCK}).`, tone: 'neutral',
+    body: 'Until then, Grade calibration and Does your filter filter? (on v2) are the tests of the rubric.',
+    meter: { kind: 'share', value: Math.min(1, v.settled.length / V2_SCORE_UNLOCK) },
+  } : v.settled.length < 8 ? { kind: 'text', headline: '', tone: 'neutral', tooEarly: { text: `Needs ${8 - v.settled.length} more settled legacy trade${8 - v.settled.length === 1 ? '' : 's'}.`, ghost: 'text' } }
+  : ({ kind: 'custom', view: 'quality', claim: { n: v.settled.length },
     data: { q: v.quality, model: v.model, thumbs: v.thumbsOf(v.quality.clean.rows.flatMap((r) => r.tradeIds.slice(0, 12))),
       weightsLocked: v.mat.n >= 100 ? null : `Under 100 trades the learned weights barely leave yours (40 pseudo-trades of prior) — ${100 - v.mat.n} to go before they can visibly diverge.` } }),
 });
 
 add({
   id: 'anatomy', title: 'Setup anatomy', category: 'chart', kind: 'custom', view: 'anatomy', sizes: ['L', 'XL'], defaultSize: 'L', claims: true, minTrades: 8,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'Every level of every pre-trade field against the rest of your trades: shrunk toward your mean, an interval on each, Benjamini–Hochberg across the table. Only fields known before the entry are allowed in.',
   select: (v) => ({ kind: 'custom', view: 'anatomy', claim: { n: v.engine.n },
     data: { rows: v.visibleRows, mu: v.engine.explorer.mu, tests: v.engine.explorer.tests, hidden: v.engine.explorer.rows.length - v.visibleRows.length,
@@ -449,7 +467,7 @@ add({
 
 add({
   id: 'hesitation', title: 'Hesitation', category: 'chart', kind: 'bars', sizes: ['M'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'Missed setups logged in real time against the ones you took: if your skips score like your takes, you are hesitating; if lower, your filter works. Hindsight entries are left out.',
   select: (v) => {
     const m = v.missed;
@@ -463,10 +481,10 @@ add({
 
 add({
   id: 'rule-lab', title: 'Rule Lab', category: 'chart', kind: 'custom', view: 'rulelab', sizes: ['L', 'XL'], defaultSize: 'L', claims: true, minTrades: 30, lazy: true,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'What would have happened under a stricter rule: expectancy with its interval, the difference against what you took, and P(better). An experiment, never a verdict; none needing more than 200 trades is proposed.',
   select: (v) => ({ kind: 'custom', view: 'rulelab', claim: { n: v.lab.length },
-    data: { rows: packRows(v.lab), each: Object.fromEntries(Object.entries(v.labEach).map(([k, r]) => [k, { ...r, curve: [] }])) } }),
+    data: { rows: packRows(v.lab), family: v.family, each: Object.fromEntries(Object.entries(v.labEach).map(([k, r]) => [k, { ...r, curve: [] }])) } }),
 });
 
 /* ───────────── Rubric v2 (4 rows): its trades only, never on the old scale ───────────── */
@@ -476,7 +494,7 @@ const V2_EMPTY = (ghost: 'bars' | 'text') => ({ kind: 'text' as const, headline:
 
 add({
   id: 'v2-total', title: 'Rubric v2: by total', category: 'chart', kind: 'bars', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Rubric v2 (4 rows) trades only: R per trade taken at each total out of 8, with how many at that total were passed or missed. 8 is A+, 6–7 A, 5 B, 4 or less no trade. If higher totals do not make more, the rows are not reading the setup.',
   select: (v) => {
     const d = v.decisions;
@@ -492,7 +510,7 @@ add({
 
 add({
   id: 'v2-rows', title: 'Rubric v2: each row', category: 'chart', kind: 'heat', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Rubric v2 trades taken: R per trade by the score each row got. A row whose 2s do not beat its 1s is not separating good from weak.',
   select: (v) => {
     const d = v.decisions;
@@ -506,7 +524,7 @@ add({
 
 add({
   id: 'v2-gap', title: 'Rubric v2: singular gap', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'The gate before the rows: ONE clean, unmistakable FVG, or more than one (No trade). Every Rubric v2 decision that answered it, and R per trade taken. A taken "more than one" was taken against a no-trade grade.',
   select: (v) => {
     const d = v.decisions;
@@ -521,7 +539,7 @@ add({
 
 add({
   id: 'v2-origin', title: 'Rubric v2: by HTF origin', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Where the reaction started (a fact on Step 1, never graded): how many Rubric v2 decisions came from each, and the expectancy of the ones taken.',
   select: (v) => {
     const d = v.decisions;
@@ -536,7 +554,7 @@ add({
 
 add({
   id: 'v2-mirrors', title: 'Rubric v2: mistakes and their mirrors', category: 'chart', kind: 'bars', sizes: ['L', 'M'], defaultSize: 'L', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Each "what went wrong — me" tag beside its mirror under "what worked", on Rubric v2 trades taken: R per trade with the mistake, and with the opposite done right. Only pairs seen at least once are shown.',
   select: (v) => {
     const pairs = v.decisions.mirrors.filter((p) => p.me_cell.n || p.worked_cell.n);
@@ -552,7 +570,7 @@ add({
 
 add({
   id: 'v2-pass-reasons', title: 'Passes and misses: why', category: 'chart', kind: 'bars', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Rubric v2 passes and misses by their main reason: how many, and what they would have made (the hypothetical R written on Step 2). Above zero: the reason cost you; below: it saved you.',
   select: (v) => {
     const rows = v.decisions.byReason.filter((b) => b.count > 0);
@@ -566,7 +584,7 @@ add({
 
 add({
   id: 'v2-fear-rule', title: 'Fear passes vs rule passes', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'The passes and misses whose main reason was "Doubt or fear", beside the ones where the rubric said no trade: what each would have made. If the fear passes would have won more, the fear is costing you; if the rule passes would have lost, the rubric is earning its keep.',
   select: (v) => {
     const { fear, rule } = v.decisions.fearVsRule;
@@ -642,7 +660,7 @@ zoneWidget('replay-kills', 'Replay plans: kill switches on winning vs losing day
 
 add({
   id: 'v2-scenario', title: 'Rubric v2: by scenario', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Rubric v2 trades taken: R per trade with the bias (A), against it (B) and unplanned. B and unplanned are capped at grade B on the form.',
   select: (v) => {
     const d = v.decisions;
@@ -656,7 +674,7 @@ add({
 
 add({
   id: 'v2-time', title: 'Rubric v2: time to decide', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: false, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Timed decisions only: how long each took, by quarters of the limit; then the ones decided after the clock chimed (Over time), and the ones you logged as Missed — too slow. The aim is the candle close, inside the time.',
   select: (v) => {
     const t = v.decisions.time;
@@ -668,7 +686,7 @@ add({
 
 add({
   id: 'v2-decisions', title: 'Rubric v2: taken, passed, missed', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'v2' },
   help: 'Every Rubric v2 decision: what the taken trades made, and what the passes and the misses would have made (their hypothetical R, required on the form). Passes that would have lost are the filter working.',
   select: (v) => {
     const d = v.decisions;
@@ -737,7 +755,7 @@ add({
 
 add({
   id: 'backtest-gap', title: 'Backtest vs live', category: 'data', kind: 'list', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 8,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'The same setup level live and in replay. A big gap on the same setup means execution under pressure, not the setup.',
   select: (v) => ({ kind: 'list', empty: v.btEligible ? 'No setup level has enough trades in both yet.' : 'Shown on real accounts, when you have backtests.',
     rows: v.btGap.map((g) => ({ key: g.label, title: g.label, sub: `live ${R(g.live)} (${g.liveN}) · replay ${R(g.bt)} (${g.btN})`, value: `gap ${R(g.gap)}`, tone: 'neutral' as Tone })),
@@ -766,7 +784,8 @@ add({
 
 const point = (id: 'fix' | 'keep' | 'rules' | 'risk', title: string, help: string) => add({
   id: `point-${id}`, title, category: 'insight', kind: 'text', sizes: ['S', 'M'], defaultSize: 'M', claims: true, minTrades: 1,
-  settings: { scope: true }, help,
+  // Fix first and Keep doing read the explorer and the Rule Lab: rubric-dependent. Rules and risk are not.
+  settings: { scope: true, ...(id === 'fix' || id === 'keep' ? { family: 'toggle' as const } : {}) }, help,
   select: (v) => {
     const p = v.summary.points.find((x) => x.id === id);
     if (!p) return { kind: 'none' };
@@ -783,7 +802,7 @@ point('risk', 'Risk', 'Is your drawdown normal for your results? Your worst fall
 
 add({
   id: 'focus', title: "This week's experiment", category: 'insight', kind: 'text', sizes: ['S', 'M'], defaultSize: 'M', claims: true, minTrades: 8,
-  settings: { scope: true },
+  settings: { family: 'toggle', scope: true },
   help: 'One change to test on your next trades, from the biggest leak or the Rule Lab. An experiment, not a verdict: none that would need more than 200 trades to tell apart is proposed.',
   select: (v) => {
     const x = v.focus.experiment;
@@ -910,7 +929,7 @@ add({
 
 add({
   id: 'missed', title: 'Missed setups', category: 'list', kind: 'list', sizes: ['T', 'L'], defaultSize: 'T', claims: true, minTrades: 0,
-  settings: {},
+  settings: { family: 'toggle' },
   help: 'Setups you saw and skipped, logged in real time, by the reason you gave: how many would have won and the R left behind. Hindsight entries are left out and counted.',
   select: (v) => {
     const m = v.missed;

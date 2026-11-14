@@ -3,7 +3,7 @@ import {
 } from './domain';
 import { GATES_SINCE, gradeUnder } from './rubric';
 import { DEFAULT_RULE_CONFIG, TRADE_RULES } from './ruleBook';
-import { RUBRIC_V2, rulesFollowedV2 } from './decision';
+import { rubricFamily, rulesFollowedV2 } from './decision';
 import type { Trade } from './types';
 
 /**
@@ -74,7 +74,7 @@ export type Adherence = 'followed' | 'broken' | 'unscored';
  */
 export function adherenceOf(t: AdherenceInput): Adherence {
   // Rubric v2 (046): computed from the override, the "me" tags and risk (lib/decision). Day rules are the review's.
-  if (t.rubric_version === RUBRIC_V2) {
+  if (rubricFamily(t) === 'v2') {
     if (!t.decision || t.decision !== 'take') return 'unscored';
     return rulesFollowedV2({ grade_override: t.grade_override, mistake_tags: t.mistake_tags, risk_percent: t.risk_percent },
       { maxRiskPct: DEFAULT_RULE_CONFIG.maxRiskPct, backtest: true }).followed ? 'followed' : 'broken';

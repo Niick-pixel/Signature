@@ -19,16 +19,20 @@ export function deleteThemeWord(id: string): void { getDb().prepare('DELETE FROM
 /* ── insight ledger ── */
 export interface InsightRow {
   id: string; created_at: string; scope: string; kind: string; field: string; level: string; direction: 'positive' | 'negative';
-  size: number; verdict: string; n_at: number; last_trade_at: string; status: 'open' | 'held' | 'faded' | 'reversed';
+  size: number; verdict: string; n_at: number; last_trade_at: string; status: 'open' | 'held' | 'faded' | 'reversed' | 'retired';
+  /** The rubric family the claim was made on (052). */
+  family: 'legacy' | 'v2';
   evaluated_at: string | null; eval_n: number | null; eval_size: number | null; eval_p: number | null;
 }
 export function listInsights(): InsightRow[] {
-  return getDb().prepare('SELECT * FROM insights ORDER BY created_at').all() as unknown as InsightRow[];
+  // Plain objects: node:sqlite rows have a null prototype, which can't be handed to a client component (Engine health).
+  return (getDb().prepare('SELECT * FROM insights ORDER BY created_at').all() as Record<string, unknown>[]).map((r) => ({ ...r })) as unknown as InsightRow[];
 }
-export function addInsight(i: Pick<InsightRow, 'scope' | 'kind' | 'field' | 'level' | 'direction' | 'size' | 'verdict' | 'n_at' | 'last_trade_at'>): string {
+/** New claims are made on Rubric v2 (db/statsEngine): the family defaults to 'v2'. */
+export function addInsight(i: Pick<InsightRow, 'scope' | 'kind' | 'field' | 'level' | 'direction' | 'size' | 'verdict' | 'n_at' | 'last_trade_at'> & { family?: InsightRow['family'] }): string {
   const id = crypto.randomUUID();
-  getDb().prepare('INSERT INTO insights (id, scope, kind, field, level, direction, size, verdict, n_at, last_trade_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(id, i.scope, i.kind, i.field, i.level, i.direction, i.size, i.verdict, i.n_at, i.last_trade_at);
+  getDb().prepare('INSERT INTO insights (id, scope, kind, field, level, direction, size, verdict, n_at, last_trade_at, family) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, i.scope, i.kind, i.field, i.level, i.direction, i.size, i.verdict, i.n_at, i.last_trade_at, i.family ?? 'v2');
   return id;
 }
 export function settleInsight(id: string, r: { status: InsightRow['status']; eval_n: number; eval_size: number; eval_p: number }): void {
@@ -71,9 +75,14 @@ export function restoreEdge(b: { themeDictionary?: unknown; insights?: unknown; 
     try { n += Number(db.prepare('INSERT OR IGNORE INTO theme_dictionary (id, theme, phrase, created_at) VALUES (?, ?, ?, ?)').run(r.id as string, r.theme as string, r.phrase as string, str(r.created_at) ?? new Date().toISOString()).changes); } catch { /* skipped */ }
   for (const r of rows(b.insights)) if (str(r.id) && str(r.scope) && (r.direction === 'positive' || r.direction === 'negative'))
     try {
-      n += Number(db.prepare('INSERT OR IGNORE INTO insights (id, created_at, scope, kind, field, level, direction, size, verdict, n_at, last_trade_at, status, evaluated_at, eval_n, eval_size, eval_p) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      // An export from before 052 has no family: its claims were made on legacy data. A legacy claim still open is
+      // retired on the way in, as the migration does (the legacy rubric is frozen; it can never be re-checked).
+      const family = r.family === 'v2' ? 'v2' : 'legacy';
+      const known = ['open', 'held', 'faded', 'reversed', 'retired'].includes(String(r.status)) ? String(r.status) : 'open';
+      const status = family === 'legacy' && known === 'open' ? 'retired' : known;
+      n += Number(db.prepare('INSERT OR IGNORE INTO insights (id, created_at, scope, kind, field, level, direction, size, verdict, n_at, last_trade_at, status, evaluated_at, eval_n, eval_size, eval_p, family) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(r.id as string, str(r.created_at) ?? new Date().toISOString(), r.scope as string, str(r.kind) ?? 'anatomy', str(r.field) ?? '', str(r.level) ?? '', r.direction as string, num(r.size) ?? 0, str(r.verdict) ?? 'hint',
-          num(r.n_at) ?? 0, str(r.last_trade_at) ?? '', ['open', 'held', 'faded', 'reversed'].includes(String(r.status)) ? String(r.status) : 'open', str(r.evaluated_at), num(r.eval_n), num(r.eval_size), num(r.eval_p)).changes);
+          num(r.n_at) ?? 0, str(r.last_trade_at) ?? '', status, str(r.evaluated_at), num(r.eval_n), num(r.eval_size), num(r.eval_p), family).changes);
     } catch { /* skipped */ }
   for (const r of rows(b.blindGrades)) if (str(r.id) && str(r.trade_id) && str(r.grade))
     try { n += Number(db.prepare('INSERT OR IGNORE INTO blind_grades (id, trade_id, created_at, grade, score) VALUES (?, ?, ?, ?, ?)').run(r.id as string, r.trade_id as string, str(r.created_at) ?? new Date().toISOString(), r.grade as string, num(r.score)).changes); } catch { /* skipped */ }

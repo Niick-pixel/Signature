@@ -16,6 +16,10 @@
  *  - The Brier score of the stored win-probability predictions (similar
  *    setups at the reveal): mean (p − outcome)², against always saying your
  *    base rate.
+ *  - Every claim records its rubric family (052). Legacy claims still open
+ *    when the checklist rubric was frozen are closed as 'retired': they can
+ *    never be re-checked, so they are listed (Engine health) but left out of
+ *    the hit rate and the thresholds. New claims are made on Rubric v2 only.
  */
 import { compare } from './compare';
 import { DEFAULT_THRESHOLDS, verdict, type Thresholds, type Verdict, type VerdictLevel } from './verdict';
@@ -23,18 +27,19 @@ import { resultClass } from './metrics';
 import type { ExplorerRow } from './explorer';
 import { field } from './fields';
 import type { Trade } from '../types';
+import type { RubricFamily } from '../decision';
 
 export const RECHECK_AFTER = 30;
-export interface Claim { scope: string; kind: string; field: string; level: string; direction: 'positive' | 'negative'; size: number; verdict: string; n_at: number; last_trade_at: string }
-export interface StoredClaim extends Claim { id: string; created_at: string; status: 'open' | 'held' | 'faded' | 'reversed'; eval_n: number | null; eval_size: number | null; eval_p: number | null }
+export interface Claim { scope: string; kind: string; field: string; level: string; direction: 'positive' | 'negative'; size: number; verdict: string; n_at: number; last_trade_at: string; family: RubricFamily }
+export interface StoredClaim extends Claim { id: string; created_at: string; status: 'open' | 'held' | 'faded' | 'reversed' | 'retired'; eval_n: number | null; eval_size: number | null; eval_p: number | null }
 
 const key = (c: Pick<Claim, 'scope' | 'field' | 'level' | 'direction'>) => `${c.scope}|${c.field}|${c.level}|${c.direction}`;
 
 /** New claims from the explorer rows above Too early that the ledger doesn't hold yet. */
-export function newClaims(rows: readonly ExplorerRow[], scope: string, n: number, lastTradeAt: string, stored: readonly StoredClaim[]): Claim[] {
+export function newClaims(rows: readonly ExplorerRow[], scope: string, n: number, lastTradeAt: string, stored: readonly StoredClaim[], family: RubricFamily): Claim[] {
   const have = new Set(stored.map(key));
   return rows.filter((r) => !r.hidden && r.verdict.level !== 'too-early' && r.verdict.direction)
-    .map((r) => ({ scope, kind: 'anatomy', field: r.field, level: r.level, direction: r.verdict.direction!, size: r.diff, verdict: r.verdict.level, n_at: n, last_trade_at: lastTradeAt }))
+    .map((r) => ({ scope, kind: 'anatomy', field: r.field, level: r.level, direction: r.verdict.direction!, size: r.diff, verdict: r.verdict.level, n_at: n, last_trade_at: lastTradeAt, family }))
     .filter((c) => !have.has(key(c)));
 }
 
@@ -61,7 +66,8 @@ export function recheck(c: Claim, after: readonly Trade[]): { status: 'held' | '
 export interface HitRate { level: string; checked: number; held: number; rate: number | null }
 export function hitRates(stored: readonly StoredClaim[]): HitRate[] {
   return (['hint', 'likely', 'confirmed'] as const).map((level) => {
-    const done = stored.filter((s) => s.verdict === level && s.status !== 'open');
+    // Checked claims only: an open one is not yet, a retired one never will be (its rubric is frozen).
+    const done = stored.filter((s) => s.verdict === level && s.status !== 'open' && s.status !== 'retired');
     const held = done.filter((s) => s.status === 'held').length;
     return { level, checked: done.length, held, rate: done.length ? held / done.length : null };
   });

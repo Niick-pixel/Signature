@@ -403,6 +403,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
         <div ref={grid} className="grid" style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gridAutoRows: `${rowH}px`, gap: s.gap, minHeight: editing ? '100%' : undefined }}>
           {layout.tiles.map((t, i) => (
             <Tile key={t.id} tile={t} widgets={page.widgets} states={page.states} reduce={reduce} index={i} tint={s.tint}
+              onFamily={board.readOnly ? undefined : (uid, family) => ed.apply((l) => updateWidget(l, t.id, uid, (it) => ({ ...it, cfg: { ...it.cfg, family } })), { refresh: true })}
               rotate={page.rotate[t.id] && t.items[page.rotate[t.id].index] ? { uid: t.items[page.rotate[t.id].index].uid, reason: page.rotate[t.id].reason } : undefined}
               edit={editing ? {
                 selected: selected === t.id, dragging: (drag?.kind === 'move' || drag?.kind === 'resize') && drag.id === t.id,

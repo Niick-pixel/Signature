@@ -11,7 +11,7 @@
  *    and how often each would have won. If skips score the same as takes and
  *    win as often, hesitation is the leak; if lower, the filter is working.
  */
-import { onOldScale } from '../decision';
+import { rubricFamily, type RubricFamily } from '../decision';
 import { Z80 } from './dist';
 import { resultClass, wilson } from './metrics';
 import { isHypothetical } from '../domain';
@@ -32,7 +32,9 @@ const varOf = (xs: number[], m: number) => (xs.length > 1 ? xs.reduce((a, v) => 
 const wouldR = (t: Trade) => t.would_be_r ?? (t.would_have_hit_tp == null ? null : t.would_have_hit_tp ? 1 : -1);
 
 /** `all`: every trade in view, missed and taken. */
-export function missedStats(all: readonly Trade[]): MissedStats {
+export function missedStats(all: readonly Trade[], family: RubricFamily = 'legacy'): MissedStats {
+  // Skip and take scores compared on one rubric's scale only: the checklist score (legacy), or the v2 total as a
+  // percentage, locked at the decision. The counts and the R left behind read every skip.
   const missed = all.filter((t) => isHypothetical(t.account) && !t.deleted_at);
   const rt = missed.filter((t) => t.written_before_outcome === true);
   const taken = all.filter((t) => !isHypothetical(t.account) && t.r_multiple != null && t.outcome !== 'Not taken');
@@ -40,8 +42,10 @@ export function missedStats(all: readonly Trade[]): MissedStats {
   const win = wr.filter((v) => v != null && v > 0.1).length; const lose = wr.filter((v) => v != null && v < -0.1).length;
   const reasons = new Map<string, Trade[]>();
   for (const t of rt) { const k = t.skip_reason ?? 'Not given'; reasons.set(k, [...(reasons.get(k) ?? []), t]); }
-  const ss = rt.filter(onOldScale).map((t) => t.checklist_score).filter((v): v is number => v != null);
-  const ts = taken.filter(onOldScale).map((t) => t.checklist_score).filter((v): v is number => v != null);
+  // checklist_score holds the stored grade: the v2 total as a percentage on a v2 trade (db/trades), when it was graded.
+  const scoreOf = (t: Trade) => (family === 'v2' && !t.grade_letter ? null : t.checklist_score);
+  const ss = rt.filter((t) => rubricFamily(t) === family).map(scoreOf).filter((v): v is number => v != null);
+  const ts = taken.filter((t) => rubricFamily(t) === family).map(scoreOf).filter((v): v is number => v != null);
   const sm = mean(ss); const tm = mean(ts);
   const gap = sm != null && tm != null ? sm - tm : null;
   const se = sm != null && tm != null && ss.length > 1 && ts.length > 1 ? Math.sqrt(varOf(ss, sm) / ss.length + varOf(ts, tm) / ts.length) : null;

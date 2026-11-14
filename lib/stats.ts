@@ -1,7 +1,7 @@
 import {
   ACCOUNT_VALUES, accountLabel, isDated, isHypothetical, isReal, isSeparate, CHECKLIST_ITEMS, CONFIDENCE_LEVELS, GRADE_BANDS, MIN_SAMPLE, REASONS,
   RETIRED_TARGET_TYPES, SKIP_REASONS, SWEEP_TIERS, SWEEP_TIER_SPEC, TAKE_IT_THRESHOLD, TARGET_TYPES,
-  TARGET_CLASSES, TARGET_TYPE_VALUES, isTaken, targetClassOf,
+  TARGET_CLASSES, TARGET_TYPE_VALUES, isBacktest, isTaken, targetClassOf,
   type Account, type ChecklistKey, type MistakeTag, type Reason, type SkipReason,
   type TargetType,
 } from './domain';
@@ -727,6 +727,24 @@ export function streaks(all: Trade[]): Streaks {
 
 /** R and count per weekday and entry hour, for the heatmap. */
 export interface HeatCell { day: number; hour: number; count: number; totalR: number }
+
+/**
+ * Whether a trade's date is a market date. A real trade's is. A backtest's is
+ * only when it has a replay date: traded on a replay day (048), or moved to the
+ * day it replayed (Fix replay dates / When → Change, in its edit history).
+ * Anything else is the day it was logged — never read as market time.
+ */
+export function hasMarketDate(t: Pick<Trade, 'account' | 'undated' | 'replay_day_id' | 'id'>, redated: ReadonlySet<string>): boolean {
+  if (t.undated) return false;
+  if (!isBacktest(t.account)) return true;
+  return t.replay_day_id != null || redated.has(t.id);
+}
+
+/** Day and hour's trades: those with a market date, and how many backtests were left out for having none. */
+export function whenTrades<T extends Pick<Trade, 'account' | 'undated' | 'replay_day_id' | 'id'>>(trades: readonly T[], redated: ReadonlySet<string>): { trades: T[]; noReplayDate: number } {
+  const ok = trades.filter((t) => hasMarketDate(t, redated));
+  return { trades: ok, noReplayDate: trades.filter((t) => isBacktest(t.account) && !hasMarketDate(t, redated)).length };
+}
 
 export function whenHeatmap(trades: Trade[]): HeatCell[] {
   const cells = new Map<string, HeatCell>();

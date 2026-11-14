@@ -20,6 +20,7 @@ import {
   MOVED_TO_BE, PLANNED_RR_VALUES, SMT_STATES, STOP_METHODS, TIMEFRAMES, TRI_ANSWERS, closureLetter, closureScore,
 } from '../anatomy';
 import type { Trade } from '../types';
+import { HTF_ORIGINS, LEG_LOCATIONS, ROWS, gradeV2, rubricFamily } from '../decision';
 import type { TradeState } from './state';
 
 export type Timing = 'pre' | 'in' | 'outcome' | 'post' | 'meta';
@@ -68,6 +69,7 @@ export const FIELDS: FieldDef[] = [
   { key: 'source', label: 'Source', kind: 'cat', options: ['live', 'demo', 'eval', 'backtest', 'missed'], timing: 'meta', objective: true, source: 'derived', predictor: false, get: (t) => sourceOf(t.account) },
   { key: 'account', label: 'Account', kind: 'cat', timing: 'meta', objective: true, source: 'trade', predictor: false, get: col('account') },
   { key: 'rubric_version', label: 'Rubric', kind: 'num', timing: 'meta', objective: true, source: 'trade', predictor: false, get: col('rubric_version') },
+  { key: 'rubric_family', label: 'Rubric family', kind: 'cat', options: ['v2', 'legacy'], timing: 'meta', objective: true, source: 'derived', predictor: false, get: (t) => rubricFamily(t) },
   { key: 'session_index', label: 'Replay session', kind: 'num', timing: 'meta', objective: true, source: 'trade', predictor: false, get: col('session_index') },
 
   // ── pre: the setup
@@ -88,6 +90,7 @@ export const FIELDS: FieldDef[] = [
   { key: 'fvg_tf', label: 'FVG timeframe', kind: 'cat', options: TIMEFRAMES, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('fvg_tf') },
   { key: 'entry_tf', label: 'Entry timeframe', kind: 'cat', options: TIMEFRAMES, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('entry_tf') },
   { key: 'fvg_quality', label: 'FVG quality', kind: 'cat', options: FVG_QUALITIES, timing: 'pre', objective: false, source: 'trade', predictor: true, get: col('fvg_quality') },
+  // Rubric v2's singular-gap gate (047) is this column: one clean gap, or more than one.
   { key: 'fvg_overlap', label: 'FVG', kind: 'cat', options: ['Clean', 'Overlapping gaps'], timing: 'pre', objective: true, source: 'derived', predictor: true,
     get: (t) => (t.singular_gap == null ? null : t.singular_gap ? 'Clean' : 'Overlapping gaps') },
   { key: 'candle_strength', label: 'Candle strength', kind: 'num', range: [0, 4], timing: 'pre', objective: false, source: 'trade', predictor: false, get: col('candle_strength') },
@@ -101,7 +104,12 @@ export const FIELDS: FieldDef[] = [
   // pool" overlaps EQH/EQL, PDH/PDL and session levels) can't be placed in it, so it reads as unanswered
   // here — and the integrity banner lists those trades to re-tag.
   { key: 'target_type', label: 'Target', kind: 'cat', options: TARGET_TYPES, timing: 'pre', objective: true, source: 'trade', predictor: true,
-    get: (t) => ((TARGET_TYPES as readonly string[]).includes(t.target_type ?? '') ? t.target_type : null) },
+    get: (t) => {
+      // A Rubric v2 miss (the clock ran out) may be saved before a target was picked: the column can't be empty, so it
+      // reads "Other". That is a default, not an answer — unset at the decision, so null here, never imputed.
+      if (rubricFamily(t) === 'v2' && t.decision === 'missed' && t.target_type === 'Other') return null;
+      return (TARGET_TYPES as readonly string[]).includes(t.target_type ?? '') ? t.target_type : null;
+    } },
   { key: 'into_eq_pool', label: 'Into an EQ pool', kind: 'bool', timing: 'pre', objective: true, source: 'trade', predictor: true, get: tri('into_eq_pool') },
   { key: 'planned_rr', label: 'Planned R:R', kind: 'cat', options: PLANNED_RR_VALUES, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('planned_rr') },
   { key: 'entry_method', label: 'Entry', kind: 'cat', options: ENTRY_METHODS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('entry_method') },
@@ -110,6 +118,22 @@ export const FIELDS: FieldDef[] = [
     key: i.key, label: i.label, kind: 'bool', timing: 'pre', objective: i.key !== 'chk_htf_bias' && i.key !== 'chk_displacement_fvg',
     source: 'trade', predictor: true, points: i.points, get: tri(i.key as keyof Trade),
   })),
+  // ── pre, Rubric v2 (046–048): set at the decision, before the outcome. Null on every legacy trade, and null on a v2
+  // trade where it was left unset at the decision — never imputed (Data checks counts them as "unset at decision").
+  // The rows are judgements scored under a clock; the scenario, the leg and the origin are read off the chart.
+  ...ROWS.map((r): FieldDef => ({
+    key: r.key, label: `v2 ${r.label}`, kind: 'cat', options: ['0', '1', '2'], timing: 'pre', objective: false, source: 'trade', predictor: true,
+    get: (t) => (t[r.key] == null ? null : String(t[r.key])),
+  })),
+  { key: 'plan_scenario', label: 'Scenario', kind: 'cat', options: ['A', 'B', 'none'], timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('plan_scenario') },
+  { key: 'v2_cap', label: 'Capped at B by', kind: 'cat', options: ['No cap', 'Scenario B', 'Unplanned', 'Leg side'], timing: 'pre', objective: true, source: 'derived', predictor: true,
+    get: (t) => {
+      if (rubricFamily(t) !== 'v2' || t.plan_scenario == null || t.leg_location == null) return null;
+      const c = gradeV2(t).caps[0]?.id;
+      return c == null ? 'No cap' : c === 'scenario-b' ? 'Scenario B' : c === 'unplanned' ? 'Unplanned' : c === 'leg' ? 'Leg side' : null;
+    } },
+  { key: 'leg_location', label: 'Leg location', kind: 'cat', options: LEG_LOCATIONS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('leg_location') },
+  { key: 'htf_origin', label: 'HTF origin', kind: 'cat', options: HTF_ORIGINS, timing: 'pre', objective: true, source: 'trade', predictor: true, get: col('htf_origin') },
   { key: 'checklist_score', label: 'Checklist score', kind: 'num', range: [0, 100], timing: 'pre', objective: false, source: 'trade', predictor: false, get: col('checklist_score') },
   { key: 'grade', label: 'Grade', kind: 'cat', options: ['A+', 'A', 'B', 'C', 'D', 'F'], timing: 'pre', objective: false, source: 'trade', predictor: false, get: col('grade_letter') },
   { key: 'pre_state', label: 'Calm before entry', kind: 'num', range: [1, 5], timing: 'pre', objective: false, source: 'trade', predictor: true, get: col('pre_state') },
@@ -150,6 +174,13 @@ export const FIELDS: FieldDef[] = [
   { key: 'lesson', label: 'Lesson', kind: 'cat', timing: 'post', objective: false, source: 'trade', predictor: false, get: col('lesson') },
   { key: 'explanation', label: 'Explanation', kind: 'cat', timing: 'post', objective: false, source: 'trade', predictor: false, get: col('explanation') },
 ];
+
+/**
+ * The fields Rubric v2 asks at the decision (Step 1): left unset there, they stay null and are counted as
+ * "unset at decision" (lib/edge/integrity), never filled in. Confidence is asked too; it is registered above
+ * (confidence_at_entry), a judgement and not a predictor until its own calibration pass.
+ */
+export const V2_DECISION_FIELDS = ['row_sweep', 'row_inversion', 'row_path', 'row_target', 'fvg_overlap', 'planned_rr', 'plan_scenario', 'leg_location', 'htf_origin', 'target_type', 'entry_method', 'confidence_at_entry'] as const;
 
 /** The leakage firewall: the only fields a predictive module may read. */
 export const PREDICTORS: readonly FieldDef[] = FIELDS.filter((f) => f.timing === 'pre' && f.predictor);

@@ -16,7 +16,7 @@ export function SimilarLookup({ options, picked, result, thumbs }: { options: Ar
           {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
         </select>
       </label>
-      {!result ? null : !result.n ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>No past trade shares 3 or more setup fields with this one yet.</p> : (
+      {!result ? null : result.v2 && result.v2.have < result.v2.need ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }} data-similar-v2-few>Not enough v2 trades yet ({result.v2.have}/{result.v2.need}). A Rubric v2 trade is compared with v2 trades only.</p> : !result.n ? <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>No past trade shares 3 or more setup fields with this one yet.</p> : (
         <>
           <p className="mb-2 text-[12px] tabular-nums" style={{ color: 'var(--text-dim)' }}>
             {result.n} nearest of {result.pool} (on {result.fieldsUsed} setup fields) · mean {sR(result.meanR)} · shrunk <b style={{ color: 'var(--text)' }}>{sR(result.shrunkR)}</b> · win chance <b style={{ color: 'var(--text)' }}>{pct(result.pWin)}</b>

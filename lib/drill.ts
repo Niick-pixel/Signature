@@ -1,5 +1,6 @@
 import type { Progress } from './edge/flaws';
 import type { Trade } from './types';
+import { rubricFamily } from './decision';
 
 /** What the trade form's drill card is told about the running drill (GET /api/flaws). */
 export interface DrillInfo {
@@ -54,12 +55,12 @@ const filled = (t: Trade, k: keyof Trade) => t[k] != null && (t[k] as unknown) !
 export const fills = (t: Trade, fields: ReadonlyArray<keyof Trade>) => fields.every((k) => filled(t, k));
 /** Whether a trade logs a group: by the old fields, or on a Rubric v2 trade by what its form asks. */
 export function fillsGroup(t: Trade, g: DataGroup): boolean {
-  if (t.rubric_version === 5) return g.v2 ? g.v2(t).every((k) => filled(t, k)) : true;
+  if (rubricFamily(t) === 'v2') return g.v2 ? g.v2(t).every((k) => filled(t, k)) : true;
   return fills(t, g.fields);
 }
 /** Which fields a trade is measured on for a group, for the form to name them. */
 export const groupFields = (t: Pick<Trade, 'rubric_version' | 'decision'>, g: DataGroup): ReadonlyArray<keyof Trade> =>
-  (t.rubric_version === 5 ? (g.v2 ? g.v2(t as Trade) : []) : g.fields);
+  (rubricFamily(t) === 'v2' ? (g.v2 ? g.v2(t as Trade) : []) : g.fields);
 /** The data group a drill key measures, or null for a drill that is not about data. */
 export const dataGroupOf = (key: string): DataGroup | null =>
   (key === 'data' ? DATA_GROUPS[0] : key.startsWith('data:') ? DATA_GROUPS.find((g) => g.key === key.slice(5)) ?? null : null);

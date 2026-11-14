@@ -163,6 +163,7 @@ function Time({ v, minN, clock, onClock }: { v: TimeView; minN: number; clock: P
   const clockName = clock === 'ny' ? 'New York' : 'your clock';
   return (
     <div className="grid gap-4 lg:grid-cols-5">
+      {!!v.noReplayDate && <p className="text-[11.5px] lg:col-span-5" style={{ color: 'var(--text-faint)' }} data-no-replay-date>{v.noReplayDate} backtest{v.noReplayDate === 1 ? '' : 's'} left out — no replay date (Calendar → Backtest → Fix replay dates).</p>}
       <Card title="24-hour dial" note={<Seg value={clock} onChange={onClock} options={['ny', 'local'] as const} label={(c) => (c === 'ny' ? 'New York' : 'My clock')} />} className="lg:col-span-2">
         <svg viewBox="0 0 320 320" className="mx-auto w-full max-w-[22rem]" role="img" aria-label="Average R by half-hour of the day" onMouseLeave={() => setHover(null)} data-dial>
           {SESSION_RANGES.map((s) => (

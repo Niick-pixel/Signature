@@ -35,6 +35,7 @@ import { Z80 } from './dist';
 import { closureScore } from '../anatomy';
 import { datasetHash } from './engine';
 import type { Trade } from '../types';
+import { rubricFamily } from '../decision';
 import { verdict, type Verdict } from './verdict';
 
 export const N0 = 40; export const WF_START = 20;
@@ -266,7 +267,10 @@ export interface ScoreModel { fit: Fit; weights: Weight[]; wf: WalkForward | nul
 /** `trades`: settled with an R, oldest first. Recency weights apply to the final fit when `halfLife` is set. */
 const cache = new Map<string, ScoreModel | null>();
 
-export function scoreModel(trades: readonly Trade[], opts: { halfLife?: number | null } = {}): ScoreModel | null {
+export function scoreModel(input: readonly Trade[], opts: { halfLife?: number | null } = {}): ScoreModel | null {
+  // Fitted on legacy-rubric trades only. A v2 trade has no checklist answers: filling them with means (imputing)
+  // would teach the model that a v2 setup is an average checklist one. v2 gets its own score (V2_SCORE_UNLOCK).
+  const trades = input.filter((t) => rubricFamily(t) === 'legacy');
   if (trades.length < 8) return null;
   // Cached by the data: same trades, same answer, computed once (walk-forward at 2,000 trades is ~0.7 s).
   const key = datasetHash(trades, { halfLife: opts.halfLife ?? null } as never) + trades.map((t) => `${t.graded_post_hoc ? 1 : 0}${t.checklist_score}`).join('');

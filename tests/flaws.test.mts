@@ -188,11 +188,12 @@ test('data and filter flaws graduate too: a trade logs every field; a filter is 
   const logged = Array.from({ length: 20 }, () => tr(1, { ...full, drill_key: 'data', drill_kept: 'kept' }));
   assert.equal(F.progress(work('data'), logged, hit).graduated, true);
 
-  // Every setup an A: not fixed. A spread of grades over the last 20: fixed.
-  const graded = (g: string) => tr(1, { grade_letter: g, graded_post_hoc: false, drill_key: 'filter', drill_kept: 'kept' });
+  // Every setup an A: not fixed. A spread of grades over the last 20: fixed. Judged on Rubric v2 grades: the
+  // legacy checklist is frozen, so a filter flaw is about the rubric in use (lib/decision rubricFamily).
+  const graded = (g: string) => tr(1, { rubric_version: 5, grade_letter: g, graded_post_hoc: false, drill_key: 'filter', drill_kept: 'kept' });
   const allA = Array.from({ length: 20 }, () => graded('A'));
   assert.equal(F.progress(work('filter'), allA, () => false).graduated, false);
-  const spread = Array.from({ length: 20 }, (_, i) => graded(['A', 'B', 'C'][i % 3]));
+  const spread = Array.from({ length: 20 }, (_, i) => graded(['A', 'B', 'F'][i % 3]));
   const p = F.progress(work('filter'), spread, () => false);
   assert.equal(p.graduated, true);
   // Relapse: the next 20 are all A again.

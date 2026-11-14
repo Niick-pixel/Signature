@@ -18,7 +18,7 @@
  *
  * Every result is labelled an experiment — test it on the next N trades.
  */
-import { onOldScale } from '../decision';
+import { rubricFamily, type RubricFamily } from '../decision';
 import { edgeMetrics, type EdgeMetrics } from './metrics';
 import { hashString, seedOf } from './rng';
 import { memo } from './memo';
@@ -35,19 +35,28 @@ type Break = { id: string };
  */
 export const MAX_TESTABLE = 200;
 
-export interface LabFilter { id: string; label: string; help: string; test: (t: Trade, s: TradeState | undefined, ctx: { breaks: Break[]; sinceFirstLoss: number | null }) => boolean | null }
+/** The filters a view offers: the rubric-agnostic ones, and those of its own family (none of either family's on an all-trades view). */
+export const labFiltersFor = (family: RubricFamily | null | undefined): LabFilter[] => LAB_FILTERS.filter((f) => !f.family || f.family === family);
+
+/**
+ * `family`: a filter on one rubric family's grade or checklist answers. It judges only that family's trades (null —
+ * unknown — on the other), and is offered only on a view of that family, so grades never mix (lib/decision rubricFamily).
+ */
+export interface LabFilter { id: string; label: string; help: string; family?: RubricFamily; test: (t: Trade, s: TradeState | undefined, ctx: { breaks: Break[]; sinceFirstLoss: number | null }) => boolean | null }
 
 const st = (t: Trade) => (t as Trade & { __state?: TradeState }).__state;
 
 export const LAB_FILTERS: LabFilter[] = [
   { id: 'rules-only', label: 'Only trades inside every rule', help: 'Nothing broken — auto or self. The rule-followed-only curve.', test: (_t, _s, c) => c.breaks.length === 0 },
-  { id: 'with-bias', label: 'Only with the HTF bias', help: 'Removes trades marked against the bias.', test: (t) => (t.htf_bias === 'Against bias' ? false : t.htf_bias === 'With bias' ? true : null) },
-  { id: 'liq-event', label: 'Only with a liquidity event', help: 'Removes trades whose liquidity event is None.', test: (t) => (t.liquidity_event == null ? null : t.liquidity_event !== 'None') },
+  { id: 'with-bias', label: 'Only with the HTF bias', help: 'Removes trades marked against the bias.', family: 'legacy', test: (t) => (t.htf_bias === 'Against bias' ? false : t.htf_bias === 'With bias' ? true : null) },
+  { id: 'liq-event', label: 'Only with a liquidity event', help: 'Removes trades whose liquidity event is None.', family: 'legacy', test: (t) => (t.liquidity_event == null ? null : t.liquidity_event !== 'None') },
   { id: 'no-anticipation', label: 'No anticipation entries', help: 'Removes entries taken before the inversion closed.', test: (t) => (t.entry_method == null ? null : t.entry_method !== 'Before close (anticipation)') },
   { id: 'no-diagonal', label: 'No trendline targets', help: 'Removes trades targeting a diagonal / LRLR trendline.', test: (t) => (t.target_type == null ? null : !/trend|diagonal|lrlr/i.test(t.target_type)) },
-  { id: 'closure-8', label: 'Closure score 8 or more', help: 'Keeps inversion closures graded A− or better.', test: (t) => { const c = closureScore(t); return c == null ? null : c >= 8; } },
-  { id: 'killzone', label: 'Inside the killzone only', help: 'Removes trades marked outside the killzone.', test: (t) => (t.chk_killzone == null ? null : Boolean(t.chk_killzone)) },
-  { id: 'a-grade', label: 'A and A+ only', help: 'Keeps A+ and A grades.', test: (t) => (t.grade_letter && onOldScale(t) ? t.grade_letter === 'A+' || t.grade_letter === 'A' : null) },
+  { id: 'closure-8', label: 'Closure score 8 or more', help: 'Keeps inversion closures graded A− or better.', family: 'legacy', test: (t) => { const c = closureScore(t); return c == null ? null : c >= 8; } },
+  { id: 'killzone', label: 'Inside the killzone only', help: 'Removes trades marked outside the killzone.', family: 'legacy', test: (t) => (t.chk_killzone == null ? null : Boolean(t.chk_killzone)) },
+  { id: 'a-grade', label: 'A and A+ only', help: 'Keeps A+ and A grades (the legacy checklist).', family: 'legacy', test: (t) => (t.grade_letter && rubricFamily(t) === 'legacy' ? t.grade_letter === 'A+' || t.grade_letter === 'A' : null) },
+  { id: 'v2-a-grade', label: 'v2: A and A+ only', help: 'Keeps Rubric v2 trades graded A+ or A at the decision.', family: 'v2', test: (t) => (t.grade_letter && rubricFamily(t) === 'v2' ? t.grade_letter === 'A+' || t.grade_letter === 'A' : null) },
+  { id: 'v2-scenario-a', label: 'v2: Scenario A only', help: 'Keeps Rubric v2 trades that were the morning plan\'s Scenario A (with the bias).', family: 'v2', test: (t) => (rubricFamily(t) === 'v2' && t.plan_scenario ? t.plan_scenario === 'A' : null) },
   { id: 'max-2', label: 'At most 2 trades a day', help: 'Removes the 3rd trade of a day or session and later.', test: (_t, s) => (s?.tradeNo == null ? null : s.tradeNo <= 2) },
   { id: 'stop-first-loss', label: 'Stop after the first loss of the day', help: 'Removes every trade after a loss that day.', test: (_t, _s, c) => (c.sinceFirstLoss == null ? true : false) },
   { id: 'one-after-loss', label: 'At most 1 trade after a loss', help: 'After the first loss of a day, one more trade, then done.', test: (_t, _s, c) => (c.sinceFirstLoss == null ? true : c.sinceFirstLoss <= 1) },

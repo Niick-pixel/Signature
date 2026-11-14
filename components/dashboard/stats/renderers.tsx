@@ -442,7 +442,7 @@ function Custom({ view, data }: { view: string; data: any }) {
       </ScrollBox>
     );
     case 'eval': return <ScrollBox className="h-full"><LabProvider rows={data.rows}><EvalPanel presets={data.presets} /></LabProvider></ScrollBox>;
-    case 'rulelab': return <ScrollBox className="h-full"><LabProvider rows={data.rows}><RuleLabPanel each={data.each} /></LabProvider></ScrollBox>;
+    case 'rulelab': return <ScrollBox className="h-full"><LabProvider rows={data.rows}><RuleLabPanel each={data.each} family={data.family ?? null} /></LabProvider></ScrollBox>;
     case 'quality': return <ScrollBox className="h-full"><QualityPanel {...data} /></ScrollBox>;
     case 'anatomy': return <ScrollBox className="h-full"><AnatomyExplorer {...data} /></ScrollBox>;
     case 'similar': return <ScrollBox className="h-full"><SimilarLookup {...data} /></ScrollBox>;

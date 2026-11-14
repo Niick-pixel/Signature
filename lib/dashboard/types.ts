@@ -34,6 +34,8 @@ export interface WidgetCfg {
   source?: Source;
   period?: string;
   lastN?: number;
+  /** A rubric-dependent widget's rubric family (v2 by default). Saved with the widget, like its scope. */
+  family?: 'v2' | 'legacy';
   showSubtitle?: boolean;
   /** n and the interval: shown inline, or folded into a tooltip. Never removed from a claim. */
   stats?: 'inline' | 'tooltip';
@@ -82,6 +84,12 @@ export interface BoardSettings {
   tint: boolean;
   /** 'app': the same centred column as the Dashboard and every other tab; 'full': edge to edge. */
   width: 'app' | 'full';
+  /**
+   * The source was picked by you (Real · Backtest · All), and is then the one the board opens on: the last scope
+   * used, kept in the journal. Until then the Stats board opens on whichever source has the most trades logged in
+   * the last 14 days (lib/statsScope busiestSource).
+   */
+  sourceSet?: boolean;
 }
 
 export interface Board { id: string; name: string; position: number; layout: BoardLayout; settings: BoardSettings }

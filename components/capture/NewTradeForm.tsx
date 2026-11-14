@@ -2,7 +2,7 @@
 
 import { DrillChip, type DrillKept } from './DrillChip';
 import { DecisionFlow } from './DecisionFlow';
-import { isRubricV2 } from '@/lib/decision';
+import { formFor } from '@/lib/decision';
 import { PlanChip, type PlanScenario } from './PlanChip';
 import { FilterNote } from './FilterNote';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -111,7 +111,7 @@ export function NewTradeForm(props: FormProps) {
   const [n, setN] = useState(0);
   // Rubric v2 (046): every new trade, and every trade decided under it, is the two-step flow.
   // Older trades keep this form, with their own fields, untouched.
-  if (!props.trade || isRubricV2(props.trade)) return <DecisionFlow key={n} trade={props.trade} onNext={() => setN((x) => x + 1)} />;
+  if (formFor(props.trade) === 'decision') return <DecisionFlow key={n} trade={props.trade} onNext={() => setN((x) => x + 1)} />;
   return <TradeForm key={n} {...props} onNext={() => setN((x) => x + 1)} />;
 }
 

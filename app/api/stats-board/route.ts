@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   switch (b.action) {
     case 'source': {
       if (!SOURCES.includes(b.source as string)) return bad('Real, Backtest or All.');
-      saveBoard({ ...board!, settings: { ...board!.settings, source: b.source as Source } });
+      saveBoard({ ...board!, settings: { ...board!.settings, source: b.source as Source, sourceSet: true } });
       return NextResponse.json({ ok: true });
     }
     case 'layout': {

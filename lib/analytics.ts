@@ -71,6 +71,8 @@ export interface TimeView {
   sessions: Array<{ id: string; label: string; from: number; to: number } & Stat>;
   heat: { rows: Array<{ weekday: number; label: string; cells: Array<{ hour: number } & Stat> }>; hours: number[] };
   weekdays: Array<{ label: string } & Stat>;
+  /** Backtests left out for having no replay date (set by the route). */
+  noReplayDate?: number;
 }
 
 export function timeView(ts: readonly Trade[], clock: Clock, minN: number): TimeView {

@@ -2,11 +2,8 @@ import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
 import { countsInStats, isTaken } from '@/lib/domain';
 import { sourceOf } from '@/lib/edge/fields';
-import { similarSetups } from '@/lib/edge/similar';
-import { isRubricV2 } from '@/lib/decision';
-
-/** A Rubric v2 trade is compared with v2 trades only, and shows nothing until this many match. */
-const V2_MIN_MATCHES = 10;
+import { similarInFamily } from '@/lib/edge/similar';
+import { RUBRIC_V2 } from '@/lib/decision';
 import type { Trade } from '@/lib/types';
 
 /**
@@ -22,10 +19,7 @@ export async function POST(request: Request) {
   const world = sourceOf(String(draft.account ?? 'Live'));
   const pool = listTrades().filter((t) => countsInStats(t) && !t.deleted_at && isTaken(t.outcome) && t.status !== 'Planned' && t.r_multiple != null)
     .filter((t) => { const s = sourceOf(t.account); return world === 'backtest' ? s === 'backtest' : s !== 'backtest' && s !== 'missed'; });
-  const v2 = isRubricV2(draft);
-  const result = similarSetups({ ...draft, id: String(draft.id ?? 'draft') } as Trade, v2 ? pool.filter(isRubricV2) : pool);
-  if (v2 && result.n < V2_MIN_MATCHES) {
-    return NextResponse.json({ ...result, meanR: null, shrunkR: null, pWin: null, neighbours: [], v2: { have: result.n, need: V2_MIN_MATCHES } });
-  }
-  return NextResponse.json(v2 ? { ...result, v2: { have: result.n, need: V2_MIN_MATCHES } } : result);
+  // A draft from the decision flow is Rubric v2 even before it is saved (it is never graded under the legacy rubric).
+  const rubric = draft.rubric_version ?? (draft.decision || draft.row_sweep != null ? RUBRIC_V2 : null);
+  return NextResponse.json(similarInFamily({ ...draft, rubric_version: rubric, id: String(draft.id ?? 'draft') } as Trade, pool));
 }

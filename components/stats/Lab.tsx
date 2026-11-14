@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useMemo, useState } from 'react';
-import { LAB_FILTERS, MAX_TESTABLE, labResult, tradesPerDay, unpackRows, type LabRow, type LabResult, type PackedRow } from '@/lib/edge/ruleLab';
+import { LAB_FILTERS, MAX_TESTABLE, labFiltersFor, labResult, tradesPerDay, unpackRows, type LabRow, type LabResult, type PackedRow } from '@/lib/edge/ruleLab';
 import { type EvalRules, type EvalResult } from '@/lib/edge/montecarlo';
 import { useEvalSims } from './useEvalSims';
 import type { EvalJob } from '@/lib/edge/evalWorker';
@@ -41,14 +41,16 @@ function Curve({ actual, kept }: { actual: number[]; kept: number[] }) {
 }
 
 /** Section K. `each`: every filter on its own, computed on the server (the browser only combines). */
-export function RuleLabPanel({ each }: { each: Record<string, LabResult> }) {
+export function RuleLabPanel({ each, family = null }: { each: Record<string, LabResult>; family?: 'v2' | 'legacy' | null }) {
   const { rows, on, setOn } = useLab();
   const combo = useMemo(() => (on.length ? labResult(rows, on) : null), [rows, on]);
   const actual = useMemo(() => { let c = 0; return rows.map((r) => (c += r.r)); }, [rows]);
   const toggle = (id: string) => setOn(on.includes(id) ? on.filter((x) => x !== id) : [...on, id]);
   const th = 'py-1 text-[10px] font-normal uppercase tracking-[0.06em]';
-  const usable = LAB_FILTERS.filter((f) => each[f.id].removed > 0);
-  const idle = LAB_FILTERS.filter((f) => each[f.id].removed === 0);
+  // One rubric family's grade and checklist filters at a time, never mixed (lib/edge/ruleLab labFiltersFor).
+  const offered = labFiltersFor(family);
+  const usable = offered.filter((f) => each[f.id]?.removed > 0);
+  const idle = offered.filter((f) => (each[f.id]?.removed ?? 0) === 0);
   return (
     <div data-rule-lab>
       <p className="mb-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>

@@ -240,12 +240,13 @@ export function findFlaws(i: FlawInputs): Flaw[] {
     }));
   }
 
-  // A filter that does not filter: one grade for everything, or checklist items ticked yes on 90%+ of trades.
+  // A filter that does not filter: one grade for everything, or rows (checklist items, on legacy data) at the top on 90%+ of trades.
+  // The deck reads Rubric v2's spread (db/flaws): the legacy checklist is retired, so a flaw in it can no longer be worked on.
   const flat = i.spread.items.filter((x) => x.notFiltering);
   if (i.spread.oneGrade || flat.length >= 2) {
     const ids = trades.slice(-RECENT).map((t) => t.id);
     out.push(build({
-      key: 'filter', type: 'filter', title: i.spread.oneGrade ? `Every setup graded ${i.spread.oneGrade}` : 'A checklist that says yes to everything',
+      key: 'filter', type: 'filter', title: i.spread.oneGrade ? `Every setup graded ${i.spread.oneGrade}` : i.spread.family === 'v2' ? 'A rubric that scores 2 on everything' : 'A checklist that says yes to everything',
       hitIds: ids, cmp: null, costPer: null, processOnly: true, chipKind: 'filter', text: FLAW_TEXT.filter,
       chart: { kind: 'spread', items: i.spread.items.filter((x) => x.share != null).map((x) => ({ label: x.label, share: x.share as number })), grades: i.spread.grades.map((g) => ({ grade: g.grade, share: g.share })) },
     }));
@@ -383,7 +384,7 @@ export { DATA_GROUPS, dataGroupOf, fills, fillsGroup, groupFields, type DataGrou
  * Null for flaws measured trade by trade.
  */
 export function groupTest(key: string): ((window: readonly Trade[]) => boolean) | null {
-  if (key === 'filter') return (w) => { const sp = setupQuality([...w]).spread; return !sp.oneGrade && !sp.items.some((x) => x.notFiltering); };
+  if (key === 'filter') return (w) => { const sp = setupQuality([...w], 'v2').spread; return !sp.oneGrade && !sp.items.some((x) => x.notFiltering); };
   return null;
 }
 

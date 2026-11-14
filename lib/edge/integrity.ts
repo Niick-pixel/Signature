@@ -10,13 +10,22 @@
  *  - the setup anatomy (the new structured fields) recorded on too few trades
  */
 import { equity, type EdgeMetrics } from './metrics';
-import { PREDICTORS } from './fields';
+import { PREDICTORS, V2_DECISION_FIELDS, field } from './fields';
+import { rubricFamily } from '../decision';
 import type { Trade } from '../types';
 import { TARGET_TYPES } from '../domain';
 
 export interface IntegrityIssue { id: string; text: string; tone: 'bug' | 'warn' | 'info'; links?: Array<{ href: string; label: string }> }
 
 const share = (a: number, b: number) => `${Math.round((a / b) * 100)}%`;
+
+/** Rubric v2 trades, decided, with a decision field left unset (lib/edge/fields V2_DECISION_FIELDS): per field, and in all. */
+export function unsetAtDecision(trades: readonly Trade[]): { trades: number; fields: Array<{ key: string; label: string; n: number }> } {
+  const v2 = trades.filter((t) => rubricFamily(t) === 'v2' && t.decided_at);
+  const defs = V2_DECISION_FIELDS.map((k) => field(k)!).filter(Boolean);
+  const fields = defs.map((f) => ({ key: f.key, label: f.key === 'confidence_at_entry' ? 'confidence' : f.label.replace(/^v2 /, '').toLowerCase(), n: v2.filter((t) => f.get(t) == null).length })).filter((f) => f.n > 0);
+  return { trades: v2.filter((t) => defs.some((f) => f.get(t) == null)).length, fields };
+}
 
 export function integrity(settled: readonly Trade[], m: EdgeMetrics, opts: { noR?: number } = {}): IntegrityIssue[] {
   const out: IntegrityIssue[] = [];
@@ -31,10 +40,17 @@ export function integrity(settled: readonly Trade[], m: EdgeMetrics, opts: { noR
   if (noRubric) out.push({ id: 'rubric', tone: 'warn', text: `${noRubric} trade${noRubric === 1 ? '' : 's'} with no rubric version — they can't be compared across rubrics.` });
   const exposed = settled.filter((t) => t.graded_post_hoc).length;
   if (exposed && settled.length) out.push({ id: 'hindsight', tone: 'info', text: `${exposed} of ${settled.length} grades (${share(exposed, settled.length)}) were given after the outcome — hindsight-exposed. Setup quality keeps them apart.` });
-  // The structured anatomy (milestone 3 fields): how much of it exists to learn from.
+  // The structured anatomy (milestone 3 fields, legacy trades only — Rubric v2 asks its own): how much of it exists to learn from.
   const anatomy = PREDICTORS.filter((f) => ['liquidity_event', 'entry_method', 'stop_method', 'closure_score', 'fvg_quality', 'entry_tf'].includes(f.key));
-  const filled = settled.filter((t) => anatomy.some((f) => f.get(t) != null)).length;
-  if (settled.length && filled / settled.length < 0.5) out.push({ id: 'anatomy', tone: 'info', text: `Setup anatomy (liquidity event, entry, stop, closure score…) recorded on ${filled} of ${settled.length} trades. Those fields can't be analysed until more trades carry them.` });
+  const legacyN = settled.filter((t) => rubricFamily(t) === 'legacy');
+  const filled = legacyN.filter((t) => anatomy.some((f) => f.get(t) != null)).length;
+  // Rubric v2: what was left unset at the decision stays unset — null, never filled in — and is counted here.
+  const unset = unsetAtDecision(settled);
+  if (unset.trades) {
+    out.push({ id: 'unset-decision', tone: 'info',
+      text: `Unset at decision on ${unset.trades} Rubric v2 trade${unset.trades === 1 ? '' : 's'}: ${unset.fields.map((f) => `${f.label} ${f.n}`).join(', ')}. Left empty, never filled in — each is out of that field's numbers only.` });
+  }
+  if (legacyN.length && filled / legacyN.length < 0.5) out.push({ id: 'anatomy', tone: 'info', text: `Setup anatomy (liquidity event, entry, stop, closure score…) recorded on ${filled} of ${legacyN.length} trades. Those fields can't be analysed until more trades carry them.` });
   // Targets filed under a retired, overlapping type: left out of the target comparison until re-tagged.
   const retired = settled.filter((t) => t.target_type && !(TARGET_TYPES as readonly string[]).includes(t.target_type));
   if (retired.length) {

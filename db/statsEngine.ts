@@ -12,9 +12,9 @@ import { listReplayDays } from './replay';
  * itself as the page is opened.
  */
 import { decisionStats } from '@/lib/decisionStats';
-import { listTrades } from './trades';
+import { listTrades, redatedTradeIds } from './trades';
 import { countsInStats, isBacktest, isDated, isHypothetical, isSeparate } from '../lib/domain';
-import { accountsInUse, aggregate, deliveryOnlyVerdict, equityCurves, pnlOf, preGradedOnly } from '../lib/stats';
+import { accountsInUse, aggregate, deliveryOnlyVerdict, equityCurves, pnlOf, preGradedOnly, whenTrades } from '../lib/stats';
 import { edgeInputs } from './edgeInputs';
 import { planBreaks } from '../lib/review';
 import { edgeMetrics, adherence } from '../lib/edge/metrics';
@@ -29,12 +29,12 @@ import { ledgerV2 } from '../lib/edge/ledger';
 import { compare } from '../lib/edge/compare';
 import { equityCone } from '../lib/edge/montecarlo';
 import type { Thumb } from '../components/stats/EdgeUI';
-import { LAB_FILTERS, MAX_TESTABLE, labResult, labRows } from '../lib/edge/ruleLab';
+import { LAB_FILTERS, MAX_TESTABLE, labFiltersFor, labResult, labRows } from '../lib/edge/ruleLab';
 import { listPropAccounts } from './prop';
 import { scoreModel, skillVerdict } from '../lib/edge/scoreModel';
 import { setupQuality } from '../lib/edge/quality';
 import { execution } from '../lib/edge/execution';
-import { similarSetups } from '../lib/edge/similar';
+import { similarInFamily } from '../lib/edge/similar';
 import { language } from '../lib/edge/text';
 import { missedStats } from '../lib/edge/missed';
 import { BACKTEST_WEIGHT } from '../lib/edge/explorer';
@@ -52,6 +52,7 @@ import { TRIAL_RUBRIC } from '../lib/rubric';
 import { backtestGap } from '../lib/edge/views';
 import { listPreps } from './prep';
 import { biasSplit, scenarioSplit } from '../lib/planMatch';
+import { rubricFamily, type RubricFamily } from '../lib/decision';
 
 export type StatsParams = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -60,13 +61,18 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
   // Hindsight — a Missed trade not written down before the move — never
   // enters a number (lib/domain countsInStats). Counted, and said, below.
   const everything = listTrades();
-  const all = everything.filter(countsInStats);
-  const hindsight = everything.length - all.length;
+  const counted = everything.filter(countsInStats);
+  const hindsight = everything.length - counted.length;
+  // ?family=v2|legacy: one rubric family only (lib/decision rubricFamily). The rubric-dependent widgets
+  // read one family at a time and never pool legacy and v2 trades; without it, every trade (rubric-agnostic).
+  const famParam = one(params.family);
+  const family: RubricFamily | null = famParam === 'v2' || famParam === 'legacy' ? famParam : null;
+  const all = family ? counted.filter((t) => rubricFamily(t) === family) : counted;
   const accounts = accountsInUse(everything);
 
   // Accounts, period, session and direction, from the URL (lib/statsScope).
-  // With no account asked for, the remembered choice; with none, the busiest
-  // real account. "All accounts" is every account, Backtest and Missed too.
+  // With no account asked for, the remembered choice; with none, every real
+  // account together (lib/statsScope parseStatsScope). "All accounts" is every account, Backtest and Missed too.
   const scope = parseStatsScope(params, accounts.map((a) => a.account), rememberedAccount);
   const single = scope.accounts.length === 1 ? scope.accounts[0] : null;
   // The URL value for this selection, carried by every link on the page.
@@ -83,6 +89,7 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
     ...(scope.rubrics.length ? { rubric: scope.rubrics.join(',') } : {}),
     ...(scope.from ? { from: scope.from } : {}),
     ...(scope.to ? { to: scope.to } : {}),
+    ...(family ? { family } : {}),
   };
 
   /*
@@ -156,7 +163,9 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
     if (res) settleInsight(c.id, { status: res.status, eval_n: res.n, eval_size: res.size, eval_p: res.p });
   }
   const lastLogged = settled.reduce((m, t) => (t.created_at > m ? t.created_at : m), '');
-  for (const c of newClaims(explorerRows, scopeKey, settled.length, lastLogged, claimsBefore)) addInsight(c);
+  // New claims on Rubric v2 views only: an all-trades view pools the rubrics, and legacy data is frozen (nothing new
+  // can ever re-check a legacy claim). Each records its family (052).
+  if (family === 'v2') for (const c of newClaims(explorerRows, scopeKey, settled.length, lastLogged, claimsBefore, family)) addInsight(c);
   const claims = listInsights() as StoredClaim[];
   // Backtest vs live, level by level: a big gap means execution, not the setup.
   const btEngine = btEligible ? runEngine(backtests, { window: 'all' }) : null;
@@ -172,7 +181,7 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
   const blind = { ...blindCounter(blindGrades, localDay()), kappa: blindK.kappa, kappaN: blindK.n };
   const preCompleteness = engine.completeness.filter((c) => PREDICTORS.some((f) => f.key === c.key)).sort((a, b) => b.filled - a.filled);
   const lang = language(settled);
-  const missed = missedStats(everything.filter((t) => scope.accounts.includes(t.account) || isHypothetical(t.account)));
+  const missed = missedStats(everything.filter((t) => (scope.accounts.includes(t.account) || isHypothetical(t.account)) && (!family || rubricFamily(t) === family)), family ?? 'legacy');
   const rs = settled.map((t) => t.r_multiple as number);
   const cone = equityCone(rs);
   const kept = settled.filter((t) => breaksOf(t).length === 0);
@@ -184,7 +193,7 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
   // Rule Lab rows (lib/edge/ruleLab), and the best single filter as this week's experiment when it is at least a hint.
   const lab = labRows(stateful, breaksOf);
   const labEach = Object.fromEntries(LAB_FILTERS.map((f) => [f.id, labResult(lab, [f.id], { resamples: 1000 })]));
-  const bestLab = LAB_FILTERS.map((f) => ({ f, r: labEach[f.id] }))
+  const bestLab = labFiltersFor(family).map((f) => ({ f, r: labEach[f.id] }))
     .filter((x) => x.r.pImprove != null && x.r.pImprove >= 0.75 && x.r.kept >= lab.length / 2 && x.r.testN != null && x.r.testN <= MAX_TESTABLE).sort((a, b) => (b.r.pImprove ?? 0) - (a.r.pImprove ?? 0))[0];
   if (bestLab) focus.experiment = { text: `Rule Lab: ${bestLab.f.label.toLowerCase()}.`, from: `the Rule Lab (P(better) ${Math.round((bestLab.r.pImprove ?? 0) * 100)}%)`, n: bestLab.r.testN! };
   // Eval presets: your prop accounts first, then the common evaluations.
@@ -194,12 +203,13 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
     ...PRESETS.filter((p) => p.phase === 'eval' && p.rules.profit_target).map((p) => ({ key: `preset:${p.firm}:${p.plan}`, label: `${p.firm} ${p.plan}`, rules: evalRules(p.rules) })),
   ];
   // Setup quality, the learned score (lib/edge/scoreModel), similar setups, execution.
-  const quality = setupQuality(settled);
+  // One rubric family's scale (lib/edge/quality): v2 on a v2 view, the frozen checklist otherwise.
+  const quality = setupQuality(settled, family ?? 'legacy');
   const model = scoreModel(settled, { halfLife: window === 'recent' ? 60 : null });
   const mv = model?.wf ? skillVerdict(model.wf.model, model.wf.n) : null;
   const simId = one(params.similar) ?? settled[settled.length - 1]?.id ?? null;
   const simTarget = settled.find((t) => t.id === simId) ?? null;
-  const similar = simTarget ? similarSetups(simTarget, settled.filter((t) => t.id !== simTarget.id && t.date <= simTarget.date)) : null;
+  const similar = simTarget ? similarInFamily(simTarget, settled.filter((t) => t.id !== simTarget.id && t.date <= simTarget.date)) : null;
   const simOptions = [...settled].reverse().slice(0, 80).map((t) => ({ id: t.id, label: `${thumbs[t.id].day} · ${t.setup_type} ${t.direction === 'Long' ? '↗' : '↘'} · ${t.grade_letter ?? ''}` }));
   const exec = execution(settled);
   // The top of the page, in plain words (lib/edge/summary).
@@ -227,7 +237,15 @@ export function statsEngine(params: StatsParams, rememberedAccount: string | und
   // Replay plans (048), backtests only; amended days counted apart (lib/replayStats).
   const replayPlans = replayStats(listReplayDays(), trades);
 
+  // What a family view says about itself: "Legacy rubric · frozen · n trades · first–last".
+  // Day and hour (lib/stats whenTrades): backtests with no replay date are left out and counted — log time is never market time.
+  const when = whenTrades(settled, redatedTradeIds());
+  const familySpan = family ? { family, n: settled.length, first: settled[0]?.date.slice(0, 10) ?? null, last: settled[settled.length - 1]?.date.slice(0, 10) ?? null } : null;
+
   return {
+    family,
+    familySpan,
+    when,
     plans,
     decisions,
     replayPlans,

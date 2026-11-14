@@ -15,7 +15,29 @@
 export const RUBRIC_V2 = 5;
 export const RUBRIC_V2_LABEL = 'Rubric v2 (4 rows)';
 export const RUBRIC_V2_SHORT = 'v2';
-export const isRubricV2 = (t: { rubric_version?: number | null }): boolean => t.rubric_version === RUBRIC_V2;
+export const isRubricV2 = (t: { rubric_version?: number | null }): boolean => rubricFamily(t) === 'v2';
+
+/**
+ * The rubric family a trade was graded under. Rubric v2 (rubric_version 5) is
+ * 'v2'; everything else — the checklist rubrics 1–3, the liquidity trial 4,
+ * and trades with no version at all — is 'legacy'. Legacy data is frozen: no
+ * new trade is graded under it (db/trades createTrade refuses one), and the
+ * rubric-dependent stats read one family at a time, never both together.
+ */
+export type RubricFamily = 'legacy' | 'v2';
+export const RUBRIC_FAMILIES: readonly RubricFamily[] = ['v2', 'legacy'];
+export function rubricFamily(t: { rubric_version?: number | null }): RubricFamily {
+  return t.rubric_version === RUBRIC_V2 ? 'v2' : 'legacy';
+}
+
+/**
+ * Which form opens a trade: a new trade is always the Rubric v2 decision
+ * flow, so nothing new is ever graded under the frozen legacy rubric. Only
+ * an existing legacy trade, opened to edit, keeps the old form.
+ */
+export function formFor(trade?: { rubric_version?: number | null } | null): 'decision' | 'legacy-edit' {
+  return !trade || rubricFamily(trade) === 'v2' ? 'decision' : 'legacy-edit';
+}
 
 /* ───────────────────────── the four rows ───────────────────────── */
 
@@ -418,13 +440,15 @@ export function scenarioFromPlan(direction: string | null, plans: { aDir: string
 
 /** Rubric v2's sample on the Path: v2 trades locked at the decision, outcome written, never re-graded, Step 1 not edited after the outcome. */
 export const V2_SAMPLE_TARGET = 50;
+/** The v2 learned score (a later pass) is fitted only from this many settled v2 trades; until then it says n/100. */
+export const V2_SCORE_UNLOCK = 100;
 // A Step 1 edited after the outcome (049) is out: its grade was given knowing the result.
 export function v2SampleCount(trades: ReadonlyArray<{ rubric_version?: number | null; decided_at?: string | null; outcome_at?: string | null; regrade?: string | null; deleted_at?: string | null; step1_edited_at?: string | null }>): number {
-  return trades.filter((t) => t.rubric_version === RUBRIC_V2 && t.decided_at && t.outcome_at && !t.regrade && !t.deleted_at && !step1EditedAfterOutcome(t)).length;
+  return trades.filter((t) => rubricFamily(t) === 'v2' && t.decided_at && t.outcome_at && !t.regrade && !t.deleted_at && !step1EditedAfterOutcome(t)).length;
 }
 
 /** The old checklist's scale: every grade not decided under Rubric v2. By-grade stats read only these, so the scales never mix. */
-export const onOldScale = (t: { rubric_version?: number | null }): boolean => t.rubric_version !== RUBRIC_V2;
+export const onOldScale = (t: { rubric_version?: number | null }): boolean => rubricFamily(t) === 'legacy';
 
 /* ───────────────────────── for the Markdown exports ───────────────────────── */
 
