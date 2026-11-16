@@ -411,7 +411,13 @@ await check('Rubric v2: four rows, direction and scenario, and Take — keyboard
   const t = await savedTrade(page);
   expect(t.decision === 'take' && t.decision_seconds < 40 && t.decision_limit === 40 && t.grade_letter === 'A' && t.outcome_at === null,
     `saved as decided: ${JSON.stringify({ d: t.decision, s: t.decision_seconds, g: t.grade_letter })}`);
+  // Similar setups appear only now, in Step 2: one of the cards that turn over; a dot brings it forward.
+  await page.click('[data-rotator-dot="similar"]');
+  await page.waitForSelector('[data-similar]', { timeout: 5000 });
   expect(await page.locator('[data-similar]').count() === 1, 'similar setups appear only now, in Step 2');
+  // Step 2 fits the window: nothing scrolls on a 1920×1080 screen.
+  const fit = await page.evaluate(() => { const el = document.querySelector('[data-outcome-step]'); return Math.round(el.getBoundingClientRect().bottom) <= innerHeight; });
+  expect(fit, 'Step 2 ends inside the window');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });

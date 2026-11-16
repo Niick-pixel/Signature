@@ -32,8 +32,10 @@ const ANSWERS: { v: DrillKept; label: string; tone: string; means: string }[] = 
  *
  * `draft`: the trade as the form has it now, for a measured drill.
  */
-export function DrillChip({ drillKey, value, onChange, draft, onJump }: {
+export function DrillChip({ drillKey, value, onChange, draft, onJump, compact = false }: {
   drillKey: string | null;
+  /** Step 2: the flaw, the drill and this trade, with the two counts as thin bars (their words are in the ?). */
+  compact?: boolean;
   value: DrillKept | null;
   onChange: (key: string | null, kept: DrillKept | null) => void;
   draft?: Partial<Trade>;
@@ -133,7 +135,14 @@ export function DrillChip({ drillKey, value, onChange, draft, onJump }: {
       </div>
 
       {/* 4. Progress: two labelled bars. */}
-      {p && (
+      {p && compact && (
+        <div className="mt-2 grid grid-cols-2 gap-3" data-drill-progress>
+          <Bar label="Clean run" value={run} of={info.need.clean} data="run" title={`${run} of ${info.need.clean} trades in a row without the flaw — one trade with the flaw resets it.`} />
+          <Bar label="Drill kept" value={share?.kept ?? 0} of={share?.of ?? 0} goal={info.need.kept} data="kept"
+            title={`${share?.kept ?? 0} of ${share?.of ?? 0}${share?.share != null ? ` (${pct(share.share)})` : ''} — needs ${pct(info.need.kept)}. It graduates when both are met.`} />
+        </div>
+      )}
+      {p && !compact && (
         <div className="mt-2.5 space-y-2" data-drill-progress>
           <Bar label="Clean run" value={run} of={info.need.clean} text={`${run} of ${info.need.clean} trades in a row without the flaw — one trade with the flaw resets it.`} data="run" />
           <Bar label="Drill kept" value={share?.kept ?? 0} of={share?.of ?? 0} goal={info.need.kept}
@@ -142,7 +151,7 @@ export function DrillChip({ drillKey, value, onChange, draft, onJump }: {
       )}
 
       {/* 5. Graduation, and what comes next. */}
-      <p className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+      <p className={`mt-2 text-[11px] leading-snug ${compact ? 'hidden' : ''}`} style={{ color: 'var(--text-faint)' }}>
         {p?.graduated ? 'Graduated — the Flaw Deck will offer the next flaw.'
           : `It graduates when both are met: ${info.need.clean} clean trades in a row and the drill kept on ${pct(info.need.kept)} of them. Then the Flaw Deck picks the next flaw to work on.`}
       </p>
@@ -150,16 +159,16 @@ export function DrillChip({ drillKey, value, onChange, draft, onJump }: {
   );
 }
 
-function Bar({ label, value, of, goal, text, data }: { label: string; value: number; of: number; goal?: number; text: string; data: string }) {
+function Bar({ label, value, of, goal, text, data, title }: { label: string; value: number; of: number; goal?: number; text?: string; data: string; title?: string }) {
   const share = of > 0 ? Math.min(1, value / of) : 0;
   return (
-    <div data-drill-bar={data}>
+    <div data-drill-bar={data} title={title}>
       <div className="flex items-baseline justify-between text-[11px]"><b>{label}</b><span className="tabular-nums" style={{ color: 'var(--text-dim)' }}>{value} / {of}</span></div>
       <div className="relative mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--glass-stroke)' }}>
         <div className="h-full rounded-full" style={{ width: `${share * 100}%`, background: 'rgb(var(--accent))' }} />
         {goal != null && <div className="absolute top-0 h-full w-px" style={{ left: `${goal * 100}%`, background: 'var(--text)' }} title={`Goal ${Math.round(goal * 100)}%`} />}
       </div>
-      <p className="mt-0.5 text-[10.5px] leading-snug" style={{ color: 'var(--text-faint)' }}>{text}</p>
+      {text && <p className="mt-0.5 text-[10.5px] leading-snug" style={{ color: 'var(--text-faint)' }}>{text}</p>}
     </div>
   );
 }

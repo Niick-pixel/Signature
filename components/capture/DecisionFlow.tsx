@@ -8,6 +8,7 @@ import { Field, Input } from '@/components/ui/Field';
 import { Help } from '@/components/ui/Help';
 import { Button } from '@/components/ui/Button';
 import { ShotSlots, type SlotFiles } from './ShotSlots';
+import { Rotator, TradeNotes } from './TradeNotes';
 import { ExplanationField } from './ExplanationField';
 import { DrillChip, type DrillKept } from './DrillChip';
 import { SimilarCard, type SimilarResult } from './SetupAnatomy';
@@ -405,6 +406,8 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
           <Field quiet label="Confidence" hint="Before the outcome — it predicts better than the old checklist did.">
             <Segmented value={confidence ? String(confidence) : ''} onChange={(v) => setConfidence(Number(v))} options={CONFIDENCES} accentFor={confidenceTone} />
           </Field>
+          {/* Level with Take and Pass: a line from your own journal (the last lesson, the mistake you tag most…), turning over. */}
+          <TradeNotes world={backtest ? 'backtest' : 'real'} compact title="Before you decide" />
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
@@ -808,7 +811,17 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const onDrill = useCallback((k: string | null, v: DrillKept | null) => { setDrillKey(k); setDrillKept(v); }, []);
 
   /** `draft`: keep what is written but leave the outcome unwritten — the trade stays on the Unfinished shelf. */
-  const drillCard = <DrillChip drillKey={drillKey} value={drillKept} onChange={onDrill} draft={draft} onJump={jumpTo} />;
+  const drillCard = <DrillChip drillKey={drillKey} value={drillKept} onChange={onDrill} draft={draft} onJump={jumpTo} compact />;
+  // What is read, not written, turning over in one box: the replay, the v2 progress, similar setups, your notes.
+  const insights = (
+    <Rotator slides={[
+      { id: 'notes', label: 'From your journal', node: <TradeNotes world={backtest ? 'backtest' : 'real'} exclude={trade.id} grade={trade.grade_letter} still /> },
+      // With a drill running, its card takes the replay's place: the replay turns over with the rest.
+      ...(drillKey && taken ? [{ id: 'replay', label: 'Decision replay', node: <DecisionReplay trade={trade} /> }] : []),
+      { id: 'progress', label: 'Rubric v2 progress', node: <RubricProgress /> },
+      { id: 'similar', label: 'Similar past setups', node: <SimilarCard s={similar} loading={simLoading} /> },
+    ]} />
+  );
 
   async function save(next = false, draft = false) {
     if (owed.length && !draft) {
@@ -936,42 +949,45 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
             </p>
           </div>
           {/* Placed so the three columns end level above the tag row (they balance differently once taken). */}
-          {taken ? <>{drillCard}<DecisionReplay trade={trade} /></> : <><DecisionReplay trade={trade} /><RubricProgress /></>}
-          {/* The result chart, here: no going back to Step 1 for it. It takes the height the column has left. */}
-          <ResultChart tradeId={trade.id} />
+          {taken && drillCard}
+          {!(drillKey && taken) && <DecisionReplay trade={trade} />}
+          {/* The room the column has left: one card that turns over (replay, v2 progress, similar setups, your notes). */}
+          {insights}
         </div>
 
         {/* How it ended — or, for a pass or a miss, what it would have done. */}
         <div className="flex flex-col gap-3" data-outcome-fields>
           {taken ? (
             <>
-              <Field quiet label="Stage" hint="Still open: save it and write the result later.">
-                <Segmented value={stage} onChange={setStage} options={['Live', 'Settled'] as const} labelFor={(v) => (v === 'Live' ? 'Still open' : 'Closed')} compact />
-              </Field>
-              {stage === 'Settled' && (
-                <Field quiet label="How it ended" group required={!ended} className={flashing && !ended ? 'need-flash' : ''}>
-                  <Segmented value={ended ?? ('' as Ended)} onChange={setEnded} options={ENDED} accentFor={endedTone} titleFor={(e) => ENDED_MEANS[e]} />
+              <div className="grid grid-cols-[9rem_minmax(0,1fr)] gap-3">
+                <Field quiet label="Stage" hint="Still open: save it and write the result later.">
+                  <Segmented value={stage} onChange={setStage} options={['Live', 'Settled'] as const} labelFor={(v) => (v === 'Live' ? 'Open' : 'Closed')} compact />
                 </Field>
-              )}
-              <div className="grid grid-cols-3 gap-3">
-                <Field quiet label="R" required={settled && num(r) == null} className={flashing && settled && num(r) == null ? 'need-flash' : ''}><Input inputMode="decimal" value={r} onChange={(e) => setR(e.target.value)} placeholder="e.g. 2 or −1" data-field="r" /></Field>
+                {stage === 'Settled' ? (
+                  <Field quiet label="How it ended" group required={!ended} className={flashing && !ended ? 'need-flash' : ''}>
+                    <Segmented value={ended ?? ('' as Ended)} onChange={setEnded} options={ENDED} accentFor={endedTone} titleFor={(e) => ENDED_MEANS[e]} compact />
+                  </Field>
+                ) : <p className="self-end pb-2 text-[11.5px]" style={dim}>Still open — write the result when it closes.</p>}
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                <Field quiet label="R" required={settled && num(r) == null} className={flashing && settled && num(r) == null ? 'need-flash' : ''}><Input inputMode="decimal" value={r} onChange={(e) => setR(e.target.value)} placeholder="2 or −1" data-field="r" /></Field>
                 <Field quiet label="P&L $"><Input inputMode="decimal" value={pnl} onChange={(e) => setPnl(e.target.value)} placeholder="—" /></Field>
                 <Field quiet label="Contracts"><Input inputMode="numeric" value={contracts} onChange={(e) => setContracts(e.target.value)} placeholder="—" /></Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <Field quiet label="Max R (MFE)"><Input inputMode="decimal" value={mfe} onChange={(e) => setMfe(e.target.value)} placeholder="—" data-field="mfe" /></Field>
-                <Field quiet label="Reached +1R before the stop">
-                  <Segmented value={reached1R == null ? '' : reached1R ? 'Yes' : 'No'} onChange={(v) => setReached1R(v === 'Yes')} options={['Yes', 'No']} accentFor={yesNoTone} compact />
-                </Field>
               </div>
-              <div data-field="exit">
-                <Field quiet label="Exit" group>
-                  <Segmented value={exit ?? ''} onChange={setExit} options={EXIT_REASONS} accentFor={exitTone} compact />
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+                <div data-field="exit">
+                  <Field quiet label="Exit" group>
+                    <Segmented value={exit ?? ''} onChange={setExit} options={EXIT_REASONS} accentFor={exitTone} compact />
+                  </Field>
+                </div>
+                <Field quiet label="+1R first">
+                  <Segmented value={reached1R == null ? '' : reached1R ? 'Yes' : 'No'} onChange={(v) => setReached1R(v === 'Yes')} options={['Yes', 'No']} accentFor={yesNoTone} compact />
                 </Field>
               </div>
               <div data-field="management">
                 <Field quiet label="Management plan" group>
-                  <Segmented value={management ?? ''} onChange={setManagement} options={V2_MANAGEMENTS} />
+                  <Segmented value={management ?? ''} onChange={setManagement} options={V2_MANAGEMENTS} compact />
                 </Field>
               </div>
             </>
@@ -988,17 +1004,20 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               </div>
             </div>
           )}
-          {taken ? <RubricProgress /> : drillCard}
+          {!taken && drillCard}
+          {/* The result chart, here: no going back to Step 1 for it. Small and one size — for the record and reviews;
+              it takes the room the column has left, and a chart pasted into it changes nothing around it. */}
+          <ResultChart tradeId={trade.id} />
         </div>
 
         {/* The words, and what they add up to. */}
         <div className="flex flex-col gap-3 lg:col-span-2 xl:col-span-1" data-words>
           <Field quiet label="Explanation" required={explanation.trim().length < minExplanation} className={flashing && explanation.trim().length < minExplanation ? 'need-flash' : ''}>
-            <ExplanationField value={explanation} onChange={setExplanation} minChars={minExplanation} minRows={taken ? 4 : 2}
+            <ExplanationField value={explanation} onChange={setExplanation} minChars={minExplanation} minRows={taken ? 5 : 3}
               placeholder={taken ? 'What you saw and why you decided as you did.' : `One line: why it was ${decision === 'pass' ? 'passed' : 'missed'}.`} />
           </Field>
           <Field quiet label={taken ? 'Lesson' : 'Lesson (optional)'} required={lessonRequired && lesson.trim().length < MIN_LESSON} className={flashing && lessonRequired && lesson.trim().length < MIN_LESSON ? 'need-flash' : ''}>
-            <ExplanationField value={lesson} onChange={setLesson} placeholder="What would you do differently?" minChars={MIN_LESSON} minRows={taken ? 3 : 2} required={lessonRequired} />
+            <ExplanationField value={lesson} onChange={setLesson} placeholder="What would you do differently?" minChars={MIN_LESSON} minRows={taken ? 4 : 2} required={lessonRequired} />
           </Field>
           {taken && (
             <div className="rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" data-rules-followed={verdict.followed ? 'yes' : 'no'}
@@ -1020,7 +1039,6 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
                 options={[NOT_REGRADED, ...regrades]} labelFor={(v) => (v === NOT_REGRADED ? 'Not re-graded' : v)} compact />
             </Field>
           </div>
-          <SimilarCard s={similar} loading={simLoading} />
         </div>
       </div>
 
@@ -1221,7 +1239,7 @@ function TagGrid({ options, value, onToggle, blocked, cols, tone, auto = [], dat
         return (
           <button key={tag} type="button" disabled={isAuto} aria-pressed={on} data-tag={tag} data-blocked={why ? 'true' : undefined}
             onClick={() => onToggle(tag)} title={isAuto ? 'Computed from Max R, the planned R and the exit — not tapped' : why ?? undefined}
-            className="relative flex min-h-[2.5rem] items-center justify-center rounded-[calc(11px*var(--rk))] border px-2 py-1.5 text-center text-[11.5px] leading-snug transition-colors"
+            className="relative flex min-h-[2.1rem] items-center justify-center rounded-[calc(11px*var(--rk))] border px-2 py-1 text-center text-[11.5px] leading-snug transition-colors"
             style={{
               borderColor: on ? `rgb(${hue} / 0.6)` : 'transparent',
               background: on ? `rgb(${hue} / 0.12)` : 'transparent',
@@ -1369,7 +1387,7 @@ function ResultChart({ tradeId }: { tradeId: string }) {
     window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: tradeId }));
   };
   return (
-    <div className="flex min-h-[11rem] flex-1 flex-col" data-result-chart={result ? 'saved' : 'empty'}>
+    <div className="flex min-h-[7rem] flex-1 flex-col" data-result-chart={result ? 'saved' : 'empty'}>
       <ShotSlots files={files} onChange={(n) => void add(n)} grow box="min-h-0 flex-1" only="Result"
         saved={result ? { url: `/api/screenshots/${result.path}`, onRemove: () => void remove() } : null} />
       {error && <p className="mt-1 text-[11px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}

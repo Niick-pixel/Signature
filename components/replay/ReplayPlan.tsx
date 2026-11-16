@@ -249,10 +249,16 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
           </div>
           <div className="flex items-end gap-2">
             <div className="w-[12.5rem]">
-              <Field quiet label={`Replay date${date ? ` · ${weekdayOf(date) ?? 'weekend'}` : ''}`}>
+              <Field quiet label={`FX Replay date${date ? ` · ${weekdayOf(date) ?? 'weekend'}` : ''}`}>
                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-replay-date
-                  title={amend ? 'A wrong date can be put right: the day and its trades move, the plan is not amended.' : 'The day you are replaying — the next one is this + one trading day.'} />
+                  title={amend ? 'A wrong date can be put right: the day and its trades move, the plan is not amended.' : 'The day on your FX Replay chart — not today. Every trade on this replay day takes it.'} />
               </Field>
+              {/* Where the date came from, so a guess is never taken for the chart's day. */}
+              {!amend && (
+                <p className="mt-0.5 px-1 text-[10.5px] leading-tight" style={last && date === nextWeekday(last.replay_date) ? { color: 'rgb(var(--amber))' } : faint} data-replay-date-note>
+                  {last && date === nextWeekday(last.replay_date) ? `Guessed: the trading day after Day ${last.sequence}. Set your chart’s day.` : 'The day on your FX Replay chart.'}
+                </p>
+              )}
             </div>
             {!amend && last && (
               <Button onClick={() => { const p = copyPlan(last); setContext(p.context); setRaw(p.scenarios); }} data-copy-last>Copy last day</Button>
