@@ -131,6 +131,20 @@ export function targetOptions(news: ReplayContext['news'], dir: Dir | null = nul
 }
 
 /**
+ * A pair target with part of its side run before the open: which levels are
+ * still there to aim at, so the chip says it ("Session H/L · London high")
+ * rather than read as a level already taken. Null when the whole side is
+ * untaken, or the direction is not known yet.
+ */
+export function targetLeft(o: string, dir: Dir | null, taken: readonly string[] | null): string | null {
+  const sides = TARGET_LEVELS[o];
+  if (!sides || !dir || !taken?.length) return null;
+  const side = dir === 'Long' ? sides[0] : sides[1];
+  const left = side.filter((x) => !taken.includes(x));
+  return left.length && left.length < side.length ? left.join(', ') : null;
+}
+
+/**
  * The plan kept in step with the context, as everything else is: a zone or a
  * target that is no longer offered (run before the open, the wrong side after
  * a change of direction, a data wick with no news) is let go.

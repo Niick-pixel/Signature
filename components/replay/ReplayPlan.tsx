@@ -8,7 +8,7 @@ import { MultiSegmented } from '@/components/ui/MultiSegmented';
 import { Button } from '@/components/ui/Button';
 import {
   CONFIRMS, DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, RR_BANDS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
-  copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, nextWeekday, noBiasCap, playedOf, rrWarning, scenarioLine, targetOptions,
+  copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, nextWeekday, noBiasCap, playedOf, rrWarning, scenarioLine, targetLeft, targetOptions,
   overnightOf, tidyScenarios, tookFromTrades, weekdayOf, withDirections, zoneOptions,
   type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenario, type ReplayScenarios, type Took,
 } from '@/lib/replay';
@@ -203,6 +203,19 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
           <Chips id="a-dir" label="Direction" options={['Long', 'Short'] as const} value={sc.dir} onChange={(v) => set({ dir: v as 'Long' | null })}
             focused={fid === 'a-dir'} onFocus={() => focusOn('a-dir')} tone={dirTone} required />
         )}
+        {/* A no-bias day: A's direction is tapped, B's follows it — shown in the same row, never an empty block. */}
+        {k === 'b' && !bias && (
+          <div className="p-1" data-b-direction={sc.dir ?? 'none'}>
+            <Field quiet label="Direction · the other way of A">
+              <div className="glass flex rounded-[calc(16px*var(--rk))] p-1">
+                {sc.dir ? (['Long', 'Short'] as const).map((d) => (
+                  <span key={d} className="flex-1 rounded-[calc(12px*var(--rk))] px-3 py-2 text-center text-[12.5px] font-medium"
+                    style={d === sc.dir ? { background: `rgb(${dirTone(d)} / 0.14)`, color: `rgb(${dirTone(d)})`, boxShadow: `inset 0 0 0 1px rgb(${dirTone(d)} / 0.35)` } : { color: 'var(--text-faint)' }}>{d}</span>
+                )) : <span className="flex-1 px-3 py-2 text-center text-[12px]" style={dim}>Pick A&rsquo;s direction first</span>}
+              </div>
+            </Field>
+          </div>
+        )}
         </div>
         <Chips id={`${k}-zones`} label="Trigger zone" options={zoneOptions(sc.dir, context.news, context.taken)} value={sc.zones} multi max={MAX_ZONES}
           onChange={(v) => set({ zones: v as string[] })} focused={fid === `${k}-zones`} onFocus={() => focusOn(`${k}-zones`)} required titleFor={swingTitle}
@@ -210,6 +223,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
         <Chips id={`${k}-confirm`} label="Confirmation" options={CONFIRMS} value={sc.confirm} multi onChange={(v) => set({ confirm: v as string[] })}
           focused={fid === `${k}-confirm`} onFocus={() => focusOn(`${k}-confirm`)} required />
         <Chips id={`${k}-target`} label="First target" options={targetOptions(context.news, sc.dir, context.taken)} value={sc.target} onChange={(v) => set({ target: v as string | null })}
+          labelFor={(o) => { const left = targetLeft(o, sc.dir, context.taken); return left ? `${o} · ${left}` : o; }}
           focused={fid === `${k}-target`} onFocus={() => focusOn(`${k}-target`)} required titleFor={swingTitle}
           hint="A target already run before the open is not offered: a long aims above, a short below." />
         <div>

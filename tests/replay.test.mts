@@ -206,3 +206,26 @@ test('backtests on no replay day move by the day they were logged, in one go: tw
   assert.equal(getTrade(a.id)!.date.slice(0, 16), '2023-09-12T09:45', 'time of day kept');
   assert.throws(() => DB.redateLooseBacktests([{ from: 'x', to: '2023-09-12' }]), /YYYY-MM-DD/);
 });
+
+test('a no-bias day with both sides run (4H bear, 1H disagrees; Asia high, Asia low, London low, PDL taken): every taken level is gone, B follows A', () => {
+  const c = { ...R.emptyContext(), h4: 'Bear' as const, h1Agrees: false, taken: ['Asia high', 'Asia low', 'London low', 'PDL'], news: 'None' as const, open: 'Discount' as const };
+  assert.equal(R.dayBias(c), null);
+  assert.equal(R.overnightOf(c.taken), 'Both');
+  const s = R.withDirections(c, { ...R.emptyScenarios(), a: { ...R.emptyScenarios().a, dir: 'Long' } });
+  assert.equal(s.b.dir, 'Short', 'B is the other way of A');
+  // A long triggers off an untaken low; a short off an untaken high.
+  const longZones = R.zoneOptions('Long', c.news, c.taken);
+  for (const gone of ['Asia low', 'London low', 'PDL']) assert.ok(!longZones.includes(gone), gone);
+  assert.ok(longZones.includes('PWL') && longZones.includes('EQL'));
+  const shortZones = R.zoneOptions('Short', c.news, c.taken);
+  assert.ok(!shortZones.includes('Asia high'));
+  assert.ok(shortZones.includes('London high') && shortZones.includes('PDH'));
+  // Targets: a long aims above (PDH and London high still there), a short below (PDL, Asia low and London low all run).
+  const longT = R.targetOptions(c.news, 'Long', c.taken);
+  assert.ok(longT.includes('PDH/PDL') && longT.includes('Session H/L'));
+  assert.equal(R.targetLeft('Session H/L', 'Long', c.taken), 'London high', 'the chip names the high still there');
+  assert.equal(R.targetLeft('PDH/PDL', 'Long', c.taken), null, 'nothing of it taken: no note');
+  const shortT = R.targetOptions(c.news, 'Short', c.taken);
+  assert.ok(!shortT.includes('PDH/PDL') && !shortT.includes('Session H/L'));
+  assert.ok(shortT.includes('PWH/PWL'));
+});
