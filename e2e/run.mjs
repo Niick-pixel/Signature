@@ -305,12 +305,19 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   const g = (f) => page.locator(`[data-prep-field="${f}"]`);
   const pill = (f, o) => g(f).getByRole('button', { name: o, exact: true }).first().click();
   const next = async () => { await page.click('[data-prep-next]'); await page.waitForTimeout(350); };
-  await page.waitForTimeout(800); await next();                                   // news
-  // Taps only: nothing on the prep is written any more.
+  await page.waitForTimeout(800);
+  // Page 1, read the chart: news, bias, overnight, location and the map on one page. Taps only.
   expect(await page.locator('[data-chart-prep] textarea').count() === 0, 'no text boxes');
-  await pill('bias', 'Bearish'); await pill('reasons', '4H displaced through a level'); await pill('reasons', 'Swept a HTF high or low'); await pill('invAt', 'The 1H iFVG'); await next();
-  await pill('taken', 'Asia high'); await next();                                 // overnight
-  await next(); await pill('zone', 'Premium'); await next();                      // map, location
+  expect(await page.locator('[data-chart-prep] [role="combobox"]').count() === 0, 'no dropdowns');
+  const box = () => page.locator('[data-chart-prep]').evaluate((el) => { const r = el.getBoundingClientRect(); return `${Math.round(r.width)}×${Math.round(r.height)}`; });
+  const size1 = await box();
+  const fits = () => page.evaluate(() => [...document.querySelectorAll('[data-chart-prep] *')].every((el) => el.scrollHeight <= el.clientHeight + 1 || getComputedStyle(el).overflowY === 'visible'));
+  expect(await fits(), 'nothing scrolls on page 1');
+  await pill('bias', 'Bearish'); await pill('reasons', '4H displaced through a level'); await pill('reasons', 'Swept a HTF high or low'); await pill('invAt', 'The 1H iFVG');
+  await pill('taken', 'Asia high'); await pill('zone', 'Premium');
+  await next();
+  expect(await box() === size1, `the window keeps its size from page to page (${size1} → ${await box()})`);
+  expect(await fits(), 'nothing scrolls on the plans');
   expect(await page.locator('[data-chart-prep] textarea').count() === 0, 'no text boxes on the plans');
   // The bearish bias already filled A short and B long; the Asia high, run overnight, is not offered.
   expect(await g('aDir').locator('[aria-pressed="true"]').innerText() === 'Short' && await g('bDir').locator('[aria-pressed="true"]').innerText() === 'Long', 'A with the bias, B against it');
@@ -380,8 +387,7 @@ async function openNewTrade(prefs = {}) {
 }
 /** The answers no key covers by default: the gate (G), a planned R of 2R, and a target type. */
 const pickTarget = async (page) => {
-  await page.locator('[data-facts] [role="combobox"]').nth(3).click();
-  await page.locator('[role="option"]:has-text("PDH/PDL")').click();
+  await page.locator('[data-target-type] [data-option="PDH/PDL"]').click();
 };
 const gateAndR = async (page) => {
   await page.keyboard.press('g');
@@ -479,17 +485,15 @@ await check('Rubric v2: a Take after the clock is still a take, stored over time
   expect(!errors.length, errors.join(' | '));
 });
 
-await check('Rubric v2: a dropdown keeps its highlight under the pointer while the clock runs, and a click picks', async () => {
+await check('Rubric v2: no dropdowns — target and entry are taps, account, instrument and session sit beside the strip', async () => {
   const { page, errors } = await openNewTrade({ decisionSeconds: 90 });
-  const trig = page.locator('[data-facts] [role="combobox"]').nth(3);
-  await trig.click();
-  const opt = page.locator('[role="option"]:has-text("HTF FVG")');
-  await opt.hover();
-  await page.waitForTimeout(600);
-  const bg = await opt.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(bg !== 'rgba(0, 0, 0, 0)', `the hovered option stays highlighted (${bg})`);
-  await opt.click();
-  expect((await trig.innerText()).includes('HTF FVG'), 'picked');
+  expect(await page.locator('[data-decide-step] [role="combobox"]').count() === 0, 'no dropdown on Step 1');
+  await page.locator('[data-target-type] [data-option="HTF FVG 1H/4H"], [data-target-type] [data-option="HTF FVG (1H/4H)"]').first().click();
+  expect(await page.locator('[data-target-type] [aria-pressed="true"]').count() === 1, 'one target picked');
+  await page.locator('[data-entry-type] [data-option="CE of FVG"]').click();
+  expect(await page.locator('[data-entry-type] [aria-pressed="true"][data-option="CE of FVG"]').count() === 1, 'entry picked');
+  await page.locator('[data-context="instrument"] [data-option="MNQ"]').click();
+  expect(await page.locator('[data-context="instrument"] [aria-checked="true"]').innerText() === 'MNQ', 'instrument tapped');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -500,7 +504,7 @@ await check('Rubric v2: Close shuts an untouched form, asks once something is en
   await page.waitForSelector('[data-decide-step]', { state: 'detached', timeout: 5000 });
   await page.locator('[data-new-trade]:visible').click();
   await page.waitForSelector('[data-decide-step]');
-  expect((await page.locator('[data-facts] [role="combobox"]').nth(2).innerText()).includes('NY AM'), 'session defaults to NY AM');
+  expect((await page.locator('[data-context="session"] [aria-checked="true"]').innerText()).includes('NY AM'), 'session defaults to NY AM');
   await page.keyboard.press('2');
   await page.keyboard.press('Escape');
   await page.waitForSelector('[data-close-dialog]');
@@ -569,7 +573,18 @@ await check('Rubric v2: click outside asks; re-scoring a row keeps the focus san
   await gateAndR(page);
   await page.keyboard.press('t');
   await page.waitForSelector('[data-outcome-step]');
-  expect(await page.locator('[data-outcome-step] [data-shot-slots]').count() === 0, 'no charts on Step 2');
+  // The result chart is added on Step 2 (saved at once); When and the account are put right here too.
+  expect(await page.locator('[data-outcome-step] [role="combobox"]').count() === 0, 'no dropdown on Step 2');
+  expect(await page.locator('[data-result-chart="empty"]').count() === 1, 'a result chart box on Step 2');
+  await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 800; c.height = 500;
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const dt = new DataTransfer(); dt.items.add(new File([blob], 'result.png', { type: 'image/png' }));
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+  });
+  await page.waitForSelector('[data-result-chart="saved"]', { timeout: 10000 });
+  expect(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(await page.inputValue('[data-when]')), 'When shows the trade\'s date');
+  expect(await page.locator('[data-outcome-step] [data-context="account"] [aria-checked="true"]').count() === 1, 'the account shows');
   await page.click('[data-back]');
   await page.waitForSelector('[data-locked-step1] [data-shot-slots]');
   const h = await page.locator('[data-locked-step1] [data-trade-charts]').evaluate((el) => el.getBoundingClientRect().height);

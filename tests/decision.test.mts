@@ -443,3 +443,23 @@ test('the summary names what a v2 trade still owes, as the form does', () => {
   assert.deepEqual(pass.owed, ['Why I passed', 'Explanation (18/20)']);
   assert.match(D.V2_MEASURE.rows, /8 is A\+, 6–7 is A, 5 is B/);
 });
+
+test('Step 2 puts the account and the date right: a trade saved on Backtest by mistake moves to Live, on the day it happened', async () => {
+  const tradeRoute = await import('../app/api/trades/[id]/route');
+  const t = save({ date: '2026-11-19T09:45' });
+  assert.equal(t.account, 'Backtest (FX Replay)');
+  // What Step 2 sends: the trade, its outcome, and the account and When it shows.
+  const payload = {
+    ...t, account: 'Live', date: '2026-11-16T09:52', undated: false, replay_day_id: null, reason: 'Rules-based (A+ setup)',
+    status: 'Settled', outcome: 'Loss', r_multiple: -1, explanation: 'E'.repeat(170), lesson: 'L'.repeat(170), outcome_at: '2026-11-16T10:30:00.000Z',
+  };
+  const fd = new FormData(); fd.append('trade', JSON.stringify(payload));
+  const res = await tradeRoute.PUT(new Request(`http://x/api/trades/${t.id}`, { method: 'PUT', body: fd }), { params: Promise.resolve({ id: t.id }) });
+  assert.equal(res.status, 200, await res.clone().text());
+  const back = getTrade(t.id)!;
+  assert.deepEqual([back.account, back.date.slice(0, 16), back.replay_day_id, back.reason], ['Live', '2026-11-16T09:52', null, 'Rules-based (A+ setup)']);
+  assert.equal(back.rubric_version, 5, 'still graded under Rubric v2');
+  assert.equal(back.grade_letter, 'A', 'the grade at the decision stays');
+  const edits = (getDb().prepare("SELECT field FROM trade_edits WHERE trade_id = ?").all(t.id) as Array<{ field: string }>).map((e) => e.field);
+  assert.ok(edits.includes('date') && edits.includes('account'), 'both changes are in its edit history');
+});

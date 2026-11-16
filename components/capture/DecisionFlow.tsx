@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
-import { Select } from '@/components/ui/Select';
 import { Segmented } from '@/components/ui/Segmented';
 import { Field, Input } from '@/components/ui/Field';
 import { Help } from '@/components/ui/Help';
@@ -57,6 +56,8 @@ const localNow = () => { const d = new Date(); return `${d.getFullYear()}-${pad(
 // Built once: a list made inside the component is a new array every tick of the clock.
 const TARGET_VALUES = V2_TARGETS.map((t) => t.value);
 const targetLabel = (v: string) => V2_TARGETS.find((t) => t.value === v)?.label ?? v;
+/** On a chip: the label without its parenthesis ("Session H/L"); the full one is the chip's tooltip. */
+const targetChip = (v: string) => targetLabel(v).replace(/\s*\(.*\)$/, '');
 const ENTRY_VALUES = V2_ENTRIES.map((t) => t.value);
 const entryLabel = (v: string) => V2_ENTRIES.find((t) => t.value === v)?.label ?? v;
 const CONFIDENCES = ['1', '2', '3', '4', '5'] as const;
@@ -365,25 +366,15 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
         </div>
       </div>
       {/* The session's running tally, the replay day and the Path: one thin strip under the title. */}
-      <HeaderStrip backtest={backtest} replay={backtest ? <ReplayDayControl instrument={instrument} /> : null} />
+      <HeaderStrip backtest={backtest} replay={backtest ? <ReplayDayControl instrument={instrument} /> : null}
+        context={<SetupContext account={account} instrument={instrument} session={session} onAccount={setAccount} onInstrument={setInstrument} onSession={setSession} />} />
 
       {/* Fields and rows keep their own size; only the chart grows, so the card reaches the bottom without stretched boxes. */}
       {/* Column 1: the facts. Columns 2 and 3: the four rows, two each (Sweep and Inversion, then Path and Target),
           and the chart across both underneath — wide enough to read — with Take and Pass below it. */}
       <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
         {/* The facts. */}
-        <div className="flex flex-col gap-4" data-facts>
-          <div className="grid grid-cols-2 gap-3">
-            <Field quiet label="Account" hint="Remembered from the last trade. The clock runs on accounts set to Timed decision (Settings → Trades).">
-              <Select value={account} onChange={(v) => setAccount(v as Account)} options={ACCOUNTS} labelFor={accountLabel} />
-            </Field>
-            <Field quiet label="Instrument">
-              <Select value={instrument} onChange={setInstrument} options={INSTRUMENTS} />
-            </Field>
-          </div>
-          <Field quiet label="Session" hint="NY AM by default; Save & next carries the replay’s session over.">
-            <Select value={session} onChange={setSession} options={SESSIONS} />
-          </Field>
+        <div className="flex flex-col justify-between gap-4" data-facts>
           <Field quiet label="Direction" badge={<Key k="L / S" />} required={!direction} group className={flashing && !direction ? 'need-flash' : ''}>
             <Segmented value={direction ?? ('' as 'Long')} onChange={setDirection} options={['Long', 'Short'] as const} accentFor={directionTone} />
           </Field>
@@ -398,12 +389,14 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
           <Field quiet label="HTF origin" badge={<Key k="H" />} group hint="Where the reaction started. A fact only — it never changes the grade.">
             <Segmented value={htfOrigin ?? ('' as HtfOrigin)} onChange={setHtfOrigin} options={HTF_ORIGINS} compact />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field quiet label="Target type" required={!target} className={flashing && !target ? 'need-flash' : ''}>
-              <Select value={target} onChange={setTarget} placeholder="Which…" options={TARGET_VALUES} labelFor={targetLabel} />
+          <div data-target-type>
+            <Field quiet label="Target type" required={!target} group className={flashing && !target ? 'need-flash' : ''}>
+              <Segmented value={target ?? ''} onChange={setTarget} options={TARGET_VALUES} labelFor={targetChip} titleFor={targetLabel} />
             </Field>
-            <Field quiet label="Entry type">
-              <Select value={entry} onChange={setEntry} placeholder="How…" options={ENTRY_VALUES} labelFor={entryLabel} />
+          </div>
+          <div data-entry-type>
+            <Field quiet label="Entry type" group>
+              <Segmented value={entry ?? ''} onChange={setEntry} options={ENTRY_VALUES} labelFor={entryLabel} />
             </Field>
           </div>
           <Field quiet label="Planned R" hint="Required — the Target row's thresholds read it. Under 1.5R is no trade." required={!plannedR} group className={flashing && !plannedR ? 'need-flash' : ''}>
@@ -442,7 +435,7 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
           )}
           {/* The chart box takes only the room the window has left, and the chart is drawn inside it:
               whatever is pasted, the box keeps its size and nothing below it moves — no scrolling. */}
-          <div className="flex min-h-[10rem] flex-1 flex-col"><ShotSlots files={slots} onChange={setSlots} grow box="min-h-0 flex-1" /></div>
+          <div className="flex min-h-[10rem] flex-1 flex-col"><ShotSlots files={slots} onChange={setSlots} grow box="min-h-0 flex-1" only="Entry" /></div>
           <div className="grid items-start gap-x-6 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-1.5 md:order-2">
           <div className="relative">
@@ -526,13 +519,49 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
   );
 }
 
-function HeaderStrip({ backtest, replay }: { backtest: boolean; replay?: React.ReactNode }) {
+function HeaderStrip({ backtest, replay, context }: { backtest: boolean; replay?: React.ReactNode; context?: React.ReactNode }) {
   return (
     <div className="mb-4 mt-2 flex min-h-[1.75rem] flex-wrap items-center gap-2" data-header-strip>
       {replay}
       {backtest && <SessionTally inline />}
       <PathBanner compact />
+      {context && <div className="ml-auto flex flex-wrap items-center justify-end gap-2" data-setup-context>{context}</div>}
     </div>
+  );
+}
+
+/**
+ * Account, instrument and session: one tap each, in a row beside the strip under the title — they are carried
+ * from the last trade and rarely change, so they take one line instead of three fields. `readOnly`: Step 1 locked.
+ */
+function SetupContext({ account, instrument, session, onAccount, onInstrument, onSession, readOnly = false, accountOnly = false }: {
+  account: string; instrument: string; session: string;
+  onAccount?: (v: Account) => void; onInstrument?: (v: string) => void; onSession?: (v: string) => void; readOnly?: boolean;
+  /** Step 2: the account alone (a trade saved on the wrong account is put right there). */
+  accountOnly?: boolean;
+}) {
+  const group = (label: string, title: string, options: readonly string[], value: string, on: ((v: string) => void) | undefined, labelFor?: (v: string) => string, data?: string) => (
+    <div role="radiogroup" aria-label={label} title={title} data-context={data}
+      className="glass flex items-center gap-0.5 rounded-full p-0.5 text-[11.5px]">
+      {options.map((o) => {
+        const on2 = o === value;
+        return (
+          <motion.button key={o} type="button" role="radio" aria-checked={on2} data-option={o} disabled={readOnly && !on2}
+            onClick={() => !readOnly && on?.(o)} whileTap={readOnly ? undefined : press} transition={spring}
+            className="whitespace-nowrap rounded-full px-2.5 py-1 font-medium disabled:cursor-default"
+            style={on2 ? { background: 'rgb(var(--accent) / 0.14)', color: 'rgb(var(--accent))', boxShadow: 'inset 0 0 0 1px rgb(var(--accent) / 0.35)' } : { color: readOnly ? 'var(--text-faint)' : 'var(--text-dim)', opacity: readOnly ? 0.55 : 1 }}>
+            {labelFor ? labelFor(o) : o}
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+  return (
+    <>
+      {group('Account', 'Account — remembered from the last trade. The clock runs on accounts set to Timed decision (Settings → Trades).', ACCOUNTS, account, onAccount as ((v: string) => void) | undefined, accountLabel, 'account')}
+      {!accountOnly && group('Instrument', 'Instrument', INSTRUMENTS, instrument, onInstrument, undefined, 'instrument')}
+      {!accountOnly && group('Session', 'Session — NY AM by default; Save & next carries the replay’s session over.', SESSIONS, session, onSession, undefined, 'session')}
+    </>
   );
 }
 
@@ -657,12 +686,17 @@ const ENDED_MEANS: Record<Ended, string> = {
   Scratched: 'Closed by hand around entry (about 0R) before the stop or the target — the idea was gone, so you got out flat.',
 };
 const V2_MANAGEMENTS = MANAGEMENTS.filter((m) => m !== 'Other');
+const NOT_REGRADED = 'none';
 const num = (s: string) => (s.trim() === '' || !Number.isFinite(Number(s)) ? null : Number(s));
 
 function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => void; onBack: () => void }) {
   const decision = (trade.decision ?? 'take') as Decision;
   const taken = decision === 'take';
-  const backtest = trade.account === BACKTEST;
+  // When and where, put right here (Step 1 is a rush): the account it was really on, and when it really happened.
+  const [account, setAccount] = useState<Account>(trade.account);
+  const [when, setWhen] = useState(trade.undated ? '' : trade.date.slice(0, 16));
+  const whenOk = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(when);
+  const backtest = account === BACKTEST;
   const first = trade.outcome_at == null;
   const [ended, setEnded] = useState<Ended | null>(trade.outcome_at && taken ? (trade.outcome === 'Win' && trade.partial_win ? 'Partial win' : trade.outcome as Ended) : null);
   const [r, setR] = useState(trade.r_multiple != null && taken ? String(trade.r_multiple) : '');
@@ -735,12 +769,13 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
     ...(taken && settled && num(r) == null ? ['R'] : []),
     ...(!taken && num(wouldR) == null ? ['what it would have done'] : []),
     ...(!taken && reasons.length === 0 ? [`why it was ${decision === 'pass' ? 'passed' : 'missed'}`] : []),
+    ...(!whenOk ? ['when it happened'] : []),
     ...(explanation.trim().length < minExplanation ? [`explanation (${minExplanation}+)`] : []),
     ...(lessonRequired && lesson.trim().length < MIN_LESSON ? [`lesson (${MIN_LESSON}+)`] : []),
   ];
 
   // What has been written since the form opened: closing then asks.
-  const snapshot = JSON.stringify([ended, r, pnl, contracts, mfe, reached1R, exit, management, wouldR, wouldMfe, explanation, lesson, me, market, worked, regrade, stage, drillKept, reasons, mainReason]);
+  const snapshot = JSON.stringify([account, when, ended, r, pnl, contracts, mfe, reached1R, exit, management, wouldR, wouldMfe, explanation, lesson, me, market, worked, regrade, stage, drillKept, reasons, mainReason]);
   const [initial] = useState(snapshot);
   const dirty = snapshot !== initial;
   const requestClose = useCallback(() => { if (dirty) setClosing(true); else closeCapture(); }, [dirty]);
@@ -783,8 +818,15 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
     }
     setSaving(true);
     setError(null);
+    const leftBacktest = trade.account === BACKTEST && account !== BACKTEST;
     const payload = {
       ...trade,
+      account,
+      // A real trade happens on its own day: off a replay day, with a real-trade reason.
+      ...(whenOk ? { date: when, undated: false } : {}),
+      ...(account !== BACKTEST ? { replay_day_id: null } : {}),
+      ...(leftBacktest ? { reason: trade.grade_letter === 'A+' || trade.grade_letter === 'A' ? 'Rules-based (A+ setup)' : 'Rules-based (B setup)' } : {}),
+      ...(account === BACKTEST && trade.account !== BACKTEST ? { reason: BACKTEST_REASON } : {}),
       status: taken ? (draft ? (ended ? 'Settled' : 'Live') : stage) : 'Settled',
       outcome: taken ? (draft ? (outcome ?? 'Not taken') : settled ? outcome : 'Not taken') : 'Not taken',
       partial_win: ended === 'Partial win' ? true : outcome === 'Win' ? false : null,
@@ -801,7 +843,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       // Step 2 is written once settled; a trade still open stays pending.
       outcome_at: draft ? (trade.outcome_at ?? null) : settled ? (trade.outcome_at ?? new Date().toISOString()) : null,
     };
-    // Charts live on Step 1 (added there, before or after the decision); Step 2 writes only the outcome.
+    // Charts are saved as they are added (the entry on Step 1, the result here, ResultChart); this writes only the outcome.
     const body = new FormData();
     body.append('trade', JSON.stringify(payload));
     try {
@@ -845,7 +887,15 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
           <CloseButton onClick={requestClose} title="Close (Esc, or click outside) — asks first if anything was written" />
         </div>
       </div>
-      <HeaderStrip backtest={backtest} />
+      <HeaderStrip backtest={backtest} context={<>
+        <SetupContext account={account} instrument={trade.instrument} session={trade.session} onAccount={setAccount} accountOnly />
+        <label className="glass flex items-center gap-1.5 rounded-full py-0.5 pl-3 pr-1 text-[11.5px]" data-field="when"
+          title={account === BACKTEST ? 'The day replayed, and the time of the entry.' : 'When you took it — the day and the time of the entry.'}>
+          <span className="font-medium" style={!whenOk ? { color: 'rgb(var(--grade-f))' } : dim}>When</span>
+          <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="When it happened" data-when
+            className="rounded-full bg-transparent px-2 py-1 font-medium tabular-nums outline-none" style={{ color: 'var(--text)' }} />
+        </label>
+      </>} />
 
       {/* Three equal columns: the locked decision, how it ended, the words. The tags run below them, then Save. */}
       <div className="grid items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
@@ -887,6 +937,8 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
           </div>
           {/* Placed so the three columns end level above the tag row (they balance differently once taken). */}
           {taken ? <>{drillCard}<DecisionReplay trade={trade} /></> : <><DecisionReplay trade={trade} /><RubricProgress /></>}
+          {/* The result chart, here: no going back to Step 1 for it. It takes the height the column has left. */}
+          <ResultChart tradeId={trade.id} />
         </div>
 
         {/* How it ended — or, for a pass or a miss, what it would have done. */}
@@ -917,9 +969,11 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
                   <Segmented value={exit ?? ''} onChange={setExit} options={EXIT_REASONS} accentFor={exitTone} compact />
                 </Field>
               </div>
-              <Field quiet label="Management plan">
-                <Select value={management} onChange={setManagement} placeholder="Which plan?" options={V2_MANAGEMENTS} />
-              </Field>
+              <div data-field="management">
+                <Field quiet label="Management plan" group>
+                  <Segmented value={management ?? ''} onChange={setManagement} options={V2_MANAGEMENTS} />
+                </Field>
+              </div>
             </>
           ) : (
             <div className="space-y-3 rounded-[calc(18px*var(--rk))] border p-3" data-hypothetical
@@ -960,9 +1014,12 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               {flags.map((f) => <li key={f} className="rounded-[10px] px-2.5 py-1.5" style={{ background: 'color-mix(in srgb, rgb(var(--grade-b)) 12%, transparent)', color: 'var(--text)' }}>⚠ {f}</li>)}
             </ul>
           )}
-          <Field quiet label="Honest re-grade" hint={`${REGRADE_HINT} Stored, never counted in stats or expectancy.`}>
-            <Select value={regrade} onChange={setRegrade} placeholder="Not re-graded" options={regrades} />
-          </Field>
+          <div data-field="regrade">
+            <Field quiet label="Honest re-grade" group hint={`${REGRADE_HINT} Stored, never counted in stats or expectancy.`}>
+              <Segmented value={regrade ?? NOT_REGRADED} onChange={(v) => setRegrade(v === NOT_REGRADED ? null : v as typeof regrade)}
+                options={[NOT_REGRADED, ...regrades]} labelFor={(v) => (v === NOT_REGRADED ? 'Not re-graded' : v)} compact />
+            </Field>
+          </div>
           <SimilarCard s={similar} loading={simLoading} />
         </div>
       </div>
@@ -1278,6 +1335,48 @@ function CloseDialog({ open, title, body, actions, onCancel }: {
  * as thumbnails, and the paste area for more. A pasted chart is added at
  * once (the first becomes the trade's own chart when it had none).
  */
+/**
+ * Step 2's result chart: pasted (or dropped, or clicked) here, saved on the trade at once as its Result. A new
+ * one replaces the last; × removes it (a trade keeps at least one chart). Fills the room its column has left.
+ */
+function ResultChart({ tradeId }: { tradeId: string }) {
+  const [saved, setSaved] = useState<Array<{ id: string; path: string; slot: string }>>([]);
+  const [files, setFiles] = useState<SlotFiles>({});
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    void fetch(`/api/trades/${tradeId}/shots`).then((r) => (r.ok ? r.json() : [])).then(setSaved).catch(() => {});
+  }, [tradeId]);
+  useEffect(() => { load(); }, [load]);
+  const result = [...saved].reverse().find((s) => s.slot === 'Result') ?? null;
+  const add = async (next: SlotFiles) => {
+    const file = next.Result;
+    setFiles(next); setError(null);
+    if (!file) return;
+    const f = new FormData(); f.append('screenshot', file); f.append('slot', 'Result');
+    const r = await fetch(`/api/trades/${tradeId}/shots`, { method: 'POST', body: f }).catch(() => null);
+    if (!r || !r.ok) { setError('Could not save the chart.'); return; }
+    // The new one replaces the last result.
+    if (result) await fetch(`/api/trades/${tradeId}/shots?shot=${result.id}`, { method: 'DELETE' }).catch(() => {});
+    setFiles({});
+    load();
+    window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: tradeId }));
+  };
+  const remove = async () => {
+    if (!result) return;
+    const r = await fetch(`/api/trades/${tradeId}/shots?shot=${result.id}`, { method: 'DELETE' }).catch(() => null);
+    if (!r || !r.ok) { setError((await r?.json().catch(() => null))?.error ?? 'Could not remove it.'); return; }
+    load();
+    window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: tradeId }));
+  };
+  return (
+    <div className="flex min-h-[11rem] flex-1 flex-col" data-result-chart={result ? 'saved' : 'empty'}>
+      <ShotSlots files={files} onChange={(n) => void add(n)} grow box="min-h-0 flex-1" only="Result"
+        saved={result ? { url: `/api/screenshots/${result.path}`, onRemove: () => void remove() } : null} />
+      {error && <p className="mt-1 text-[11px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
+    </div>
+  );
+}
+
 function TradeCharts({ tradeId }: { tradeId: string }) {
   const [saved, setSaved] = useState<Array<{ id: string; path: string; slot: string }>>([]);
   const [files, setFiles] = useState<SlotFiles>({});
@@ -1403,21 +1502,17 @@ function LockedStep1({ trade, onForward, onEdited }: { trade: Trade; onForward: 
 
       <div className="grid flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
         <div className={`${ro} flex flex-col gap-4`} aria-readonly={!editing}>
-          <div className="pointer-events-none grid grid-cols-2 gap-3">
-            <Field quiet label="Account"><Select value={trade.account} onChange={noop} options={[trade.account]} labelFor={(a) => accountLabel(a as Account)} disabled /></Field>
-            <Field quiet label="Instrument"><Select value={trade.instrument} onChange={noop} options={[trade.instrument]} disabled /></Field>
+          <div className="pointer-events-none flex flex-wrap gap-2" data-setup-context>
+            <SetupContext account={trade.account} instrument={trade.instrument} session={trade.session} readOnly />
           </div>
-          <div className="pointer-events-none"><Field quiet label="Session"><Select value={trade.session} onChange={noop} options={[trade.session]} disabled /></Field></div>
           <Field quiet label="Direction" group><Segmented value={shown.direction} onChange={on('direction')} options={['Long', 'Short'] as const} accentFor={directionTone} /></Field>
           <Field quiet label="Scenario" group>
             <Segmented value={(shown.plan_scenario ?? '') as Scenario} onChange={on('plan_scenario')} options={['A', 'B', 'none'] as const} labelFor={(v) => (v === 'none' ? 'Unplanned' : v)} accentFor={scenarioTone} />
           </Field>
           <Field quiet label="Leg location" group><Segmented value={(shown.leg_location ?? '') as LegLocation} onChange={on('leg_location')} options={LEG_LOCATIONS} accentFor={legTone(shown.direction)} /></Field>
           <Field quiet label="HTF origin" group><Segmented value={(shown.htf_origin ?? '') as HtfOrigin} onChange={on('htf_origin')} options={HTF_ORIGINS} compact /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field quiet label="Target type"><Select value={shown.target_type} onChange={on('target_type')} options={editing ? TARGET_VALUES : [trade.target_type]} labelFor={targetLabel} disabled={!editing} /></Field>
-            <Field quiet label="Entry type"><Select value={shown.entry_method ?? null} onChange={on('entry_method')} options={editing ? ENTRY_VALUES : shown.entry_method ? [shown.entry_method] : []} placeholder="—" labelFor={entryLabel} disabled={!editing} /></Field>
-          </div>
+          <Field quiet label="Target type" group><Segmented value={shown.target_type ?? ''} onChange={on('target_type')} options={TARGET_VALUES} labelFor={targetChip} titleFor={targetLabel} /></Field>
+          <Field quiet label="Entry type" group><Segmented value={shown.entry_method ?? ''} onChange={on('entry_method')} options={ENTRY_VALUES} labelFor={entryLabel} /></Field>
           <Field quiet label="Planned R" group><Segmented value={shown.planned_rr ?? ''} onChange={on('planned_rr')} options={V2_PLANNED_RS} labelFor={(v) => `${v}R`} accentFor={plannedRTone} /></Field>
           <Field quiet label="Confidence" group><Segmented value={shown.confidence_at_entry ? String(shown.confidence_at_entry) : ''} onChange={editing ? (v) => set('confidence_at_entry', Number(v)) : noop} options={CONFIDENCES} accentFor={confidenceTone} /></Field>
         </div>

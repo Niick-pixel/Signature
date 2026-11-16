@@ -24,7 +24,12 @@ export function nextSlot(files: SlotFiles): ShotSlot {
  */
 /** `grow`: fill the height the parent gives (a column that reaches the bottom of the window). */
 /** `box`: a fixed height for the preview (a class) — the chart fits inside it, so no screenshot changes the layout. */
-export function ShotSlots({ files, onChange, grow = false, box }: { files: SlotFiles; onChange: (next: SlotFiles) => void; grow?: boolean; box?: string }) {
+/** `only`: one slot (Step 1 asks for the Entry, Step 2 for the Result): no slot row under the box, and × on the chart. */
+/** `saved`: with `only`, a chart already on the trade, shown until a new one is pasted over it; × removes it. */
+export function ShotSlots({ files, onChange, grow = false, box, only, saved }: {
+  files: SlotFiles; onChange: (next: SlotFiles) => void; grow?: boolean; box?: string; only?: ShotSlot; saved?: { url: string; onRemove: () => void } | null;
+}) {
+  const list: readonly ShotSlot[] = only ? [only] : SHOT_SLOTS;
   const [selected, setSelected] = useState<ShotSlot | null>(null);
   const [flash, setFlash] = useState<ShotSlot | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -40,21 +45,22 @@ export function ShotSlots({ files, onChange, grow = false, box }: { files: SlotF
   // Object URLs for the thumbnails, revoked as they are replaced.
   useEffect(() => {
     const made: Partial<Record<ShotSlot, string>> = {};
-    for (const s of SHOT_SLOTS) if (files[s]) made[s] = URL.createObjectURL(files[s]!);
+    for (const s of list) if (files[s]) made[s] = URL.createObjectURL(files[s]!);
     setUrls(made);
     return () => { for (const u of Object.values(made)) URL.revokeObjectURL(u!); };
-  }, [files]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `list` follows `only`
+  }, [files, only]);
 
   const put = useCallback((file: File | null | undefined, slot?: ShotSlot) => {
     if (!file) return;
     if (!ACCEPTED.includes(file.type)) { setError('That file is not an image Signature can read.'); return; }
     setError(null);
-    const into = slot ?? nextSlot(current.current);
+    const into = slot ?? (only ?? nextSlot(current.current));
     onChange({ ...current.current, [into]: file });
     setSelected(into);
     setFlash(into);
     window.setTimeout(() => setFlash(null), 450);
-  }, [onChange]);
+  }, [onChange, only]);
 
   // Paste from anywhere on the page. An image on the clipboard is always a
   // chart, even with the cursor in the explanation box.
@@ -70,8 +76,9 @@ export function ShotSlots({ files, onChange, grow = false, box }: { files: SlotF
     return () => document.removeEventListener('paste', onPaste);
   }, [put]);
 
-  const shownSlot = selected && files[selected] ? selected : SHOT_SLOTS.find((s) => files[s]) ?? null;
-  const shown = shownSlot ? urls[shownSlot] : undefined;
+  const fileSlot = selected && files[selected] ? selected : list.find((s) => files[s]) ?? null;
+  const shownSlot = fileSlot ?? (only && saved ? only : null);
+  const shown = fileSlot ? urls[fileSlot] : saved?.url;
   const browse = (slot: ShotSlot | null) => { target.current = slot; input.current?.click(); };
   const clear = (slot: ShotSlot) => {
     const next = { ...files };
@@ -108,6 +115,11 @@ export function ShotSlots({ files, onChange, grow = false, box }: { files: SlotF
               <img src={shown} alt={`${shownSlot} chart`} className={`${box ? 'h-full' : grow ? 'max-h-[min(60vh,520px)]' : 'max-h-[86px]'} w-full rounded-[calc(12px*var(--rk))] object-contain`} />
               <span className="absolute left-2.5 top-2.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
                 style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}>{shownSlot}</span>
+              {only && shownSlot && (
+                <button type="button" aria-label={`Remove the ${shownSlot} chart`} onClick={(e) => { e.stopPropagation(); if (fileSlot) clear(shownSlot); else saved?.onRemove(); }}
+                  className="absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full text-[12px]"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--glass-stroke)', color: 'var(--text-dim)' }}>×</button>
+              )}
             </motion.div>
           ) : (
             <motion.div key="empty" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -124,15 +136,15 @@ export function ShotSlots({ files, onChange, grow = false, box }: { files: SlotF
                 Paste your chart <kbd className="rounded-md px-1.5 py-0.5 text-[11px]" style={{ background: 'var(--glass-fill-strong)' }}>⌘V</kbd>
               </p>
               <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                anywhere here · Entry, then Result
+                {only ? `anywhere here · the ${only.toLowerCase()} chart` : 'anywhere here · Entry, then Result'}
               </p>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
 
-      <div className="mt-2 grid grid-cols-2 gap-1.5">
-        {SHOT_SLOTS.map((slot) => {
+      {!only && <div className="mt-2 grid grid-cols-2 gap-1.5">
+        {list.map((slot) => {
           const url = urls[slot];
           const on = shownSlot === slot;
           return (
@@ -170,7 +182,7 @@ export function ShotSlots({ files, onChange, grow = false, box }: { files: SlotF
             </div>
           );
         })}
-      </div>
+      </div>}
 
       <input
         ref={input}

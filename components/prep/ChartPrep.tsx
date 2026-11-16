@@ -12,7 +12,6 @@ import {
 } from '@/lib/prep';
 import type { DailyReview } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { figuresLine } from '@/lib/news';
 
@@ -34,11 +33,24 @@ function openLine(mins: number): string {
 }
 
 /**
- * The chart half of the check-in: six steps, top-down, one at a time, every
- * answer written down — news, the bias sentence, what was taken overnight,
- * the liquidity map, location, and the two plans (and C). Saved as it goes;
- * any step can be skipped; the dots at the top jump anywhere.
+ * The chart half of the check-in, as the backtest plan builder is laid out:
+ * two pages in one window that never changes size and never scrolls.
+ *
+ *  1. Read the chart — news, the HTF bias sentence and what was run overnight
+ *     side by side, the location, then the liquidity map above and below.
+ *  2. Two plans, and C — A and B side by side, each question beside its twin,
+ *     then C (the cutoff and the stop) in one strip.
+ *
+ * Every answer is a tap. Saved as it goes; a page can be skipped; the dots at
+ * the top jump. Progress is still kept per step (news, htf, overnight, map,
+ * location, plans): a page marks the steps on it.
  */
+const PAGES = [
+  { id: 'read', title: 'Read the chart', frames: '4H · 1H · 15m', steps: ['news', 'htf', 'overnight', 'location', 'map'] },
+  { id: 'plan', title: 'Two plans, and C', frames: 'NY AM', steps: ['plans'] },
+] as const;
+const pageDone = (d: PrepData, i: number) => PAGES[i].steps.every((s) => d.steps[s]);
+
 export function ChartPrep({ review, onClose }: { review: DailyReview | null; onClose: () => void }) {
   const [day] = useState(() => localDay());
   const [data, setData] = useState<PrepData | null>(null);
@@ -58,7 +70,7 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
       const d = withWeeklyTaken(res.prep?.data ?? structuredClone(EMPTY_PREP), week);
       setData(d);
       setStartedAt(res.prep?.started_at ?? null);
-      const first = PREP_STEPS.findIndex((s) => !d.steps[s.id]);
+      const first = PAGES.findIndex((_, i) => !pageDone(d, i));
       setAt(first === -1 ? 0 : first);
       setFinished(first === -1);
     }).catch(() => setData(structuredClone(EMPTY_PREP)));
@@ -88,97 +100,113 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
     setData((d) => (d ? fn(structuredClone(d)) : d));
   }, []);
 
-  if (!data) return <div className="grid h-48 place-items-center text-[12px]" style={{ color: 'var(--text-faint)' }}>Opening the chart prep…</div>;
+  if (!data) return <div className="grid flex-1 place-items-center text-[12px]" style={{ color: 'var(--text-faint)' }}>Opening the chart prep…</div>;
 
-  const step = PREP_STEPS[at];
+  const page = PAGES[at];
   const progress = prepProgress(data);
 
   const mark = (state: 'done' | 'skipped') => {
     const next = structuredClone(data);
-    next.steps[step.id] = state;
+    for (const id of page.steps) if (!next.steps[id] || state === 'done') next.steps[id] = state;
     touched.current = true;
     setData(next);
-    const after = PREP_STEPS.findIndex((s, i) => i > at && !next.steps[s.id]);
-    const any = PREP_STEPS.findIndex((s) => !next.steps[s.id]);
+    const after = PAGES.findIndex((_, i) => i > at && !pageDone(next, i));
+    const any = PAGES.findIndex((_, i) => !pageDone(next, i));
     if (after !== -1) setAt(after);
     else if (any !== -1) setAt(any);
     else { setFinished(true); void save(next, true); }
   };
 
   return (
-    <div data-chart-prep>
-      {/* Where you are: one dot per step, each a jump. */}
-      <div className="mb-5 flex items-center gap-1.5" role="tablist" aria-label="Chart prep steps">
-        {PREP_STEPS.map((s, i) => {
-          const state = data.steps[s.id];
+    <div data-chart-prep className="flex min-h-0 flex-1 flex-col">
+      {/* Where you are: one dot per page, each a jump. */}
+      <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Chart prep pages">
+        {PAGES.map((pg, i) => {
+          const done = pageDone(data, i);
+          const skipped = done && pg.steps.every((s) => data.steps[s] === 'skipped');
           const here = i === at && !finished;
           return (
-            <motion.button key={s.id} type="button" role="tab" aria-selected={here} title={s.title}
-              data-prep-dot={s.id} data-state={state ?? 'open'}
+            <motion.button key={pg.id} type="button" role="tab" aria-selected={here} title={pg.title}
+              data-prep-dot={pg.id} data-state={skipped ? 'skipped' : done ? 'done' : 'open'}
               onClick={() => { setFinished(false); setAt(i); }}
-              className="h-1.5 rounded-full"
-              initial={false}
+              className="h-1.5 rounded-full" initial={false}
               animate={{
                 flexGrow: here ? 3 : 1,
-                background: state === 'done' ? 'rgb(var(--outcome-win))'
-                  : state === 'skipped' ? 'var(--text-faint)'
-                  : here ? 'rgb(var(--accent))' : 'var(--glass-stroke)',
-                opacity: state === 'skipped' ? 0.45 : 1,
+                background: skipped ? 'var(--text-faint)' : done ? 'rgb(var(--outcome-win))' : here ? 'rgb(var(--accent))' : 'var(--glass-stroke)',
+                opacity: skipped ? 0.45 : 1,
               }}
-              transition={springSoft}
-              style={{ flexBasis: 0 }} />
+              transition={springSoft} style={{ flexBasis: 0 }} />
           );
         })}
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
         {finished ? (
-          <motion.div key="ready" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          <motion.div key="ready" className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={springSoft}>
             <Ready data={data} startedAt={startedAt} onReview={() => { setFinished(false); setAt(0); }} onClose={onClose} />
           </motion.div>
         ) : (
-          <motion.div key={step.id} data-prep-current={step.id}
+          <motion.div key={page.id} data-prep-current={page.id} className="flex min-h-0 flex-1 flex-col"
             initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -8, transition: { duration: 0.12 } }} transition={springSoft}>
-            <StepView step={step} index={at} data={data} change={change} review={review} carried={carried} />
-            <div className="mt-6 flex items-center gap-2">
+            <PageHead index={at} page={page} heatmap={page.id === 'read'} note={page.id === 'plan' ? <PlansAuto data={data} /> : null} />
+            <div className="mt-2.5 flex min-h-0 flex-1 flex-col">
+              {page.id === 'read'
+                ? <ReadPage data={data} change={change} review={review} carried={carried} />
+                : <PlanPage data={data} change={change} />}
+            </div>
+            <div className="mt-2.5 flex items-center gap-3 border-t pt-2.5" style={{ borderColor: 'var(--glass-stroke)' }}>
               {at > 0 && <Button onClick={() => setAt(at - 1)}>Back</Button>}
-              <span className="text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
+              <span className="shrink-0 text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>
                 {progress.answered}/{progress.total}{saved ? ' · saved' : ''}
+                <span data-open-countdown className="block" style={{ color: mins > 0 ? 'var(--text-faint)' : 'rgb(var(--amber))' }}>{openLine(mins)}</span>
               </span>
-              <div className="ml-auto flex gap-2">
+              {/* The plan's own checks (a kill switch missing, both scenarios the same way…), where they never push the page. */}
+              <div className="min-w-0 flex-1">{page.id === 'plan' && <PlanChecks data={data} />}</div>
+              <div className="flex shrink-0 gap-2">
                 <Button onClick={() => mark('skipped')}>Skip</Button>
                 <Button variant="primary" data-prep-next onClick={() => mark('done')}>
-                  {at === PREP_STEPS.length - 1 ? 'Finish' : 'Next'}
+                  {at === PAGES.length - 1 ? 'Finish' : 'Next'}
                 </Button>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <p data-open-countdown className="mt-4 text-center text-[10.5px]"
-        style={{ color: mins > 0 ? 'var(--text-faint)' : 'rgb(var(--amber))' }}>
-        {openLine(mins)}
-      </p>
     </div>
   );
 }
 
-function StepView({ step, index, data, change, review, carried }: {
-  step: PrepStep; index: number; data: PrepData; change: (fn: (d: PrepData) => PrepData) => void; review: DailyReview | null;
-  carried: Array<{ level: string; day: string }>;
-}) {
+function PageHead({ index, page, heatmap, note }: { index: number; page: (typeof PAGES)[number]; heatmap: boolean; note?: React.ReactNode }) {
   const { prefs } = usePreferences();
-  const ticks = data.ticks[step.id] ?? [];
-  const toggle = (i: number) => change((d) => {
-    const cur = new Set(d.ticks[step.id] ?? []);
-    if (cur.has(i)) cur.delete(i); else cur.add(i);
-    d.ticks[step.id] = [...cur].sort();
-    return d;
-  });
-  const setAnswer = (field: PrepField, value: Answer | null) => change((d) => {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <div className="flex min-w-0 items-baseline gap-2.5">
+        <h3 className="shrink-0 text-[18px] font-semibold tracking-tight">{page.title}</h3>
+        <span className="shrink-0 text-[10.5px] font-medium uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Step {index + 1} of {PAGES.length} · {page.frames}</span>
+        {note}
+      </div>
+      {heatmap && prefs.heatmapUrl && (
+        <a href={prefs.heatmapUrl} target="_blank" rel="noreferrer" data-heatmap-link
+          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium"
+          style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.1)', color: 'rgb(var(--accent))' }}>
+          Open the heatmap
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden>
+            <path d="M4 2h6v6M10 2L3 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </a>
+      )}
+    </div>
+  );
+}
+
+type Change = (fn: (d: PrepData) => PrepData) => void;
+
+/** One answer setter for every step, as the six-step prep had per step: the plans follow what is answered. */
+function useFields(data: PrepData, change: Change) {
+  const stepOf = (id: string) => PREP_STEPS.find((x) => x.id === id)!;
+  const setAnswer = (step: PrepStep, field: PrepField, value: Answer | null) => change((d) => {
     const key = answerKey(step, field);
     if (value == null || (Array.isArray(value) && value.length === 0)) delete d.answers[key];
     else d.answers[key] = value;
@@ -193,144 +221,110 @@ function StepView({ step, index, data, change, review, carried }: {
     d.answers = deriveDecisions(tidyPlans(d.answers, key));
     return d;
   });
-  const f = (id: string) => step.fields.find((x) => x.id === id)!;
-  const field = (id: string, extra: Partial<Parameters<typeof FieldView>[0]> = {}) => (
-    <FieldView key={id} field={f(id)} value={data.answers[answerKey(step, f(id))]} onChange={(v) => setAnswer(f(id), v)} {...extra} />
-  );
+  /** `field('htf', 'bias')`: the field, its answer and its setter. */
+  const field = (stepId: string, id: string, extra: Partial<Parameters<typeof FieldView>[0]> = {}) => {
+    const step = stepOf(stepId); const f = step.fields.find((x) => x.id === id)!;
+    return <FieldView key={`${stepId}.${id}`} field={f} value={data.answers[answerKey(step, f)]} onChange={(v) => setAnswer(step, f, v)} {...extra} />;
+  };
+  const toggleMark = (stepId: string, i: number) => change((d) => {
+    const cur = new Set(d.ticks[stepId] ?? []);
+    if (cur.has(i)) cur.delete(i); else cur.add(i);
+    d.ticks[stepId] = [...cur].sort();
+    return d;
+  });
+  return { field, setAnswer, stepOf, toggleMark };
+}
 
+const card = 'rounded-[calc(18px*var(--rk))] border p-3';
+const cardStyle = { borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' } as const;
+const Heading = ({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) => (
+  <div className="flex items-baseline justify-between gap-2 px-1">
+    <span className="text-[13px] font-semibold">{children}</span>{right}
+  </div>
+);
+
+/** Page 1: news, the bias and the overnight run side by side; the location; then the map, above and below. */
+function ReadPage({ data, change, review, carried }: { data: PrepData; change: Change; review: DailyReview | null; carried: Array<{ level: string; day: string }> }) {
+  const { field, setAnswer, stepOf } = useFields(data, change);
+  const news = stepOf('news');
+  const r = overnightRead(data.answers);
   return (
-    <>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[10.5px] font-medium uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
-          Step {index + 1} of {PREP_STEPS.length}{step.frames ? ` · ${step.frames}` : ''}
-        </p>
-        {step.heatmap && prefs.heatmapUrl && (
-          <a href={prefs.heatmapUrl} target="_blank" rel="noreferrer" data-heatmap-link
-            className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium"
-            style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.1)', color: 'rgb(var(--accent))' }}>
-            Open the heatmap
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden>
-              <path d="M4 2h6v6M10 2L3 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </a>
-        )}
-      </div>
-      <h3 className="mt-1 text-[19px] font-semibold tracking-tight">{step.title}</h3>
-
-      {step.id === 'news' && (
-        <SessionNews review={review} answered={data.answers['session.news'] != null} onAnswer={(v) => setAnswer(f('news'), v)} />
-      )}
-
-      {/* The marks — ticked as each goes on the chart (most steps now have none: they are written down). */}
-      <div className={liveMarks(step).length ? 'mt-4 space-y-1.5' : 'hidden'}>
-        {liveMarks(step).map(({ text: m, i }) => {
-          const on = ticks.includes(i);
-          return (
-            <motion.button key={i} type="button" role="checkbox" aria-checked={on} data-mark={i}
-              onClick={() => toggle(i)} whileTap={press}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{
-                opacity: 1, y: 0,
-                borderColor: on ? 'rgb(var(--outcome-win) / 0.45)' : 'var(--glass-stroke)',
-                background: on ? 'rgb(var(--outcome-win) / 0.08)' : 'var(--glass-fill)',
-              }}
-              transition={{ ...spring, delay: i * 0.035 }}
-              className="flex w-full items-center gap-3 rounded-[calc(12px*var(--rk))] border px-3 py-2 text-left">
-              <span className="grid size-[16px] shrink-0 place-items-center rounded-[calc(5px*var(--rk))]"
-                style={{ background: on ? 'rgb(var(--outcome-win) / 0.2)' : 'var(--glass-fill-strong)' }}>
-                <motion.svg width="10" height="8" viewBox="0 0 11 9" fill="none" aria-hidden style={{ color: 'rgb(var(--outcome-win))' }}
-                  animate={{ scale: on ? 1 : 0, opacity: on ? 1 : 0 }} transition={spring}>
-                  <path d="M1 4.6L4 7.5L10 1.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                </motion.svg>
-              </span>
-              <span className="text-[12.5px] leading-snug" style={{ color: on ? 'var(--text-dim)' : 'var(--text)' }}>{m}</span>
-            </motion.button>
-          );
-        })}
-      </div>
-
-      {/* The answers, each written down. */}
-      <div className="mt-5 space-y-4">
-        {step.id === 'news' && <>
-          {field('news')}
-          {data.answers['session.news'] === 'Inside the killzone' && (
-            <Rule>Red folder inside NY AM: no position through it — wait for the release candle’s range, then trade off it.</Rule>
-          )}
-        </>}
-
-        {step.id === 'htf' && <HtfSentence data={data} field={field} />}
-
-        {step.id === 'overnight' && <>
-          {field('taken', { notes: Object.fromEntries(carried.map((c) => [c.level, `since ${weekday(c.day)}`])) })}
-          {(() => {
-            const r = overnightRead(data.answers);
-            return (
-              <div className="rounded-[calc(12px*var(--rk))] border px-3 py-2.5 text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)' }} data-overnight-read>
-                <p><span style={{ color: 'var(--text-faint)' }}>Still there: </span><b className="font-medium">{r.stillThere.join(', ') || 'nothing — every level was run'}</b></p>
-                {r.line && <p className="mt-1" style={{ color: 'var(--text-dim)' }}>{r.line}</p>}
-              </div>
-            );
-          })()}
-        </>}
-
-        {step.id === 'map' && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(['above', 'below'] as const).map((side) => (
-              <div key={side} className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-map-side={side}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-dim)' }}>{side === 'above' ? 'Above price' : 'Below price'}</p>
-                {field(side, { hide: takenOf(data.answers) })}
-                {field(`${side}Tier`)}
-                {field(`${side}State`)}
-                {field(side === 'above' ? 'gapAbove' : 'gapBelow')}
-              </div>
-            ))}
-            <p className="text-[11.5px] sm:col-span-2" style={{ color: 'var(--text-faint)' }}>A 1H/4H gap between price and a level is where a move tends to end: a target stops short of it.</p>
+    <div className="flex min-h-0 flex-1 flex-col justify-between gap-3">
+      {/* The bias (and where price sits) on the left; the news and the overnight run stacked beside it. */}
+      <div className="grid gap-3 lg:grid-cols-[1.55fr_1fr]">
+        <div className={`${card} flex flex-col gap-1.5`} style={cardStyle} data-prep-section="htf">
+          <Heading>HTF bias</Heading>
+          <HtfSentence data={data} field={(id, extra) => field('htf', id, extra)} location={field('location', 'zone')} />
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className={`${card} flex flex-col gap-1.5`} style={cardStyle} data-prep-section="news">
+            <Heading>News</Heading>
+            {field('news', 'news')}
+            <SessionNews review={review} answered={data.answers['session.news'] != null} onAnswer={(v) => setAnswer(news, news.fields.find((x) => x.id === 'news')!, v)} />
+            {data.answers['session.news'] === 'Inside the killzone' && (
+              <Rule>Red folder inside NY AM: no position through it — wait for the release candle’s range, then trade off it.</Rule>
+            )}
           </div>
-        )}
-
-        {step.id === 'location' && field('zone')}
-
-        {step.id === 'plans' && <Plans data={data} field={field} />}
-
-        {/* An earlier version's step, opened from an old prep: its fields as they were. */}
-        {!['news', 'htf', 'overnight', 'map', 'location', 'plans'].includes(step.id) && step.fields.filter((x) => !x.hidden).map((x) => (
-          <FieldView key={x.id} field={x} value={data.answers[answerKey(step, x)]} onChange={(v) => setAnswer(x, v)}
-            hide={answerKey(step, x) === WAIT_KEY ? (Array.isArray(data.answers[TAKEN_KEY]) ? data.answers[TAKEN_KEY] as string[] : []) : []} />
+          <div className={`${card} flex flex-1 flex-col gap-1.5`} style={cardStyle} data-prep-section="overnight">
+            <Heading>Taken overnight</Heading>
+            {field('overnight', 'taken', { notes: Object.fromEntries(carried.map((c) => [c.level, `since ${weekday(c.day)}`])) })}
+            <div className="mt-auto px-1 text-[12px]" data-overnight-read>
+              <p><span style={{ color: 'var(--text-faint)' }}>Still there: </span><b className="font-medium">{r.stillThere.join(', ') || 'nothing — every level was run'}</b></p>
+              {r.line && <p className="mt-0.5" style={{ color: 'var(--text-dim)' }}>{r.line}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* The liquidity map: the nearest named level each way, and what stands between price and it. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        {(['above', 'below'] as const).map((side) => (
+          <div key={side} className={`${card} flex flex-col gap-1.5`} style={cardStyle} data-map-side={side}>
+            <Heading>{side === 'above' ? 'Above price' : 'Below price'}</Heading>
+            {field('map', side, { hide: takenOf(data.answers) })}
+            <div className="grid gap-1.5 xl:grid-cols-2">
+              {field('map', `${side}Tier`)}
+              {field('map', `${side}State`)}
+              <div className="xl:col-span-2">{field('map', side === 'above' ? 'gapAbove' : 'gapBelow')}</div>
+            </div>
+          </div>
         ))}
       </div>
-    </>
+      <p className="-mt-1 px-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>A 1H/4H gap between price and a level is where a move tends to end: a target stops short of it.</p>
+    </div>
   );
 }
 
-const TONE: Record<string, string> = {
-  Uptrend: 'var(--outcome-win)', Up: 'var(--outcome-win)', 'Longs only': 'var(--outcome-win)', Discount: 'var(--outcome-win)',
-  Downtrend: 'var(--outcome-loss)', Down: 'var(--outcome-loss)', 'Shorts only': 'var(--outcome-loss)', Premium: 'var(--outcome-loss)',
-  'No trade today': 'var(--amber)', 'Coin flip': 'var(--amber)', 'Being pulled': 'var(--amber)', 'Thin book': 'var(--amber)',
-};
-
 const weekday = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
 
-function FieldView({ field, value, onChange, hide = [], notes = {} }: {
+const TONE: Record<string, string> = {
+  Uptrend: 'var(--outcome-win)', Up: 'var(--outcome-win)', 'Longs only': 'var(--outcome-win)', Discount: 'var(--outcome-win)', Bullish: 'var(--outcome-win)', Long: 'var(--outcome-win)',
+  Downtrend: 'var(--outcome-loss)', Down: 'var(--outcome-loss)', 'Shorts only': 'var(--outcome-loss)', Premium: 'var(--outcome-loss)', Bearish: 'var(--outcome-loss)', Short: 'var(--outcome-loss)',
+  'No trade today': 'var(--amber)', 'Coin flip': 'var(--amber)', 'Being pulled': 'var(--amber)', 'Thin book': 'var(--amber)', '<1.5': 'var(--outcome-loss)',
+};
+
+/**
+ * One question: its label and its options as taps, in the builder's glass group. One answer, or any that
+ * apply ('many', with a cap where it has one). No dropdowns: a pick is a tap like the rest.
+ */
+function FieldView({ field, value, onChange, hide = [], notes = {}, inline = true }: {
   field: PrepField; value: Answer | undefined; onChange: (v: Answer | null) => void;
-  /** Options not offered (a level already taken, under "Sweep to wait for"). */
+  /** The label beside the taps (the default: a line saved per question, so nothing scrolls); false: above them. */
+  inline?: boolean;
+  /** Options not offered (a level already taken, on the wrong side). */
   hide?: readonly string[];
   /** A short note per option, e.g. "since Mon" on a weekly level carried in. */
   notes?: Record<string, string>;
 }) {
   return (
-    <div data-prep-field={field.id} role="group" aria-label={field.label}>
-      <span className="mb-1.5 block text-[10.5px] font-medium uppercase tracking-[0.07em]" style={{ color: 'var(--text-faint)' }}>
-        {field.label}{field.kind === 'many' && !field.max ? ' — any that apply' : ''}
+    <div data-prep-field={field.id} role="group" aria-label={field.label} className={inline ? 'grid grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-2' : undefined}>
+      <span className={`${inline ? 'pt-[9px] leading-tight' : 'mb-1'} block px-1 text-[10px] font-medium uppercase tracking-[0.07em]`} style={{ color: 'var(--text-faint)' }}>
+        {field.label}{field.kind === 'many' ? (field.max ? '' : ' · any') : ''}
       </span>
       {field.kind === 'text' ? (
         <TextAnswer value={typeof value === 'string' ? value : ''} placeholder={field.placeholder} long={field.long} label={field.label} onChange={(v) => onChange(v.trim() ? v : null)} />
-      ) : field.kind === 'pick' ? (
-        <div className="max-w-[16rem]">
-          <Select value={typeof value === 'string' ? value : null} onChange={(v) => onChange(v)} options={field.options.filter((o) => !hide.includes(o) || o === value)} placeholder="Choose…" />
-        </div>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {field.options.filter((o) => !hide.includes(o)).map((o) => {
+        <div className="glass flex flex-wrap gap-0.5 rounded-[calc(14px*var(--rk))] p-1">
+          {field.options.filter((o) => !hide.includes(o) || o === value).map((o) => {
             const on = field.kind === 'many' ? Array.isArray(value) && value.includes(o) : value === o;
             const tone = TONE[o] ?? 'var(--accent)';
             return (
@@ -343,14 +337,14 @@ function FieldView({ field, value, onChange, hide = [], notes = {} }: {
                   } else onChange(on ? null : o);
                 }}
                 animate={{
-                  borderColor: on ? `rgb(${tone} / 0.55)` : 'var(--glass-stroke)',
-                  background: on ? `rgb(${tone} / 0.13)` : 'var(--glass-fill)',
+                  background: on ? `rgb(${tone} / 0.14)` : 'rgb(0 0 0 / 0)',
                   color: on ? `rgb(${tone})` : 'var(--text-dim)',
+                  boxShadow: on ? `inset 0 0 0 1px rgb(${tone} / 0.4)` : 'inset 0 0 0 1px rgb(0 0 0 / 0)',
                 }}
                 transition={spring}
-                className="rounded-full border px-3 py-1.5 text-[12px] font-medium">
+                className="flex-[1_0_auto] whitespace-nowrap rounded-[calc(10px*var(--rk))] px-2.5 py-1 text-[11.5px] font-medium">
                 {o}
-                {notes[o] && on && <span className="ml-1.5 text-[10.5px] font-normal opacity-70" data-carried={o}>{notes[o]}</span>}
+                {notes[o] && on && <span className="ml-1.5 text-[10px] font-normal opacity-70" data-carried={o}>{notes[o]}</span>}
               </motion.button>
             );
           })}
@@ -499,82 +493,112 @@ function Rule({ children }: { children: React.ReactNode }) {
 type FieldFn = (id: string, extra?: Partial<Parameters<typeof FieldView>[0]>) => React.ReactNode;
 
 /** "4H/1H bias is ___ because ___. Invalidated by a 1H body close beyond ___." — or, honestly, neutral. */
-function HtfSentence({ data, field }: { data: PrepData; field: FieldFn }) {
+function HtfSentence({ data, field, location }: { data: PrepData; field: FieldFn; location?: React.ReactNode }) {
   const neutral = data.answers['htf.bias'] === 'Neutral';
   const line = biasSentence(data.answers);
   return (
-    <div className="space-y-4" data-htf-sentence>
+    <div className="flex flex-1 flex-col gap-2" data-htf-sentence>
       {field('bias')}
       {neutral ? (
-        <Rule>No bias you can state honestly: <b>neutral, A+ only</b>. Both scenarios below can only be taken as A+ setups today.</Rule>
+        <Rule>No bias you can state honestly: <b>neutral, A+ only</b>. Both scenarios can only be taken as A+ setups today.</Rule>
       ) : <>
         {field('reasons')}
         {field('invAt')}
         <Written answers={data.answers} keys={['htf.because', 'htf.inv']} />
       </>}
-      {line && <p className="text-[12.5px] italic leading-snug" style={{ color: 'var(--text-dim)' }} data-bias-line>“{line}”</p>}
-      {!neutral && <p className="text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Can’t fill it in honestly? Choose Neutral: A+ only.</p>}
+      {location}
+      <p className="mt-auto px-1 text-[12px] italic leading-snug" style={{ color: line ? 'var(--text-dim)' : 'var(--text-faint)' }} data-bias-line>
+        {line ? `“${line}”` : 'Can’t fill it in honestly? Choose Neutral: A+ only.'}
+      </p>
     </div>
   );
 }
 
-/** Scenario A (with the bias) and B (the alternate), written the same way every day, then C: neither. */
-function Plans({ data, field }: { data: PrepData; field: FieldFn }) {
-  const checks = planChecks(data.answers);
-  const card = (k: 'a' | 'b') => {
+const PLAN_ROWS = ['Dir', 'Zones', 'Confirms', 'Target', 'TargetAt', 'RR', 'Kills'] as const;
+
+/**
+ * Page 2: Scenario A (with the bias) and B (the alternate) side by side, on rows they share — each question
+ * beside its twin, as in the backtest builder — then C (neither: the cutoff, the stop) and the marks in a strip.
+ */
+function PlanPage({ data, change }: { data: PrepData; change: Change }) {
+  const { field, stepOf, toggleMark } = useFields(data, change);
+  const f = (id: string, extra: Partial<Parameters<typeof FieldView>[0]> = {}) => field('plans', id, extra);
+  const plans = stepOf('plans');
+  const ticks = data.ticks.plans ?? [];
+  const col = (k: 'a' | 'b') => {
     const ceiling = gradeCeiling(data.answers, k);
     return (
-      <div className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-scenario={k}>
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-[12px] font-semibold">{k === 'a' ? 'Scenario A · primary, with the bias' : 'Scenario B · the alternate'}</p>
-          {ceiling && <span className="shrink-0 rounded-full border px-2 py-px text-[10.5px] font-semibold" data-ceiling
-            style={ceiling.startsWith('Can') ? { borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' } : { borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }}>{ceiling}</span>}
+      <div className={`${card} row-span-8 grid grid-rows-subgrid gap-y-1.5`} style={cardStyle} data-scenario={k}>
+        <div>
+          <Heading right={ceiling && <span className="shrink-0 rounded-full border px-2 py-px text-[10.5px] font-semibold" data-ceiling
+            style={ceiling.startsWith('Can') ? { borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' } : { borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }}>{ceiling}</span>}>
+            {k === 'a' ? 'Scenario A · with the bias' : 'Scenario B · the alternate'}
+          </Heading>
+          <Written answers={data.answers} keys={['Story', 'TriggerNote', 'Confirm', 'TargetNote', 'Kill'].map((x) => `plans.${k}${x}`)} />
         </div>
-        {field(`${k}Dir`)}
-        {/* A long waits below price and aims above; a short the other way round. */}
-        {field(`${k}Zones`, { hide: notOffered(data.answers, k, 'zone') })}
-        {field(`${k}Confirms`)}
-        {field(`${k}Target`)}
-        {field(`${k}TargetAt`, { hide: notOffered(data.answers, k, 'target') })}
-        {field(`${k}RR`)}
-        {field(`${k}Kills`)}
-        <Written answers={data.answers} keys={['Story', 'TriggerNote', 'Confirm', 'TargetNote', 'Kill'].map((f) => `plans.${k}${f}`)} />
+        {PLAN_ROWS.map((row) => (
+          <div key={row}>{f(`${k}${row}`, row === 'Zones' ? { hide: notOffered(data.answers, k, 'zone') } : row === 'TargetAt' ? { hide: notOffered(data.answers, k, 'target') } : {})}</div>
+        ))}
       </div>
     );
   };
   return (
-    <div className="space-y-4" data-plans>
-      {(() => {
-        const taken = takenOf(data.answers);
-        const noNews = data.answers['session.news'] === 'None today';
-        const bias = data.answers['htf.bias'];
-        const parts = [
-          taken.length ? <>run overnight, so not offered: <b>{taken.join(', ')}</b></> : null,
-          noNews ? <>no news today, so no data wick</> : null,
-          bias === 'Bullish' || bias === 'Bearish' ? <>A goes with your {String(bias).toLowerCase()} bias, B the other way</> : null,
-        ].filter(Boolean);
-        return parts.length ? (
-          <p className="text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }} data-plans-auto>
-            From your earlier answers: {parts.map((p, i) => <span key={i}>{i > 0 && ' · '}{p}</span>)}.
-          </p>
-        ) : null;
-      })()}
-      <div className="grid gap-3 sm:grid-cols-2">{card('a')}{card('b')}</div>
-      {checks.length > 0 && (
-        <ul className="space-y-1.5" data-plan-checks>
-          {checks.map((c) => (
-            <li key={c.text} className="rounded-[calc(10px*var(--rk))] px-3 py-1.5 text-[12px] leading-snug"
-              style={{ background: c.level === 'warn' ? 'rgb(var(--amber) / 0.1)' : 'var(--glass-fill)', color: c.level === 'warn' ? 'var(--text)' : 'var(--text-dim)' }}>{c.text}</li>
-          ))}
-        </ul>
-      )}
-      <div className="space-y-3 rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)' }} data-scenario="c">
-        <p className="text-[12px] font-semibold">Scenario C · neither</p>
-        {field('cutoffAt')}
-        <Written answers={data.answers} keys={['plans.cutoff']} />
-        <p className="text-[12.5px] leading-snug" data-scenario-c-line>{scenarioC(data.answers)} Written down, so “no trade” counts as following the plan.</p>
-        {field('stop')}
+    <div className="flex min-h-0 flex-1 flex-col justify-between gap-2.5" data-plans>
+      <div className="grid grid-rows-[repeat(8,auto)] gap-x-3 lg:grid-cols-2">{col('a')}{col('b')}</div>
+      {/* C, the stop and the marks: one strip. */}
+      <div className={`${card} grid items-end gap-x-4 gap-y-2 lg:grid-cols-[1.5fr_auto_auto_1fr]`} style={cardStyle} data-scenario="c">
+        <div className="self-center px-1">
+          <span className="text-[13px] font-semibold">Scenario C</span>
+          <p className="text-[12px] leading-snug" data-scenario-c-line>{scenarioC(data.answers)} <span style={{ color: 'var(--text-faint)' }}>Written down, so “no trade” counts as following the plan.</span></p>
+          <Written answers={data.answers} keys={['plans.cutoff']} />
+        </div>
+        {f('cutoffAt', { inline: false })}
+        {f('stop', { inline: false })}
+        <div className="flex flex-col gap-1" data-plan-marks>
+          {liveMarks(plans).map(({ text, i }) => {
+            const on = ticks.includes(i);
+            return (
+              <motion.button key={i} type="button" role="checkbox" aria-checked={on} data-mark={i} onClick={() => toggleMark('plans', i)} whileTap={press}
+                animate={{ borderColor: on ? 'rgb(var(--outcome-win) / 0.45)' : 'var(--glass-stroke)', background: on ? 'rgb(var(--outcome-win) / 0.08)' : 'rgb(0 0 0 / 0)' }}
+                transition={spring} className="flex items-center gap-2 rounded-[calc(10px*var(--rk))] border px-2.5 py-[5px] text-left text-[11.5px]">
+                <span className="grid size-[14px] shrink-0 place-items-center rounded-[calc(4px*var(--rk))]" style={{ background: on ? 'rgb(var(--outcome-win) / 0.2)' : 'var(--glass-fill-strong)', color: 'rgb(var(--outcome-win))' }}>{on ? '✓' : ''}</span>
+                <span style={{ color: on ? 'var(--text-dim)' : 'var(--text)' }}>{text}</span>
+              </motion.button>
+            );
+          })}
+        </div>
       </div>
     </div>
+  );
+}
+
+/** What the plans took from the earlier answers, beside the page title. */
+function PlansAuto({ data }: { data: PrepData }) {
+  const taken = takenOf(data.answers);
+  const bias = data.answers['htf.bias'];
+  const auto = [
+    taken.length ? <>run overnight, so not offered: <b>{taken.join(', ')}</b></> : null,
+    data.answers['session.news'] === 'None today' ? <>no news today, so no data wick</> : null,
+    bias === 'Bullish' || bias === 'Bearish' ? <>A goes with your {String(bias).toLowerCase()} bias, B the other way</> : null,
+  ].filter(Boolean);
+  if (!auto.length) return null;
+  return (
+    <p className="min-w-0 truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-plans-auto>
+      From your earlier answers: {auto.map((x, i) => <span key={i}>{i > 0 && ' · '}{x}</span>)}.
+    </p>
+  );
+}
+
+/** The plan's checks, in the footer: amber for a rule left out, plain for a note. */
+function PlanChecks({ data }: { data: PrepData }) {
+  const checks = planChecks(data.answers);
+  if (!checks.length) return null;
+  return (
+    <ul className="flex flex-wrap gap-1" data-plan-checks>
+      {checks.map((c) => (
+        <li key={c.text} className="rounded-full px-2.5 py-0.5 text-[11px] leading-snug"
+          style={{ background: c.level === 'warn' ? 'rgb(var(--amber) / 0.12)' : 'var(--glass-fill)', color: c.level === 'warn' ? 'var(--text)' : 'var(--text-dim)' }}>{c.text}</li>
+      ))}
+    </ul>
   );
 }
