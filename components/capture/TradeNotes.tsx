@@ -97,7 +97,7 @@ export function Rotator({ slides }: { slides: Array<{ id: string; label: string;
   const s = slides[i % Math.max(1, n)];
   if (!s) return null;
   return (
-    <div className="relative flex min-h-[9.5rem] flex-1 flex-col" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} data-rotator={s.id}>
+    <div className="relative flex min-h-[6rem] flex-1 flex-col" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} data-rotator={s.id}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={s.id} className="flex min-h-0 flex-1 flex-col overflow-hidden [&>*]:min-h-0 [&>*]:flex-1"
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }} transition={springSoft}>

@@ -816,8 +816,6 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const insights = (
     <Rotator slides={[
       { id: 'notes', label: 'From your journal', node: <TradeNotes world={backtest ? 'backtest' : 'real'} exclude={trade.id} grade={trade.grade_letter} still /> },
-      // With a drill running, its card takes the replay's place: the replay turns over with the rest.
-      ...(drillKey && taken ? [{ id: 'replay', label: 'Decision replay', node: <DecisionReplay trade={trade} /> }] : []),
       { id: 'progress', label: 'Rubric v2 progress', node: <RubricProgress /> },
       { id: 'similar', label: 'Similar past setups', node: <SimilarCard s={similar} loading={simLoading} /> },
     ]} />
@@ -913,7 +911,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       {/* Three equal columns: the locked decision, how it ended, the words. The tags run below them, then Save. */}
       <div className="grid items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
         {/* Step 1, read-only: the decision and its grade. */}
-        <div className="flex flex-col gap-3" data-step1-summary>
+        <div className="flex flex-col gap-2.5" data-step1-summary>
           <div className="rounded-[calc(18px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -950,7 +948,8 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
           </div>
           {/* Placed so the three columns end level above the tag row (they balance differently once taken). */}
           {taken && drillCard}
-          {!(drillKey && taken) && <DecisionReplay trade={trade} />}
+          {/* Always shown, on its own: never one of the cards that turn over. */}
+          <DecisionReplay trade={trade} compact />
           {/* The room the column has left: one card that turns over (replay, v2 progress, similar setups, your notes). */}
           {insights}
         </div>
@@ -1036,7 +1035,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
           <div data-field="regrade">
             <Field quiet label="Honest re-grade" group hint={`${REGRADE_HINT} Stored, never counted in stats or expectancy.`}>
               <Segmented value={regrade ?? NOT_REGRADED} onChange={(v) => setRegrade(v === NOT_REGRADED ? null : v as typeof regrade)}
-                options={[NOT_REGRADED, ...regrades]} labelFor={(v) => (v === NOT_REGRADED ? 'Not re-graded' : v)} compact />
+                options={[NOT_REGRADED, ...regrades]} labelFor={(v) => (v === NOT_REGRADED ? 'Not re-graded' : v)} />
             </Field>
           </div>
         </div>
@@ -1047,7 +1046,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       {!taken ? (
         <ReasonRow decision={decision} reasons={reasons} main={mainReason} onTap={tapReason} flash={flashing && reasons.length === 0} />
       ) : (
-      <div className="mt-5 grid items-stretch gap-x-6 gap-y-4 border-t pt-4 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
+      <div className="mt-3 grid min-h-0 flex-1 items-stretch gap-x-6 gap-y-4 border-t pt-3 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
         <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken. Its opposite sits at the same place under What worked.">
           <TagGrid cols={3} tone="loss" options={tagOptions(ME_TAGS as readonly string[], trade.mistake_tags)} value={me}
             onToggle={(tag) => toggleTag('me', tag)} blocked={(tag) => tagBlocked(tag, { me, worked }, { decision, overTime: overTime(trade) })} data="me" />
@@ -1064,10 +1063,10 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       </div>
       )}
 
-      {/* Spare height goes here, under the tags — never as a gap above them. */}
-      <div className="flex-1" aria-hidden />
+      {/* Spare height: the tag grids take it (their rows grow); a pass's reasons sit above this spacer. */}
+      {!taken && <div className="flex-1" aria-hidden />}
       {/* Save, along the bottom. */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: 'var(--glass-stroke)' }}>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3" style={{ borderColor: 'var(--glass-stroke)' }}>
         <div className="min-w-0 text-[11px] leading-snug" style={faint}>
           {error && <p className="text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
           {owed.length > 0 && <p>Still to write: {owed.join(', ')}.</p>}
@@ -1138,7 +1137,8 @@ function ReasonRow({ decision, reasons, main, onTap, flash }: { decision: Decisi
 }
 
 /** From open to decision: when each row and the gate were scored, and which took longest (048). */
-export function DecisionReplay({ trade }: { trade: Trade }) {
+/** `compact`: Step 2 — the longest step in the header, every time in the tooltip, a shorter line. */
+export function DecisionReplay({ trade, compact = false }: { trade: Trade; compact?: boolean }) {
   const r = decisionReplay(trade);
   // The scale is what happened (the limit is drawn only when it falls inside), so close answers stay apart.
   const end = (Math.max(r?.total ?? 0, ...(r?.marks.map((m) => m.at) ?? [0])) || 1) * 1.04;
@@ -1146,13 +1146,16 @@ export function DecisionReplay({ trade }: { trade: Trade }) {
     <section className="rounded-[calc(16px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-decision-replay={r ? r.marks.length : 0}>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>Decision replay</span>
-        <span className="text-[11px] tabular-nums" style={dim}>{trade.decision_seconds ?? '—'}s{trade.decision_limit ? ` of ${trade.decision_limit}s` : ''}</span>
+        <span className="text-[11px] tabular-nums" style={dim}>
+          {compact && r?.slowest && <>Longest: <b style={{ color: 'var(--text)' }}>{r.slowest.label}</b> (+{r.slowest.took}s) · </>}
+          {trade.decision_seconds ?? '—'}s{trade.decision_limit ? ` of ${trade.decision_limit}s` : ''}
+        </span>
       </div>
       {!r ? (
         <p className="mt-1 text-[11.5px]" style={faint}>No timings on this trade — they are kept from Step 1 on trades decided from now on.</p>
       ) : (
         <>
-          <div className="relative mx-3 mt-5 mb-4 h-6" aria-hidden>
+          <div className={`relative mx-3 h-6 ${compact ? 'mb-2.5 mt-3.5' : 'mb-4 mt-5'}`} aria-hidden title={compact ? r.marks.map((m) => `${m.label} ${m.at}s`).join(' · ') : undefined}>
             <div className="absolute inset-x-0 top-1/2 h-px" style={{ background: 'var(--glass-stroke)' }} />
             {trade.decision_limit != null && trade.decision_limit <= end && (
               <div className="absolute top-0 h-full w-px" style={{ left: `${(trade.decision_limit / end) * 100}%`, background: 'rgb(var(--grade-f) / 0.5)' }} title="The limit" />
@@ -1177,7 +1180,7 @@ export function DecisionReplay({ trade }: { trade: Trade }) {
               <span className="block h-3.5 w-1 rounded-full" style={{ background: 'var(--text)' }} title="Decided" />
             </div>
           </div>
-          <p className="mt-1 text-[11px] tabular-nums" style={dim}>
+          <p className={`mt-1 text-[11px] tabular-nums ${compact ? 'hidden' : ''}`} style={dim}>
             {r.slowest && <>Longest: <b style={{ color: 'var(--text)' }}>{r.slowest.label}</b> (+{r.slowest.took}s). </>}
             {r.marks.map((m) => `${m.label} ${m.at}s`).join(' · ')}
           </p>
@@ -1257,11 +1260,11 @@ function TagGrid({ options, value, onToggle, blocked, cols, tone, auto = [], dat
 
 function TagBlock({ title, help, children }: { title: string; help?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col">
+    <div className="flex min-h-0 flex-col">
       <span className="mb-1 flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>
         {title}{help && <Help>{help}</Help>}
       </span>
-      {children}
+      <div className="min-h-0 flex-1">{children}</div>
     </div>
   );
 }
