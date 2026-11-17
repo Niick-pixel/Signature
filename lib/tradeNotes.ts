@@ -70,3 +70,31 @@ export function tradeNotes(all: readonly T[], o: { world: 'backtest' | 'real'; e
   }
   return out;
 }
+
+/**
+ * Step 2's honesty card, from your last 50 trades in this world: graded before the outcome (the Discipline
+ * score's Honesty axis), re-graded lower than the grade at entry, and decided within the clock (timed Rubric v2
+ * trades). Each with the count behind it; null where there is nothing to count yet.
+ */
+export interface HonestyStats {
+  graded: { pct: number | null; n: number };
+  regradedLower: { lower: number; of: number };
+  inTime: { pct: number | null; n: number };
+}
+export const HONESTY_WINDOW = 50;
+const RANK: Record<string, number> = { 'A+': 9, A: 8, 'A-': 7, 'B+': 6, B: 5, 'B-': 4, C: 3, D: 2, F: 1 };
+export function honestyStats(all: readonly (T & { graded_post_hoc?: boolean | null; regrade?: string | null; decision_seconds?: number | null; decision_limit?: number | null })[],
+  world: 'backtest' | 'real', exclude?: string | null): HonestyStats {
+  const ts = all.filter((t) => !t.deleted_at && t.id !== exclude && !isHypothetical(t.account) && isTaken(t.outcome as Outcome) && t.status !== 'Planned'
+    && (world === 'backtest' ? isBacktest(t.account) : !isBacktest(t.account)))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, HONESTY_WINDOW);
+  const pre = ts.filter((t) => !t.graded_post_hoc).length;
+  const re = ts.filter((t) => t.regrade && t.grade_letter && RANK[t.regrade] != null && RANK[t.grade_letter] != null);
+  const timed = ts.filter((t) => t.decision_limit != null && t.decision_seconds != null);
+  const kept = timed.filter((t) => (t.decision_seconds as number) <= (t.decision_limit as number)).length;
+  return {
+    graded: { pct: ts.length ? Math.round((pre / ts.length) * 100) : null, n: ts.length },
+    regradedLower: { lower: re.filter((t) => RANK[t.regrade as string] < RANK[t.grade_letter as string]).length, of: re.length },
+    inTime: { pct: timed.length ? Math.round((kept / timed.length) * 100) : null, n: timed.length },
+  };
+}

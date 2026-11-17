@@ -43,3 +43,19 @@ test('notes: a grade shows its numbers only from enough Rubric v2 trades, never 
   assert.match(shown.body, /not a verdict/);
   assert.equal(tradeNotes(enough, { world: 'real', grade: 'F' }).find((x) => x.id === 'grade')!.title, 'Graded No trade before');
 });
+
+test('honesty card: graded before the outcome, re-graded lower, decided within the clock — one world, the last 50', async () => {
+  const { honestyStats } = await import('../lib/tradeNotes');
+  const ts = [
+    t({ graded_post_hoc: false, regrade: 'B', grade_letter: 'A', decision_seconds: 30, decision_limit: 40 }),
+    t({ graded_post_hoc: false, regrade: 'A', grade_letter: 'A', decision_seconds: 50, decision_limit: 40 }),
+    t({ graded_post_hoc: true }),
+    t({ account: 'Backtest (FX Replay)', graded_post_hoc: true }),
+    t({ account: 'Missed', graded_post_hoc: true }),
+  ];
+  const h = honestyStats(ts as never, 'real');
+  assert.deepEqual(h.graded, { pct: 67, n: 3 });
+  assert.deepEqual(h.regradedLower, { lower: 1, of: 2 });
+  assert.deepEqual(h.inTime, { pct: 50, n: 2 });
+  assert.deepEqual(honestyStats([] as never, 'real').graded, { pct: null, n: 0 });
+});

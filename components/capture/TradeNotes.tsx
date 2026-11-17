@@ -105,13 +105,54 @@ export function Rotator({ slides }: { slides: Array<{ id: string; label: string;
         </motion.div>
       </AnimatePresence>
       {n > 1 && (
-        <span className="absolute bottom-2 right-3 flex gap-1" role="tablist" aria-label="Turn over">
+        <span className="absolute bottom-1.5 left-1/2 flex -translate-x-1/2 gap-1" role="tablist" aria-label="Turn over">
           {slides.map((x, k) => (
             <button key={x.id} type="button" role="tab" aria-selected={k === i} aria-label={x.label} title={x.label} onClick={() => setI(k)} data-rotator-dot={x.id}
               className="h-1.5 rounded-full transition-all" style={{ width: k === i ? 12 : 6, background: k === i ? 'rgb(var(--accent))' : 'var(--glass-stroke)' }} />
           ))}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * Under the honest re-grade: how honest your grading has been, from your last 50 trades in this world —
+ * graded before the outcome, re-graded lower than at entry, decided within the clock. Small, one size.
+ */
+export function HonestyCard({ world, exclude }: { world: 'backtest' | 'real'; exclude?: string | null }) {
+  const [h, setH] = useState<import('@/lib/tradeNotes').HonestyStats | null>(null);
+  useEffect(() => {
+    let live = true;
+    const q = new URLSearchParams({ world, honesty: '1', ...(exclude ? { exclude } : {}) });
+    void fetch(`/api/trade-notes?${q}`).then((r) => (r.ok ? r.json() : null)).then((x) => { if (live) setH(x); }).catch(() => {});
+    return () => { live = false; };
+  }, [world, exclude]);
+  const tone = (pct: number | null, good: number) => (pct == null ? 'var(--text-faint)' : pct >= good ? 'rgb(var(--outcome-win))' : pct >= good - 20 ? 'rgb(var(--amber))' : 'rgb(var(--outcome-loss))');
+  const lowerPct = h && h.regradedLower.of ? Math.round((h.regradedLower.lower / h.regradedLower.of) * 100) : null;
+  const stats = !h ? [] : [
+    { k: 'graded', label: 'Graded before the outcome', value: h.graded.pct == null ? '—' : `${h.graded.pct}%`, sub: `of ${h.graded.n}`, color: tone(h.graded.pct, 90),
+      title: 'The Honesty axis of your discipline score: trades graded before the result was known.' },
+    { k: 'regrade', label: 'Re-graded lower', value: h.regradedLower.of ? `${h.regradedLower.lower}/${h.regradedLower.of}` : '—', sub: h.regradedLower.of ? 're-graded' : 'none yet',
+      color: lowerPct == null ? 'var(--text-faint)' : lowerPct <= 20 ? 'rgb(var(--outcome-win))' : lowerPct <= 40 ? 'rgb(var(--amber))' : 'rgb(var(--outcome-loss))',
+      title: 'Of the trades you re-graded, how many came out lower than the grade at entry: the entry grade flattered them.' },
+    { k: 'time', label: 'Decided within the clock', value: h.inTime.pct == null ? '—' : `${h.inTime.pct}%`, sub: h.inTime.n ? `of ${h.inTime.n} timed` : 'none timed', color: tone(h.inTime.pct, 90),
+      title: 'Rubric v2 trades with a clock that were decided before it ran out.' },
+  ];
+  return (
+    <div className="flex min-h-[5.5rem] flex-1 flex-col justify-between rounded-[calc(14px*var(--rk))] border px-3 py-2.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-honesty-card>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+        Your honesty · last {h?.graded.n ?? '—'} {world === 'backtest' ? 'backtests' : 'real trades'}
+      </span>
+      <div className="mt-1.5 grid grid-cols-3 gap-2">
+        {stats.map((s) => (
+          <div key={s.k} title={s.title} data-honesty={s.k}>
+            <div className="text-[18px] font-semibold leading-none tabular-nums" style={{ color: s.color }}>{s.value}</div>
+            <div className="mt-1 text-[10.5px] leading-tight" style={{ color: 'var(--text-dim)' }}>{s.label}</div>
+            <div className="text-[10px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

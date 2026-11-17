@@ -8,7 +8,7 @@ import { Field, Input } from '@/components/ui/Field';
 import { Help } from '@/components/ui/Help';
 import { Button } from '@/components/ui/Button';
 import { ShotSlots, type SlotFiles } from './ShotSlots';
-import { Rotator, TradeNotes } from './TradeNotes';
+import { HonestyCard, Rotator, TradeNotes } from './TradeNotes';
 import { ExplanationField } from './ExplanationField';
 import { DrillChip, type DrillKept } from './DrillChip';
 import { SimilarCard, type SimilarResult } from './SetupAnatomy';
@@ -524,7 +524,7 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
 
 function HeaderStrip({ backtest, replay, context }: { backtest: boolean; replay?: React.ReactNode; context?: React.ReactNode }) {
   return (
-    <div className="mb-4 mt-2 flex min-h-[1.75rem] flex-wrap items-center gap-2" data-header-strip>
+    <div className="mb-3 mt-1.5 flex min-h-[1.75rem] flex-wrap items-center gap-2" data-header-strip>
       {replay}
       {backtest && <SessionTally inline />}
       <PathBanner compact />
@@ -815,7 +815,6 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   // What is read, not written, turning over in one box: the replay, the v2 progress, similar setups, your notes.
   const insights = (
     <Rotator slides={[
-      { id: 'notes', label: 'From your journal', node: <TradeNotes world={backtest ? 'backtest' : 'real'} exclude={trade.id} grade={trade.grade_letter} still /> },
       { id: 'progress', label: 'Rubric v2 progress', node: <RubricProgress /> },
       { id: 'similar', label: 'Similar past setups', node: <SimilarCard s={similar} loading={simLoading} /> },
     ]} />
@@ -909,9 +908,9 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       </>} />
 
       {/* Three equal columns: the locked decision, how it ended, the words. The tags run below them, then Save. */}
-      <div className="grid items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid min-h-0 flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
         {/* Step 1, read-only: the decision and its grade. */}
-        <div className="flex flex-col gap-2.5" data-step1-summary>
+        <div className="flex flex-col gap-2" data-step1-summary>
           <div className="rounded-[calc(18px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1012,11 +1011,11 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
         {/* The words, and what they add up to. */}
         <div className="flex flex-col gap-3 lg:col-span-2 xl:col-span-1" data-words>
           <Field quiet label="Explanation" required={explanation.trim().length < minExplanation} className={flashing && explanation.trim().length < minExplanation ? 'need-flash' : ''}>
-            <ExplanationField value={explanation} onChange={setExplanation} minChars={minExplanation} minRows={taken ? 5 : 3}
+            <ExplanationField value={explanation} onChange={setExplanation} minChars={minExplanation} minRows={taken ? 4 : 3}
               placeholder={taken ? 'What you saw and why you decided as you did.' : `One line: why it was ${decision === 'pass' ? 'passed' : 'missed'}.`} />
           </Field>
           <Field quiet label={taken ? 'Lesson' : 'Lesson (optional)'} required={lessonRequired && lesson.trim().length < MIN_LESSON} className={flashing && lessonRequired && lesson.trim().length < MIN_LESSON ? 'need-flash' : ''}>
-            <ExplanationField value={lesson} onChange={setLesson} placeholder="What would you do differently?" minChars={MIN_LESSON} minRows={taken ? 4 : 2} required={lessonRequired} />
+            <ExplanationField value={lesson} onChange={setLesson} placeholder="What would you do differently?" minChars={MIN_LESSON} minRows={taken ? 3 : 2} required={lessonRequired} />
           </Field>
           {taken && (
             <div className="rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" data-rules-followed={verdict.followed ? 'yes' : 'no'}
@@ -1038,6 +1037,8 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
                 options={[NOT_REGRADED, ...regrades]} labelFor={(v) => (v === NOT_REGRADED ? 'Not re-graded' : v)} />
             </Field>
           </div>
+          {/* How honest the grading has been: small, and it takes the room the column has left. */}
+          <HonestyCard world={backtest ? 'backtest' : 'real'} exclude={trade.id} />
         </div>
       </div>
 
@@ -1046,7 +1047,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       {!taken ? (
         <ReasonRow decision={decision} reasons={reasons} main={mainReason} onTap={tapReason} flash={flashing && reasons.length === 0} />
       ) : (
-      <div className="mt-3 grid min-h-0 flex-1 items-stretch gap-x-6 gap-y-4 border-t pt-3 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
+      <div className="mt-2.5 grid items-stretch gap-x-6 gap-y-4 border-t pt-2 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
         <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken. Its opposite sits at the same place under What worked.">
           <TagGrid cols={3} tone="loss" options={tagOptions(ME_TAGS as readonly string[], trade.mistake_tags)} value={me}
             onToggle={(tag) => toggleTag('me', tag)} blocked={(tag) => tagBlocked(tag, { me, worked }, { decision, overTime: overTime(trade) })} data="me" />
@@ -1063,10 +1064,8 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       </div>
       )}
 
-      {/* Spare height: the tag grids take it (their rows grow); a pass's reasons sit above this spacer. */}
-      {!taken && <div className="flex-1" aria-hidden />}
       {/* Save, along the bottom. */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3" style={{ borderColor: 'var(--glass-stroke)' }}>
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 border-t pt-2.5" style={{ borderColor: 'var(--glass-stroke)' }}>
         <div className="min-w-0 text-[11px] leading-snug" style={faint}>
           {error && <p className="text-[12px]" style={{ color: 'rgb(var(--grade-f))' }} role="alert">{error}</p>}
           {owed.length > 0 && <p>Still to write: {owed.join(', ')}.</p>}
@@ -1233,7 +1232,7 @@ function TagGrid({ options, value, onToggle, blocked, cols, tone, auto = [], dat
 }) {
   const hue = tone === 'win' ? 'var(--outcome-win)' : tone === 'market' ? 'var(--amber)' : 'var(--outcome-loss)';
   return (
-    <div className={`grid h-full auto-rows-fr gap-1.5 rounded-[calc(16px*var(--rk))] border p-2 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}
+    <div className={`grid h-full auto-rows-fr gap-1 rounded-[calc(16px*var(--rk))] border p-1.5 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}
       style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-tag-grid={data}>
       {options.map((tag) => {
         const on = value.includes(tag);
