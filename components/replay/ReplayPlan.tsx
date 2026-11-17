@@ -6,9 +6,10 @@ import { Field, Input } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { MultiSegmented } from '@/components/ui/MultiSegmented';
 import { Button } from '@/components/ui/Button';
+import { localDay } from '@/lib/day';
 import {
   CONFIRMS, DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, RR_BANDS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
-  copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, nextWeekday, noBiasCap, playedOf, rrWarning, scenarioLine, targetLeft, targetOptions,
+  copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, noBiasCap, playedOf, rrWarning, scenarioLine, targetLeft, targetOptions,
   overnightOf, tidyScenarios, tookFromTrades, weekdayOf, withDirections, zoneOptions,
   type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenario, type ReplayScenarios, type Took,
 } from '@/lib/replay';
@@ -93,8 +94,8 @@ export function ReplayBuilder(props: BuilderProps) {
 
 function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: BuilderProps) {
   const start = amend ? copyPlan({ context: amend.amended_context ?? amend.context, scenarios: amend.amended_scenarios ?? amend.scenarios }) : null;
-  // The replayed date, never today's: the last replay date + one trading day; the very first is typed.
-  const [date, setDate] = useState(() => (amend ? amend.replay_date : last ? nextWeekday(last.replay_date) : ''));
+  // Today's calendar date by default (the day you sat the replay); the chart's own day can still be typed.
+  const [date, setDate] = useState(() => (amend ? amend.replay_date : localDay()));
   const [context, setContext] = useState<ReplayContext>(() => start?.context ?? emptyContext());
   const [raw, setRaw] = useState<ReplayScenarios>(() => start?.scenarios ?? emptyScenarios());
   const [focus, setFocus] = useState(0);
@@ -251,12 +252,12 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
             <div className="w-[12.5rem]">
               <Field quiet label={`FX Replay date${date ? ` · ${weekdayOf(date) ?? 'weekend'}` : ''}`}>
                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-replay-date
-                  title={amend ? 'A wrong date can be put right: the day and its trades move, the plan is not amended.' : 'The day on your FX Replay chart — not today. Every trade on this replay day takes it.'} />
+                  title={amend ? 'A wrong date can be put right: the day and its trades move, the plan is not amended.' : 'Today by default. Every trade on this replay day takes it; each trade can still be re-dated on Step 2.'} />
               </Field>
-              {/* Where the date came from, so a guess is never taken for the chart's day. */}
+              {/* Where the date came from. */}
               {!amend && (
-                <p className="mt-0.5 px-1 text-[10.5px] leading-tight" style={last && date === nextWeekday(last.replay_date) ? { color: 'rgb(var(--amber))' } : faint} data-replay-date-note>
-                  {last && date === nextWeekday(last.replay_date) ? `Guessed: the trading day after Day ${last.sequence}. Set your chart’s day.` : 'The day on your FX Replay chart.'}
+                <p className="mt-0.5 px-1 text-[10.5px] leading-tight" style={faint} data-replay-date-note>
+                  {date === localDay() ? 'Today’s date — change it for the chart’s day.' : 'The day you set.'}
                 </p>
               )}
             </div>

@@ -33,7 +33,9 @@ as an Electron desktop app) for one trader: NQ/MNQ, DodgysDD's iFVG model.
 11. **Rubric families.** Legacy-rubric data (rubric ≤ 4) is frozen. Rubric-dependent
     stats run on one rubric family at a time and never mix legacy and v2 trades.
     Unset decision fields stay null — never imputed. (`rubricFamily` in
-    `lib/decision.ts`; docs/edge-engine.md §64–70.)
+    `lib/decision.ts`; docs/edge-engine.md §64–70.) The Path's "current rubric" is
+    the one new trades are graded under — v2 (`PATH_CURRENT_RUBRIC` in `lib/path.ts`),
+    not the checklist's `CURRENT_RUBRIC`.
 
 Also from earlier sessions:
 

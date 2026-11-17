@@ -18,7 +18,9 @@ const { createTrade, getTrade } = await import('../db/trades');
 const { syncPath, listEvents, addPurchase, setManual, listSteps } = await import('../db/path');
 const { brokenBy, bannerText, heldCommitments } = await import('../lib/path');
 const { parseTradeInput } = await import('../lib/validate');
-const { CURRENT_RUBRIC } = await import('../lib/rubric');
+const { applyRules } = await import('../db/rules');
+const { PATH_CURRENT_RUBRIC } = await import('../lib/path');
+const { RUBRIC_V2 } = await import('../lib/decision');
 const tradesRoute = await import('../app/api/trades/route');
 const tradeRoute = await import('../app/api/trades/[id]/route');
 const exportRoute = await import('../app/api/export/route');
@@ -79,11 +81,29 @@ test('the seeded path: six steps, step 1 active, the banner reads its progress',
   assert.ok(views[0].started_at, 'the active step is started');
 });
 
-test('only pre-graded backtests on the current rubric count toward step 1', () => {
-  createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: true }));    // hindsight: no
+/** A Rubric v2 backtest, decided before the outcome and settled. */
+const v2 = (x: Record<string, unknown> = {}) => {
+  const r = parseTradeInput({
+    date: '2026-11-13T09:45', instrument: 'NQ', direction: 'Long', session: 'NY AM', reason: 'Backtest replay',
+    setup_type: 'iFVG', htf_bias: 'With bias', premium_discount: 'Discount', target_type: 'PDH/PDL', account: 'Backtest (FX Replay)',
+    row_sweep: 2, row_inversion: 2, row_path: 2, row_target: 1, singular_gap: true, htf_origin: '15m', plan_scenario: 'A', leg_location: 'Discount',
+    planned_rr: '2', entry_method: 'On inversion close', confidence_at_entry: 4, decision: 'take', decided_at: '2026-11-13T09:45:21.000Z',
+    decision_seconds: 21.3, decision_limit: 40, grade_override: false,
+    outcome: 'Win', r_multiple: 2, status: 'Settled', outcome_at: '2026-11-13T10:00:00.000Z', screenshot_path: 'x.png',
+    explanation: 'E'.repeat(170), lesson: 'L'.repeat(170), ...x,
+  });
+  if (!r.ok) throw new Error(r.error);
+  return createTrade(applyRules(r.value, null));
+};
+
+test('only pre-graded Rubric v2 backtests count toward step 1 — the rubric new trades are graded under', () => {
+  assert.equal(PATH_CURRENT_RUBRIC, RUBRIC_V2, '"current" is the rubric in force, v2');
+  createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: false }));    // the old checklist: another family, no
+  createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: true }));     // hindsight: no
   createTrade(base({ account: 'Demo', graded_post_hoc: false }));                    // wrong account: no
-  createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: false, outcome: 'Not taken', r_multiple: null })); // passed: no
-  createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: false }));    // yes
+  assert.equal(v2({ outcome: 'Not taken', r_multiple: null, decision: 'pass', status: 'Settled', would_be_r: -1, pass_reasons: ['Rubric said no trade'], pass_main_reason: 'Rubric said no trade' }).rubric_version, RUBRIC_V2); // passed: no
+  const yes = v2();                                                                   // yes
+  assert.equal(yes.rubric_version, RUBRIC_V2);
   const views = syncPath();
   assert.equal(views[0].progress[0].value, 1);
   assert.equal(views[0].progress[0].display, '1 / 50');
@@ -142,7 +162,7 @@ test('an eval purchase needs a reason while the promise holds', () => {
 });
 
 test('a step completes itself when every criterion is met, and the next one starts', () => {
-  for (let i = 0; i < 49; i++) createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: false, r_multiple: i % 2 ? 2 : -1, outcome: i % 2 ? 'Win' : 'Loss' }));
+  for (let i = 0; i < 49; i++) v2({ r_multiple: i % 2 ? 2 : -1, outcome: i % 2 ? 'Win' : 'Loss' });
   const views = syncPath();
   assert.equal(views[0].status, 'done');
   assert.equal(views[1].status, 'active');
@@ -154,7 +174,7 @@ test('a step completes itself when every criterion is met, and the next one star
   const after = syncPath();
   assert.equal(after[1].status, 'done', JSON.stringify(after[1].progress));
   assert.equal(after[2].status, 'active');
-  assert.equal(CURRENT_RUBRIC, listSteps()[0].criteria[0].filter?.rubric === 'current' ? CURRENT_RUBRIC : -1);
+  assert.equal(listSteps()[0].criteria[0].filter?.rubric, 'current');
 });
 
 test('the export carries the Path, at version 23, and overrides in every format', async () => {

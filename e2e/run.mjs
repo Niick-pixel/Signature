@@ -418,6 +418,12 @@ await check('Rubric v2: four rows, direction and scenario, and Take — keyboard
   // Step 2 fits the window: nothing scrolls on a 1920×1080 screen.
   const fit = await page.evaluate(() => { const el = document.querySelector('[data-outcome-step]'); return Math.round(el.getBoundingClientRect().bottom) <= innerHeight; });
   expect(fit, 'Step 2 ends inside the window');
+  // A replay day dated in the chart's year: one tap puts the trade on today's date, the time kept.
+  const before = await page.inputValue('[data-when]');
+  await page.click('[data-when-today]');
+  const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  expect(await page.inputValue('[data-when]') === `${today}T${before.slice(11)}`, 'Today sets the date and keeps the time');
+  expect(await page.locator('[data-when-today]').count() === 0, 'Today hides once the date is today');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -677,7 +683,7 @@ await check('Replay plan: Next replay day closes the day with one question, and 
   await page.click('[data-took-for="A"] [data-option="passed"]');
   await page.click('[data-next-day]');
   await page.waitForSelector('[data-replay-builder="plan"]');
-  expect(await page.inputValue('[data-replay-date]') === '2026-03-04', 'the next weekday after the last replay date');
+  expect(await page.inputValue('[data-replay-date]') === await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }), 'the replay date starts on today, the calendar date');
   await page.click('[data-copy-last]');
   // Copy keeps the plan, never yesterday's taken levels: asked again, and each one taken leaves the zones and targets.
   expect(/taken before the open/.test(await page.locator('[data-builder-footer]').innerText()), 'taken is asked again');
@@ -697,7 +703,7 @@ await check('Replay plan: Next replay day closes the day with one question, and 
   await page.waitForSelector('[data-replay-builder]', { state: 'detached' });
   await page.waitForSelector('[data-replay-day="2"]');
   const st = await page.evaluate(async () => (await fetch('/api/replay')).json());
-  expect(st.active.sequence === 2 && st.active.replay_date === '2026-03-04' && st.active.locked_at, JSON.stringify({ s: st.active?.sequence, d: st.active?.replay_date }));
+  expect(st.active.sequence === 2 && st.active.replay_date === await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }) && st.active.locked_at, JSON.stringify({ s: st.active?.sequence, d: st.active?.replay_date }));
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });

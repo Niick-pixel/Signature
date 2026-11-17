@@ -904,6 +904,12 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
           <span className="font-medium" style={!whenOk ? { color: 'rgb(var(--grade-f))' } : dim}>When</span>
           <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="When it happened" data-when
             className="rounded-full bg-transparent px-2 py-1 font-medium tabular-nums outline-none" style={{ color: 'var(--text)' }} />
+          {/* One tap to today's date, the time kept: a replay day set to the chart's year is never a trap. */}
+          {when.slice(0, 10) !== localNow().slice(0, 10) && (
+            <button type="button" data-when-today onClick={() => setWhen(`${localNow().slice(0, 10)}T${whenOk ? when.slice(11, 16) : localNow().slice(11)}`)}
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: 'rgb(var(--accent) / 0.14)', color: 'rgb(var(--accent))' }}
+              title="Set the date to today; the time stays.">Today</button>
+          )}
         </label>
       </>} />
 

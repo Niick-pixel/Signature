@@ -13,7 +13,9 @@ process.env.SIGNATURE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'signatur
 process.env.SIGNATURE_MIGRATIONS_DIR = path.resolve('db/migrations');
 
 const { getDb } = await import('../db/index');
-const { getTrade } = await import('../db/trades');
+const { getTrade, listTrades } = await import('../db/trades');
+const { measure } = await import('../lib/path');
+const { CURRENT_RUBRIC } = await import('../lib/rubric');
 const { syncPath } = await import('../db/path');
 const { guardContext, dayLimit } = await import('../db/rules');
 const { savePrep } = await import('../db/prep');
@@ -73,12 +75,14 @@ test('a locked grade does not move: not by editing the plan, not by settling it'
   assert.equal(settled.graded_post_hoc, false);
 });
 
-test('a backtest locked then settled counts toward step 1; one logged after the fact does not', async () => {
-  const before = syncPath()[0].progress[0].value ?? 0;
+test('a checklist backtest locked then settled counts as graded before the outcome; one logged after the fact does not', async () => {
+  // Step 1's criterion, pinned to the checklist: "current" is Rubric v2 now (tests/path), these are checklist trades.
+  const count = () => { const step = syncPath()[0]; const c = step.criteria[0]; return measure({ ...c, filter: { ...c.filter, rubric: CURRENT_RUBRIC } }, listTrades({}), step).value ?? 0; };
+  const before = count();
   const locked = await post({ account: 'Backtest (FX Replay)', reason: 'Backtest replay', status: 'Planned', outcome: 'Not taken', r_multiple: null, chart_date: '2026-09-15' });
   await put(locked.id, { account: 'Backtest (FX Replay)', reason: 'Backtest replay', status: 'Settled', outcome: 'Win', r_multiple: 2, chart_date: '2026-09-15' });
   await post({ account: 'Backtest (FX Replay)', reason: 'Backtest replay', chart_date: '2026-09-15' }); // straight to Settled
-  assert.equal(syncPath()[0].progress[0].value, before + 1);
+  assert.equal(count(), before + 1);
   assert.equal(getTrade(locked.id)!.chart_date, '2026-09-15');
 });
 
