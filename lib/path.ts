@@ -11,6 +11,7 @@
 import { derivedAdherence } from './adherence';
 import { isTaken } from './domain';
 import { RUBRIC_V2, rubricFamily } from './decision';
+import { CURRENT_RUBRIC } from './rubric';
 import type { Trade } from './types';
 
 export type Metric = 'count' | 'expectancy' | 'pct_pre_graded';
@@ -19,7 +20,7 @@ export type Op = '>=' | '>';
 export interface CriterionFilter {
   /** Stored account values. Empty or absent means every account. */
   accounts?: string[];
-  /** 'current' follows the rubric new trades are graded under (PATH_CURRENT_RUBRIC); a number pins one version. */
+  /** 'current': the checklist rubric and Rubric v2 together (PATH_CURRENT_RUBRICS); a number pins one version. */
   rubric?: 'current' | number;
   /** Only trades graded before the outcome was known. */
   preGraded?: boolean;
@@ -147,22 +148,22 @@ const signedR = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)
 export const effectiveGrade = (t: Pick<Trade, 'grade_letter' | 'regrade' | 'rubric_version'>): string => (rubricFamily(t) === 'v2' ? t.grade_letter : t.regrade ?? t.grade_letter);
 
 /**
- * The rubric "current" means: the one new trades are graded under. Since Rubric v2 that is v2 (5), not the
- * checklist's CURRENT_RUBRIC (3), which only the old form still grades with. Pointing "current" at 3 counted
- * no trade logged since v2 (CLAUDE.md rule 11: one family, never mixed). A step already done stays done:
- * completion is stored, never re-derived.
+ * The rubrics "current" counts on the Path: the checklist rubric the Path was started on (3) and Rubric v2 (5),
+ * which replaced it. Progress toward a step is a running total — a new rubric adds to it, never starts it over.
+ * (The Path is the one place the two families meet: a count and an R expectancy, never a grade comparison —
+ * CLAUDE.md rule 11.) A pinned version number still means that version alone.
  */
-export const PATH_CURRENT_RUBRIC = RUBRIC_V2;
+export const PATH_CURRENT_RUBRICS: readonly number[] = [CURRENT_RUBRIC, RUBRIC_V2];
 
 /** The trades a criterion is measured over. Taken trades only: a pass is graded, but never priced. */
 export function criterionTrades(c: Criterion, trades: readonly Trade[], step: Pick<PathStep, 'started_at'>): Trade[] {
   const f = c.filter ?? {};
-  const rubric = f.rubric === 'current' ? PATH_CURRENT_RUBRIC : f.rubric;
+  const rubrics = f.rubric === 'current' ? PATH_CURRENT_RUBRICS : f.rubric != null ? [f.rubric] : null;
   return trades.filter((t) => {
     if (t.deleted_at) return false;
     if (!isTaken(t.outcome)) return false;
     if (f.accounts?.length && !f.accounts.includes(t.account)) return false;
-    if (rubric != null && t.rubric_version !== rubric) return false;
+    if (rubrics && !rubrics.includes(t.rubric_version)) return false;
     if (f.preGraded && t.graded_post_hoc) return false;
     if (f.followed && !derivedAdherence(t)) return false;
     if (f.grades?.length && !f.grades.includes(effectiveGrade(t))) return false;

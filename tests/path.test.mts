@@ -19,8 +19,9 @@ const { syncPath, listEvents, addPurchase, setManual, listSteps } = await import
 const { brokenBy, bannerText, heldCommitments } = await import('../lib/path');
 const { parseTradeInput } = await import('../lib/validate');
 const { applyRules } = await import('../db/rules');
-const { PATH_CURRENT_RUBRIC } = await import('../lib/path');
+const { PATH_CURRENT_RUBRICS } = await import('../lib/path');
 const { RUBRIC_V2 } = await import('../lib/decision');
+const { CURRENT_RUBRIC } = await import('../lib/rubric');
 const tradesRoute = await import('../app/api/trades/route');
 const tradeRoute = await import('../app/api/trades/[id]/route');
 const exportRoute = await import('../app/api/export/route');
@@ -96,18 +97,19 @@ const v2 = (x: Record<string, unknown> = {}) => {
   return createTrade(applyRules(r.value, null));
 };
 
-test('only pre-graded Rubric v2 backtests count toward step 1 — the rubric new trades are graded under', () => {
-  assert.equal(PATH_CURRENT_RUBRIC, RUBRIC_V2, '"current" is the rubric in force, v2');
-  createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: false }));    // the old checklist: another family, no
+test('pre-graded backtests on the checklist rubric and Rubric v2 both count toward step 1 — a running total', () => {
+  assert.deepEqual([...PATH_CURRENT_RUBRICS], [CURRENT_RUBRIC, RUBRIC_V2], '"current" is the checklist rubric and v2 together');
+  const old = createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: false })); // the checklist rubric: yes
+  assert.equal(old.rubric_version, CURRENT_RUBRIC);
   createTrade(base({ account: 'Backtest (FX Replay)', graded_post_hoc: true }));     // hindsight: no
   createTrade(base({ account: 'Demo', graded_post_hoc: false }));                    // wrong account: no
   assert.equal(v2({ outcome: 'Not taken', r_multiple: null, decision: 'pass', status: 'Settled', would_be_r: -1, pass_reasons: ['Rubric said no trade'], pass_main_reason: 'Rubric said no trade' }).rubric_version, RUBRIC_V2); // passed: no
-  const yes = v2();                                                                   // yes
+  const yes = v2();                                                                   // Rubric v2: yes, added to the total
   assert.equal(yes.rubric_version, RUBRIC_V2);
   const views = syncPath();
-  assert.equal(views[0].progress[0].value, 1);
-  assert.equal(views[0].progress[0].display, '1 / 50');
-  assert.equal(views[0].nextAction, '49 more: FX Replay trades on the current rubric, graded before the outcome.');
+  assert.equal(views[0].progress[0].value, 2);
+  assert.equal(views[0].progress[0].display, '2 / 50');
+  assert.equal(views[0].nextAction, '48 more: FX Replay trades on the current rubric, graded before the outcome.');
 });
 
 test('promises are held until their step is done: Eval and Funded break "no paid eval"', () => {
@@ -162,7 +164,7 @@ test('an eval purchase needs a reason while the promise holds', () => {
 });
 
 test('a step completes itself when every criterion is met, and the next one starts', () => {
-  for (let i = 0; i < 49; i++) v2({ r_multiple: i % 2 ? 2 : -1, outcome: i % 2 ? 'Win' : 'Loss' });
+  for (let i = 0; i < 48; i++) v2({ r_multiple: i % 2 ? 2 : -1, outcome: i % 2 ? 'Win' : 'Loss' });
   const views = syncPath();
   assert.equal(views[0].status, 'done');
   assert.equal(views[1].status, 'active');
