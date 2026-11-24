@@ -26,6 +26,14 @@ contextBridge.exposeInMainWorld('signature', {
       return () => ipcRenderer.off('signature:update', listener);
     },
   },
+  /** The cockpit window: open, close, keep on top; and a route opened in the main window. */
+  cockpit: {
+    open: () => ipcRenderer.invoke('signature:cockpit-open'),
+    close: () => ipcRenderer.invoke('signature:cockpit-close'),
+    pin: (on) => ipcRenderer.invoke('signature:cockpit-pin', on),
+    state: () => ipcRenderer.invoke('signature:cockpit-state'),
+    openInMain: (route) => ipcRenderer.invoke('signature:open-in-main', route),
+  },
   /** Start with Windows: whether it is on, and the switch. */
   startup: {
     state: () => ipcRenderer.invoke('signature:startup-state'),

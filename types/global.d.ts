@@ -44,6 +44,13 @@ declare global {
         install: () => Promise<boolean>;
         onChange: (handler: (state: UpdateState) => void) => () => void;
       };
+      cockpit?: {
+        open: () => Promise<boolean>;
+        close: () => Promise<boolean>;
+        pin: (on: boolean) => Promise<boolean>;
+        state: () => Promise<{ open: boolean; pinned: boolean }>;
+        openInMain: (route: string) => Promise<boolean>;
+      };
       startup?: {
         state: () => Promise<{ enabled: boolean; on: boolean; reason: string | null }>;
         set: (on: boolean) => Promise<{ enabled: boolean; on: boolean; reason: string | null }>;

@@ -193,7 +193,7 @@ export async function GET(request?: Request) {
     // 27: Step 1 timings, pass/miss reasons, replay days (048).
     // 28: Step 1's one edit — when, and what it said before (049).
     // 29: the daily question's answers and the time in the app (051, raw tables).
-    version: 31,
+    version: 32,
     exported_at: now.toISOString(),
     count: trades.length,
     trades,

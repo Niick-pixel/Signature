@@ -1,5 +1,6 @@
 'use client';
 
+import { PLAN_PREFILL } from '@/lib/replay';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, springBouncy, springSnappy, stagger } from '@/lib/motion';
@@ -33,6 +34,16 @@ export function openReminderRoute(route: string): void {
   if (route.startsWith('settings:')) { window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: route.slice(9), open: true } })); return; }
   // The prompts that used to open themselves on the Dashboard now open from here.
   if (route === 'redday' || route === 'weekend' || route === 'before') { window.dispatchEvent(new Event(`signature:${route}-open`)); return; }
+  // A plan tapped in the cockpit: an open Step 1 takes it; otherwise New trade opens with it (lib/replay PLAN_PREFILL).
+  const plan = /^\/new\?(.*)$/.exec(route);
+  if (plan) {
+    const q = new URLSearchParams(plan[1]); const k = q.get('plan');
+    if (k === 'a' || k === 'b') {
+      const ev = new CustomEvent(PLAN_PREFILL, { detail: { k, taken: false, source: q.get('from') === 'prep' ? 'prep' as const : 'replay' as const, account: q.get('account') ?? undefined } });
+      window.dispatchEvent(ev);
+      if (ev.detail.taken) return;
+    }
+  }
   if (route.startsWith('/')) navigate(route);
 }
 

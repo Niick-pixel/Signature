@@ -379,6 +379,25 @@ await check('Today\'s plan: the morning\'s A and B, tappable, on the account pic
   expect(!errors.length, errors.join(' | '));
 });
 
+await check('Cockpit: alone in its window — clock, countdowns, today against the rules, the plans a tap from Step 1', async () => {
+  const { page, errors } = await open({ width: 380, height: 700 });
+  await page.goto(`${BASE}/cockpit`);
+  await page.waitForSelector('[data-cockpit-today]');
+  expect(await page.locator('[data-cockpit-clock]').innerText() !== '', 'the clock runs');
+  expect(await page.locator('[data-checkin-chip], [data-today-panel], [data-side-rail]').count() === 0, 'no app around it');
+  expect(await page.locator('[data-cockpit-stat]').count() === 3, 'trades, losses, R today');
+  if (await page.locator('[data-cockpit-skip]').count()) await page.click('[data-cockpit-skip]');
+  // The morning prep (an earlier check) wrote the plans: A is a tap from Step 1 on the account picked.
+  await page.waitForSelector('[data-cockpit-plan="a"]', { timeout: 8000 });
+  await page.click('[data-cockpit-plans] [data-option="Eval"]');
+  await page.click('[data-cockpit-plan="a"]');
+  await page.waitForSelector('[data-decide-step]');
+  await page.waitForFunction(() => document.querySelector('[data-facts] [data-option="A"][aria-pressed="true"]'), null, { timeout: 8000 });
+  expect(await page.locator('[data-context="account"] [data-option="Eval"][aria-checked="true"]').count() === 1, 'on Eval');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
 await check('Filters: one chip and panel on Stats and the Dashboard; a token under the header lets a filter go', async () => {
   const { page, errors } = await open();
   for (const url of ['/stats', '/dashboard']) {

@@ -459,6 +459,10 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                 hint="Off, it waits in the title bar until you open it (or press M)."
               />
             </Section>
+            <Section title="Cockpit" hint="A small window above your charts during the session: the clock, the countdowns, today against your rules, nudges, and the plans a tap from a trade. Open it any time from the title bar.">
+              <TogglePill checked={prefs.cockpitAuto} onChange={(cockpitAuto) => update({ cockpitAuto })}
+                label="Open it at 9:20 New York time" hint="Once a trading day, in the desktop app. Off, it opens only when you click Cockpit." />
+            </Section>
 
             <Section
               title="Chart prep"

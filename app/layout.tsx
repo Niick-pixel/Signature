@@ -1,3 +1,5 @@
+import { Chrome } from '@/components/shell/Chrome';
+import { CockpitAuto } from '@/components/cockpit/CockpitLauncher';
 import { AppTimeTracker } from '@/components/shell/AppTimeTracker';
 import { THEME_BOOTSTRAP } from '@/lib/themes';
 import type { Metadata } from 'next';
@@ -47,9 +49,10 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
       <body>
         <PreferencesProvider>
           <ConfirmProvider>
+          <Chrome before={<>
           {/* The tabs down the left, when Settings → Appearance → Navigation says so. */}
           <SideRail />
-          {children}
+          </>} after={<>
           {/* The whiteboard, mounted once and kept alive — see PersistentBoard. */}
           <BoardLayer />
           {/* New trade, over the current screen — see components/capture/CaptureSheet. */}
@@ -59,6 +62,8 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
             <ThemeToggle />
           </BottomLeftControls>
           <MorningCheckIn />
+          {/* The cockpit, at the NY AM open (Settings → Morning). */}
+          <CockpitAuto />
           <ReminderPoller />
           <AppTimeTracker />
           <GoalsSheet />
@@ -82,6 +87,9 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
           <Shortcuts />
           {/* Every move between screens, animated — see lib/nav.ts. */}
           <NavTransitions />
+          </>}>
+          {children}
+          </Chrome>
           {/* Every title="…" hint, drawn in the theme with a small spring. */}
           <Tooltips />
           </ConfirmProvider>

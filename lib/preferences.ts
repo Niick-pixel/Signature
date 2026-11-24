@@ -34,6 +34,8 @@ export interface Preferences {
   watermark: boolean;
   /** Offer the morning check-in on the first screen of a trading day. */
   askCheckIn: boolean;
+  /** Open the cockpit (a small window above the charts) at 9:20 New York time on a trading day. */
+  cockpitAuto: boolean;
   /**
    * The order-book heatmap the chart prep opens for its liquidity step. Any
    * link works; it opens in the browser, outside the app.
@@ -281,6 +283,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   reduceMotion: false,
   watermark: true,
   askCheckIn: true,
+  cockpitAuto: true,
   heatmapUrl: 'https://openmarket.xyz/chart/JUSJIzyA',
   savedViews: [],
   startScreen: 'board',

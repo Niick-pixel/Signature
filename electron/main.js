@@ -4,6 +4,7 @@
 
 const { app, BrowserWindow, shell, Menu, dialog, ipcMain, screen, Notification } = require('electron');
 const { setupStartup } = require('./startup');
+const { setupCockpit } = require('./cockpit');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -82,6 +83,8 @@ const SHELL_BG = '#e9e2d4';
 
 let nextServer = null;
 let mainWindow = null;
+/** The server's port, once started (the cockpit window loads from it). */
+let appPort = null;
 /** Last few lines of server output, so a startup failure can explain itself. */
 let serverLog = [];
 let serverExited = null;
@@ -323,6 +326,7 @@ function closeSplash() {
 }
 
 function createWindow(port) {
+  appPort = port;
   const state = restoreWindowState(DATA_DIR);
   display = state.display;
   scaled = zoomFor(openingSize(state), display);
@@ -650,6 +654,13 @@ if (!app.requestSingleInstanceLock()) {
         : 'Running from source.',
       version: app.getVersion(),
       testFeed: MODE === 'dev' ? process.env.SIGNATURE_UPDATE_TEST_FEED : undefined,
+    });
+
+    // The cockpit: a small always-on-top window for the session (electron/cockpit.js).
+    setupCockpit({
+      ipcMain, BrowserWindow, shell, isSafeExternal, settingsDir: SETTINGS_DIR(),
+      getPort: () => appPort, getMain: () => mainWindow, preload: path.join(__dirname, 'preload.js'),
+      background: () => titleBarPalette?.color ?? SHELL_BG,
     });
 
     // Start with Windows: an installed copy only (see electron/startup.js).

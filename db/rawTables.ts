@@ -23,6 +23,8 @@ export const RAW_TABLES = [
   'dashboard_boards',
   // 051: the daily question's answers and the time spent in the app.
   'daily_answers', 'app_time',
+  // 054: the cockpit's nudges, as they were shown.
+  'nudge_log',
 ] as const;
 
 export function exportRawTables(): { raw_tables: Record<string, Record<string, unknown>[]> } {

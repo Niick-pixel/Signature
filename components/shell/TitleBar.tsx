@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { SPRING_CSS, press, spring } from '@/lib/motion';
 import { Wordmark } from './Wordmark';
 import { CheckInChip } from './MorningCheckIn';
+import { CockpitButton } from '@/components/cockpit/CockpitLauncher';
 import { AccountPicker } from './AccountPicker';
 import { UpdateChip } from './UpdateChip';
 import { Suspense } from 'react';
@@ -150,6 +151,7 @@ export function TitleBar() {
         <UpdateChip />
         <Suspense fallback={null}><AccountPicker /></Suspense>
         <NotificationBell />
+        <CockpitButton />
         <CheckInChip />
         {/* New trade, here on every screen with the tabs on top (in the rail otherwise):
             last, so the chips that come and go never move it. */}
