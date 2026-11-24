@@ -88,3 +88,46 @@ test('a damaged or foreign file is refused and nothing is touched', () => {
   assert.equal(safe.restoreBackup(getDb(), closeDb, { source: 'local', name: '../journal.db' }).ok, false);
   assert.equal(listTrades().length, n);
 });
+
+test('a password seals the second copy: opened here with the saved key, elsewhere only with the password', () => {
+  assert.equal(safe.setBackupPassword('short').ok, false, 'at least 8 characters');
+  assert.equal(safe.setBackupPassword('correct horse battery').ok, true);
+  const file = safe.folderBackup(getDb(), true)!;
+  assert.ok(file.endsWith('.zip.enc'), file);
+  const raw = fs.readFileSync(file);
+  assert.equal(raw.subarray(0, 8).toString('latin1'), 'SIGENC1\n', 'sealed, not a readable zip');
+  assert.throws(() => readZip(raw));
+  const point = { source: 'folder' as const, name: path.basename(file) };
+  // On this computer: the saved key opens it.
+  const here = safe.previewRestore(getDb(), point);
+  assert.equal(here.ok, true);
+  // Another computer: no key saved — the password is asked for, a wrong one refused, the right one opens it.
+  const cfgFile = path.join(DIR, 'backup-folder.json');
+  const saved = fs.readFileSync(cfgFile, 'utf8');
+  fs.writeFileSync(cfgFile, JSON.stringify({ folder: ELSEWHERE }));
+  const asked = safe.previewRestore(getDb(), point);
+  assert.ok(!asked.ok && asked.needsPassword);
+  const wrong = safe.previewRestore(getDb(), { ...point, password: 'not the password' });
+  assert.ok(!wrong.ok && /Wrong password/.test(wrong.error));
+  assert.equal(safe.previewRestore(getDb(), { ...point, password: 'correct horse battery' }).ok, true);
+  fs.writeFileSync(cfgFile, saved);
+  assert.equal(safe.setBackupPassword(null).ok, true);
+  assert.equal(safe.backupSealed(), false);
+});
+
+test('the restore preview: counts now beside the backup, and the trades logged since', () => {
+  const before = safe.restorePoints().find((p) => p.source === 'local')!;
+  trade('2026-09/b.png'); trade('2026-09/c.png');
+  const r = safe.previewRestore(getDb(), { source: 'local', name: before.name });
+  assert.ok(r.ok);
+  const row = r.preview.rows.find((x) => x.label === 'Trades')!;
+  assert.ok(row.now >= row.backup + 2, JSON.stringify(row));
+  assert.ok(r.preview.newerTrades >= 2);
+});
+
+test('the journal check: sound now, recorded, and not re-run within the week unless asked', () => {
+  const first = safe.checkIntegrity(getDb(), true)!;
+  assert.equal(first.ok, true);
+  assert.equal(safe.checkIntegrity(getDb()), null, 'checked this week already');
+  assert.ok(safe.backupFolder().checkedAt);
+});

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { closeDb, getDb } from '@/db';
 import { backupNow, listBackups } from '@/db/backup';
-import { backupFolder, folderBackup, restoreBackup, restorePoints, setBackupFolder } from '@/db/safeBackup';
+import { backupFolder, backupSealed, checkIntegrity, folderBackup, previewRestore, restoreBackup, restorePoints, setBackupFolder, setBackupPassword } from '@/db/safeBackup';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +15,8 @@ function state() {
     folder: cfg.folder, folderLastOk: cfg.lastOk ?? null, folderError: cfg.lastError ?? null,
     folderLatest: points.find((p) => p.source === 'folder') ?? null,
     points,
+    sealed: backupSealed(),
+    integrity: cfg.checkedAt ? { at: cfg.checkedAt, ok: cfg.checkOk !== false, detail: cfg.checkDetail ?? null } : null,
   };
 }
 
@@ -27,11 +29,31 @@ export async function GET() {
 /**
  * No body: a copy right now (and a zip to the second folder, if set).
  * { action: 'folder', folder }: set or clear the second folder.
- * { action: 'restore', source, name }: restore a backup (a safety copy is taken first).
+ * { action: 'restore', source, name, password? }: restore a backup (a safety copy is taken first).
+ * { action: 'preview', source, name, password? }: what a restore would change, before it does.
+ * { action: 'password', password }: seal the second copy's zips (empty: stop sealing).
+ * { action: 'integrity' }: check the journal now.
  */
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null) as { action?: string; folder?: string | null; source?: string; name?: string } | null;
+  const body = await request.json().catch(() => null) as { action?: string; folder?: string | null; source?: string; name?: string; password?: string | null } | null;
+  const password = typeof body?.password === 'string' && body.password ? body.password : undefined;
   try {
+    if (body?.action === 'password') {
+      const r = setBackupPassword(typeof body.password === 'string' ? body.password : null);
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+      if (backupFolder().folder) folderBackup(getDb(), true);
+      return NextResponse.json(state());
+    }
+    if (body?.action === 'integrity') {
+      checkIntegrity(getDb(), true);
+      return NextResponse.json(state());
+    }
+    if (body?.action === 'preview') {
+      if ((body.source !== 'local' && body.source !== 'folder') || typeof body.name !== 'string') return NextResponse.json({ error: 'Which backup?' }, { status: 400 });
+      const r = previewRestore(getDb(), { source: body.source, name: body.name, password });
+      if (!r.ok) return NextResponse.json({ error: r.error, needsPassword: r.needsPassword ?? false }, { status: 400 });
+      return NextResponse.json(r.preview);
+    }
     if (body?.action === 'folder') {
       const r = setBackupFolder(body.folder ?? null);
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
@@ -42,8 +64,8 @@ export async function POST(request: Request) {
       if ((body.source !== 'local' && body.source !== 'folder') || typeof body.name !== 'string') {
         return NextResponse.json({ error: 'Which backup?' }, { status: 400 });
       }
-      const r = restoreBackup(getDb(), closeDb, { source: body.source, name: body.name });
-      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+      const r = restoreBackup(getDb(), closeDb, { source: body.source, name: body.name, password });
+      if (!r.ok) return NextResponse.json({ error: r.error, needsPassword: r.needsPassword ?? false }, { status: 400 });
       getDb(); // reopen and migrate the restored journal now, not on the next click
       return NextResponse.json({ ...state(), restored: body.name, safety: r.safety, charts: r.charts });
     }

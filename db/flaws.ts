@@ -1,6 +1,8 @@
 import 'server-only';
 import crypto from 'node:crypto';
 import { getDb } from './index';
+import { cachedByData } from './dataVersion';
+import { localDay } from '../lib/day';
 import { listTrades } from './trades';
 import { edgeInputs } from './edgeInputs';
 import { countsInStats, isHypothetical } from '../lib/domain';
@@ -99,7 +101,12 @@ export interface Deck {
 }
 
 
+/** The deck, kept until the journal's data changes (db/dataVersion) or the day turns (snoozes count days). */
 export function flawDeck(source: DeckSource = 'all'): Deck {
+  return cachedByData(`flawDeck|${source}|${localDay()}`, () => flawDeckUncached(source));
+}
+
+function flawDeckUncached(source: DeckSource): Deck {
   const ei = edgeInputs();
   const everything = listTrades().filter((t) => !t.deleted_at);
   const counted = everything.filter(countsInStats);

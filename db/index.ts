@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { DATA_DIR, DB_PATH } from '../lib/paths';
 import { migrate } from './migrate';
 import { backupBeforeMigrations, backupToday } from './backup';
-import { folderBackup } from './safeBackup';
+import { checkIntegrity, folderBackup } from './safeBackup';
 
 /**
  * SQLite comes from `node:sqlite`, built into Node itself.
@@ -63,11 +63,13 @@ export function getDb(): DatabaseSync {
     try { backupToday(db); } catch (err) { console.warn('[signature] daily backup failed:', err); }
     // The zip to your second folder (db/safeBackup) — never throws.
     folderBackup(db);
+    // And the journal's own health, once a week (PRAGMA quick_check) — never throws.
+    checkIntegrity(db);
   };
   const hourly = setInterval(daily, 60 * 60 * 1000);
   hourly.unref?.();
   // The first zip of the day waits half a minute, so it never slows opening.
-  setTimeout(() => { if (globalForDb.__signatureDb === db) folderBackup(db); }, 30_000).unref?.();
+  setTimeout(() => { if (globalForDb.__signatureDb === db) { folderBackup(db); checkIntegrity(db); } }, 30_000).unref?.();
 
   globalForDb.__signatureDb = db;
   globalForDb.__signatureTimer = hourly;

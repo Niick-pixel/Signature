@@ -9,6 +9,7 @@ import { exportTags } from '@/db/tags';
 import { exportPredictions } from '@/db/predictions';
 import { exportEdge } from '@/db/edge';
 import path from 'node:path';
+import { localDay } from '@/lib/day';
 import { NextResponse } from 'next/server';
 import { listTrades } from '@/db/trades';
 import { listCashEvents } from '@/db/cash';
@@ -148,7 +149,15 @@ ${body}
  * included — an export that quietly drops the trades I binned is not a backup,
  * and neither is one that restores the trades but forgets where the account was.
  */
-export async function GET() {
+export async function GET(request?: Request) {
+  // ?format=csv: the trades alone, as a spreadsheet (Excel, Sheets) — the binned ones left out.
+  if (request && new URL(request.url).searchParams.get('format') === 'csv') {
+    const rows = listTrades({ pending: true });
+    // A byte-order mark first: Excel reads the file as UTF-8 (accents, the minus sign) only with it.
+    return new Response(`\uFEFF${toCsv(rows)}`, {
+      headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="signature-trades-${localDay()}.csv"` },
+    });
+  }
   const trades = listTrades({ bin: 'all', pending: true });
   const cash = listCashEvents();
   const journal = listJournalPages();

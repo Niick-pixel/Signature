@@ -23,7 +23,8 @@ const exportRoute = await import('../app/api/export/route');
 const importRoute = await import('../app/api/import/route');
 
 // Rows a restore rebuilds by design, or that are not journal content.
-const SKIP = new Set(['schema_migrations', 'sqlite_sequence']);
+// data_version is derived (migration 053): it moves with every write, it is not data.
+const SKIP = new Set(['schema_migrations', 'sqlite_sequence', 'data_version']);
 // Columns a restore legitimately rewrites.
 const VOLATILE = new Set(['updated_at']);
 

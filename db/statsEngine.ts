@@ -1,6 +1,7 @@
 import 'server-only';
 import { replayStats } from '../lib/replayStats';
 import { listReplayDays } from './replay';
+import { cachedByData } from './dataVersion';
 /**
  * Everything the Stats page computes, in one place: the engine's outputs for a
  * scope (accounts, period, filters from the URL). The page — and from phase 2
@@ -57,7 +58,17 @@ import { rubricFamily, type RubricFamily } from '../lib/decision';
 export type StatsParams = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
+/**
+ * The engine, kept until the journal's data changes (db/dataVersion): Stats, its widgets and the
+ * dashboard's open the same scopes again and again; only a change to the data recomputes them.
+ * Today's date is part of the key (focus, streaks and "this week" move with it).
+ */
 export function statsEngine(params: StatsParams, rememberedAccount: string | undefined) {
+  const key = `engine|${localDay()}|${rememberedAccount ?? ''}|${JSON.stringify(Object.entries(params).filter(([, v]) => v != null).sort(([a], [b]) => a.localeCompare(b)))}`;
+  return cachedByData(key, () => statsEngineUncached(params, rememberedAccount));
+}
+
+function statsEngineUncached(params: StatsParams, rememberedAccount: string | undefined) {
   // Hindsight — a Missed trade not written down before the move — never
   // enters a number (lib/domain countsInStats). Counted, and said, below.
   const everything = listTrades();

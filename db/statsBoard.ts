@@ -75,7 +75,8 @@ function makeViews(filters: Record<string, string>) {
     const p: StatsParams = { ...filters, account, ...(period ? { period } : {}), ...(lastN ? { last: String(lastN) } : {}), ...(family !== 'all' ? { family } : {}) };
     let deck: Deck | null = null; let deckAll: Deck | null = null;
     const deckSource = s === 'real' ? 'real' : s === 'backtest' ? 'backtest' : 'all';
-    const v: View = Object.assign(statsEngine(p, undefined), {
+    // A copy: the engine's result is shared by every page that asks for the same scope (db/dataVersion).
+    const v: View = Object.assign({}, statsEngine(p, undefined), {
       source: s,
       deck: () => (deck ??= flawDeck(deckSource)),
       deckAll: () => (deckAll ??= flawDeck('all')),

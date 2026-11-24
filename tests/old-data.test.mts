@@ -66,6 +66,7 @@ test('a pre-Path journal comes through every later migration unchanged', () => {
   // Every index and trigger came across the rebuild.
   const objs = (db.prepare("SELECT name FROM sqlite_master WHERE tbl_name='trades' AND type IN ('index','trigger') AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>).map((r) => r.name).sort();
   assert.deepEqual(objs, [
+    'dv_trades_delete', 'dv_trades_insert', 'dv_trades_update',
     'idx_trades_account', 'idx_trades_date', 'idx_trades_deleted', 'idx_trades_grade', 'idx_trades_outcome', 'idx_trades_playbook',
     'idx_trades_reason', 'idx_trades_status', 'idx_trades_sweep_tier', 'idx_trades_target_type',
     'trades_decision_locked_048', 'trades_decision_locked_049', 'trades_grade_at_entry_locked', 'trades_loss_negative_insert', 'trades_loss_negative_update', 'trades_no_return_to_planned', 'trades_step1_answers_locked', 'trades_step1_edit_once', 'trades_touch_updated_at',

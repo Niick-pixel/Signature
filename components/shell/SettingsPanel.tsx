@@ -32,10 +32,11 @@ interface Info {
 
 
 /** A group of settings: its name, and what it does behind a "?" — the controls carry the rest as hover titles. */
-interface RestorePoint { source: 'local' | 'folder'; name: string; bytes: number; taken: string }
+interface RestorePoint { source: 'local' | 'folder'; name: string; bytes: number; taken: string; sealed?: boolean }
 interface BackupState {
   latest: { name: string; taken: string } | null; count: number;
   folder: string | null; folderLastOk: string | null; folderError: string | null; points: RestorePoint[];
+  sealed?: boolean; integrity?: { at: string; ok: boolean; detail: string | null } | null;
 }
 
 /** How new charts are stored (db/shotCompress). Off unless you choose otherwise. */
@@ -120,6 +121,10 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   const [backup, setBackup] = useState<BackupState | null>(null);
   const confirm = useConfirm();
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // The second copy's password, typed here (the desktop app has no prompt); and one asked for a sealed backup.
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  const [askPw, setAskPw] = useState<{ point: RestorePoint; error: string } | null>(null);
   const [showPoints, setShowPoints] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [desktop, setDesktop] = useState(false);
@@ -188,22 +193,56 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     } finally { setBackingUp(false); }
   }
 
-  async function restorePoint(p: RestorePoint) {
+  /** The second copy's password: set, or (empty) removed. */
+  async function savePassword(value: string | null) {
+    setBackingUp(true);
+    try {
+      const res = await fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'password', password: value }) });
+      const j = await res.json();
+      if (res.ok) { setBackup(j); setPw(''); setPwOpen(false); setBackupMsg({ ok: true, text: value ? 'Password set — the zips in the second folder are sealed from now on.' : 'Password removed — later zips are not sealed.' }); }
+      else setBackupMsg({ ok: false, text: j.error ?? 'Could not set the password.' });
+    } finally { setBackingUp(false); }
+  }
+  async function checkNow() {
+    setBackingUp(true);
+    try { const res = await fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'integrity' }) }); if (res.ok) setBackup(await res.json()); }
+    finally { setBackingUp(false); }
+  }
+
+  /**
+   * Restore, after a preview: what the journal holds now beside the backup, and the trades only here now,
+   * before anything is replaced. A sealed backup from another computer asks for its password first.
+   */
+  async function restorePoint(p: RestorePoint, password?: string) {
     const when = new Date(p.taken).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    const post = (action: string) => fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, source: p.source, name: p.name, password }) });
+    setBackingUp(true);
+    let pv: { rows: Array<{ label: string; now: number; backup: number }>; lastTradeNow: string | null; lastTradeBackup: string | null; newerTrades: number };
+    try {
+      const res = await post('preview');
+      const j = await res.json();
+      if (!res.ok) {
+        if (j.needsPassword) { setAskPw({ point: p, error: j.error }); return; }
+        setBackupMsg({ ok: false, text: j.error ?? 'That backup could not be read.' }); return;
+      }
+      pv = j;
+    } finally { setBackingUp(false); }
+    setAskPw(null);
+    const changes = pv.rows.filter((r) => r.now !== r.backup).map((r) => `${r.label}: ${r.now} now → ${r.backup}`);
+    const lost = pv.newerTrades ? ` ${pv.newerTrades} trade${pv.newerTrades === 1 ? '' : 's'} logged since would be gone (the safety copy keeps them).` : '';
     if (!(await confirm({
       title: `Restore the backup from ${when}?`,
-      body: 'Your journal goes back to how it was then. A copy of it as it is right now is kept first, so this can be undone by restoring that copy.',
+      body: `${changes.length ? `${changes.join(' · ')}.` : 'The backup holds the same counts as now.'}${lost} Last trade: ${pv.lastTradeBackup?.slice(0, 10) ?? '—'} in the backup, ${pv.lastTradeNow?.slice(0, 10) ?? '—'} now. A copy of the journal as it is right now is kept first, so this can be undone.`,
       action: 'Restore', danger: true,
     }))) return;
     setBackingUp(true);
     try {
-      const res = await fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'restore', source: p.source, name: p.name }) });
+      const res = await post('restore');
       const j = await res.json();
       if (!res.ok) { setBackupMsg({ ok: false, text: j.error ?? 'Restore failed.' }); return; }
       window.location.reload();
     } finally { setBackingUp(false); }
   }
-
 
   /**
    * Restores from an export. Idempotent on id, so importing the same file
@@ -547,6 +586,48 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               {backup?.folderError && (
                 <p className="mt-1.5 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }} data-backup-error>Last zip failed: {backup.folderError}</p>
               )}
+              {backup?.folder && (
+                <div className="mt-3" data-backup-password={backup.sealed ? 'on' : 'off'}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="min-w-0 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
+                      <span className="font-medium" style={{ color: 'var(--text)' }}>Password</span>{' · '}
+                      {backup.sealed ? 'on — the zips in the second folder are sealed (AES-256); this computer keeps the key, another one needs the password'
+                        : 'off — anyone with the second folder can open the zips'}
+                    </p>
+                    <div className="flex shrink-0 gap-1.5">
+                      {backup.sealed && <Button onClick={() => void savePassword(null)} disabled={backingUp} title="Later zips are not sealed; the sealed ones stay sealed">Remove</Button>}
+                      <Button onClick={() => setPwOpen((v) => !v)} disabled={backingUp}>{backup.sealed ? 'Change…' : 'Set password…'}</Button>
+                    </div>
+                  </div>
+                  {pwOpen && (
+                    <form className="mt-2 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); void savePassword(pw); }}>
+                      <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 8 characters — keep it somewhere safe" autoFocus data-backup-password-input
+                        className="min-w-0 flex-1 rounded-[calc(12px*var(--rk))] border bg-transparent px-3 py-1.5 text-[12px] outline-none" style={{ borderColor: 'var(--glass-stroke)' }} />
+                      <Button type="submit" disabled={backingUp || pw.length < 8}>Save</Button>
+                    </form>
+                  )}
+                </div>
+              )}
+              <div className="mt-3 flex items-center justify-between gap-3" data-integrity={backup?.integrity ? (backup.integrity.ok ? 'ok' : 'bad') : 'never'}>
+                <p className="min-w-0 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
+                  <span className="font-medium" style={{ color: 'var(--text)' }}>Journal check</span>{' · '}
+                  {!backup?.integrity ? 'not run yet — it runs once a week by itself'
+                    : backup.integrity.ok ? <>sound <span style={{ color: 'var(--text-faint)' }}>· checked {new Date(backup.integrity.at).toLocaleDateString(undefined, { dateStyle: 'medium' })}, again weekly</span></>
+                      : <span style={{ color: 'rgb(var(--outcome-loss))' }}>problems found: {backup.integrity.detail} — restore the newest backup from before {new Date(backup.integrity.at).toLocaleDateString()}</span>}
+                </p>
+                <Button onClick={() => void checkNow()} disabled={backingUp} title="SQLite's own check of the journal file">Check now</Button>
+              </div>
+              {askPw && (
+                <form className="mt-2 rounded-[calc(12px*var(--rk))] border px-3 py-2" style={{ borderColor: 'rgb(var(--amber) / 0.45)' }} data-restore-password
+                  onSubmit={(e) => { e.preventDefault(); const v = (e.currentTarget.elements.namedItem('pw') as HTMLInputElement).value; void restorePoint(askPw.point, v); }}>
+                  <p className="text-[11.5px]" style={{ color: 'rgb(var(--amber))' }}>{askPw.error}</p>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <input name="pw" type="password" autoFocus placeholder="The backup's password" className="min-w-0 flex-1 rounded-[calc(12px*var(--rk))] border bg-transparent px-3 py-1.5 text-[12px] outline-none" style={{ borderColor: 'var(--glass-stroke)' }} />
+                    <Button type="submit" disabled={backingUp}>Open</Button>
+                    <Button onClick={() => setAskPw(null)}>Cancel</Button>
+                  </div>
+                </form>
+              )}
               {backupMsg && (
                 <p className="mt-1.5 text-[11px]" style={{ color: backupMsg.ok ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))' }}>{backupMsg.text}</p>
               )}
@@ -564,7 +645,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                         style={{ background: 'var(--glass-fill)' }}>
                         <span className="min-w-0 truncate" style={{ color: 'var(--text-dim)' }}>
                           {new Date(p.taken).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                          <span style={{ color: 'var(--text-faint)' }}> · {p.source === 'folder' ? 'second copy, with charts' : 'journal only'} · {(p.bytes / 1024 / 1024).toFixed(1)} MB</span>
+                          <span style={{ color: 'var(--text-faint)' }}> · {p.source === 'folder' ? 'second copy, with charts' : 'journal only'}{p.sealed ? ' · sealed' : ''} · {(p.bytes / 1024 / 1024).toFixed(1)} MB</span>
                         </span>
                         <button type="button" onClick={() => void restorePoint(p)} disabled={backingUp} data-restore={p.name}
                           className="shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium"
@@ -621,9 +702,14 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </>)}
             {cat === 'export' && (<>
             <Section title="Export" hint="One zip: every trade as JSON and as a spreadsheet, your money movements, the journal as a readable document, and every chart screenshot.">
-              <a href="/api/export" download className="outline-none">
-                <Button tabIndex={-1} title="Downloads one zip with everything in the journal">Export everything</Button>
-              </a>
+              <div className="flex flex-wrap gap-2">
+                <a href="/api/export" download className="outline-none">
+                  <Button tabIndex={-1} title="Downloads one zip with everything in the journal">Export everything</Button>
+                </a>
+                <a href="/api/export?format=csv" download className="outline-none" data-export-csv>
+                  <Button tabIndex={-1} title="Every trade as one spreadsheet file — opens in Excel or Google Sheets">Trades as CSV</Button>
+                </a>
+              </div>
             </Section>
             <Section title="Import" hint="Restores from an export: the .zip (charts included) or its trades.json. Matched on id, so importing the same file twice changes nothing the second time.">
               <Button onClick={() => importRef.current?.click()} disabled={importing} title="Choose an export to bring back in">
