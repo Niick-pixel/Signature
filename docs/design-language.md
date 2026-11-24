@@ -131,6 +131,10 @@ Everything is a spring (framer-motion). Nothing fades linearly.
 - **Summaries that act**: a read-only card can be tapped when it starts the next
   thing (a scenario on the day's plan opens New trade with it filled in), and it
   lifts and tints on hover to say so.
+- **Filters, one way everywhere** (components/ui/FilterBar): a "Filters · n ▾"
+  chip in the header opens a panel of rows — the label beside its tap pills,
+  never a dropdown — with "Clear filters" at its foot. Closed, what is filtered
+  shows under the header as tokens, each × removing just that one.
 - **Self-closing endings**: a finished flow shrinks to a small summary with no
   buttons and a bar that empties; it closes at zero, the pointer holds it, Esc closes now.
 - **Too early states**: a ghost of the chart with one line ("Needs 8 more

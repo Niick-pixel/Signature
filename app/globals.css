@@ -1086,3 +1086,6 @@ html[data-rail='icons'] [data-inline-header], html[data-rail='labels'] [data-inl
 [data-merged-header] .ui-btn { padding: 0.25rem 0.8rem; font-size: 12px; border-radius: 999px; }
 /* Top tabs chosen: the rail (drawn by the server for the default) is gone from the first paint. */
 html[data-rail='off'] [data-side-rail] { display: none; }
+
+/* The chart prep's closing bar (components/prep/ChartPrep Ready): empties from full, on the compositor. */
+@keyframes prep-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }

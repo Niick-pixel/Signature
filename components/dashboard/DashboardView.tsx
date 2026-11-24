@@ -3,6 +3,7 @@
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { ReplayDayControl } from '@/components/replay/ReplayPlan';
 import { Reveal } from '@/components/ui/Motion';
+import { ActiveFilters, FilterChip, FilterPanel, FilterPill, FilterRow } from '@/components/ui/FilterBar';
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
 import { Card } from './Card';
@@ -49,6 +50,14 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
   }, [query, live]);
   const d = (filtered && picked) ? picked : data[prefs.dashWorld] ?? data.real;
   const setF = (patch: Partial<typeof f>) => update({ dashFilters: { ...f, ...patch } });
+  const clearAll = () => update({ dashAccounts: [], dashFilters: { period: 'all', sessions: [], dirs: [] } });
+  // What is filtered, each a token that lets go of itself.
+  const active = [
+    ...chosen.map((k) => ({ id: `acc:${k}`, label: accounts.find((a) => a.key === k)?.label ?? k, onRemove: () => update({ dashAccounts: chosen.filter((x) => x !== k) }) })),
+    ...(f.period !== 'all' ? [{ id: 'period', label: DASH_PERIODS.find(([k]) => k === f.period)?.[1] ?? f.period, onRemove: () => setF({ period: 'all' }) }] : []),
+    ...f.sessions.map((x) => ({ id: `s:${x}`, label: x, onRemove: () => setF({ sessions: f.sessions.filter((y) => y !== x) }) })),
+    ...f.dirs.map((x) => ({ id: `d:${x}`, label: `${x}s`, onRemove: () => setF({ dirs: f.dirs.filter((y) => y !== x) }) })),
+  ];
   const flip = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const money = prefs.dashUnit === 'money' && d.total.money != null;
   const merged = useMergedHeader();
@@ -61,9 +70,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
       <InTitleBar
         merged={<MergedHeader title="Dashboard" data="dashboard" sub={<>{new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · {scope}</>}>
           <div className="flex items-center gap-1.5" data-dash-accounts>
-          <Chip on={open || nFilters > 0} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" data="filters">
-            Filters{nFilters ? ` · ${nFilters}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
-          </Chip>
+          <FilterChip open={open} count={nFilters} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" />
           <Chip on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data="cards">
             Cards <span aria-hidden className="inline-block transition-transform" style={{ transform: arranging ? 'rotate(180deg)' : 'none' }}>▾</span>
           </Chip>
@@ -87,9 +94,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
           {prefs.quoteOnDashboard && <QuoteOfDay inline className="mt-0.5 max-w-[44rem]" />}
         </div>
         <div className="flex flex-wrap items-center gap-1.5" data-dash-accounts>
-          <Chip on={open || nFilters > 0} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" data="filters">
-            Filters{nFilters ? ` · ${nFilters}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
-          </Chip>
+          <FilterChip open={open} count={nFilters} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" />
           <Chip on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data="cards">
             Cards <span aria-hidden className="inline-block transition-transform" style={{ transform: arranging ? 'rotate(180deg)' : 'none' }}>▾</span>
           </Chip>
@@ -112,36 +117,31 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
         </div>
       </Reveal>
 
-      <Reveal open={open}>
-        <div className="glass mb-3 grid gap-x-6 gap-y-2.5 rounded-[calc(18px*var(--rk))] px-4 py-3 sm:grid-cols-[auto_1fr]" data-dash-filters>
-          <Row label="Accounts">
+      <ActiveFilters open={open} items={active} />
+      <FilterPanel open={open} count={nFilters} onClear={clearAll}>
+        <div className="contents" data-dash-filters>
+          <FilterRow label="Accounts">
             {/* "All" used to mean the world picked in Settings (Real accounts by default), so a
                 backtest vanished under it. Now it is every account; "Real" is the old default. */}
-            <Pill on={!chosen.length && prefs.dashWorld === 'all'} onClick={() => update({ dashAccounts: [], dashWorld: 'all' })} title="Every account, real and backtest. Missed setups are picked on their own.">All</Pill>
-            <Pill on={!chosen.length && prefs.dashWorld === 'real'} onClick={() => update({ dashAccounts: [], dashWorld: 'real' })} title="Live, Demo, Eval and Funded — no backtests">Real only</Pill>
+            <FilterPill on={!chosen.length && prefs.dashWorld === 'all'} onClick={() => update({ dashAccounts: [], dashWorld: 'all' })} title="Every account, real and backtest. Missed setups are picked on their own.">All</FilterPill>
+            <FilterPill on={!chosen.length && prefs.dashWorld === 'real'} onClick={() => update({ dashAccounts: [], dashWorld: 'real' })} title="Live, Demo, Eval and Funded — no backtests">Real only</FilterPill>
             {accounts.filter((a) => !a.key.includes('|') || chosen.includes(a.key) || accounts.filter((x) => x.key.startsWith(`${a.key.split('|')[0]}|`)).length > 1).map((a) => (
-              <Pill key={a.key} on={chosen.includes(a.key)} onClick={() => toggle(a.key)} title={a.key === 'Missed' ? `${a.n} missed setup${a.n === 1 ? '' : 's'}, counted by what they would have made` : `${a.n} trade${a.n === 1 ? '' : 's'}`}>{a.label}</Pill>
+              <FilterPill key={a.key} on={chosen.includes(a.key)} onClick={() => toggle(a.key)} title={a.key === 'Missed' ? `${a.n} missed setup${a.n === 1 ? '' : 's'}, counted by what they would have made` : `${a.n} trade${a.n === 1 ? '' : 's'}`}>{a.label}</FilterPill>
             ))}
-          </Row>
-          <Row label="Period">
-            {DASH_PERIODS.map(([k, l]) => <Pill key={k} on={f.period === k} onClick={() => setF({ period: k })}>{l}</Pill>)}
-          </Row>
-          <Row label="Session">
-            <Pill on={!f.sessions.length} onClick={() => setF({ sessions: [] })}>Any</Pill>
-            {SESSIONS.map((x) => <Pill key={x} on={f.sessions.includes(x)} onClick={() => setF({ sessions: flip(f.sessions, x) })}>{x}</Pill>)}
-          </Row>
-          <Row label="Direction">
-            <Pill on={!f.dirs.length} onClick={() => setF({ dirs: [] })}>Both</Pill>
-            {DIRECTIONS.map((x) => <Pill key={x} on={f.dirs.includes(x)} onClick={() => setF({ dirs: flip(f.dirs, x) })}>{x}</Pill>)}
-          </Row>
-          {nFilters > 0 && (
-            <div className="sm:col-span-2">
-              <button type="button" className="text-[11px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}
-                onClick={() => update({ dashAccounts: [], dashFilters: { period: 'all', sessions: [], dirs: [] } })}>Clear filters</button>
-            </div>
-          )}
+          </FilterRow>
+          <FilterRow label="Period">
+            {DASH_PERIODS.map(([k, l]) => <FilterPill key={k} on={f.period === k} onClick={() => setF({ period: k })}>{l}</FilterPill>)}
+          </FilterRow>
+          <FilterRow label="Session">
+            <FilterPill on={!f.sessions.length} onClick={() => setF({ sessions: [] })}>Any</FilterPill>
+            {SESSIONS.map((x) => <FilterPill key={x} on={f.sessions.includes(x)} onClick={() => setF({ sessions: flip(f.sessions, x) })}>{x}</FilterPill>)}
+          </FilterRow>
+          <FilterRow label="Direction">
+            <FilterPill on={!f.dirs.length} onClick={() => setF({ dirs: [] })}>Both</FilterPill>
+            {DIRECTIONS.map((x) => <FilterPill key={x} on={f.dirs.includes(x)} onClick={() => setF({ dirs: flip(f.dirs, x) })}>{x}</FilterPill>)}
+          </FilterRow>
         </div>
-      </Reveal>
+      </FilterPanel>
 
       {d.total.trades === 0 ? (
         <div className="glass rounded-[calc(24px*var(--rk))] p-10 text-center text-[13px]" style={{ color: 'var(--text-dim)' }}>
@@ -173,23 +173,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <>
-      <span className="pt-1 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>{label}</span>
-      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
-    </>
-  );
-}
 
-function Pill({ on, onClick, title, children }: { on: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} title={title} className="rounded-full border px-2.5 py-1 text-[11.5px] font-medium"
-      style={{ borderColor: on ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: on ? 'rgb(var(--accent) / 0.12)' : 'transparent', color: on ? 'rgb(var(--accent))' : 'var(--text-dim)' }}>
-      {children}
-    </button>
-  );
-}
 
 function Chip({ on = false, onClick, title, children, data }: { on?: boolean; onClick: () => void; title: string; children: React.ReactNode; data: string }) {
   return (

@@ -41,6 +41,8 @@ export const TOOK = ['yes', 'passed', 'missed'] as const;
 export const TOOK_LABEL: Record<Took, string> = { yes: 'Yes', passed: 'Passed', missed: 'Missed' };
 export const SCENARIO_C = 'Neither trigger zone reached by 10:30, or price chops through both: no trade.';
 export const MAX_ZONES = 2;
+/** First targets per scenario: up to three (the first, and where it may run next). */
+export const MAX_TARGETS = 3;
 
 export type Dir = 'Long' | 'Short';
 export type DayOutcome = (typeof DAY_OUTCOMES)[number];
@@ -59,7 +61,8 @@ export interface ReplayScenario {
   dir: Dir | null;
   zones: string[];
   confirm: string[];
-  target: string | null;
+  /** First targets, up to MAX_TARGETS (a day planned before held one: `target`, read in by withTargets). */
+  targets: string[];
   rr: (typeof RR_BANDS)[number] | null;
   kill: (typeof KILLS)[number] | null;
 }
@@ -73,7 +76,20 @@ export interface ReplayDay {
 }
 
 export const emptyContext = (): ReplayContext => ({ h4: null, h1Agrees: null, overnight: null, taken: null, news: null, open: null });
-export const emptyScenario = (): ReplayScenario => ({ dir: null, zones: [], confirm: [], target: null, rr: null, kill: null });
+export const emptyScenario = (): ReplayScenario => ({ dir: null, zones: [], confirm: [], targets: [], rr: null, kill: null });
+/** A stored scenario of either age: one planned before targets were a list held `target` (a string). */
+export function withTargets(sc: unknown): ReplayScenario {
+  const raw = (sc && typeof sc === 'object' ? sc : {}) as Partial<ReplayScenario> & { target?: unknown };
+  const o = { ...emptyScenario(), ...raw } as ReplayScenario & { target?: unknown };
+  // Read what was stored, not the empty default: an old day has no `targets`, only `target`.
+  const targets = Array.isArray(raw.targets) ? raw.targets.filter((t): t is string => typeof t === 'string') : typeof raw.target === 'string' ? [raw.target] : [];
+  const { target: _old, ...rest } = o; void _old;
+  return { ...rest, targets: targets.slice(0, MAX_TARGETS) };
+}
+export const withTargetsAll = (s: unknown): ReplayScenarios => {
+  const o = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>;
+  return { a: withTargets(o.a), b: withTargets(o.b) };
+};
 export const emptyScenarios = (): ReplayScenarios => ({ a: emptyScenario(), b: emptyScenario() });
 
 /** The day bias, derived, never tapped: the 4H direction when the 1H agrees, otherwise no bias. */
@@ -160,7 +176,7 @@ export function tidyScenarios(c: ReplayContext, s: ReplayScenarios): ReplayScena
   const one = (sc: ReplayScenario): ReplayScenario => {
     const zones = zoneOptions(sc.dir, c.news, c.taken);
     const targets = targetOptions(c.news, sc.dir, c.taken);
-    return { ...sc, zones: sc.zones.filter((z) => zones.includes(z)), target: sc.target && targets.includes(sc.target) ? sc.target : null };
+    return { ...sc, zones: sc.zones.filter((z) => zones.includes(z)), targets: sc.targets.filter((t) => targets.includes(t)) };
   };
   return { a: one(s.a), b: one(s.b) };
 }
@@ -180,7 +196,7 @@ export function lockMissing(c: ReplayContext, raw: ReplayScenarios): string[] {
   for (const [k, sc] of [['A', s.a], ['B', s.b]] as const) {
     if (!sc.dir) out.push(`${k}: direction`);
     if (!sc.zones.length) out.push(`${k}: trigger zone`);
-    if (!sc.target) out.push(`${k}: first target`);
+    if (!sc.targets.length) out.push(`${k}: first target`);
     if (!sc.rr) out.push(`${k}: rough R`);
     if (!sc.kill) out.push(`${k}: kill switch`);
   }
@@ -189,7 +205,7 @@ export function lockMissing(c: ReplayContext, raw: ReplayScenarios): string[] {
 
 /** One line per scenario, for the plan strip and the exports. */
 export function scenarioLine(s: ReplayScenario): string {
-  const route = `${s.zones.join(' + ') || 'no zone'}${s.target ? ` → ${s.target}` : ''}`;
+  const route = `${s.zones.join(' + ') || 'no zone'}${s.targets.length ? ` → ${s.targets.join(' / ')}` : ''}`;
   return [s.dir ?? '—', route, s.rr ? `${s.rr}R` : null, s.kill ? `kill: ${s.kill}` : null].filter(Boolean).join(' · ');
 }
 
@@ -200,7 +216,7 @@ export const planOf = (d: Pick<ReplayDay, 'context' | 'scenarios'>) => ({ contex
 export function copyPlan(d: Pick<ReplayDay, 'context' | 'scenarios'> | null): { context: ReplayContext; scenarios: ReplayScenarios } {
   if (!d) return { context: emptyContext(), scenarios: emptyScenarios() };
   // What was run before the open is the new day's own answer, never yesterday's.
-  return { context: { ...emptyContext(), ...d.context, taken: null, overnight: null }, scenarios: { a: { ...d.scenarios.a, zones: [...d.scenarios.a.zones], confirm: [...d.scenarios.a.confirm] }, b: { ...d.scenarios.b, zones: [...d.scenarios.b.zones], confirm: [...d.scenarios.b.confirm] } } };
+  return { context: { ...emptyContext(), ...d.context, taken: null, overnight: null }, scenarios: { a: { ...d.scenarios.a, zones: [...d.scenarios.a.zones], confirm: [...d.scenarios.a.confirm], targets: [...d.scenarios.a.targets] }, b: { ...d.scenarios.b, zones: [...d.scenarios.b.zones], confirm: [...d.scenarios.b.confirm], targets: [...d.scenarios.b.targets] } } };
 }
 
 /** The weekday of a YYYY-MM-DD date, or null on a weekend. */
@@ -250,7 +266,8 @@ function parseScenario(v: unknown): ReplayScenario {
   const list = (x: unknown, allowed: readonly string[], max = 99) => (Array.isArray(x) ? [...new Set(x.filter((y): y is string => typeof y === 'string' && allowed.includes(y)))].slice(0, max) : []);
   return {
     dir: pick(o.dir, ['Long', 'Short'] as const), zones: list(o.zones, ALL_ZONES, MAX_ZONES), confirm: list(o.confirm, CONFIRMS),
-    target: pick(o.target, ALL_TARGETS), rr: pick(o.rr, RR_BANDS), kill: pick(o.kill, KILLS),
+    targets: list(Array.isArray(o.targets) ? o.targets : typeof o.target === 'string' ? [o.target] : [], ALL_TARGETS, MAX_TARGETS),
+    rr: pick(o.rr, RR_BANDS), kill: pick(o.kill, KILLS),
   };
 }
 export function parseScenarios(v: unknown, context: ReplayContext): ReplayScenarios {
@@ -300,11 +317,37 @@ export function planPrefill(day: Pick<ReplayDay, 'context' | 'scenarios'>, k: 'a
   return {
     scenario: k === 'a' ? 'A' : 'B',
     direction: s.dir,
-    target_type: s.target ? PLAN_TARGET_TYPE[s.target] ?? null : null,
+    // The first of its targets: Step 1 stores one target type.
+    target_type: s.targets[0] ? PLAN_TARGET_TYPE[s.targets[0]] ?? null : null,
     planned_rr: s.rr ? PLAN_RR[s.rr] ?? null : null,
   };
 }
 
-/** Fired by a tapped scenario: an open Step 1 takes it (and sets `taken`); otherwise New trade opens with ?plan=. */
+/**
+ * The same from the morning's chart prep (a real account): its scenario, direction, first target type (when
+ * Step 1 can store it) and rough R. The prep's answers are read as saved, a single target or a list.
+ */
+export function prepPrefill(answers: Record<string, unknown>, k: 'a' | 'b'): PlanPrefill {
+  const dir = answers[`plans.${k}Dir`];
+  const t = answers[`plans.${k}Target`];
+  const first = Array.isArray(t) ? (t.find((x) => typeof x === 'string') as string | undefined) ?? null : typeof t === 'string' ? t : null;
+  const rr = answers[`plans.${k}RR`];
+  return {
+    scenario: k === 'a' ? 'A' : 'B',
+    direction: dir === 'Long' || dir === 'Short' ? dir : null,
+    target_type: first && STEP1_TARGETS.has(first) ? first : null,
+    planned_rr: typeof rr === 'string' ? PLAN_RR[rr] ?? null : null,
+  };
+}
+/** Step 1's target types (lib/decision V2_TARGETS values), kept here so this file imports nothing. */
+const STEP1_TARGETS = new Set(['Data wick', 'PDH/PDL', 'Weekly high/low', 'Session high/low', 'EQH/EQL', 'ITH/ITL', 'Major swing H/L', 'HTF FVG (1H/4H)', 'Other']);
+
+/**
+ * Fired by a tapped scenario: an open Step 1 takes it (and sets `taken`); otherwise New trade opens with
+ * ?plan=a|b (and &from=prep&account=… for the morning's plan on a real account).
+ */
 export const PLAN_PREFILL = 'signature:plan-prefill';
-export type PlanPrefillEvent = CustomEvent<{ k: 'a' | 'b'; taken: boolean }>;
+/** The accounts the morning's plan can be traded on: real ones (a backtest has its replay day's plan). */
+export const PLAN_ACCOUNTS = ['Live', 'Demo', 'Eval', 'Funded'] as const;
+export type PlanSource = 'replay' | 'prep';
+export type PlanPrefillEvent = CustomEvent<{ k: 'a' | 'b'; taken: boolean; source?: PlanSource; account?: string }>;

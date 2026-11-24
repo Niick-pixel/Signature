@@ -2,7 +2,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { getDb } from './index';
 import { BACKTEST } from '../lib/domain';
-import { emptyContext, emptyScenarios, weekdayOf, type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenarios, type Took } from '../lib/replay';
+import { emptyContext, emptyScenarios, weekdayOf, withTargetsAll, type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenarios, type Took } from '../lib/replay';
 
 /*
   Replay days (048). A day is created already locked ("Lock & play"); its
@@ -20,10 +20,10 @@ const read = (r: Record<string, unknown>): ReplayDay => ({
   id: r.id as string, sitting_id: r.sitting_id as string, sequence: r.sequence as number, replay_date: r.replay_date as string,
   weekday: (r.weekday as string | null) ?? null, instrument: (r.instrument as string | null) ?? null,
   // A day planned before the taken levels were asked reads with taken: null (not answered).
-  context: { ...emptyContext(), ...json(r.context, emptyContext()) }, scenarios: json(r.scenarios, emptyScenarios()),
+  context: { ...emptyContext(), ...json(r.context, emptyContext()) }, scenarios: withTargetsAll(json(r.scenarios, emptyScenarios())),
   locked_at: (r.locked_at as string | null) ?? null, amended_at: (r.amended_at as string | null) ?? null,
   amended_context: r.amended_context ? { ...emptyContext(), ...json(r.amended_context, emptyContext()) } : null,
-  amended_scenarios: r.amended_scenarios ? json(r.amended_scenarios, null) : null,
+  amended_scenarios: r.amended_scenarios ? withTargetsAll(json(r.amended_scenarios, null)) : null,
   outcome: (r.outcome as DayOutcome | null) ?? null, took_a: (r.took_a as Took | null) ?? null, took_b: (r.took_b as Took | null) ?? null,
   closed_at: (r.closed_at as string | null) ?? null, ends_sitting: r.ends_sitting === 1, created_at: r.created_at as string,
 });

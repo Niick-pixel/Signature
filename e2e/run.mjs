@@ -315,6 +315,13 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   expect(await fits(), 'nothing scrolls on page 1');
   await pill('bias', 'Bearish'); await pill('reasons', '4H displaced through a level'); await pill('reasons', 'Swept a HTF high or low'); await pill('invAt', 'The 1H iFVG');
   await pill('taken', 'Asia high'); await pill('zone', 'Premium');
+  // A red folder inside the killzone adds the rule line: the map still ends above the footer, nothing under it.
+  await pill('news', 'Inside the killzone'); await page.waitForTimeout(300);
+  const clear = () => page.evaluate(() => {
+    const foot = document.querySelector('[data-prep-next]').closest('.border-t').getBoundingClientRect().top;
+    return Math.max(...[...document.querySelectorAll('[data-chart-prep] [data-map-side], [data-chart-prep] [data-scenario]')].map((el) => el.getBoundingClientRect().bottom)) <= foot;
+  });
+  expect(await clear(), 'the read-the-chart cards end above the footer');
   await next();
   expect(await box() === size1, `the window keeps its size from page to page (${size1} → ${await box()})`);
   expect(await fits(), 'nothing scrolls on the plans');
@@ -324,13 +331,18 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   expect(await g('aZones').getByRole('button', { name: 'PDL', exact: true }).count() === 0, 'a short waits above: no lows offered');
   expect(await g('aZones').getByRole('button', { name: 'Asia high', exact: true }).count() === 0, 'run overnight: not offered');
   expect(/run overnight, so not offered: Asia high/.test(await page.locator('[data-plans-auto]').innerText()), 'and it says why');
-  await pill('aZones', 'PDH'); await pill('aConfirms', 'CISD');
+  await pill('aZones', 'PDH');
+  expect(await g('aConfirms').count() === 0 && await page.locator('[data-confirm-info="prep"]').count() === 1, 'the confirmation is shown as the strategy, not asked');
+  // Up to three first targets.
+  for (const t of ['PDH/PDL', 'Weekly high/low', 'Session high/low', 'EQH/EQL']) await pill('aTarget', t);
+  expect(await g('aTarget').locator('[aria-pressed="true"]').count() === 3, 'three first targets at most');
   await pill('bZones', 'London low'); await page.waitForTimeout(300);
   expect(await g('bZones').getByRole('button', { name: 'PDH', exact: true }).count() === 0, 'a long: no highs offered');
   const notes = await page.locator('[data-plan-checks]').innerText();
   expect(/no kill switch/.test(notes), `the rules were not checked: ${notes}`);
   await pill('aKills', '15m closes through the zone'); await pill('bKills', 'Never reaches the zone'); await pill('bKills', 'Bias invalidated');
   await pill('cutoffAt', '10:00'); await page.waitForTimeout(300);
+  expect(await clear(), 'the plans and C end above the footer');
   expect(await page.locator('[data-plan-checks]').count() === 0, 'the notes clear once the plans are sound');
   await page.click('[data-prep-next]'); await page.waitForSelector('[data-prep-plan]');
   const plan = await page.locator('[data-prep-plan]').innerText();
@@ -347,6 +359,40 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   await page.mouse.move(2, 2);
   await page.waitForSelector('[data-prep-ready]', { state: 'detached', timeout: 12000 });
   expect(await page.locator('[data-chart-prep]').count() === 0, 'closed by itself');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Today\'s plan: the morning\'s A and B, tappable, on the account picked — real accounts only', async () => {
+  const { page, errors } = await open();
+  await page.evaluate(() => window.dispatchEvent(new Event('signature:open-day-plan')));
+  await page.waitForSelector('[data-day-plan-pick="a"]');
+  const accounts = await page.locator('[data-day-plan-account] [data-option]').allTextContents();
+  expect(JSON.stringify(accounts) === JSON.stringify(['Live', 'Demo', 'Eval', 'Funded']), `real accounts only: ${accounts}`);
+  await page.click('[data-day-plan-account] [data-option="Live"]');
+  await page.click('[data-day-plan-pick="a"]');
+  await page.waitForSelector('[data-decide-step]');
+  await page.waitForFunction(() => document.querySelector('[data-facts] [data-option="A"][aria-pressed="true"]'), null, { timeout: 8000 });
+  expect(await page.locator('[data-context="account"] [data-option="Live"][aria-checked="true"]').count() === 1, 'on Live');
+  expect(await page.locator('[data-facts] [data-option="Short"][aria-pressed="true"]').count() === 1, 'A\'s direction from the prep (bearish: A short)');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Filters: one chip and panel on Stats and the Dashboard; a token under the header lets a filter go', async () => {
+  const { page, errors } = await open();
+  for (const url of ['/stats', '/dashboard']) {
+    await page.goto(`${BASE}${url}`); await page.waitForSelector('[data-filter-chip]');
+    expect(await page.locator('select').count() === 0 || url !== '/stats', 'no dropdown on Stats');
+    await page.locator('[data-filter-chip]:visible').first().click();
+    await page.waitForSelector('[data-filter-panel]');
+    await page.locator('[data-filter-row="Period"] button', { hasText: '30 days' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-filter-chip]')?.getAttribute('data-filter-chip') === '1', null, { timeout: 8000 });
+    await page.locator('[data-filter-chip]:visible').first().click();
+    await page.waitForSelector('[data-active-filter="period"]');
+    await page.click('[data-active-filter="period"]');
+    await page.waitForFunction(() => document.querySelector('[data-filter-chip]')?.getAttribute('data-filter-chip') === '0', null, { timeout: 8000 });
+  }
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });

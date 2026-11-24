@@ -18,6 +18,7 @@ import { Tile, triple } from './Tile';
 import { useBoardEditor } from './useBoardEditor';
 import { InTitleBar, useMergedHeader } from '@/components/shell/TitleSlot';
 import { Overlay } from '@/components/ui/Overlay';
+import { ActiveFilters, FilterChip, FilterPanel, FilterPill, FilterRow } from '@/components/ui/FilterBar';
 import { WidgetBody } from './renderers';
 import { BoardSettingsPanel, Gallery, Menu, WidgetSettings } from './EditPanels';
 
@@ -81,6 +82,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
   const [height, setHeight] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   // Opened from "+": straight into editing with the gallery.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [panel, setPanel] = useState<null | 'gallery' | 'widget' | 'board'>(startEditing && !board.readOnly ? 'gallery' : null);
   const [panelUid, setPanelUid] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -330,19 +332,16 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
               <button type="button" onClick={() => setPanel(panel === 'board' ? null : 'board')} className="rounded-full border px-3 py-1 font-medium" style={pill(panel === 'board')} data-open-board-settings>Board</button>
               <button type="button" onClick={() => { setEditing(false); setPanel(null); setSelected(null); router.refresh(); }} className="rounded-full px-3.5 py-1 font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-done>Done</button>
   </>);
+  // The page's filters, as everywhere else: a chip here, the rows in a panel under the header (components/ui/FilterBar).
+  const setPeriod = (v: string) => router.push(href({ period: v === 'all' ? undefined : v }), { scroll: false });
+  const setPregraded = (on: boolean) => router.push(href({ pregraded: on ? '1' : undefined }), { scroll: false });
+  const nFilters = ((filters.period ?? 'all') !== 'all' ? 1 : 0) + (filters.pregraded ? 1 : 0);
+  const activeFilters = [
+    ...((filters.period ?? 'all') !== 'all' ? [{ id: 'period', label: PERIODS.find((p) => p.key === filters.period)?.label ?? String(filters.period), onRemove: () => setPeriod('all') }] : []),
+    ...(filters.pregraded ? [{ id: 'pregraded', label: 'Pre-graded only', onRemove: () => setPregraded(false) }] : []),
+  ];
   const sourceAndPeriod = (<>
-              <div role="radiogroup" aria-label="Which trades" className="flex rounded-full p-0.5" style={{ background: 'var(--glass-fill)' }} data-source-toggle>
-                {SOURCES.map((o) => (
-                  <button key={o.v} type="button" role="radio" aria-checked={page.source === o.v} title={o.title} onClick={() => void setSource(o.v)}
-                    disabled={(o.v === 'real' && !page.has.real) || (o.v === 'backtest' && !page.has.backtest)}
-                    className="rounded-full px-3 py-1 font-medium transition-colors disabled:opacity-40"
-                    style={page.source === o.v ? { background: 'var(--bg-raised)', color: 'var(--text)', boxShadow: 'var(--shadow-card)' } : { color: 'var(--text-dim)' }}>{o.label}</button>
-                ))}
-              </div>
-              <select value={filters.period ?? 'all'} onChange={(e) => router.push(href({ period: e.target.value === 'all' ? undefined : e.target.value }), { scroll: false })}
-                aria-label="Period" className="rounded-full border bg-transparent px-2.5 py-1 font-medium" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }} data-period>
-                {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-              </select>
+              <FilterChip open={filtersOpen} count={nFilters} onClick={() => setFiltersOpen((o) => !o)} title="Which trades, the period, pre-graded only" />
   </>);
   const editButton = (<>
               <button type="button" onClick={() => setEditing(true)} disabled={board.readOnly} title={board.readOnly ? 'Saved by a newer version of Signature' : 'Move, resize, stack, restyle and add widgets'}
@@ -351,8 +350,6 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
   const importInput = <input ref={importer} type="file" accept="application/json,.json" hidden onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = ''; }} />;
   // In the title bar there is room for the essentials; the rest of the toolbar joins the ⋯ menu.
   const mergedMenu = [
-    { label: filters.pregraded ? 'Pre-graded only ✓' : 'Pre-graded only', onClick: () => router.push(href({ pregraded: filters.pregraded ? undefined : '1' }), { scroll: false }) },
-    { label: 'Blind re-grade', onClick: () => router.push('/blind') },
     { label: 'Deep dives…', onClick: () => router.push(href({ open: 'report-compare' }), { scroll: false }) },
     ...menu,
   ];
@@ -385,8 +382,6 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
           {editing ? editTools : (
             <>
               {sourceAndPeriod}
-              <Link href={href({ pregraded: filters.pregraded ? undefined : '1' })} scroll={false} prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(!!filters.pregraded)} title="Only trades graded before the outcome was known">Pre-graded only</Link>
-              <Link href="/blind" prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)} title="Grade past setups with the outcome hidden">Blind re-grade</Link>
               <Link href={href({ open: 'report-compare' })} scroll={false} prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)} title="Reports and analytics: compare, breakdowns, time of day, psychology, what if…" data-deep-dives>Deep dives</Link>
               {editButton}
             </>
@@ -396,6 +391,26 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
         </div>
       </header>
         } />
+      {!editing && (
+        <div className={`w-full px-6 ${col}`}>
+          <ActiveFilters open={filtersOpen} items={activeFilters} />
+          <FilterPanel open={filtersOpen} count={nFilters} onClear={() => router.push(href({ period: undefined, pregraded: undefined }), { scroll: false })}>
+            <FilterRow label="Trades" hint="Which trades the whole board reads; saved with the board.">
+              {SOURCES.map((o) => (
+                <FilterPill key={o.v} on={page.source === o.v} title={o.title} onClick={() => void setSource(o.v)}
+                  disabled={(o.v === 'real' && !page.has.real) || (o.v === 'backtest' && !page.has.backtest)}>{o.label}</FilterPill>
+              ))}
+            </FilterRow>
+            <FilterRow label="Period">
+              {PERIODS.map((p) => <FilterPill key={p.key} on={(filters.period ?? 'all') === p.key} onClick={() => setPeriod(p.key)}>{p.label}</FilterPill>)}
+            </FilterRow>
+            <FilterRow label="Grading" hint="Pre-graded: graded before the outcome was known.">
+              <FilterPill on={!filters.pregraded} onClick={() => setPregraded(false)}>Every trade</FilterPill>
+              <FilterPill on={!!filters.pregraded} onClick={() => setPregraded(true)} title="Only trades graded before the outcome was known">Pre-graded only</FilterPill>
+            </FilterRow>
+          </FilterPanel>
+        </div>
+      )}
       {board.dropped.length > 0 && <p className="px-6 pb-1 text-[11.5px]" style={{ color: 'rgb(var(--amber))' }}>Removed from this board because they no longer exist: {board.dropped.join(', ')}.</p>}
       <div ref={gridBox} className={`relative min-h-0 w-full flex-1 px-6 pb-4 transition-[padding] duration-300 ${merged ? 'pt-2' : ''} ${col} ${overflow || !s.fit ? 'overflow-y-auto' : 'overflow-hidden'}`} data-grid
         style={{ paddingRight: editing && panel ? (panel === 'gallery' ? 404 : 384) : undefined }}

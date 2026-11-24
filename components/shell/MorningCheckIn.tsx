@@ -16,6 +16,7 @@ import { Choice } from '@/components/ui/Choice';
 import { Scale } from '@/components/ui/Scale';
 import { usePreferences } from './PreferencesProvider';
 import { ChartPrep, usePrepProgress } from '@/components/prep/ChartPrep';
+import { DayPlanWindow, openDayPlan } from '@/components/prep/DayPlanWindow';
 import { figuresLine, isRedFolder } from '@/lib/news';
 
 /*
@@ -136,8 +137,10 @@ export function MorningCheckIn() {
   const [finishedPrep, setSmall] = useState(false);
   const small = finishedPrep && open && tab === 'chart';
 
-  return (
-    // The chart prep is one fixed window, as the backtest plan builder: the same size on every page, never scrolled.
+  return (<>
+    {/* Today's plan, tappable: what the title bar chip opens once the morning is answered. */}
+    <DayPlanWindow onEdit={(t) => openCheckIn(t)} />
+    {/* The chart prep is one fixed window, as the backtest plan builder: the same size on every page, never scrolled. */}
     <Overlay open={open} onClose={close} className={`${tab === 'chart' && small ? 'flex w-[min(34rem,calc(100vw-2rem))] flex-col overflow-hidden px-6 pb-5 pt-5' : tab === 'chart' ? 'flex h-[min(50rem,calc(100dvh-2rem))] w-[min(86rem,calc(100vw-2rem))] flex-col overflow-hidden px-5 pb-4 pt-4' : 'max-h-[90vh] w-[34rem] overflow-y-auto p-7'} max-w-full rounded-[calc(26px*var(--rk))] transition-[width] duration-300`}
       // Something to work through, not glance at: solid enough that the board behind stays behind.
       surface="color-mix(in srgb, var(--bg-raised) 94%, transparent)">
@@ -172,7 +175,7 @@ export function MorningCheckIn() {
         </motion.div>
       </AnimatePresence>
     </Overlay>
-  );
+  </>);
 }
 
 function CheckInForm({ day, existing, onDone, onSaved, onChart }: {
@@ -375,13 +378,14 @@ export function CheckInChip() {
     <motion.button
       type="button"
       data-checkin-chip={done ? 'done' : 'todo'}
-      onClick={() => openCheckIn()}
+      // Answered: today's plan, its scenarios a tap from a trade. Not yet: the check-in.
+      onClick={() => (done ? openDayPlan() : openCheckIn())}
       whileTap={press}
       whileHover={{ y: -1 }}
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={spring}
-      title={done ? 'Your morning and the chart prep (M, or P for the chart)' : 'Four questions, then the chart, before the session (M)'}
+      title={done ? 'Today’s plan — tap a scenario to trade it (M for the morning, P for the chart)' : 'Four questions, then the chart, before the session (M)'}
       className="flex max-w-[22rem] items-center gap-2 rounded-full border px-3 py-1 text-[11.5px] font-medium"
       style={{
         borderColor: done ? 'var(--glass-stroke)' : 'rgb(var(--accent) / 0.45)',

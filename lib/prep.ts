@@ -49,6 +49,8 @@ export interface PrepField {
   hidden?: boolean;
   /** For many: at most this many; a tap past it lets go of the oldest. */
   max?: number;
+  /** One line of help behind the label (its tooltip). */
+  hint?: string;
   /**
    * The answer's stored key, when it is not "step.field": a question that
    * moved to another step keeps the key it was saved under, so everything
@@ -264,7 +266,10 @@ export const PREP_CONFIRMS = ['Sweep + iFVG close', 'HTF FVG delivery + iFVG clo
 /** The first target, named: the opposite side's liquidity, or the gap that ends the move. */
 export const PREP_TARGET_AT = [...SWEEPABLE, 'ITH', 'ITL', 'Session high', 'Session low', 'Data wick', 'Opposing 1H gap', 'Opposing 4H gap'];
 export const PREP_KILLS = ['Never reaches the zone', '5m closes through the zone', '15m closes through the zone', 'Opposing HTF gap forms',
-  'Not triggered by the cutoff', 'Takes the other side’s liquidity first', 'News spike through the zone', 'Bias invalidated'];
+  'Not triggered by the cutoff', 'Takes the other side’s liquidity first', 'News spike through the zone', 'Bias invalidated',
+  'Triggered before the market open'];
+/** First targets per scenario: up to this many (a scale-out or the level after), as the backtest plan. */
+export const MAX_TARGETS = 3;
 export const HTF_REASONS = ['4H displaced through a level', '1H holding an iFVG', 'HTF FVG respected', 'Swept a HTF high or low',
   '4H structure: higher highs / lower lows', 'Drawing to a weekly level', 'Daily candle direction', 'Rejected a premium / discount'];
 export const HTF_INV_AT = ['The 1H iFVG', 'The last 1H swing', 'The 4H FVG', 'PDH / PDL', 'The overnight high / low', 'The weekly open'];
@@ -273,9 +278,11 @@ export const CUTOFFS = ['9:45', '10:00', '10:30', '11:00'];
 const scenario = (k: 'a' | 'b'): PrepField[] => [
   { id: `${k}Dir`, label: 'Direction', kind: 'one', options: ['Long', 'Short'] },
   { id: `${k}Zones`, label: 'Trigger zone · up to 2', kind: 'many', options: PREP_ZONES, max: 2 },
-  { id: `${k}Confirms`, label: 'Confirmation', kind: 'many', options: PREP_CONFIRMS },
-  { id: `${k}Target`, label: 'First target', kind: 'pick', options: [...TARGET_TYPES] },
-  { id: `${k}TargetAt`, label: 'First target, named', kind: 'one', options: PREP_TARGET_AT },
+  // The confirmation is the strategy (lib/replay CONFIRM_RULE), shown on the plan, no longer asked; older answers still read.
+  { id: `${k}Confirms`, label: 'Confirmation', kind: 'many', options: PREP_CONFIRMS, hidden: true },
+  // Up to three each; a prep saved before holds one, as text — targetsOf reads both.
+  { id: `${k}Target`, label: 'First target · up to 3', kind: 'many', options: [...TARGET_TYPES], max: MAX_TARGETS },
+  { id: `${k}TargetAt`, label: 'First target, named · up to 3', kind: 'many', options: PREP_TARGET_AT, max: MAX_TARGETS },
   { id: `${k}RR`, label: 'Rough R', kind: 'one', options: RR_BANDS },
   { id: `${k}Kills`, label: 'Kill switch', kind: 'many', options: PREP_KILLS },
   // Written, before the plans were tapped: read, never asked.
@@ -321,11 +328,11 @@ export const PREP_STEPS: PrepStep[] = [
       { id: 'above', key: 'panel.above', label: 'Nearest named level above', kind: 'pick', options: PANEL_LEVELS },
       { id: 'aboveTier', key: 'panel.aboveTier', label: 'It is', kind: 'one', options: ['Major', 'Minor'] },
       { id: 'aboveState', label: 'And', kind: 'one', options: ['Fresh', 'Tapped'] },
-      { id: 'gapAbove', label: '1H/4H gap between price and it', kind: 'one', options: ['None', '1H gap', '4H gap', 'Both'] },
+      { id: 'gapAbove', label: '1H/4H gap between price and it', kind: 'one', options: ['None', '1H gap', '4H gap', 'Both'], hint: 'A 1H/4H gap between price and a level is where a move tends to end: a target stops short of it.' },
       { id: 'below', key: 'panel.below', label: 'Nearest named level below', kind: 'pick', options: PANEL_LEVELS },
       { id: 'belowTier', key: 'panel.belowTier', label: 'It is', kind: 'one', options: ['Major', 'Minor'] },
       { id: 'belowState', label: 'And', kind: 'one', options: ['Fresh', 'Tapped'] },
-      { id: 'gapBelow', label: '1H/4H gap between price and it', kind: 'one', options: ['None', '1H gap', '4H gap', 'Both'] },
+      { id: 'gapBelow', label: '1H/4H gap between price and it', kind: 'one', options: ['None', '1H gap', '4H gap', 'Both'], hint: 'A 1H/4H gap between price and a level is where a move tends to end: a target stops short of it.' },
     ],
   },
   {
@@ -543,6 +550,9 @@ const list = (a: Answer | undefined): string[] | null => (Array.isArray(a) && a.
 export const zonesOf = (answers: Record<string, Answer>, k: 'a' | 'b'): string[] =>
   list(answers[`plans.${k}Zones`]) ?? (str(answers[`plans.${k}Trigger`]) ? [str(answers[`plans.${k}Trigger`])!] : []);
 const DECIDED = ['draw.side', 'draw.direction', 'liquidity.wait', 'draw.target'] as const;
+/** A scenario's first targets (type, or named): the tapped ones, or the one picked before (an old prep's text). */
+export const targetsOf = (answers: Record<string, Answer>, k: 'a' | 'b', f: 'Target' | 'TargetAt'): string[] =>
+  list(answers[`plans.${k}${f}`]) ?? (str(answers[`plans.${k}${f}`]) ? [str(answers[`plans.${k}${f}`])!] : []);
 
 /**
  * The decisions plan match, the plan grade and the stop rule read, from the
@@ -555,7 +565,8 @@ export function deriveDecisions(answers: Record<string, Answer>): Record<string,
   const a = (k: string) => str(answers[`plans.${k}`]);
   const dirs = [a('aDir'), a('bDir')].filter((d): d is string => !!d);
   const triggers = [...zonesOf(answers, 'a'), ...zonesOf(answers, 'b')];
-  if (!dirs.length && !triggers.length && !a('aTarget')) return answers;
+  const aTarget = targetsOf(answers, 'a', 'Target')[0] ?? null;
+  if (!dirs.length && !triggers.length && !aTarget) return answers;
   const out: Record<string, Answer> = { ...answers };
   for (const k of DECIDED) delete out[k];
   if (dirs.length) out['draw.side'] = new Set(dirs).size > 1 ? 'Both ways' : dirs[0] === 'Long' ? 'Longs only' : 'Shorts only';
@@ -563,7 +574,7 @@ export function deriveDecisions(answers: Record<string, Answer>): Record<string,
   const taken = Array.isArray(answers[TAKEN_KEY]) ? answers[TAKEN_KEY] as string[] : [];
   const wait = [...new Set(triggers.filter((t) => SWEEPABLE.includes(t) && !taken.includes(t)))];
   if (wait.length) out[WAIT_KEY] = wait;
-  if (a('aTarget')) out['draw.target'] = a('aTarget')!;
+  if (aTarget) out['draw.target'] = aTarget;
   return out;
 }
 
@@ -595,7 +606,7 @@ export function planChecks(answers: Record<string, Answer>): PlanCheck[] {
   const out: PlanCheck[] = [];
   const tapped = (k: string) => list(answers[`plans.${k}`]) != null;
   const started = (k: 'a' | 'b') => ['Dir', 'Story', 'Trigger', 'TriggerNote', 'Target', 'TargetAt', 'Kill'].some((f) => a(`${k}${f}`))
-    || ['Zones', 'Confirms', 'Kills'].some((f) => tapped(`${k}${f}`));
+    || ['Zones', 'Confirms', 'Kills', 'Target', 'TargetAt'].some((f) => tapped(`${k}${f}`));
   const shared = zonesOf(answers, 'a').filter((z) => zonesOf(answers, 'b').includes(z));
   if (shared.length) {
     out.push({ level: 'warn', text: `Both scenarios start at ${shared.join(' + ')}. They should differ in which liquidity is taken first — that is the question the open answers.` });
@@ -638,7 +649,8 @@ export function scenarioLine(answers: Record<string, Answer>, k: 'a' | 'b'): str
   const a = (f: string) => str(answers[`plans.${k}${f}`]);
   const l = (f: string) => list(answers[`plans.${k}${f}`]);
   const zones = l('Zones')?.join(' + ') ?? a('TriggerNote') ?? a('Trigger');
-  const target = a('TargetAt') ?? a('TargetNote') ?? a('Target');
+  const named = targetsOf(answers, k, 'TargetAt'); const types = targetsOf(answers, k, 'Target');
+  const target = (named.length ? named.join(' / ') : null) ?? a('TargetNote') ?? (types.length ? types.join(' / ') : null);
   const kill = l('Kills')?.join(' / ') ?? a('Kill');
   const parts = [
     a('Story') ?? [a('Dir'), zones && `from ${zones}`].filter(Boolean).join(' '),
@@ -707,8 +719,12 @@ export function tidyPlans(answers: Record<string, Answer>, changed: string): Rec
       const left = zones.filter((z) => !no.includes(z));
       if (left.length) out[`plans.${k}Zones`] = left; else delete out[`plans.${k}Zones`];
     }
-    const at = str(out[`plans.${k}TargetAt`]);
-    if (at && notOffered(out, k, 'target').includes(at)) delete out[`plans.${k}TargetAt`];
+    const at = targetsOf(out, k, 'TargetAt');
+    if (at.length) {
+      const no = notOffered(out, k, 'target');
+      const left = at.filter((t) => !no.includes(t));
+      if (left.length) out[`plans.${k}TargetAt`] = left; else delete out[`plans.${k}TargetAt`];
+    }
   }
   return out;
 }

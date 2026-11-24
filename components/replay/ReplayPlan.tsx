@@ -6,10 +6,11 @@ import { Field, Input } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { MultiSegmented } from '@/components/ui/MultiSegmented';
 import { Button } from '@/components/ui/Button';
+import { InfoBox } from '@/components/ui/InfoBox';
 import { localDay } from '@/lib/day';
 import { navigate } from '@/lib/nav';
 import {
-  DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, RR_BANDS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
+  DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_TARGETS, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, RR_BANDS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
   CONFIRM_RULE, PLAN_PREFILL, confirmText, copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, noBiasCap, playedOf, rrWarning, scenarioLine, targetLeft, targetOptions,
   overnightOf, tidyScenarios, tookFromTrades, weekdayOf, withDirections, zoneOptions,
   type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenario, type ReplayScenarios, type Took,
@@ -125,7 +126,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
     const scen = (k: 'a' | 'b', sc: ReplayScenario, set: (p: Partial<ReplayScenario>) => void): G[] => [
       ...(k === 'a' && !bias ? [{ id: 'a-dir', options: ['Long', 'Short'], pick: (o: string) => set({ dir: sc.dir === o ? null : o as 'Long' }) }] : []),
       { id: `${k}-zones`, options: zoneOptions(sc.dir, context.news, context.taken), pick: (o) => set({ zones: sc.zones.includes(o) ? sc.zones.filter((z) => z !== o) : [...sc.zones, o].slice(-MAX_ZONES) }) },
-      { id: `${k}-target`, options: targetOptions(context.news, sc.dir, context.taken), pick: (o) => set({ target: sc.target === o ? null : o }) },
+      { id: `${k}-target`, options: targetOptions(context.news, sc.dir, context.taken), pick: (o) => set({ targets: sc.targets.includes(o) ? sc.targets.filter((t) => t !== o) : [...sc.targets, o].slice(-MAX_TARGETS) }) },
       { id: `${k}-rr`, options: RR_BANDS, pick: (o) => set({ rr: sc.rr === o ? null : o as ReplayScenario['rr'] }) },
       { id: `${k}-kill`, options: KILLS, pick: (o) => set({ kill: sc.kill === o ? null : o as ReplayScenario['kill'] }) },
     ];
@@ -221,7 +222,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
         <Chips id={`${k}-zones`} label="Trigger zone" options={zoneOptions(sc.dir, context.news, context.taken)} value={sc.zones} multi max={MAX_ZONES}
           onChange={(v) => set({ zones: v as string[] })} focused={fid === `${k}-zones`} onFocus={() => focusOn(`${k}-zones`)} required titleFor={swingTitle}
           hint={`The high side for a short, the low side for a long; a level taken before the open is not offered. The data wick appears on a news day. Major swing: ${MAJOR_SWING_HELP}`} />
-        <Chips id={`${k}-target`} label="First target" options={targetOptions(context.news, sc.dir, context.taken)} value={sc.target} onChange={(v) => set({ target: v as string | null })}
+        <Chips id={`${k}-target`} label="First target · up to 3" options={targetOptions(context.news, sc.dir, context.taken)} value={sc.targets} multi max={MAX_TARGETS} onChange={(v) => set({ targets: v as string[] })}
           labelFor={(o) => { const left = targetLeft(o, sc.dir, context.taken); return left ? `${o} · ${left}` : o; }}
           focused={fid === `${k}-target`} onFocus={() => focusOn(`${k}-target`)} required titleFor={swingTitle}
           hint="A target already run before the open is not offered: a long aims above, a short below." />
@@ -503,7 +504,7 @@ function PlanBody({ context: c, scenarios: s, onPick }: { context: ReplayContext
         </div>
         {row('Trigger zone', sc.zones.join(' + ') || null)}
         {row('Confirmation', confirmText(sc.confirm))}
-        {row('First target', sc.target)}
+        {row(sc.targets.length > 1 ? 'First targets' : 'First target', sc.targets.join(' / ') || null)}
         {row('Rough R', sc.rr ? <span style={sc.rr === '<1.5' ? { color: `rgb(${LOSS})` } : undefined}>{sc.rr}R</span> : null)}
         {row('Kill switch', sc.kill)}
       </Wrap>
@@ -600,27 +601,3 @@ export const replayCards = (day: ReplayDay): PlanCard[] => {
   // The card already says the direction; the line starts at the zones.
   return (['a', 'b'] as const).map((k) => ({ k, dir: s[k].dir, line: scenarioLine(s[k])?.replace(/^(Long|Short) · /, '') ?? null, capped }));
 };
-
-/**
- * A value the plan works out or holds fixed, never tapped: a square, dashed box with an "auto" mark, so it
- * reads as information beside the tap rows, not as one more row to answer.
- */
-function InfoBox({ label, hint, tone, accent = false, mark = 'auto', children, ...data }: {
-  label: string; hint?: string; tone?: string; accent?: boolean;
-  /** The tag in the corner: "auto" for a derived value, "rule" for one fixed by the strategy. */
-  mark?: string; children: ReactNode; [k: `data-${string}`]: string;
-}) {
-  const ring = tone ? `rgb(${tone} / 0.45)` : accent ? 'rgb(var(--accent) / 0.4)' : 'var(--glass-stroke)';
-  const fill = tone ? `rgb(${tone} / 0.08)` : accent ? 'rgb(var(--accent) / 0.07)' : 'rgb(var(--accent) / 0.03)';
-  return (
-    <div className="p-1" {...data}>
-      <Field quiet label={label} hint={hint}>
-        <div className="flex min-h-[2.5rem] items-center gap-2.5 rounded-[calc(10px*var(--rk))] border border-dashed px-3 py-1.5" style={{ borderColor: ring, background: fill }}>
-          <span className="shrink-0 rounded-[6px] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em]"
-            style={{ color: tone ? `rgb(${tone})` : 'rgb(var(--accent))', background: tone ? `rgb(${tone} / 0.12)` : 'rgb(var(--accent) / 0.12)' }} aria-hidden>{mark}</span>
-          <span className="min-w-0 flex-1">{children}</span>
-        </div>
-      </Field>
-    </div>
-  );
-}

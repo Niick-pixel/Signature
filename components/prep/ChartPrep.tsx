@@ -1,5 +1,6 @@
 'use client';
 
+import { CONFIRM_RULE } from '@/lib/replay';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { localDay } from '@/lib/day';
@@ -286,15 +287,15 @@ function ReadPage({ data, change, review, carried }: { data: PrepData; change: C
           <div key={side} className={`${card} flex flex-col gap-1.5`} style={cardStyle} data-map-side={side}>
             <Heading>{side === 'above' ? 'Above price' : 'Below price'}</Heading>
             {field('map', side, { hide: takenOf(data.answers) })}
-            <div className="grid gap-1.5 xl:grid-cols-2">
-              {field('map', `${side}Tier`)}
-              {field('map', `${side}State`)}
-              <div className="xl:col-span-2">{field('map', side === 'above' ? 'gapAbove' : 'gapBelow')}</div>
+            {/* Three short questions side by side, each label above its taps: one row, not two, however the levels above wrap. */}
+            <div className="grid gap-x-2 gap-y-1.5 xl:grid-cols-[auto_auto_minmax(0,1fr)]">
+              {field('map', `${side}Tier`, { inline: false })}
+              {field('map', `${side}State`, { inline: false })}
+              {field('map', side === 'above' ? 'gapAbove' : 'gapBelow', { inline: false })}
             </div>
           </div>
         ))}
       </div>
-      <p className="-mt-1 px-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>A 1H/4H gap between price and a level is where a move tends to end: a target stops short of it.</p>
     </div>
   );
 }
@@ -324,6 +325,7 @@ function FieldView({ field, value, onChange, hide = [], notes = {}, inline = tru
     <div data-prep-field={field.id} role="group" aria-label={field.label} className={inline ? 'grid grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-2' : undefined}>
       <span className={`${inline ? 'pt-[9px] leading-tight' : 'mb-1'} block px-1 text-[10px] font-medium uppercase tracking-[0.07em]`} style={{ color: 'var(--text-faint)' }}>
         {field.label}{field.kind === 'many' ? (field.max ? '' : ' · any') : ''}
+        {field.hint && <span title={field.hint} className="ml-1 cursor-help normal-case" aria-label={field.hint}>ⓘ</span>}
       </span>
       {field.kind === 'text' ? (
         <TextAnswer value={typeof value === 'string' ? value : ''} placeholder={field.placeholder} long={field.long} label={field.label} onChange={(v) => onChange(v.trim() ? v : null)} />
@@ -368,18 +370,16 @@ export const READY_MS = 8000;
  */
 function Ready({ data, startedAt, onClose }: { data: PrepData; startedAt: string | null; onClose: () => void }) {
   const p = prepProgress(data);
-  const [left, setLeft] = useState(READY_MS);
+  // The bar is a CSS animation on the compositor (scaleX), never a re-render per frame: smooth on any machine.
+  // Held, it pauses where it is; the seconds under it are only the label, counted while it runs.
   const [held, setHeld] = useState(false);
+  const [left, setLeft] = useState(READY_MS);
   useEffect(() => {
     if (held) return;
     let last = performance.now();
-    const id = window.setInterval(() => {
-      const now = performance.now(); const dt = now - last; last = now;
-      setLeft((l) => Math.max(0, l - dt));
-    }, 50);
+    const id = window.setInterval(() => { const now = performance.now(); setLeft((l) => Math.max(0, l - (now - last))); last = now; }, 250);
     return () => window.clearInterval(id);
   }, [held]);
-  useEffect(() => { if (left <= 0) onClose(); }, [left, onClose]);
   // The new prep ends on its plan (bias, A, B, C); an older one lists its answers.
   const rows = stepsOf(data) === PREP_STEPS ? planSummary(data.answers).map((r) => [r.label, r.value] as const)
     : stepsOf(data).flatMap((s) => s.fields.map((f) => [f.label, answerText(data.answers[answerKey(s, f)])] as const)).filter(([, v]) => v != null);
@@ -413,8 +413,12 @@ function Ready({ data, startedAt, onClose }: { data: PrepData; startedAt: string
       )}
       {/* Emptying from full: when it reaches nothing, the window closes. */}
       <div className="mt-5 h-1 overflow-hidden rounded-full" style={{ background: 'var(--glass-stroke)' }} title={held ? 'Held while the pointer is here' : 'Closes by itself'}>
-        <div className="h-full origin-left rounded-full" data-prep-countdown={Math.ceil(left / 1000)}
-          style={{ width: `${(left / READY_MS) * 100}%`, background: held ? 'var(--text-faint)' : 'rgb(var(--outcome-win))', transition: 'background 200ms' }} />
+        <div className="h-full w-full origin-left rounded-full will-change-transform" data-prep-countdown={Math.ceil(left / 1000)}
+          onAnimationEnd={onClose}
+          style={{
+            animation: `prep-countdown ${READY_MS}ms linear forwards`, animationPlayState: held ? 'paused' : 'running',
+            background: held ? 'var(--text-faint)' : 'rgb(var(--outcome-win))', transition: 'background 200ms',
+          }} />
       </div>
       <p className="mt-1.5 text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{held ? 'Held — move away to let it close.' : `Closes in ${Math.ceil(left / 1000)}s · Esc closes now`}</p>
     </div>
@@ -454,7 +458,7 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
   const ny = (at: string) => { const m = nyMinutesOf(at); return m == null ? at.slice(11, 16) : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} NY`; };
   if (!d) return <p className="mt-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading the calendar…</p>;
   return (
-    <div className="mt-2 rounded-[calc(12px*var(--rk))] border px-3 py-2.5 text-[12px]" style={{ borderColor: 'var(--glass-stroke)' }} data-session-news={d.events.length}>
+    <div className="mt-1 rounded-[calc(12px*var(--rk))] border px-3 py-1.5 text-[12px]" style={{ borderColor: 'var(--glass-stroke)' }} data-session-news={d.events.length}>
       <div className="flex items-baseline justify-between gap-2">
         <span style={{ color: 'var(--text-dim)' }}>
           {d.events.length ? <>News in your session ({d.window.from}–{d.window.to} NY, {d.currencies.join('/')})</> : <>No red or orange {d.currencies.join('/')} news in your session ({d.window.from}–{d.window.to} NY)</>}
@@ -462,7 +466,7 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
         {d.auto && <button type="button" onClick={refresh} disabled={busy} className="shrink-0 text-[10.5px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>{busy ? 'Pulling…' : 'Refresh'}</button>}
       </div>
       {d.events.length > 0 && (
-        <ul className="mt-1.5 space-y-1">
+        <ul className="mt-1 max-h-[2.6rem] space-y-0.5 overflow-y-auto" data-session-news-list>
           {d.events.map((e) => (
             <li key={e.id} className="flex items-center gap-2">
               <span className="size-2 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
@@ -473,7 +477,7 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
           ))}
         </ul>
       )}
-      <p className="mt-1.5 text-[10.5px]" style={{ color: d.error ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
+      <p className="mt-0.5 text-[10.5px] leading-tight" style={{ color: d.error ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
         {d.error ?? (d.auto ? (d.syncedAt ? `From ForexFactory, pulled ${new Date(d.syncedAt).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'From ForexFactory.') : 'ForexFactory pull is off — Analytics → News.')}
         {review?.news ? ` Morning check-in said: ${review.news === 'None' ? 'nothing major' : review.news.toLowerCase()}.` : ''}
       </p>
@@ -508,7 +512,7 @@ function Written({ answers, keys }: { answers: PrepData['answers']; keys: string
 /** A rule to keep, shown where it applies. */
 function Rule({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-[calc(12px*var(--rk))] border px-3 py-2 text-[12.5px] leading-snug" data-prep-rule
+    <p className="rounded-[calc(10px*var(--rk))] border px-2.5 py-1 text-[11.5px] leading-snug" data-prep-rule
       style={{ borderColor: 'rgb(var(--amber) / 0.45)', background: 'rgb(var(--amber) / 0.08)', color: 'var(--text)' }}>{children}</p>
   );
 }
@@ -537,7 +541,7 @@ function HtfSentence({ data, field, location }: { data: PrepData; field: FieldFn
   );
 }
 
-const PLAN_ROWS = ['Dir', 'Zones', 'Confirms', 'Target', 'TargetAt', 'RR', 'Kills'] as const;
+const PLAN_ROWS = ['Dir', 'Zones', 'Target', 'TargetAt', 'RR', 'Kills'] as const;
 
 /**
  * Page 2: Scenario A (with the bias) and B (the alternate) side by side, on rows they share — each question
@@ -551,7 +555,7 @@ function PlanPage({ data, change }: { data: PrepData; change: Change }) {
   const col = (k: 'a' | 'b') => {
     const ceiling = gradeCeiling(data.answers, k);
     return (
-      <div className={`${card} row-span-8 grid grid-rows-subgrid gap-y-1.5`} style={cardStyle} data-scenario={k}>
+      <div className={`${card} row-span-7 grid grid-rows-subgrid gap-y-1.5`} style={cardStyle} data-scenario={k}>
         <div>
           <Heading right={ceiling && <span className="shrink-0 rounded-full border px-2 py-px text-[10.5px] font-semibold" data-ceiling
             style={ceiling.startsWith('Can') ? { borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' } : { borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }}>{ceiling}</span>}>
@@ -567,13 +571,21 @@ function PlanPage({ data, change }: { data: PrepData; change: Change }) {
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col justify-between gap-2.5" data-plans>
-      <div className="grid grid-rows-[repeat(8,auto)] gap-x-3 lg:grid-cols-2">{col('a')}{col('b')}</div>
+      <div className="grid grid-rows-[repeat(7,auto)] gap-x-3 lg:grid-cols-2">{col('a')}{col('b')}</div>
       {/* C, the stop and the marks: one strip. */}
       <div className={`${card} grid items-end gap-x-4 gap-y-2 lg:grid-cols-[1.5fr_auto_auto_1fr]`} style={cardStyle} data-scenario="c">
         <div className="self-center px-1">
-          <span className="text-[13px] font-semibold">Scenario C</span>
-          <p className="text-[12px] leading-snug" data-scenario-c-line>{scenarioC(data.answers)} <span style={{ color: 'var(--text-faint)' }}>Written down, so “no trade” counts as following the plan.</span></p>
+          <span className="text-[13px] font-semibold" title="Written down, so “no trade” counts as following the plan.">Scenario C</span>
+          <p className="text-[12px] leading-snug" data-scenario-c-line>{scenarioC(data.answers)}</p>
           <Written answers={data.answers} keys={['plans.cutoff']} />
+          {/* The confirmation is the strategy, the same for A and B every day: read here, never picked (as the backtest plan). */}
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 rounded-[calc(10px*var(--rk))] border border-dashed px-2.5 py-1 text-[11.5px]" data-confirm-info="prep"
+            title="Not picked: the model confirms the same way every day." style={{ borderColor: 'var(--glass-stroke)', background: 'rgb(var(--accent) / 0.03)' }}>
+            <span className="self-center rounded-[5px] px-1.5 py-px text-[9px] font-bold uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--accent))', background: 'rgb(var(--accent) / 0.12)' }}>rule</span>
+            <span style={{ color: 'var(--text-faint)' }}>Confirmation, A and B:</span>
+            <b className="font-semibold">{CONFIRM_RULE.trigger}</b>
+            <span style={{ color: 'var(--text-dim)' }}>· extra: {CONFIRM_RULE.extra}</span>
+          </div>
         </div>
         {f('cutoffAt', { inline: false })}
         {f('stop', { inline: false })}

@@ -256,3 +256,21 @@ test('the plans follow the earlier steps: the bias fills A and B, a level run ov
   assert.equal(flipped['plans.aZones'], undefined);
   assert.equal(flipped['plans.aTargetAt'], undefined, 'PDH is no target for a short');
 });
+
+test('the daily plan: confirmation is the strategy (not asked), up to three targets each, the old single target still reads', async () => {
+  const P = await import('../lib/prep');
+  const plans = PREP_STEPS.find((s) => s.id === 'plans')!;
+  assert.ok(plans.fields.find((f) => f.id === 'aConfirms')!.hidden, 'confirmation is not asked');
+  const t = plans.fields.find((f) => f.id === 'aTarget')!; const at = plans.fields.find((f) => f.id === 'aTargetAt')!;
+  assert.deepEqual([t.kind, t.max, at.kind, at.max], ['many', 3, 'many', 3]);
+  assert.ok(P.PREP_KILLS.includes('Triggered before the market open'));
+  // New answers are lists; an older prep held text. Both read.
+  assert.deepEqual(P.targetsOf({ 'plans.aTarget': ['PDH/PDL', 'Weekly high/low'] }, 'a', 'Target'), ['PDH/PDL', 'Weekly high/low']);
+  assert.deepEqual(P.targetsOf({ 'plans.aTarget': 'PDH/PDL' }, 'a', 'Target'), ['PDH/PDL']);
+  assert.equal(deriveDecisions({ 'plans.aDir': 'Long', 'plans.aTarget': ['Weekly high/low', 'PDH/PDL'] })['draw.target'], 'Weekly high/low', 'A\'s first target decides');
+  assert.match(P.scenarioLine({ 'plans.aDir': 'Long', 'plans.aZones': ['PDL'], 'plans.aTargetAt': ['PDH', 'PWH'] }, 'a')!, /→ PDH \/ PWH/);
+  // A trade aimed at any of the plan's targets is in the plan.
+  const prep = { ...EMPTY_PREP, answers: { 'plans.aDir': 'Long', 'plans.aTarget': ['PDH/PDL', 'Weekly high/low'] } } as never;
+  const trade = { account: 'Demo', undated: false, direction: 'Long', sweep_level: null, target_type: 'Weekly high/low', date: '2026-11-24T09:45', plan_scenario: 'A' } as never;
+  assert.equal(PM.planMatch(trade, prep).status, 'in');
+});

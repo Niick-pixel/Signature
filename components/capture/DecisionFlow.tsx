@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { Segmented } from '@/components/ui/Segmented';
@@ -18,7 +19,7 @@ import { TRADE_SAVED } from '@/components/review/SavedNotice';
 import { CAPTURE_OUTSIDE } from './CaptureSheet';
 import { PlanStrip, ReplayBuilder, ReplayDayControl, replayCards, useReplay, type PlanCard } from '@/components/replay/ReplayPlan';
 import { scenarioLine as prepLine } from '@/lib/prep';
-import { PLAN_PREFILL, noBiasCap, planPrefill, replayTradeDate, type PlanPrefillEvent } from '@/lib/replay';
+import { PLAN_ACCOUNTS, PLAN_PREFILL, noBiasCap, planPrefill, prepPrefill, replayTradeDate, type PlanPrefillEvent, type PlanSource } from '@/lib/replay';
 import { closeCapture } from '@/lib/nav';
 import { clearCarry, readCarry, writeCarry } from '@/lib/backtestSession';
 import { press, spring, springSoft, riseIn } from '@/lib/motion';
@@ -113,14 +114,19 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
   const [carry] = useState(() => (typeof window === 'undefined' ? null : readCarry()));
   useEffect(() => { clearCarry(); }, []);
 
-  // A scenario tapped on the replay day's plan (?plan=a|b): a backtest, with that scenario filled once the day is read.
-  const [planAsk, setPlanAsk] = useState<'a' | 'b' | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const k = new URLSearchParams(window.location.search).get('plan');
-    return k === 'a' || k === 'b' ? k : null;
+  // A scenario tapped on a plan: the replay day's (?plan=a|b, a backtest) or the morning's prep
+  // (?plan=a|b&from=prep&account=…, a real account). Filled in once that plan has been read.
+  // Read from the router, not window.location: opened by a client-side navigation, the address bar
+  // is updated only after this first render.
+  const query = useSearchParams();
+  const [planAsk, setPlanAsk] = useState<{ k: 'a' | 'b'; source: PlanSource } | null>(() => {
+    const k = query.get('plan');
+    return k === 'a' || k === 'b' ? { k, source: query.get('from') === 'prep' ? 'prep' : 'replay' } : null;
   });
   const [account, setAccount] = useState<Account>(() => {
-    if (planAsk) return BACKTEST;
+    if (planAsk?.source === 'replay') return BACKTEST;
+    const asked = query.get('account');
+    if (planAsk?.source === 'prep' && asked && (PLAN_ACCOUNTS as readonly string[]).includes(asked)) return asked as Account;
     const last = keep?.account ?? carry?.account ?? read(LAST_ACCOUNT_KEY);
     return (ACCOUNTS as readonly string[]).includes(last ?? '') ? last as Account : BACKTEST;
   });
@@ -194,6 +200,7 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
 
   // Demo and Live: the morning plan's scenario for this direction, pre-selected. Backtests: always chosen by hand.
   const [plans, setPlans] = useState<{ aDir: string | null; bDir: string | null; aLine: string | null; bLine: string | null } | null>(null);
+  const [prepAnswers, setPrepAnswers] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
     if (backtest) return;
     const d = new Date(); const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -203,20 +210,28 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
       const a = j?.prep?.data.answers;
       const s = (k: string) => (typeof a?.[k] === 'string' ? a[k] as string : null);
       setPlans(a ? { aDir: s('plans.aDir'), bDir: s('plans.bDir'), aLine: prepLine(a as never, 'a'), bLine: prepLine(a as never, 'b') } : null);
+      setPrepAnswers(a ?? {});
     }).catch(() => {});
     return () => { live = false; };
   }, [backtest]);
   // A tapped scenario, filled in when the locked day is known: the scenario, direction, target and planned R.
   // Never a row of the rubric — those are read off the chart. Tapped again from the header while open: the same.
   useEffect(() => {
-    const on = (e: Event) => { const ev = e as PlanPrefillEvent; ev.detail.taken = true; setAccount(BACKTEST); setPlanAsk(ev.detail.k); };
+    const on = (e: Event) => {
+      const ev = e as PlanPrefillEvent; ev.detail.taken = true;
+      const source = ev.detail.source ?? 'replay';
+      if (source === 'prep') { if (ev.detail.account && (PLAN_ACCOUNTS as readonly string[]).includes(ev.detail.account)) setAccount(ev.detail.account as Account); }
+      else setAccount(BACKTEST);
+      setPlanAsk({ k: ev.detail.k, source });
+    };
     window.addEventListener(PLAN_PREFILL, on);
     return () => window.removeEventListener(PLAN_PREFILL, on);
   }, []);
   useEffect(() => {
-    if (!planAsk || !day) return;
-    const p = planPrefill(day, planAsk);
-    // Once, when the locked day arrives: the fill is an answer to that, not derived state.
+    if (!planAsk) return;
+    const p = planAsk.source === 'replay' ? (day ? planPrefill(day, planAsk.k) : null) : (prepAnswers ? prepPrefill(prepAnswers, planAsk.k) : null);
+    if (!p) return;
+    // Once, when the plan it names has been read: the fill is an answer to that, not derived state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPicked(p.scenario);
     if (p.direction) setDirection(p.direction);
@@ -225,7 +240,7 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
     setPlanAsk(null);
     // The address keeps no ?plan: a reload starts a blank trade.
     if (window.location.search.includes('plan=')) window.history.replaceState(null, '', window.location.pathname);
-  }, [planAsk, day]);
+  }, [planAsk, day, prepAnswers]);
   // Chosen by hand wins; otherwise, off backtests, the morning plan's scenario for this direction.
   // No plan for this replay day: the trade is Unplanned (max B), not A or B.
   const scenario: Scenario | null = noPlan && backtest ? 'none' : picked ?? (backtest ? null : scenarioFromPlan(direction, plans));

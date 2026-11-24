@@ -20,7 +20,7 @@ const { parseTradeInput } = await import('../lib/validate');
 const { applyRules } = await import('../db/rules');
 
 const ctx = (x: Partial<import('../lib/replay').ReplayContext> = {}) => ({ ...R.emptyContext(), h4: 'Bull' as const, h1Agrees: true, overnight: 'Lows run' as const, news: 'Data at 8:30 ET' as const, open: 'Discount' as const, ...x });
-const sc = (x: Partial<import('../lib/replay').ReplayScenario> = {}) => ({ ...R.emptyScenario(), zones: ['PDL'], confirm: ['Sweep + iFVG close'], target: 'PDH/PDL', rr: '2+' as const, kill: 'Not triggered by 10:30' as const, ...x });
+const sc = (x: Partial<import('../lib/replay').ReplayScenario> = {}) => ({ ...R.emptyScenario(), zones: ['PDL'], confirm: ['Sweep + iFVG close'], targets: ['PDH/PDL'], rr: '2+' as const, kill: 'Not triggered by 10:30' as const, ...x });
 
 test('day bias: the 4H direction when the 1H agrees; otherwise no bias', () => {
   assert.equal(R.dayBias({ h4: 'Bull', h1Agrees: true }), 'Long');
@@ -137,8 +137,8 @@ test('weekly levels and major swings: each on its side, as zones and targets; th
   assert.ok(D.V2_TARGETS.some((t) => t.value === 'Major swing H/L'));
   // A plan with them parses back as it was.
   const c = ctx({ taken: [] });
-  const s = R.parseScenarios({ a: sc({ zones: ['PWL', 'Major swing low'], target: 'Major swing H/L' }), b: sc({ zones: ['PWH'], target: 'PWH/PWL' }) }, c);
-  assert.deepEqual([s.a.zones, s.a.target, s.b.zones, s.b.target], [['PWL', 'Major swing low'], 'Major swing H/L', ['PWH'], 'PWH/PWL']);
+  const s = R.parseScenarios({ a: sc({ zones: ['PWL', 'Major swing low'], targets: ['Major swing H/L'] }), b: sc({ zones: ['PWH'], targets: ['PWH/PWL'] }) }, c);
+  assert.deepEqual([s.a.zones, s.a.targets, s.b.zones, s.b.targets], [['PWL', 'Major swing low'], ['Major swing H/L'], ['PWH'], ['PWH/PWL']]);
 });
 
 test('taken before the open: never a zone, never a target on that side; overnight follows; the plan lets go; copy asks again', () => {
@@ -157,9 +157,9 @@ test('taken before the open: never a zone, never a target on that side; overnigh
   assert.ok(!R.targetOptions('None', 'Short', ['Asia low', 'London low']).includes('Session H/L'));
   // The plan follows: a picked zone or target that is now taken is let go.
   const c = ctx({ taken });
-  const tidy = R.tidyScenarios(c, R.withDirections(c, { a: sc({ zones: ['PDL', 'London low'], target: 'PWH/PWL' }), b: sc({ zones: ['PDH'] }) }));
+  const tidy = R.tidyScenarios(c, R.withDirections(c, { a: sc({ zones: ['PDL', 'London low'], targets: ['PWH/PWL'] }), b: sc({ zones: ['PDH'] }) }));
   assert.deepEqual(tidy.a.zones, ['London low']);
-  assert.equal(tidy.a.target, null);
+  assert.deepEqual(tidy.a.targets, []);
   assert.ok(R.lockMissing(c, { a: sc({ zones: ['PDL'] }), b: sc({ zones: ['PDH'] }) }).includes('A: trigger zone'), 'a taken zone does not count');
   // Not answered: owed. Parsed: overnight from the taps.
   assert.ok(R.lockMissing(ctx({ overnight: null, taken: null }), { a: sc(), b: sc({ zones: ['PDH'] }) }).includes('taken before the open'));
@@ -239,13 +239,31 @@ test('the confirmation is the strategy: never required to lock, shown as the fix
 });
 
 test('a scenario tapped on the plan fills Step 1: scenario, direction, target and planned R — never a rubric row', () => {
-  const day = { context: ctx(), scenarios: { a: sc({ target: 'PWH/PWL', rr: '1.5–2' }), b: sc({ zones: ['PDH'], target: 'HTF FVG', rr: '<1.5' }) } };
+  const day = { context: ctx(), scenarios: { a: sc({ targets: ['PWH/PWL', 'PDH/PDL'], rr: '1.5–2' }), b: sc({ zones: ['PDH'], targets: ['HTF FVG'], rr: '<1.5' }) } };
   assert.deepEqual(R.planPrefill(day, 'a'), { scenario: 'A', direction: 'Long', target_type: 'Weekly high/low', planned_rr: '1.5' });
   assert.deepEqual(R.planPrefill(day, 'b'), { scenario: 'B', direction: 'Short', target_type: 'HTF FVG (1H/4H)', planned_rr: null }, 'under 1.5R is left to tap');
   // Every plan target maps to a value Step 1 can store.
   const stored = D.V2_TARGETS.map((t) => t.value);
   for (const t of ['PDH/PDL', 'PWH/PWL', 'Session H/L', 'EQH/EQL', 'ITH/ITL', 'Major swing H/L', 'HTF FVG', 'Data wick']) {
-    const p = R.planPrefill({ context: ctx(), scenarios: { a: sc({ target: t }), b: sc() } }, 'a');
+    const p = R.planPrefill({ context: ctx(), scenarios: { a: sc({ targets: [t] }), b: sc() } }, 'a');
     assert.ok(p.target_type && stored.includes(p.target_type), `${t} → ${p.target_type}`);
   }
+});
+
+test('first targets: up to three per scenario; a day planned with one target (the old shape) still reads', () => {
+  const c = ctx();
+  const s = R.parseScenarios({ a: { ...sc(), targets: ['PDH/PDL', 'PWH/PWL', 'Session H/L', 'EQH/EQL'] }, b: { ...sc({ zones: ['PDH'] }), targets: undefined, target: 'Session H/L' } }, c);
+  assert.deepEqual(s.a.targets, ['PDH/PDL', 'PWH/PWL', 'Session H/L'], 'three at most');
+  assert.deepEqual(s.b.targets, ['Session H/L'], 'the old single target, as a list');
+  assert.deepEqual(R.withTargets({ dir: 'Long', zones: ['PDL'], target: 'PDH/PDL' }).targets, ['PDH/PDL'], 'read from the database as stored');
+  assert.match(R.scenarioLine(s.a), /PDH\/PDL \/ PWH\/PWL \/ Session H\/L/);
+  assert.ok(!R.lockMissing(c, { a: s.a, b: s.b }).some((m) => /first target/.test(m)));
+  assert.ok(R.lockMissing(c, { a: { ...s.a, targets: [] }, b: s.b }).includes('A: first target'));
+});
+
+test('the morning plan tapped: its scenario, direction, first target type and planned R — on a real account', () => {
+  const a = { 'plans.aDir': 'Long', 'plans.aTarget': ['Weekly high/low', 'PDH/PDL'], 'plans.aRR': '2+', 'plans.bDir': 'Short', 'plans.bTarget': 'LRLR (trendline)', 'plans.bRR': '<1.5' };
+  assert.deepEqual(R.prepPrefill(a, 'a'), { scenario: 'A', direction: 'Long', target_type: 'Weekly high/low', planned_rr: '2' });
+  assert.deepEqual(R.prepPrefill(a, 'b'), { scenario: 'B', direction: 'Short', target_type: null, planned_rr: null }, 'a target Step 1 cannot store, and under 1.5R, are left to tap');
+  assert.deepEqual([...R.PLAN_ACCOUNTS], ['Live', 'Demo', 'Eval', 'Funded'], 'never a backtest');
 });
