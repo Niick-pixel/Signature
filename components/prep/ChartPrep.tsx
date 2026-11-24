@@ -541,7 +541,7 @@ function HtfSentence({ data, field, location }: { data: PrepData; field: FieldFn
   );
 }
 
-const PLAN_ROWS = ['Dir', 'Zones', 'Target', 'TargetAt', 'RR', 'Kills'] as const;
+const PLAN_ROWS = ['DirRR', 'Zones', 'Target', 'TargetAt', 'Kills'] as const;
 
 /**
  * Page 2: Scenario A (with the bias) and B (the alternate) side by side, on rows they share — each question
@@ -555,7 +555,7 @@ function PlanPage({ data, change }: { data: PrepData; change: Change }) {
   const col = (k: 'a' | 'b') => {
     const ceiling = gradeCeiling(data.answers, k);
     return (
-      <div className={`${card} row-span-7 grid grid-rows-subgrid gap-y-1.5`} style={cardStyle} data-scenario={k}>
+      <div className={`${card} row-span-6 grid grid-rows-subgrid gap-y-1.5`} style={cardStyle} data-scenario={k}>
         <div>
           <Heading right={ceiling && <span className="shrink-0 rounded-full border px-2 py-px text-[10.5px] font-semibold" data-ceiling
             style={ceiling.startsWith('Can') ? { borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' } : { borderColor: 'rgb(var(--amber) / 0.5)', color: 'rgb(var(--amber))' }}>{ceiling}</span>}>
@@ -563,7 +563,10 @@ function PlanPage({ data, change }: { data: PrepData; change: Change }) {
           </Heading>
           <Written answers={data.answers} keys={['Story', 'TriggerNote', 'Confirm', 'TargetNote', 'Kill'].map((x) => `plans.${k}${x}`)} />
         </div>
-        {PLAN_ROWS.map((row) => (
+        {PLAN_ROWS.map((row) => row === 'DirRR' ? (
+          // Two short questions on one row, labels above: the direction and the rough R.
+          <div key={row} className="grid gap-x-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">{f(`${k}Dir`, { inline: false })}{f(`${k}RR`, { inline: false })}</div>
+        ) : (
           <div key={row}>{f(`${k}${row}`, row === 'Zones' ? { hide: notOffered(data.answers, k, 'zone') } : row === 'TargetAt' ? { hide: notOffered(data.answers, k, 'target') } : {})}</div>
         ))}
       </div>
@@ -571,7 +574,7 @@ function PlanPage({ data, change }: { data: PrepData; change: Change }) {
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col justify-between gap-2.5" data-plans>
-      <div className="grid grid-rows-[repeat(7,auto)] gap-x-3 lg:grid-cols-2">{col('a')}{col('b')}</div>
+      <div className="grid grid-rows-[repeat(6,auto)] gap-x-3 lg:grid-cols-2">{col('a')}{col('b')}</div>
       {/* C, the stop and the marks: one strip. */}
       <div className={`${card} grid items-end gap-x-4 gap-y-2 lg:grid-cols-[1.5fr_auto_auto_1fr]`} style={cardStyle} data-scenario="c">
         <div className="self-center px-1">
