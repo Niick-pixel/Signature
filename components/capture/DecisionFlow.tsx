@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { fillsSummary, type ExecutionRow, type FillsSummary } from '@/lib/executions';
 import { AnimatePresence, motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { Segmented } from '@/components/ui/Segmented';
@@ -1003,6 +1004,13 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
 
         {/* How it ended — or, for a pass or a miss, what it would have done. */}
         <div className="flex flex-col gap-3" data-outcome-fields>
+          {taken && <FillsStrip trade={trade} onUse={(f) => {
+            if (f.net != null) setPnl(String(f.net));
+            setContracts(String(f.qty));
+            if (f.r != null) setR(String(f.r));
+            if (!ended && f.outcome) setEnded(f.outcome);
+            setStage('Settled');
+          }} />}
           {taken ? (
             <>
               <div className="grid grid-cols-[9rem_minmax(0,1fr)] gap-3">
@@ -1616,3 +1624,38 @@ const STEP1_LABEL: Record<Step1Key, string> = {
   target_type: 'Target type', entry_method: 'Entry', confidence_at_entry: 'Confidence',
 };
 const fmt = (v: unknown) => (v == null ? '—' : v === true ? 'one gap' : v === false ? 'more than one' : String(v));
+
+/**
+ * The trade's fills, when an imported round trip is linked to it (the watched folder, or Executions):
+ * size, exit, net and R when it can be worked out — one tap writes them into Step 2. Looked for again
+ * every half minute while Step 2 is open: the folder is read once a minute.
+ */
+function FillsStrip({ trade, onUse }: { trade: Trade; onUse: (f: FillsSummary) => void }) {
+  const [f, setF] = useState<FillsSummary | null>(null);
+  const [used, setUsed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const look = () => void fetch(`/api/executions?trade=${encodeURIComponent(trade.id)}`).then((r) => r.json())
+      .then((j: { executions: ExecutionRow[] }) => { if (live && j.executions?.[0]) setF(fillsSummary(j.executions[0], trade)); }).catch(() => {});
+    look();
+    const id = window.setInterval(look, 30_000);
+    return () => { live = false; window.clearInterval(id); };
+  }, [trade]);
+  if (!f) return null;
+  const money = f.net == null ? null : `${f.net > 0 ? '+' : f.net < 0 ? '−' : ''}$${Math.abs(f.net).toFixed(2)}`;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[calc(12px*var(--rk))] border px-3 py-1.5 text-[11.5px]" data-fills-strip
+      style={{ borderColor: 'rgb(var(--accent) / 0.35)', background: 'rgb(var(--accent) / 0.06)' }}>
+      <span className="min-w-0 truncate" style={{ color: 'var(--text-dim)' }}>
+        <b style={{ color: 'var(--text)' }}>From your fills</b> · {f.qty} contract{f.qty === 1 ? '' : 's'} · exit {f.exitAt.slice(11, 16)}
+        {money && <> · <span className="tabular-nums" style={{ color: (f.net ?? 0) < 0 ? 'rgb(var(--outcome-loss))' : 'var(--text)' }}>{money} net</span></>}
+        {f.r != null ? <> · <span className="tabular-nums">{f.r > 0 ? '+' : ''}{f.r}R</span> <span style={{ color: 'var(--text-faint)' }}>({f.rFrom === 'risk' ? 'from the dollars risked' : 'from the stop'})</span></>
+          : <span style={{ color: 'var(--text-faint)' }}> · R: write it (no stop or risk on the trade)</span>}
+      </span>
+      <button type="button" onClick={() => { onUse(f); setUsed(true); }} disabled={used} data-fills-use
+        className="shrink-0 rounded-full px-3 py-0.5 text-[11.5px] font-semibold disabled:opacity-50" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
+        {used ? 'Used' : 'Use these'}
+      </button>
+    </div>
+  );
+}

@@ -41,13 +41,13 @@ export function knownFingerprints(fps: string[]): Map<string, { id: string; trad
   return out;
 }
 
-function blockedPairs(): Set<string> {
+export function blockedPairs(): Set<string> {
   const rows = getDb().prepare('SELECT e.fingerprint, u.trade_id FROM execution_unlinks u JOIN executions e ON e.id = u.execution_id')
     .all() as Array<{ fingerprint: string; trade_id: string }>;
   return new Set(rows.map((r) => `${r.fingerprint}|${r.trade_id}`));
 }
 
-function linkedTradeIds(): Set<string> {
+export function linkedTradeIds(): Set<string> {
   return new Set((getDb().prepare('SELECT trade_id FROM executions WHERE trade_id IS NOT NULL').all() as Array<{ trade_id: string }>).map((r) => r.trade_id));
 }
 

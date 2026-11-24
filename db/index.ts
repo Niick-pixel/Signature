@@ -5,6 +5,7 @@ import { DATA_DIR, DB_PATH } from '../lib/paths';
 import { migrate } from './migrate';
 import { backupBeforeMigrations, backupToday } from './backup';
 import { checkIntegrity, folderBackup } from './safeBackup';
+import { scanExecutionFolder } from './executionWatch';
 
 /**
  * SQLite comes from `node:sqlite`, built into Node itself.
@@ -68,6 +69,9 @@ export function getDb(): DatabaseSync {
   };
   const hourly = setInterval(daily, 60 * 60 * 1000);
   hourly.unref?.();
+  // The execution folder (db/executionWatch), read once a minute when one is set — never throws.
+  const fills = setInterval(() => { if (globalForDb.__signatureDb === db) { try { scanExecutionFolder(); } catch { /* next minute */ } } }, 60 * 1000);
+  fills.unref?.();
   // The first zip of the day waits half a minute, so it never slows opening.
   setTimeout(() => { if (globalForDb.__signatureDb === db) { folderBackup(db); checkIntegrity(db); } }, 30_000).unref?.();
 

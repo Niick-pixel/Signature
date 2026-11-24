@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Labeled } from '@/components/ui/Help';
 import Link from 'next/link';
 import { Segmented } from '@/components/ui/Segmented';
@@ -96,6 +97,7 @@ export function TradeSettings({ Section }: { Section: SectionComp }) {
             <TogglePill checked={prefs.importAutoLink} onChange={(importAutoLink) => update({ importAutoLink })} label="Link trades logged later"
               hint="A trade logged from an imported execution (Log it) finds it on its own when its page opens." />
           </div>
+          <WatchFolder platform={prefs.importPlatform} zone={prefs.importZone} window={prefs.importWindow} />
           <Link href="/executions" className="inline-block rounded-full border px-3 py-1.5 text-[12px] font-medium"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>Open Executions →</Link>
         </div>
@@ -104,3 +106,59 @@ export function TradeSettings({ Section }: { Section: SectionComp }) {
   );
 }
 
+
+interface Watch { folder: string | null; last?: { at: string; files: number; added: number; linked: number; error?: string } }
+
+/**
+ * The folder your platform exports fills to, read once a minute (db/executionWatch): new round trips
+ * stored and linked to their trades — those waiting for Step 2 too — with the platform, clock and
+ * window above.
+ */
+function WatchFolder({ platform, zone, window: win }: { platform: string; zone: string; window: number }) {
+  const [w, setW] = useState<Watch | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const post = useCallback(async (body: Record<string, unknown>) => {
+    const r = await fetch('/api/executions/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (r.ok) { setW(j); setMsg(null); } else setMsg(j.error ?? 'That did not work.');
+  }, []);
+  useEffect(() => { void fetch('/api/executions/watch').then((r) => r.json()).then(setW).catch(() => {}); }, []);
+  // The options above follow the watched folder.
+  const folder = w?.folder ?? null;
+  const opts = `${platform}|${zone}|${win}`;
+  const sent = useRef<string | null>(null);
+  useEffect(() => {
+    if (!folder) return;
+    // The first look only notes the options; a change to them after is sent.
+    if (sent.current == null || sent.current === opts) { sent.current = opts; return; }
+    sent.current = opts;
+    void fetch('/api/executions/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set', platform, zone, window: win }) });
+  }, [folder, opts, platform, zone, win]);
+  const choose = async () => {
+    const picked = window.signature?.pickFolder
+      ? await window.signature.pickFolder('The folder your platform exports its fills to')
+      : window.prompt('Full path of the folder your platform exports fills to:', folder ?? '');
+    if (picked) await post({ action: 'set', folder: picked, platform, zone, window: win });
+  };
+  const last = w?.last;
+  return (
+    <div className="rounded-[calc(12px*var(--rk))] border px-3 py-2.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-exec-watch={folder ? 'on' : 'off'}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
+          <span className="font-medium" style={{ color: 'var(--text)' }}>Watch a folder</span>{' · '}
+          {folder ? <span className="break-all">{folder}</span> : 'off — import files by hand on Executions'}
+        </p>
+        <div className="flex shrink-0 gap-1.5">
+          {folder && <button type="button" onClick={() => void post({ action: 'scan' })} className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)' }} data-exec-scan>Read now</button>}
+          {folder && <button type="button" onClick={() => void post({ action: 'set', folder: null })} className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)' }}>Stop</button>}
+          <button type="button" onClick={() => void choose()} className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'rgb(var(--accent) / 0.45)', color: 'rgb(var(--accent))' }} data-exec-choose>{folder ? 'Change…' : 'Choose folder…'}</button>
+        </div>
+      </div>
+      <p className="mt-1 text-[11px]" style={{ color: last?.error ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
+        {folder ? (last ? (last.error ? `Last read failed: ${last.error}` : `Read once a minute · last ${new Date(last.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${last.files} file${last.files === 1 ? '' : 's'}, ${last.added} new round trip${last.added === 1 ? '' : 's'}, ${last.linked} linked to a trade`) : 'Read once a minute.')
+          : 'Point it at the folder your platform saves its fills export to: every new file is read once a minute, matched to its trade — including one still waiting for Step 2 — and its prices, times, size, fees and P&L filled in where empty.'}
+      </p>
+      {msg && <p className="mt-1 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{msg}</p>}
+    </div>
+  );
+}

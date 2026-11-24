@@ -447,3 +447,26 @@ export function excursion(bars: readonly Bar[], direction: 'Long' | 'Short', ent
     ? { mfePoints: round(Math.max(0, hi - entry)), maePoints: round(Math.max(0, entry - lo)) }
     : { mfePoints: round(Math.max(0, entry - lo)), maePoints: round(Math.max(0, hi - entry)) };
 }
+
+/* ───────────────────────── Step 2, from the fills ───────────────────────── */
+
+export interface FillsSummary { qty: number; exitAt: string; net: number | null; r: number | null; rFrom: 'risk' | 'stop' | null; outcome: 'Win' | 'Loss' | 'Breakeven' | null }
+
+/**
+ * What a linked round trip says about the trade, for Step 2: its size, exit, net P&L (after fees), and R
+ * when it can be worked out — the dollars risked, or the stop's distance. R is never guessed: with
+ * neither, it stays for you to write.
+ */
+export function fillsSummary(e: Pick<ExecutionRow, 'qty' | 'exit_at' | 'gross_dollars' | 'fees_dollars' | 'entry_price' | 'exit_price' | 'direction'>,
+  t: Pick<Trade, 'risk_dollars' | 'stop_loss'>): FillsSummary {
+  const net = e.gross_dollars == null ? null : round(e.gross_dollars - (e.fees_dollars ?? 0));
+  let r: number | null = null; let rFrom: FillsSummary['rFrom'] = null;
+  if (net != null && t.risk_dollars != null && t.risk_dollars > 0) { r = round(net / t.risk_dollars); rFrom = 'risk'; }
+  else if (t.stop_loss != null && t.stop_loss !== e.entry_price) {
+    const sign = e.direction === 'Long' ? 1 : -1;
+    const risk = (e.entry_price - t.stop_loss) * sign;
+    if (risk > 0) { r = round(((e.exit_price - e.entry_price) * sign) / risk); rFrom = 'stop'; }
+  }
+  const outcome = net == null ? null : Math.abs(net) < 1 ? 'Breakeven' : net > 0 ? 'Win' : 'Loss';
+  return { qty: e.qty, exitAt: e.exit_at, net, r, rFrom, outcome };
+}
