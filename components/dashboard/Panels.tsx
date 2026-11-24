@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { springSoft } from '@/lib/motion';
 import { overallScore, SCORE_AXES, type DashboardData, type ScoreAxes, type TileValues } from '@/lib/dashboard';
 
@@ -276,26 +276,54 @@ const RAISE: Record<keyof ScoreAxes, string> = {
 };
 
 export function Score({ d, enabled }: { d: DashboardData; enabled: Record<string, boolean> }) {
+  // Under the pointer anywhere on the radar (nearest axis by angle), or pinned by a click; else the lowest.
   const [hot, setHot] = useState<keyof ScoreAxes | null>(null);
+  const [pinned, setPinned] = useState<keyof ScoreAxes | null>(null);
   const axes = SCORE_AXES.filter((a) => enabled[a.key] !== false);
   const score = overallScore(d.axes, enabled);
   const id = useId();
   const R = 62; const C = 110;
+  const step = (Math.PI * 2) / Math.max(1, axes.length);
   const at = (i: number, r: number) => {
-    const ang = -Math.PI / 2 + (i / axes.length) * Math.PI * 2;
+    const ang = -Math.PI / 2 + i * step;
     return [C + Math.cos(ang) * r, C + Math.sin(ang) * r] as const;
   };
   const val = (k: keyof ScoreAxes) => d.axes[k] ?? 0;
   const shape = axes.map((a, i) => at(i, (val(a.key) / 100) * R).join(',')).join(' ');
   const measured = axes.filter((a) => d.axes[a.key] != null);
   const weakest = measured.length ? measured.reduce((m, a) => ((d.axes[a.key] as number) < (d.axes[m.key] as number) ? a : m)) : null;
-  const focus = axes.find((a) => a.key === hot) ?? weakest;
+  const focus = axes.find((a) => a.key === (hot ?? pinned)) ?? weakest;
   const scoreTone = score == null ? 'var(--text-faint)' : score >= 70 ? WIN : score >= 45 ? 'rgb(var(--accent))' : LOSS;
+  /** The axis nearest the pointer, by angle, anywhere inside the radar and its labels. */
+  const nearest = (e: React.PointerEvent<SVGSVGElement>): keyof ScoreAxes | null => {
+    const b = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - b.left) / b.width) * 220 - C; const y = ((e.clientY - b.top) / b.height) * 220 - C;
+    if (Math.hypot(x, y) > R + 44) return null;
+    const turn = (Math.atan2(y, x) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
+    return axes[Math.round(turn / step) % axes.length]?.key ?? null;
+  };
+  const wedge = (i: number) => {
+    const a = -Math.PI / 2 + i * step; const r = R + 4;
+    const p = (t: number) => `${C + Math.cos(t) * r},${C + Math.sin(t) * r}`;
+    return `${C},${C} ${p(a - step / 2)} ${p(a - step / 4)} ${p(a)} ${p(a + step / 4)} ${p(a + step / 2)}`;
+  };
+  const tip = (k: keyof ScoreAxes) => (pinned === k ? 'Pinned — click again to let go' : 'Click to pin');
   return (
     <div className="@container" data-dash-score={score ?? ''}>
     <div className="flex flex-col items-center gap-x-4 gap-y-2 @[25rem]:flex-row">
       {axes.length >= 3 && (
-        <svg viewBox="0 0 220 220" className="aspect-square w-full max-w-[188px] shrink-0 overflow-visible @[25rem]:w-[196px]" data-dash-radar>
+        <svg viewBox="0 0 220 220" className="aspect-square w-full max-w-[188px] shrink-0 cursor-pointer overflow-visible outline-none @[25rem]:w-[196px]" data-dash-radar
+          onPointerMove={(e) => setHot(nearest(e))} onPointerLeave={() => setHot(null)}
+          onClick={(e) => { const k = nearest(e as unknown as React.PointerEvent<SVGSVGElement>); if (k) setPinned((p) => (p === k ? null : k)); }}
+          tabIndex={0} role="listbox" aria-label="Discipline score axes"
+          onKeyDown={(e) => {
+            if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Escape'].includes(e.key)) return;
+            e.preventDefault();
+            if (e.key === 'Escape') { setPinned(null); return; }
+            const i = Math.max(0, axes.findIndex((a) => a.key === (pinned ?? focus?.key)));
+            const n = (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + axes.length) % axes.length;
+            setPinned(axes[n].key);
+          }}>
           <defs>
             <radialGradient id={`${id}-f`} cx="50%" cy="50%" r="50%">
               <stop offset="0" stopColor="rgb(var(--accent))" stopOpacity="0.12" />
@@ -305,23 +333,29 @@ export function Score({ d, enabled }: { d: DashboardData; enabled: Record<string
           {[0.25, 0.5, 0.75, 1].map((k) => (
             <polygon key={k} points={axes.map((_, i) => at(i, R * k).join(',')).join(' ')} fill={k === 1 ? 'var(--glass-fill)' : 'none'} stroke="var(--glass-stroke)" />
           ))}
-          {axes.map((_, i) => { const [x2, y2] = at(i, R); return <line key={i} x1={C} y1={C} x2={x2} y2={y2} stroke="var(--glass-stroke)" />; })}
+          {/* The slice of the radar the pointer is in: a soft wash, so the whole chart answers the mouse. */}
+          {axes.map((a, i) => (
+            <motion.polygon key={`w-${a.key}`} points={wedge(i)} fill="rgb(var(--accent))" initial={false}
+              animate={{ opacity: focus?.key === a.key && (hot || pinned) ? (pinned === a.key ? 0.14 : 0.09) : 0 }} transition={{ duration: 0.18 }} pointerEvents="none" />
+          ))}
+          {axes.map((a, i) => { const [x2, y2] = at(i, R); const on = focus?.key === a.key && (hot || pinned); return <line key={i} x1={C} y1={C} x2={x2} y2={y2} stroke={on ? 'rgb(var(--accent) / 0.7)' : 'var(--glass-stroke)'} strokeWidth={on ? 1.4 : 1} />; })}
           <motion.polygon initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={springSoft} style={{ transformOrigin: `${C}px ${C}px` }}
-            points={shape} fill={`url(#${id}-f)`} stroke="rgb(var(--accent))" strokeWidth="1.6" strokeLinejoin="round" />
+            points={shape} fill={`url(#${id}-f)`} stroke="rgb(var(--accent))" strokeWidth="1.6" strokeLinejoin="round" pointerEvents="none" />
           {axes.map((a, i) => {
             const [px, py] = at(i, (val(a.key) / 100) * R);
             const [lx, ly] = at(i, R + 26);
             const on = focus?.key === a.key;
+            const lit = on && (hot != null || pinned != null);
             return (
-              <g key={a.key} onMouseEnter={() => setHot(a.key)} onMouseLeave={() => setHot(null)} style={{ cursor: 'default' }}>
-                <circle cx={px} cy={py} r={on ? 4 : 3} fill="var(--bg-raised)" stroke="rgb(var(--accent))" strokeWidth="1.6" />
+              <g key={a.key} data-dash-axis={a.key} data-pinned={pinned === a.key ? '1' : undefined} aria-selected={on} role="option">
+                <motion.circle cx={px} cy={py} initial={false} animate={{ r: lit ? 5.5 : on ? 4 : 3 }} transition={springSoft}
+                  fill={lit ? 'rgb(var(--accent))' : 'var(--bg-raised)'} stroke="rgb(var(--accent))" strokeWidth="1.6" />
                 <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fill={on ? 'var(--text)' : 'var(--text-dim)'} fontWeight={on ? 600 : 400}>{a.label}</text>
                 <text x={lx} y={ly + 9} textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="700" className="tabular-nums"
                   fill={d.axes[a.key] == null ? 'var(--text-faint)' : (d.axes[a.key] as number) >= 70 ? WIN : (d.axes[a.key] as number) >= 45 ? 'var(--text)' : LOSS}>
                   {d.axes[a.key] ?? '—'}
                 </text>
-                {/* A generous hit area over the label and the point. */}
-                <circle cx={lx} cy={ly} r="16" fill="transparent"><title>{a.hint}</title></circle>
+                <title>{`${a.label}: ${a.hint} · ${tip(a.key)}`}</title>
               </g>
             );
           })}
@@ -346,13 +380,23 @@ export function Score({ d, enabled }: { d: DashboardData; enabled: Record<string
           </div>
         </div>
         {focus && (
-          <div className="mt-2 rounded-[calc(12px*var(--rk))] px-2.5 py-1.5 text-[11px] leading-snug" data-dash-raise={focus.key}
-            style={{ background: 'var(--glass-fill)', border: '1px solid var(--glass-stroke)' }}>
-            <div className="mb-0.5 font-semibold">
-              {hot ? focus.label : 'Lowest'}{!hot && <>: {focus.label}</>} <span className="tabular-nums" style={{ color: 'var(--text-dim)' }}>{d.axes[focus.key] ?? '—'}</span>
-            </div>
-            <div style={{ color: 'var(--text-dim)' }}>{hot ? focus.hint : RAISE[focus.key]}</div>
-          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.button key={focus.key} type="button" data-dash-raise={focus.key} data-dash-pinned={pinned ?? ''}
+              onClick={() => setPinned((p) => (p === focus.key ? null : focus.key))} title={tip(focus.key)}
+              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }} transition={springSoft}
+              whileHover={{ y: -1 }} whileTap={{ scale: 0.985 }}
+              className="mt-2 block w-full rounded-[calc(12px*var(--rk))] px-2.5 py-1.5 text-left text-[11px] leading-snug"
+              style={{ background: pinned === focus.key ? 'rgb(var(--accent) / 0.08)' : 'var(--glass-fill)', border: `1px solid ${pinned === focus.key ? 'rgb(var(--accent) / 0.45)' : 'var(--glass-stroke)'}` }}>
+              <div className="mb-0.5 flex items-baseline justify-between gap-2 font-semibold">
+                <span>{hot || pinned ? focus.label : <>Lowest: {focus.label}</>} <span className="tabular-nums" style={{ color: 'var(--text-dim)' }}>{d.axes[focus.key] ?? '—'}</span></span>
+                <span className="shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.06em]" style={{ color: pinned === focus.key ? 'rgb(var(--accent))' : 'var(--text-faint)' }}>
+                  {pinned === focus.key ? 'Pinned' : 'Tap to pin'}
+                </span>
+              </div>
+              <div style={{ color: 'var(--text-dim)' }}>{focus.hint}</div>
+              <div className="mt-0.5" style={{ color: 'var(--text)' }}><span style={{ color: 'rgb(var(--accent))' }}>Raise it: </span>{RAISE[focus.key]}</div>
+            </motion.button>
+          </AnimatePresence>
         )}
       </div>
     </div>

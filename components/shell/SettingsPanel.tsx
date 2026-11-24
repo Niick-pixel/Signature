@@ -137,10 +137,12 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   const [desk, setDesk] = useState<{ dataDir: string; mode: string; canMove: boolean; version: string } | null>(null);
   const [upd, setUpd] = useState<(UpdateState & { auto?: boolean }) | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [startup, setStartup] = useState<{ enabled: boolean; on: boolean; reason: string | null } | null>(null);
 
   useEffect(() => {
     if (!open || !window.signature?.getDataInfo) return;
     window.signature.getDataInfo().then(setDesk).catch(() => setDesk(null));
+    window.signature.startup?.state().then(setStartup).catch(() => setStartup(null));
     window.signature.updates.state().then(setUpd).catch(() => setUpd(null));
     return window.signature.updates.onChange((next) => setUpd((prev) => ({ ...prev, ...next })));
   }, [open]);
@@ -306,6 +308,17 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
         <SwapIn k={cat}>
 
             {cat === 'general' && (<>
+            {startup && (
+              <Section title="Start with Windows" hint="Signature opens when you sign in to Windows, so the morning check-in is waiting for you.">
+                {startup.enabled ? (
+                  <TogglePill checked={startup.on} label="Open Signature when I sign in"
+                    onChange={async (on) => { const next = await window.signature?.startup?.set(on); if (next) setStartup(next); }}
+                    hint="On by default in the installed app. Off, you open it yourself." />
+                ) : (
+                  <p className="text-[11.5px] leading-snug" style={{ color: 'var(--text-dim)' }} data-startup-unavailable>{startup.reason}</p>
+                )}
+              </Section>
+            )}
             <Section title="Path" hint="The steps toward a funded account, their criteria, your commitments and the eval budget.">
               <Button data-settings-path onClick={() => { onClose(); navigate('/path?edit=1'); }}>Edit the path</Button>
             </Section>

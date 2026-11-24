@@ -12,7 +12,7 @@ import type { StudyTotals } from '@/lib/study';
 import { StudyToday } from './StudyToday';
 import { Card, Faint, Head, Pill, rTone, shotSrc, signedR } from './shared';
 
-export type HubTab = 'today' | 'question' | 'lessons' | 'drills' | 'notes' | 'later';
+export type HubTab = 'today' | 'question' | 'lessons' | 'notes' | 'later';
 
 /**
  * Today in the study room: what to study, from what costs you most. The
@@ -20,8 +20,8 @@ export type HubTab = 'today' | 'question' | 'lessons' | 'drills' | 'notes' | 'la
  * trades, drill them as flashcards, write the rule down — never a setup to
  * take, and never a reason to break a written rule.
  */
-export function TodayTab({ plan, drillsThisWeek, waiting, go, writePlaybook, totals, reloadTotals }: {
-  plan: StudyPlan | null; drillsThisWeek: number | null; waiting: number | null;
+export function TodayTab({ plan, waiting, go, writePlaybook, totals, reloadTotals }: {
+  plan: StudyPlan | null; waiting: number | null;
   go: (t: HubTab) => void; writePlaybook: (title: string, body: string) => void;
   totals: StudyTotals | null; reloadTotals: () => void;
 }) {
@@ -30,8 +30,7 @@ export function TodayTab({ plan, drillsThisWeek, waiting, go, writePlaybook, tot
   const appSeconds = useAppTime();
   const steps = leak ? [
     { n: 1, title: `Look at the ${Math.min(leak.tradeIds.length, 6)} most recent`, body: 'Open each one. What did the chart show before you did it?', done: false },
-    { n: 2, title: 'Grade them blind', body: 'Re-grade the entry candle without the outcome — does the grade still say take?', action: () => go('drills'), label: 'Blind re-grade' },
-    { n: 3, title: 'Write the rule that stops it', body: leak.experiment ? `A starting point: ${leak.experiment}` : 'One line, in your words, you can check before every entry.', action: () => writePlaybook(`Stop: ${leak.label}`, `${leak.label}\n\nWhat it costs: about ${Math.abs(leak.costR).toFixed(2)}R each time (${leak.n} trades).\n\nThe rule:\n\nHow I will check it before an entry:\n`), label: 'Write it' },
+    { n: 2, title: 'Write the rule that stops it', body: leak.experiment ? `A starting point: ${leak.experiment}` : 'One line, in your words, you can check before every entry.', action: () => writePlaybook(`Stop: ${leak.label}`, `${leak.label}\n\nWhat it costs: about ${Math.abs(leak.costR).toFixed(2)}R each time (${leak.n} trades).\n\nThe rule:\n\nHow I will check it before an entry:\n`), label: 'Write it' },
   ] : [];
 
   return (
@@ -39,7 +38,7 @@ export function TodayTab({ plan, drillsThisWeek, waiting, go, writePlaybook, tot
       <Card data-study-plan={leak ? 'leak' : 'none'}>
         <Head title="Study what costs you" right={leak ? (leak.clear ? 'From your Stats · Fix first' : 'Your best candidate · not proven yet') : undefined} />
         {!plan ? <div className="h-40" /> : !leak ? (
-          <Faint>{plan.trades < 5 ? 'After a few settled trades, the habit that costs you most shows up here, with a plan to study it.' : 'Nothing costs you clearly more than the rest right now. Keep the cards and the drills going.'}</Faint>
+          <Faint>{plan.trades < 5 ? 'After a few settled trades, the habit that costs you most shows up here, with a plan to study it.' : 'Nothing costs you clearly more than the rest right now. Keep the daily question and your lessons going.'}</Faint>
         ) : (
           <>
             <div className="text-[18px] font-semibold tracking-tight" data-plan-leak>{leak.label}</div>
@@ -80,7 +79,6 @@ export function TodayTab({ plan, drillsThisWeek, waiting, go, writePlaybook, tot
         <Tile title="Time in the app" value={appSeconds == null ? '—' : fmtTime(appSeconds)}
           sub={totals?.blocks?.some((b) => b.id.startsWith('app:')) || !(totals?.blocks?.length) ? 'today · counts as study time until you log one' : 'today · your logged study counts instead'}
           onClick={() => {}} data="app-time" />
-        <Tile title="Blind re-grade" value={drillsThisWeek == null ? '—' : `${drillsThisWeek}/10`} sub="graded this week" onClick={() => go('drills')} data="drills" />
         <Tile title="Watch later" value={waiting == null ? '—' : String(waiting)} sub="videos waiting" onClick={() => go('later')} data="later" />
       </div>
     </div>

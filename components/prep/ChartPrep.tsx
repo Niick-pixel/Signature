@@ -51,12 +51,17 @@ const PAGES = [
 ] as const;
 const pageDone = (d: PrepData, i: number) => PAGES[i].steps.every((s) => d.steps[s]);
 
-export function ChartPrep({ review, onClose }: { review: DailyReview | null; onClose: () => void }) {
+export function ChartPrep({ review, onClose, onFinished }: {
+  review: DailyReview | null; onClose: () => void;
+  /** The last page marked: the window shrinks to the summary (MorningCheckIn), which closes itself. */
+  onFinished?: (finished: boolean) => void;
+}) {
   const [day] = useState(() => localDay());
   const [data, setData] = useState<PrepData | null>(null);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [at, setAt] = useState(0);
   const [finished, setFinished] = useState(false);
+  useEffect(() => { onFinished?.(finished); }, [finished, onFinished]);
   const [saved, setSaved] = useState(false);
   const [carried, setCarried] = useState<Array<{ level: string; day: string }>>([]);
   const touched = useRef(false);
@@ -120,7 +125,7 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
   return (
     <div data-chart-prep className="flex min-h-0 flex-1 flex-col">
       {/* Where you are: one dot per page, each a jump. */}
-      <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Chart prep pages">
+      {!finished && <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Chart prep pages">
         {PAGES.map((pg, i) => {
           const done = pageDone(data, i);
           const skipped = done && pg.steps.every((s) => data.steps[s] === 'skipped');
@@ -138,13 +143,13 @@ export function ChartPrep({ review, onClose }: { review: DailyReview | null; onC
               transition={springSoft} style={{ flexBasis: 0 }} />
           );
         })}
-      </div>
+      </div>}
 
       <AnimatePresence mode="wait" initial={false}>
         {finished ? (
           <motion.div key="ready" className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={springSoft}>
-            <Ready data={data} startedAt={startedAt} onReview={() => { setFinished(false); setAt(0); }} onClose={onClose} />
+            <Ready data={data} startedAt={startedAt} onClose={onClose} />
           </motion.div>
         ) : (
           <motion.div key={page.id} data-prep-current={page.id} className="flex min-h-0 flex-1 flex-col"
@@ -354,16 +359,32 @@ function FieldView({ field, value, onChange, hide = [], notes = {}, inline = tru
   );
 }
 
-/** The end: the answers in one place, to glance at before an entry. */
-function Ready({ data, startedAt, onReview, onClose }: {
-  data: PrepData; startedAt: string | null; onReview: () => void; onClose: () => void;
-}) {
+/** How long the summary stays before the window closes itself. */
+export const READY_MS = 8000;
+
+/**
+ * The end, small: the answers in one place to glance at, no buttons. A bar empties from full and the window
+ * closes when it reaches nothing; the pointer over it holds it (to read), Esc closes at once.
+ */
+function Ready({ data, startedAt, onClose }: { data: PrepData; startedAt: string | null; onClose: () => void }) {
   const p = prepProgress(data);
+  const [left, setLeft] = useState(READY_MS);
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (held) return;
+    let last = performance.now();
+    const id = window.setInterval(() => {
+      const now = performance.now(); const dt = now - last; last = now;
+      setLeft((l) => Math.max(0, l - dt));
+    }, 50);
+    return () => window.clearInterval(id);
+  }, [held]);
+  useEffect(() => { if (left <= 0) onClose(); }, [left, onClose]);
   // The new prep ends on its plan (bias, A, B, C); an older one lists its answers.
   const rows = stepsOf(data) === PREP_STEPS ? planSummary(data.answers).map((r) => [r.label, r.value] as const)
     : stepsOf(data).flatMap((s) => s.fields.map((f) => [f.label, answerText(data.answers[answerKey(s, f)])] as const)).filter(([, v]) => v != null);
   return (
-    <div data-prep-ready>
+    <div data-prep-ready onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)}>
       <div className="flex items-center gap-3">
         <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={springSoft}
           className="grid size-10 shrink-0 place-items-center rounded-full"
@@ -381,7 +402,7 @@ function Ready({ data, startedAt, onReview, onClose }: {
         </div>
       </div>
       {rows.length > 0 && (
-        <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]" data-prep-plan>
+        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]" data-prep-plan>
           {rows.map(([k, v]) => (
             <div key={k} className="contents">
               <dt style={{ color: 'var(--text-faint)' }}>{k}</dt>
@@ -390,10 +411,12 @@ function Ready({ data, startedAt, onReview, onClose }: {
           ))}
         </dl>
       )}
-      <div className="mt-6 flex gap-2">
-        <Button variant="primary" onClick={onClose}>Done</Button>
-        <Button onClick={onReview}>Go through it again</Button>
+      {/* Emptying from full: when it reaches nothing, the window closes. */}
+      <div className="mt-5 h-1 overflow-hidden rounded-full" style={{ background: 'var(--glass-stroke)' }} title={held ? 'Held while the pointer is here' : 'Closes by itself'}>
+        <div className="h-full origin-left rounded-full" data-prep-countdown={Math.ceil(left / 1000)}
+          style={{ width: `${(left / READY_MS) * 100}%`, background: held ? 'var(--text-faint)' : 'rgb(var(--outcome-win))', transition: 'background 200ms' }} />
       </div>
+      <p className="mt-1.5 text-[10.5px]" style={{ color: 'var(--text-faint)' }}>{held ? 'Held — move away to let it close.' : `Closes in ${Math.ceil(left / 1000)}s · Esc closes now`}</p>
     </div>
   );
 }

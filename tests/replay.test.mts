@@ -229,3 +229,23 @@ test('a no-bias day with both sides run (4H bear, 1H disagrees; Asia high, Asia 
   assert.ok(!shortT.includes('PDH/PDL') && !shortT.includes('Session H/L'));
   assert.ok(shortT.includes('PWH/PWL'));
 });
+
+test('the confirmation is the strategy: never required to lock, shown as the fixed rule; a kill switch for a trigger before the open', () => {
+  const plan = { a: sc({ confirm: [] }), b: sc({ confirm: [], zones: ['PDH'], target: 'Session H/L' }) };
+  assert.ok(!R.lockMissing(ctx(), plan).some((m) => /confirmation/.test(m)), 'no confirmation asked');
+  assert.equal(R.confirmText([]), 'Sweep + iFVG close · HTF FVG delivery + iFVG close for extra');
+  assert.equal(R.confirmText(['CISD']), 'CISD', 'an older day keeps what it picked');
+  assert.ok((R.KILLS as readonly string[]).includes('Triggered before the market open'));
+});
+
+test('a scenario tapped on the plan fills Step 1: scenario, direction, target and planned R — never a rubric row', () => {
+  const day = { context: ctx(), scenarios: { a: sc({ target: 'PWH/PWL', rr: '1.5–2' }), b: sc({ zones: ['PDH'], target: 'HTF FVG', rr: '<1.5' }) } };
+  assert.deepEqual(R.planPrefill(day, 'a'), { scenario: 'A', direction: 'Long', target_type: 'Weekly high/low', planned_rr: '1.5' });
+  assert.deepEqual(R.planPrefill(day, 'b'), { scenario: 'B', direction: 'Short', target_type: 'HTF FVG (1H/4H)', planned_rr: null }, 'under 1.5R is left to tap');
+  // Every plan target maps to a value Step 1 can store.
+  const stored = D.V2_TARGETS.map((t) => t.value);
+  for (const t of ['PDH/PDL', 'PWH/PWL', 'Session H/L', 'EQH/EQL', 'ITH/ITL', 'Major swing H/L', 'HTF FVG', 'Data wick']) {
+    const p = R.planPrefill({ context: ctx(), scenarios: { a: sc({ target: t }), b: sc() } }, 'a');
+    assert.ok(p.target_type && stored.includes(p.target_type), `${t} → ${p.target_type}`);
+  }
+});

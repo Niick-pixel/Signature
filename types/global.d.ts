@@ -44,6 +44,10 @@ declare global {
         install: () => Promise<boolean>;
         onChange: (handler: (state: UpdateState) => void) => () => void;
       };
+      startup?: {
+        state: () => Promise<{ enabled: boolean; on: boolean; reason: string | null }>;
+        set: (on: boolean) => Promise<{ enabled: boolean; on: boolean; reason: string | null }>;
+      };
       display?: {
         set: (value: { fit: boolean; scale: number }) => Promise<DisplayWire>;
         state: () => Promise<DisplayWire>;

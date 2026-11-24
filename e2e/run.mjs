@@ -338,6 +338,15 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   const day = await page.evaluate(() => new Date().toLocaleDateString('en-CA'));
   const saved = await page.evaluate(async (day) => (await (await fetch(`/api/prep?day=${day}`)).json()).prep.data.answers, day);
   expect(saved['draw.side'] === 'Both ways' && JSON.stringify(saved['liquidity.wait']) === JSON.stringify(['PDH', 'London low']), JSON.stringify(saved).slice(0, 200));
+  // The end is small and has no buttons: a bar empties and the window closes by itself.
+  await page.waitForTimeout(600);
+  const w = await page.locator('[data-prep-ready]').evaluate((el) => Math.round(el.closest('[role="dialog"]')?.getBoundingClientRect().width ?? el.getBoundingClientRect().width));
+  expect(w <= 560, `the summary window is small (${w}px)`);
+  expect(await page.locator('[data-prep-ready] button').count() === 0, 'no buttons on the summary');
+  expect(await page.locator('[data-prep-countdown]').count() === 1, 'the countdown bar');
+  await page.mouse.move(2, 2);
+  await page.waitForSelector('[data-prep-ready]', { state: 'detached', timeout: 12000 });
+  expect(await page.locator('[data-chart-prep]').count() === 0, 'closed by itself');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -670,6 +679,23 @@ await check('Replay plan: Step 1 shows the day\'s A and B above the chart; the m
   await page.waitForSelector('[data-plan-view]', { state: 'detached' });
   expect(await page.locator('[data-row="row_sweep"]').getAttribute('data-score') === '', 'no row was scored behind it');
   expect(await page.locator('[data-facts] button[aria-pressed="true"][data-option="B"]').count() === 0, 'and does not pick it');
+  // A scenario tapped on the plan fills the open Step 1: the scenario, its direction, target and planned R — no row.
+  await page.click('[data-header-strip] [data-replay-day]');
+  await page.waitForSelector('[data-plan-pick="a"]');
+  await page.click('[data-plan-pick="a"]');
+  await page.waitForSelector('[data-plan-view]', { state: 'detached' });
+  const pressed = async (sel) => page.locator(`${sel}[aria-pressed="true"]`).count();
+  expect(await pressed('[data-facts] [data-option="A"]') === 1, 'A picked');
+  expect(await pressed('[data-facts] [data-option="Long"]') === 1, 'its direction, Long');
+  expect(await pressed('[data-target-type] [data-option="PDH/PDL"]') === 1, 'its first target');
+  expect(await pressed('[data-facts] [data-option="2"]') === 1, 'planned R from 2+: 2');
+  expect(await page.locator('[data-row="row_sweep"]').getAttribute('data-score') === '', 'the rows stay yours to score');
+  // From outside New trade: the address carries it.
+  await page.goto(`${BASE}/new?plan=b`);
+  await page.waitForSelector('[data-decide-step]');
+  await page.waitForFunction(() => document.querySelector('[data-facts] [data-option="B"][aria-pressed="true"]'), null, { timeout: 8000 });
+  expect(await pressed('[data-facts] [data-option="Short"]') === 1, 'B: Short, the other way');
+  expect(!/plan=/.test(page.url()), 'the address keeps no ?plan');
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });

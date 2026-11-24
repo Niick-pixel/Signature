@@ -21,9 +21,16 @@ export const MAJOR_SWING_HELP = 'A 1H+ swing that started a displacement leg and
 export const NEWS = ['None', 'Data at 8:30 ET', 'Data at 10:00 ET', 'Afternoon FOMC or speaker'] as const;
 export const OPEN_LOCATIONS = ['Premium', 'EQ', 'Discount'] as const;
 export const CONFIRMS = ['Sweep + iFVG close', 'HTF FVG delivery + iFVG close', 'SMT with ES', 'CISD'] as const;
+/**
+ * The confirmation is the strategy itself, the same every day: shown in the plan, never picked. Older days
+ * that picked one keep what they picked (ReplayScenario.confirm); a new day stores none.
+ */
+export const CONFIRM_RULE = { trigger: 'Sweep + iFVG close', extra: 'HTF FVG delivery + iFVG close' } as const;
+export const confirmText = (picked: readonly string[]) => (picked.length ? picked.join(', ') : `${CONFIRM_RULE.trigger} · ${CONFIRM_RULE.extra} for extra`);
 export const RR_BANDS = ['<1.5', '1.5–2', '2+'] as const;
 export const KILLS = [
   'Never reaches the zone', '5m closes through the zone', 'Opposing HTF gap forms', 'Not triggered by 10:30', "Takes the other side's liquidity first",
+  'Triggered before the market open',
 ] as const;
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 export const DAY_OUTCOMES = ['A', 'B', 'C', 'unplanned', 'both'] as const;
@@ -173,7 +180,6 @@ export function lockMissing(c: ReplayContext, raw: ReplayScenarios): string[] {
   for (const [k, sc] of [['A', s.a], ['B', s.b]] as const) {
     if (!sc.dir) out.push(`${k}: direction`);
     if (!sc.zones.length) out.push(`${k}: trigger zone`);
-    if (!sc.confirm.length) out.push(`${k}: confirmation`);
     if (!sc.target) out.push(`${k}: first target`);
     if (!sc.rr) out.push(`${k}: rough R`);
     if (!sc.kill) out.push(`${k}: kill switch`);
@@ -257,8 +263,8 @@ export function replayDayLines(d: ReplayDay): { heading: string; lines: string[]
   const bias = dayBias(d.context);
   const plan = (c: ReplayContext, s: ReplayScenarios) => [
     `- **Context:** 4H ${c.h4 ?? '—'}${c.h4 && c.h4 !== 'None' ? `, 1H ${c.h1Agrees ? 'agrees' : 'does not agree'}` : ''} → bias ${dayBias(c) ?? 'none (both scenarios max B)'} · overnight ${c.overnight ?? '—'}${c.taken ? ` (taken: ${c.taken.join(', ') || 'nothing'})` : ''} · news ${c.news ?? '—'} · open in ${c.open ?? '—'}`,
-    `- **Scenario A:** ${scenarioLine(s.a)}${s.a.confirm.length ? ` · confirm: ${s.a.confirm.join(', ')}` : ''}`,
-    `- **Scenario B:** ${scenarioLine(s.b)}${s.b.confirm.length ? ` · confirm: ${s.b.confirm.join(', ')}` : ''}`,
+    `- **Scenario A:** ${scenarioLine(s.a)} · confirm: ${confirmText(s.a.confirm)}`,
+    `- **Scenario B:** ${scenarioLine(s.b)} · confirm: ${confirmText(s.b.confirm)}`,
     `- **Scenario C:** ${SCENARIO_C}`,
   ];
   const took = [d.took_a && `A ${TOOK_LABEL[d.took_a].toLowerCase()}`, d.took_b && `B ${TOOK_LABEL[d.took_b].toLowerCase()}`].filter(Boolean).join(', ');
@@ -271,3 +277,34 @@ export function replayDayLines(d: ReplayDay): { heading: string; lines: string[]
     ],
   };
 }
+
+/* ───────────── a scenario tapped in the plan: Step 1, part filled ───────────── */
+
+/** The plan's target labels → Step 1's stored target_type values (lib/decision V2_TARGETS). */
+const PLAN_TARGET_TYPE: Record<string, string> = {
+  'PDH/PDL': 'PDH/PDL', 'PWH/PWL': 'Weekly high/low', 'Session H/L': 'Session high/low', 'EQH/EQL': 'EQH/EQL',
+  'ITH/ITL': 'ITH/ITL', 'Major swing H/L': 'Major swing H/L', 'HTF FVG': 'HTF FVG (1H/4H)', 'Data wick': 'Data wick',
+};
+/** The rough R band → Step 1's planned R, at the band's low end (the honest one); under 1.5 is left to tap. */
+const PLAN_RR: Record<string, string> = { '1.5–2': '1.5', '2+': '2' };
+
+export interface PlanPrefill { scenario: 'A' | 'B'; direction: Dir | null; target_type: string | null; planned_rr: string | null }
+
+/**
+ * What a scenario tapped on the plan fills in on Step 1: the scenario, its direction, its first target and
+ * its rough R. Facts the plan already holds — never a row of the rubric, which is read off the chart each time.
+ * The locked original is used, never the amendment (planOf).
+ */
+export function planPrefill(day: Pick<ReplayDay, 'context' | 'scenarios'>, k: 'a' | 'b'): PlanPrefill {
+  const s = tidyScenarios(day.context, withDirections(day.context, day.scenarios))[k];
+  return {
+    scenario: k === 'a' ? 'A' : 'B',
+    direction: s.dir,
+    target_type: s.target ? PLAN_TARGET_TYPE[s.target] ?? null : null,
+    planned_rr: s.rr ? PLAN_RR[s.rr] ?? null : null,
+  };
+}
+
+/** Fired by a tapped scenario: an open Step 1 takes it (and sets `taken`); otherwise New trade opens with ?plan=. */
+export const PLAN_PREFILL = 'signature:plan-prefill';
+export type PlanPrefillEvent = CustomEvent<{ k: 'a' | 'b'; taken: boolean }>;

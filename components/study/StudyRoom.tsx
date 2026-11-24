@@ -20,11 +20,10 @@ import { springSnappy } from '@/lib/motion';
 import { TodayTab, type HubTab } from './hub/TodayTab';
 import { DailyQuestion } from './hub/DailyQuestion';
 import { Lessons } from './hub/Lessons';
-import { Drills } from './hub/Drills';
 import { WatchLater } from './hub/WatchLater';
 
-const TABS: HubTab[] = ['today', 'question', 'lessons', 'drills', 'notes', 'later'];
-const TAB_LABEL: Record<HubTab, string> = { today: 'Today', question: 'Question', lessons: 'Lessons', drills: 'Drills', notes: 'Notes', later: 'Watch later' };
+const TABS: HubTab[] = ['today', 'question', 'lessons', 'notes', 'later'];
+const TAB_LABEL: Record<HubTab, string> = { today: 'Today', question: 'Question', lessons: 'Lessons', notes: 'Notes', later: 'Watch later' };
 const TAB_KEY = 'signature:study-tab';
 
 interface LinkedTrade { id: string; role: 'example' | 'counter'; date: string; undated: boolean; setup: string; direction: string; account: string; outcome: string; r: number | null; grade: string; shot: string | null }
@@ -59,7 +58,6 @@ export function StudyRoom() {
   // The server renders Today; the remembered tab is applied after hydration (no mismatch).
   const [tab, setTab] = useState<HubTab>('today');
   const [plan, setPlan] = useState<StudyPlan | null>(null);
-  const [drillsWeek, setDrillsWeek] = useState<number | null>(null);
   const [waiting, setWaiting] = useState<number | null>(null);
   useEffect(() => {
     // ?tab= (a notification's link) wins over the remembered tab.
@@ -75,8 +73,6 @@ export function StudyRoom() {
   useLive(loadPlan, { ignore: ['/api/study', '/api/blind'], focus: false });
   // The counts on the tabs and tiles: after every change — a card rated, a drill graded, a video saved.
   const loadCounts = useCallback(() => {
-    const today = localDay();
-    fetch(`/api/study/drills?today=${today}`).then((r) => r.json()).then((d) => setDrillsWeek(d.counter.thisWeek)).catch(() => {});
     fetch('/api/study/later').then((r) => r.json()).then((d) => setWaiting(d.items.filter((w: { done_at: string | null }) => !w.done_at).length)).catch(() => {});
   }, []);
   useEffect(() => { loadCounts(); }, [loadCounts]);
@@ -114,7 +110,7 @@ export function StudyRoom() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[24px] font-semibold tracking-tight">Study room</h1>
-          <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>Study what costs you: a hard question a day, your lessons, drills, notes and videos.</p>
+          <p className="mt-1 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>Study what costs you: a hard question a day, your lessons, notes and videos.</p>
         </div>
         <div className="flex items-center gap-4">
           {totals && (
@@ -169,10 +165,9 @@ export function StudyRoom() {
 
       <div className="mt-4">
         <SwapIn k={tab}>
-        {tab === 'today' && <TodayTab totals={totals} reloadTotals={() => void loadTotals()} plan={plan} drillsThisWeek={drillsWeek} waiting={waiting} go={go} writePlaybook={writePlaybook} />}
+        {tab === 'today' && <TodayTab totals={totals} reloadTotals={() => void loadTotals()} plan={plan} waiting={waiting} go={go} writePlaybook={writePlaybook} />}
         {tab === 'question' && <DailyQuestion />}
         {tab === 'lessons' && <Lessons />}
-        {tab === 'drills' && <Drills />}
         {tab === 'later' && <WatchLater onOpenNote={openNote} />}
         {tab === 'notes' && (
         <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">

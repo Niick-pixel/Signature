@@ -3,6 +3,7 @@
 // the server dies with the window.
 
 const { app, BrowserWindow, shell, Menu, dialog, ipcMain, screen, Notification } = require('electron');
+const { setupStartup } = require('./startup');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -649,6 +650,13 @@ if (!app.requestSingleInstanceLock()) {
         : 'Running from source.',
       version: app.getVersion(),
       testFeed: MODE === 'dev' ? process.env.SIGNATURE_UPDATE_TEST_FEED : undefined,
+    });
+
+    // Start with Windows: an installed copy only (see electron/startup.js).
+    setupStartup({
+      ipcMain, app, settingsDir: SETTINGS_DIR(),
+      enabled: MODE === 'installed' && (process.platform === 'win32' || process.platform === 'darwin'),
+      reason: MODE === 'portable' ? 'The portable version cannot start with Windows — install Signature for this.' : 'Available in the installed app.',
     });
 
     app.on('activate', () => {

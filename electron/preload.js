@@ -26,6 +26,11 @@ contextBridge.exposeInMainWorld('signature', {
       return () => ipcRenderer.off('signature:update', listener);
     },
   },
+  /** Start with Windows: whether it is on, and the switch. */
+  startup: {
+    state: () => ipcRenderer.invoke('signature:startup-state'),
+    set: (on) => ipcRenderer.invoke('signature:startup-set', on),
+  },
   /** Fit to screen and the Text size, applied as page zoom by the main process. */
   display: {
     set: (value) => ipcRenderer.invoke('signature:display', value),

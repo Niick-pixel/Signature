@@ -163,7 +163,7 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
             </div>
           )}
           <DashRow slots={prefs.dashRow} d={d} money={money} builtIn={{
-            score: <Card title="Discipline score" note="Hover an axis for what it measures"><Score d={d} enabled={prefs.scoreAxes} /></Card>,
+            score: <Card title="Discipline score" note="Hover or tap an axis"><Score d={d} enabled={prefs.scoreAxes} /></Card>,
             recent: <Card title="Recent trades"><Recent d={d} money={money} openIn={prefs.openTradeIn} /></Card>,
             prop: <PropMini frame={(list) => <Card title="Prop accounts">{list}</Card>} empty={null} />,
           }} />

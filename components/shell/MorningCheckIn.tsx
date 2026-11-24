@@ -132,14 +132,17 @@ export function MorningCheckIn() {
     if (day) writeAsked(day);
     setOpen(false);
   }, [day]);
+  // The chart prep's last screen: the window shrinks to its summary (only while it is that screen).
+  const [finishedPrep, setSmall] = useState(false);
+  const small = finishedPrep && open && tab === 'chart';
 
   return (
     // The chart prep is one fixed window, as the backtest plan builder: the same size on every page, never scrolled.
-    <Overlay open={open} onClose={close} className={`${tab === 'chart' ? 'flex h-[min(50rem,calc(100dvh-2rem))] w-[min(86rem,calc(100vw-2rem))] flex-col overflow-hidden px-5 pb-4 pt-4' : 'max-h-[90vh] w-[34rem] overflow-y-auto p-7'} max-w-full rounded-[calc(26px*var(--rk))] transition-[width] duration-300`}
+    <Overlay open={open} onClose={close} className={`${tab === 'chart' && small ? 'flex w-[min(34rem,calc(100vw-2rem))] flex-col overflow-hidden px-6 pb-5 pt-5' : tab === 'chart' ? 'flex h-[min(50rem,calc(100dvh-2rem))] w-[min(86rem,calc(100vw-2rem))] flex-col overflow-hidden px-5 pb-4 pt-4' : 'max-h-[90vh] w-[34rem] overflow-y-auto p-7'} max-w-full rounded-[calc(26px*var(--rk))] transition-[width] duration-300`}
       // Something to work through, not glance at: solid enough that the board behind stays behind.
       surface="color-mix(in srgb, var(--bg-raised) 94%, transparent)">
       {/* The two halves of the morning, in one window. */}
-      <div role="tablist" aria-label="Check-in" className={`${tab === 'chart' ? 'mx-auto mb-3 w-full max-w-[34rem]' : 'mb-6'} flex shrink-0 gap-1 rounded-full p-1`} style={{ background: 'var(--glass-fill-strong)' }}>
+      {!small && <div role="tablist" aria-label="Check-in" className={`${tab === 'chart' ? 'mx-auto mb-3 w-full max-w-[34rem]' : 'mb-6'} flex shrink-0 gap-1 rounded-full p-1`} style={{ background: 'var(--glass-fill-strong)' }}>
         {(['morning', 'chart'] as const).map((t) => {
           const on = tab === t;
           const label = t === 'morning'
@@ -154,7 +157,7 @@ export function MorningCheckIn() {
             </button>
           );
         })}
-      </div>
+      </div>}
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={tab} className={tab === 'chart' ? 'flex min-h-0 flex-1 flex-col' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, transition: { duration: 0.1 } }} transition={springSoft}>
@@ -165,7 +168,7 @@ export function MorningCheckIn() {
             <CheckInForm key={day} day={day} existing={existing} onDone={close}
               onSaved={setExisting} onChart={() => setTab('chart')} />
           )}
-          {day && tab === 'chart' && <ChartPrep review={existing} onClose={close} />}
+          {day && tab === 'chart' && <ChartPrep review={existing} onClose={close} onFinished={setSmall} />}
         </motion.div>
       </AnimatePresence>
     </Overlay>

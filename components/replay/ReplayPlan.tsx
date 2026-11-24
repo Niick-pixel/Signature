@@ -7,9 +7,10 @@ import { Segmented } from '@/components/ui/Segmented';
 import { MultiSegmented } from '@/components/ui/MultiSegmented';
 import { Button } from '@/components/ui/Button';
 import { localDay } from '@/lib/day';
+import { navigate } from '@/lib/nav';
 import {
-  CONFIRMS, DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, RR_BANDS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
-  copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, noBiasCap, playedOf, rrWarning, scenarioLine, targetLeft, targetOptions,
+  DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, RR_BANDS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
+  CONFIRM_RULE, PLAN_PREFILL, confirmText, copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, noBiasCap, playedOf, rrWarning, scenarioLine, targetLeft, targetOptions,
   overnightOf, tidyScenarios, tookFromTrades, weekdayOf, withDirections, zoneOptions,
   type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenario, type ReplayScenarios, type Took,
 } from '@/lib/replay';
@@ -85,7 +86,7 @@ const dirTone = (d: string) => (d === 'Long' ? WIN : LOSS);
 type BuilderProps = { open: boolean; onClose: () => void; last: ReplayDay | null; amend?: ReplayDay | null; instrument?: string | null; onLocked?: (d: ReplayDay) => void };
 export function ReplayBuilder(props: BuilderProps) {
   return (
-    <Overlay open={props.open} onClose={props.onClose} className="max-h-[calc(100dvh-2rem)] w-full max-w-[72rem] overflow-y-auto rounded-[calc(24px*var(--rk))] p-5" surface="color-mix(in srgb, var(--bg-raised) 96%, transparent)">
+    <Overlay open={props.open} onClose={props.onClose} className="max-h-[calc(100dvh-2rem)] w-[min(86rem,calc(100vw-2rem))] max-w-full overflow-y-auto rounded-[calc(24px*var(--rk))] p-5" surface="color-mix(in srgb, var(--bg-raised) 96%, transparent)">
       {/* Mounted fresh on every opening: it starts from the next date and an empty (or the amended) plan. */}
       {props.open && <BuilderBody {...props} />}
     </Overlay>
@@ -124,7 +125,6 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
     const scen = (k: 'a' | 'b', sc: ReplayScenario, set: (p: Partial<ReplayScenario>) => void): G[] => [
       ...(k === 'a' && !bias ? [{ id: 'a-dir', options: ['Long', 'Short'], pick: (o: string) => set({ dir: sc.dir === o ? null : o as 'Long' }) }] : []),
       { id: `${k}-zones`, options: zoneOptions(sc.dir, context.news, context.taken), pick: (o) => set({ zones: sc.zones.includes(o) ? sc.zones.filter((z) => z !== o) : [...sc.zones, o].slice(-MAX_ZONES) }) },
-      { id: `${k}-confirm`, options: CONFIRMS, pick: (o) => set({ confirm: sc.confirm.includes(o) ? sc.confirm.filter((z) => z !== o) : [...sc.confirm, o] }) },
       { id: `${k}-target`, options: targetOptions(context.news, sc.dir, context.taken), pick: (o) => set({ target: sc.target === o ? null : o }) },
       { id: `${k}-rr`, options: RR_BANDS, pick: (o) => set({ rr: sc.rr === o ? null : o as ReplayScenario['rr'] }) },
       { id: `${k}-kill`, options: KILLS, pick: (o) => set({ kill: sc.kill === o ? null : o as ReplayScenario['kill'] }) },
@@ -192,7 +192,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
     return (
       // Six rows on a subgrid shared by A and B: each question sits beside its twin, so a scenario
       // with fewer zones (some taken) leaves a little room in that row, not an empty block at the bottom.
-      <div className="row-span-6 grid grid-rows-subgrid gap-y-2 rounded-[calc(18px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-replay-scenario={k}>
+      <div className="row-span-5 grid grid-rows-subgrid gap-y-1 rounded-[calc(18px*var(--rk))] border px-3 py-2.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-replay-scenario={k}>
         <div>
         <div className="flex items-baseline justify-between px-1">
           <span className="text-[14px] font-semibold">Scenario {k.toUpperCase()}</span>
@@ -221,8 +221,6 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
         <Chips id={`${k}-zones`} label="Trigger zone" options={zoneOptions(sc.dir, context.news, context.taken)} value={sc.zones} multi max={MAX_ZONES}
           onChange={(v) => set({ zones: v as string[] })} focused={fid === `${k}-zones`} onFocus={() => focusOn(`${k}-zones`)} required titleFor={swingTitle}
           hint={`The high side for a short, the low side for a long; a level taken before the open is not offered. The data wick appears on a news day. Major swing: ${MAJOR_SWING_HELP}`} />
-        <Chips id={`${k}-confirm`} label="Confirmation" options={CONFIRMS} value={sc.confirm} multi onChange={(v) => set({ confirm: v as string[] })}
-          focused={fid === `${k}-confirm`} onFocus={() => focusOn(`${k}-confirm`)} required />
         <Chips id={`${k}-target`} label="First target" options={targetOptions(context.news, sc.dir, context.taken)} value={sc.target} onChange={(v) => set({ target: v as string | null })}
           labelFor={(o) => { const left = targetLeft(o, sc.dir, context.taken); return left ? `${o} · ${left}` : o; }}
           focused={fid === `${k}-target`} onFocus={() => focusOn(`${k}-target`)} required titleFor={swingTitle}
@@ -240,7 +238,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
 
   return (
       <div data-replay-builder={amend ? 'amend' : 'plan'}>
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-4">
+        <div className="mb-2 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[20px] font-semibold">{amend ? `Amend Day ${amend.sequence}` : 'Plan replay day'} <span className="text-[13px] font-medium" style={faint}>· backtest</span></h1>
             <p className="mt-0.5 text-[12.5px]" style={dim}>
@@ -283,28 +281,18 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
               </Field>
             </div>
           )}
-          <div className="p-1" data-day-bias={bias ?? 'none'}>
-            <Field quiet label="Day bias · derived" hint="The 4H direction when the 1H agrees; otherwise no bias, and both scenarios are capped at B.">
-              <div className="glass flex rounded-[calc(16px*var(--rk))] p-1">
-                <span className="flex-1 rounded-[calc(12px*var(--rk))] border px-3 py-2 text-center text-[12px] font-semibold"
-                  style={bias ? { color: `rgb(${dirTone(bias)})`, background: `rgb(${dirTone(bias)} / 0.16)`, borderColor: `rgb(${dirTone(bias)} / 0.5)` } : { color: 'var(--text-dim)', borderColor: 'transparent' }}>
-                  {bias ?? 'No bias — both scenarios max B'}
-                </span>
-              </div>
-            </Field>
-          </div>
+          <InfoBox label="Day bias · derived" hint="The 4H direction when the 1H agrees; otherwise no bias, and both scenarios are capped at B."
+            tone={bias ? dirTone(bias) : undefined} data-day-bias={bias ?? 'none'}>
+            <span className="text-[12.5px] font-semibold" style={{ color: bias ? `rgb(${dirTone(bias)})` : 'var(--text-dim)' }}>{bias ?? 'No bias — both scenarios max B'}</span>
+          </InfoBox>
           <Chips id="taken" label="Taken before the open" options={[...TAKEN_LEVELS, NOTHING_TAKEN]} value={takenValue} multi onChange={(v) => setTaken(v as string[])}
             focused={fid === 'taken'} onFocus={() => focusOn('taken')} required={taken == null} className="md:col-span-2"
             hint="Each level run before the open leaves the trigger zones and the targets. Overnight follows from it." />
-          <div className="p-1" data-overnight={context.overnight ?? ''}>
-            <Field quiet label="Overnight · derived" hint="From the levels taken: highs, lows, both or neither.">
-              <div className="glass flex rounded-[calc(16px*var(--rk))] p-1">
-                <span className="flex-1 rounded-[calc(12px*var(--rk))] px-3 py-2 text-center text-[12px] font-semibold" style={{ color: context.overnight ? 'var(--text)' : 'var(--text-dim)' }}>
-                  {context.overnight ?? 'Tap what was taken'}
-                </span>
-              </div>
-            </Field>
-          </div>
+          <InfoBox label="Overnight · derived" hint="From the levels taken: highs, lows, both or neither." accent={Boolean(context.overnight)} data-overnight={context.overnight ?? ''}>
+            <span className="text-[12.5px] font-semibold" style={{ color: context.overnight ? 'rgb(var(--accent))' : 'var(--text-dim)' }}>
+              {context.overnight ?? 'Follows what was taken'}
+            </span>
+          </InfoBox>
           <Chips id="news" label="News" options={NEWS} value={context.news} onChange={(v) => setC({ news: v as ReplayContext['news'] })}
             focused={fid === 'news'} onFocus={() => focusOn('news')} required hint="On a news day the data wick becomes a trigger zone and a target." className="md:col-span-2" />
           <Chips id="open" label="Open location" options={OPEN_LOCATIONS} value={context.open} onChange={(v) => setC({ open: v as ReplayContext['open'] })}
@@ -312,16 +300,27 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
         </div>
 
         {/* A, B and C. */}
-        <div className="mt-3 grid gap-x-3 gap-y-3 md:grid-cols-2">
+        <div className="mt-2 grid gap-x-3 gap-y-2 md:grid-cols-2">
           {scenarioCol('a', s.a, setA)}
           {scenarioCol('b', s.b, setB)}
         </div>
-        <p className="mt-3 rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
-          <b style={{ color: 'var(--text)' }}>Scenario C</b> — {SCENARIO_C}
-        </p>
+        {/* The confirmation is the strategy, the same for A and B every day: read here once, never picked. Then C. */}
+        <div className="mt-1.5 grid items-stretch gap-x-3 md:grid-cols-2">
+          <InfoBox label="Confirmation · the strategy, A and B" hint="Not picked: the model confirms the same way every day." mark="rule" data-confirm-info="ab">
+            <span className="flex flex-wrap items-baseline gap-x-2 text-[12px]">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={faint}>Trigger</span>
+              <span className="font-semibold" style={{ color: 'var(--text)' }}>{CONFIRM_RULE.trigger}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={faint}>· Extra</span>
+              <span style={dim}>{CONFIRM_RULE.extra}</span>
+            </span>
+          </InfoBox>
+          <InfoBox label="Scenario C · no trade" mark="rule" data-scenario-c>
+            <span className="text-[12px]" style={dim}>{SCENARIO_C}</span>
+          </InfoBox>
+        </div>
 
         {/* The footer stays in view while the plan scrolls on a short window. */}
-        <div className="sticky -bottom-5 -mx-5 -mb-5 mt-3 flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3"
+        <div className="sticky -bottom-5 -mx-5 -mb-5 mt-2 flex flex-wrap items-center justify-between gap-3 border-t px-5 py-2.5"
           style={{ borderColor: 'var(--glass-stroke)', background: 'color-mix(in srgb, var(--bg-raised) 96%, transparent)' }} data-builder-footer>
           <p className="min-w-0 text-[11.5px]" style={error ? { color: `rgb(${LOSS})` } : faint} role={error ? 'alert' : undefined}>
             {error ?? (missing.length ? `Still to tap: ${missing.slice(0, 6).join(', ')}${missing.length > 6 ? `, +${missing.length - 6}` : ''}.` : 'Ready to lock.')}
@@ -459,7 +458,7 @@ function PlanView({ open, day, trades, onClose, onAmend }: {
               <Button variant="primary" onClick={onClose}>Close</Button>
             </div>
           </div>
-          <PlanBody context={day.context} scenarios={day.scenarios} />
+          <PlanBody context={day.context} scenarios={day.scenarios} onPick={day.closed_at ? undefined : (k) => { onClose(); pickScenario(k); }} />
           {day.amended_at && day.amended_context && day.amended_scenarios && (
             <div className="mt-4" data-plan-view-amended>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--amber))' }}>Amended after locking — the original above is what counts</p>
@@ -477,7 +476,17 @@ function PlanView({ open, day, trades, onClose, onAmend }: {
   );
 }
 
-function PlanBody({ context: c, scenarios: s }: { context: ReplayContext; scenarios: ReplayScenarios }) {
+/**
+ * A scenario tapped on the plan: an open Step 1 fills it in (the scenario, direction, target, planned R);
+ * with none open, New trade opens with it filled. Rows of the rubric are never filled: they are read off the chart.
+ */
+function pickScenario(k: 'a' | 'b') {
+  const ev = new CustomEvent(PLAN_PREFILL, { detail: { k, taken: false } });
+  window.dispatchEvent(ev);
+  if (!ev.detail.taken) navigate(`/new?plan=${k}`);
+}
+
+function PlanBody({ context: c, scenarios: s, onPick }: { context: ReplayContext; scenarios: ReplayScenarios; onPick?: (k: 'a' | 'b') => void }) {
   const bias = dayBias(c);
   const row = (label: string, value: ReactNode) => (
     <div className="flex items-baseline justify-between gap-3 py-0.5 text-[12px]"><span style={faint}>{label}</span><span className="text-right">{value ?? '—'}</span></div>
@@ -485,21 +494,33 @@ function PlanBody({ context: c, scenarios: s }: { context: ReplayContext; scenar
   const card = (k: 'a' | 'b') => {
     const sc = s[k];
     return (
-      <div className="rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-plan-view-scenario={k}>
+      <Wrap k={k} tone={sc.dir ? dirTone(sc.dir) : null}>
         <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-[13px] font-semibold">Scenario {k.toUpperCase()}</span>
+          <span className="text-[13px] font-semibold">Scenario {k.toUpperCase()}{onPick && <span className="ml-2 text-[11px] font-medium" style={{ color: 'rgb(var(--accent))' }} data-plan-pick-hint>Tap to trade it ▸</span>}</span>
           <span className="text-[11.5px] font-medium" style={{ color: sc.dir ? `rgb(${dirTone(sc.dir)})` : 'var(--text-faint)' }}>
             {sc.dir ?? '—'}{k === 'a' ? (bias ? ' · with the bias' : '') : ' · the other way'}{!bias && ' · max B'}
           </span>
         </div>
         {row('Trigger zone', sc.zones.join(' + ') || null)}
-        {row('Confirmation', sc.confirm.join(', ') || null)}
+        {row('Confirmation', confirmText(sc.confirm))}
         {row('First target', sc.target)}
         {row('Rough R', sc.rr ? <span style={sc.rr === '<1.5' ? { color: `rgb(${LOSS})` } : undefined}>{sc.rr}R</span> : null)}
         {row('Kill switch', sc.kill)}
-      </div>
+      </Wrap>
     );
   };
+  const Wrap = ({ k, tone, children }: { k: 'a' | 'b'; tone: string | null; children: ReactNode }) => onPick ? (
+    <button type="button" onClick={() => onPick(k)} data-plan-view-scenario={k} data-plan-pick={k}
+      title={`New trade on Scenario ${k.toUpperCase()}: its direction, target and planned R filled in — the rows are yours to score.`}
+      className="group block w-full rounded-[calc(14px*var(--rk))] border p-3 text-left transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 active:scale-[0.985]"
+      style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', ['--pick' as string]: tone ?? 'var(--accent)' }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = `rgb(${tone ?? 'var(--accent)'} / 0.55)`; e.currentTarget.style.boxShadow = `0 8px 22px -12px rgb(${tone ?? 'var(--accent)'} / 0.55)`; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--glass-stroke)'; e.currentTarget.style.boxShadow = 'none'; }}>
+      {children}
+    </button>
+  ) : (
+    <div className="rounded-[calc(14px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-plan-view-scenario={k}>{children}</div>
+  );
   return (
     <div className="space-y-3">
       <div className="grid gap-x-6 rounded-[calc(14px*var(--rk))] border px-3 py-2 sm:grid-cols-2" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-plan-view-context>
@@ -579,3 +600,27 @@ export const replayCards = (day: ReplayDay): PlanCard[] => {
   // The card already says the direction; the line starts at the zones.
   return (['a', 'b'] as const).map((k) => ({ k, dir: s[k].dir, line: scenarioLine(s[k])?.replace(/^(Long|Short) · /, '') ?? null, capped }));
 };
+
+/**
+ * A value the plan works out or holds fixed, never tapped: a square, dashed box with an "auto" mark, so it
+ * reads as information beside the tap rows, not as one more row to answer.
+ */
+function InfoBox({ label, hint, tone, accent = false, mark = 'auto', children, ...data }: {
+  label: string; hint?: string; tone?: string; accent?: boolean;
+  /** The tag in the corner: "auto" for a derived value, "rule" for one fixed by the strategy. */
+  mark?: string; children: ReactNode; [k: `data-${string}`]: string;
+}) {
+  const ring = tone ? `rgb(${tone} / 0.45)` : accent ? 'rgb(var(--accent) / 0.4)' : 'var(--glass-stroke)';
+  const fill = tone ? `rgb(${tone} / 0.08)` : accent ? 'rgb(var(--accent) / 0.07)' : 'rgb(var(--accent) / 0.03)';
+  return (
+    <div className="p-1" {...data}>
+      <Field quiet label={label} hint={hint}>
+        <div className="flex min-h-[2.5rem] items-center gap-2.5 rounded-[calc(10px*var(--rk))] border border-dashed px-3 py-1.5" style={{ borderColor: ring, background: fill }}>
+          <span className="shrink-0 rounded-[6px] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em]"
+            style={{ color: tone ? `rgb(${tone})` : 'rgb(var(--accent))', background: tone ? `rgb(${tone} / 0.12)` : 'rgb(var(--accent) / 0.12)' }} aria-hidden>{mark}</span>
+          <span className="min-w-0 flex-1">{children}</span>
+        </div>
+      </Field>
+    </div>
+  );
+}

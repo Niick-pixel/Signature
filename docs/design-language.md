@@ -124,8 +124,15 @@ Everything is a spring (framer-motion). Nothing fades linearly.
 ### 8. Content patterns
 - **Status lines**: "Still to tap: A: trigger zone, B: kill switch, +2."
   They live in the footer and never push the layout.
-- **Derived fields** read like inputs but cannot be tapped
-  ("Overnight · derived: Both").
+- **Derived and fixed fields** are never drawn as chips. They use a square,
+  dashed info box with a small tag: "auto" for a value worked out from other
+  answers ("Overnight · derived: Lows run"), "rule" for one the strategy fixes
+  (the confirmation, Scenario C). It reads as information, not one more row to answer.
+- **Summaries that act**: a read-only card can be tapped when it starts the next
+  thing (a scenario on the day's plan opens New trade with it filled in), and it
+  lifts and tints on hover to say so.
+- **Self-closing endings**: a finished flow shrinks to a small summary with no
+  buttons and a bar that empties; it closes at zero, the pointer holds it, Esc closes now.
 - **Too early states**: a ghost of the chart with one line ("Needs 8 more
   settled trades"). Never show an empty chart.
 - **Counts on everything**: every number shows its n ("n 45", "80% −0.18R … +0.37R").

@@ -18,7 +18,7 @@ import { TRADE_SAVED } from '@/components/review/SavedNotice';
 import { CAPTURE_OUTSIDE } from './CaptureSheet';
 import { PlanStrip, ReplayBuilder, ReplayDayControl, replayCards, useReplay, type PlanCard } from '@/components/replay/ReplayPlan';
 import { scenarioLine as prepLine } from '@/lib/prep';
-import { noBiasCap, replayTradeDate } from '@/lib/replay';
+import { PLAN_PREFILL, noBiasCap, planPrefill, replayTradeDate, type PlanPrefillEvent } from '@/lib/replay';
 import { closeCapture } from '@/lib/nav';
 import { clearCarry, readCarry, writeCarry } from '@/lib/backtestSession';
 import { press, spring, springSoft, riseIn } from '@/lib/motion';
@@ -113,7 +113,14 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
   const [carry] = useState(() => (typeof window === 'undefined' ? null : readCarry()));
   useEffect(() => { clearCarry(); }, []);
 
+  // A scenario tapped on the replay day's plan (?plan=a|b): a backtest, with that scenario filled once the day is read.
+  const [planAsk, setPlanAsk] = useState<'a' | 'b' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const k = new URLSearchParams(window.location.search).get('plan');
+    return k === 'a' || k === 'b' ? k : null;
+  });
   const [account, setAccount] = useState<Account>(() => {
+    if (planAsk) return BACKTEST;
     const last = keep?.account ?? carry?.account ?? read(LAST_ACCOUNT_KEY);
     return (ACCOUNTS as readonly string[]).includes(last ?? '') ? last as Account : BACKTEST;
   });
@@ -199,6 +206,26 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
     }).catch(() => {});
     return () => { live = false; };
   }, [backtest]);
+  // A tapped scenario, filled in when the locked day is known: the scenario, direction, target and planned R.
+  // Never a row of the rubric — those are read off the chart. Tapped again from the header while open: the same.
+  useEffect(() => {
+    const on = (e: Event) => { const ev = e as PlanPrefillEvent; ev.detail.taken = true; setAccount(BACKTEST); setPlanAsk(ev.detail.k); };
+    window.addEventListener(PLAN_PREFILL, on);
+    return () => window.removeEventListener(PLAN_PREFILL, on);
+  }, []);
+  useEffect(() => {
+    if (!planAsk || !day) return;
+    const p = planPrefill(day, planAsk);
+    // Once, when the locked day arrives: the fill is an answer to that, not derived state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPicked(p.scenario);
+    if (p.direction) setDirection(p.direction);
+    if (p.target_type) setTarget(p.target_type);
+    if (p.planned_rr) setPlannedR(p.planned_rr);
+    setPlanAsk(null);
+    // The address keeps no ?plan: a reload starts a blank trade.
+    if (window.location.search.includes('plan=')) window.history.replaceState(null, '', window.location.pathname);
+  }, [planAsk, day]);
   // Chosen by hand wins; otherwise, off backtests, the morning plan's scenario for this direction.
   // No plan for this replay day: the trade is Unplanned (max B), not A or B.
   const scenario: Scenario | null = noPlan && backtest ? 'none' : picked ?? (backtest ? null : scenarioFromPlan(direction, plans));
