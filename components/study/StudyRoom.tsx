@@ -21,9 +21,10 @@ import { TodayTab, type HubTab } from './hub/TodayTab';
 import { DailyQuestion } from './hub/DailyQuestion';
 import { Lessons } from './hub/Lessons';
 import { WatchLater } from './hub/WatchLater';
+import { APlusGallery } from './hub/APlusGallery';
 
-const TABS: HubTab[] = ['today', 'question', 'lessons', 'notes', 'later'];
-const TAB_LABEL: Record<HubTab, string> = { today: 'Today', question: 'Question', lessons: 'Lessons', notes: 'Notes', later: 'Watch later' };
+const TABS: HubTab[] = ['today', 'question', 'lessons', 'notes', 'gallery', 'later'];
+const TAB_LABEL: Record<HubTab, string> = { today: 'Today', question: 'Question', lessons: 'Lessons', notes: 'Notes', gallery: 'A+ gallery', later: 'Watch later' };
 const TAB_KEY = 'signature:study-tab';
 
 interface LinkedTrade { id: string; role: 'example' | 'counter'; date: string; undated: boolean; setup: string; direction: string; account: string; outcome: string; r: number | null; grade: string; shot: string | null }
@@ -169,6 +170,7 @@ export function StudyRoom() {
         {tab === 'question' && <DailyQuestion />}
         {tab === 'lessons' && <Lessons />}
         {tab === 'later' && <WatchLater onOpenNote={openNote} />}
+        {tab === 'gallery' && <APlusGallery />}
         {tab === 'notes' && (
         <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
           <aside className="glass flex max-h-[calc(100dvh-14rem)] min-h-[24rem] flex-col rounded-[calc(20px*var(--rk))] p-3" data-card>

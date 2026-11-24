@@ -11,6 +11,7 @@ import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { PURCHASE_KINDS, PURCHASE_KIND_LABEL, type EvalPurchase, type PurchaseKind } from '@/lib/path';
 import { DRAWDOWN_LABEL, readRules, type PropAccount, type PropPayout, type PropStanding } from '@/lib/prop';
 import { localDay } from '@/lib/day';
+import { parsePlan, simulate, sizeFor, todayRoom } from '@/lib/propPlan';
 import { navigate } from '@/lib/nav';
 import { RulesForm, toDraft, type RulesDraft } from './RulesForm';
 import { Bar, Card, Chip, INPUT, INPUT_STYLE, PillButton, STATE_COLOR, STATUS_LABEL, tone, usd, usePropFetch } from './shared';
@@ -18,9 +19,9 @@ import { Bar, Card, Chip, INPUT, INPUT_STYLE, PillButton, STATE_COLOR, STATUS_LA
 interface TradeLine { id: string; date: string; setup: string; direction: string; instrument: string; contracts: number | null; outcome: string; r: number | null; pnl: number | null; label: string | null }
 interface AccountData { account: PropAccount; standing: PropStanding; trades: TradeLine[]; payouts: PropPayout[]; costs: EvalPurchase[] }
 
-const TABS = ['overview', 'rules', 'payouts', 'costs', 'calendar', 'trades'] as const;
+const TABS = ['overview', 'whatif', 'rules', 'payouts', 'costs', 'calendar', 'trades'] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = { overview: 'Overview', rules: 'Rules', payouts: 'Payouts', costs: 'Costs', calendar: 'Calendar', trades: 'Trades' };
+const TAB_LABEL: Record<Tab, string> = { overview: 'Overview', whatif: 'What if', rules: 'Rules', payouts: 'Payouts', costs: 'Costs', calendar: 'Calendar', trades: 'Trades' };
 
 /** One prop account: Overview, Rules, Payouts, Costs, Calendar, Trades (the tab is in the URL). */
 export function PropAccountView({ id }: { id: string }) {
@@ -69,6 +70,7 @@ export function PropAccountView({ id }: { id: string }) {
       <div className="mt-5">
         <SwapIn k={tab}>
         {tab === 'overview' && <Overview data={data} reload={reload} />}
+        {tab === 'whatif' && <WhatIf data={data} />}
         {tab === 'rules' && <Rules data={data} reload={reload} />}
         {tab === 'payouts' && <Payouts data={data} reload={reload} />}
         {tab === 'costs' && <Costs data={data} reload={reload} />}
@@ -138,6 +140,7 @@ function Overview({ data, reload }: { data: AccountData; reload: () => void }) {
           <div className="text-[22px] font-semibold tabular-nums" style={{ color: tone(s.today.pnl) }} data-money="">{usd(s.today.pnl, true)}</div>
           {s.today.dailyLeft != null && <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-money="">{usd(s.today.dailyLeft)} left before the daily limit</div>}
           <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-faint)' }} data-money="">{usd(s.room)} above the floor</div>
+          <TodayLines data={data} />
         </Card>
         <Card title="At a glance">
           <dl className="space-y-1.5 text-[12px]">
@@ -473,5 +476,87 @@ function Trades({ data }: { data: AccountData }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/* ───────────── What if (big update, #8): the rules as arithmetic ───────────── */
+
+/** Today's room before each rule, in one or two lines: what the rules allow, never what to trade. */
+function TodayLines({ data }: { data: AccountData }) {
+  const { account: a, standing: s } = data;
+  const t = todayRoom(a, s, localDay());
+  return (
+    <div className="mt-2 space-y-0.5 border-t pt-2 text-[11.5px]" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }} data-today-room>
+      <div data-money="">You can lose <b style={{ color: 'var(--text)' }}>{usd(t.canLose)}</b> more today before {t.firstLimit === 'daily' ? 'the daily limit' : 'the drawdown floor'}.</div>
+      {t.consistencyRoom != null && <div data-money="">Above <b style={{ color: 'var(--text)' }}>{usd(t.consistencyRoom, true)}</b> more today, today breaks the {Math.round((a.consistency ?? 0) * 100)}% consistency rule and other days must make it up.</div>}
+      {t.toTarget != null && t.toTarget > 0 && <div data-money="">{usd(t.toTarget)} to the target{t.daysLeft ? ` · ${t.daysLeft} more trading day${t.daysLeft === 1 ? '' : 's'} needed` : ''}.</div>}
+    </div>
+  );
+}
+
+function WhatIf({ data }: { data: AccountData }) {
+  const { account: a, standing: s } = data;
+  const [plan, setPlan] = useState('');
+  const days = useMemo(() => parsePlan(plan), [plan]);
+  const sim = useMemo(() => (days.length ? simulate(a, s, days) : null), [a, s, days]);
+  const [stop, setStop] = useState('');
+  const [risk, setRisk] = useState('');
+  const t = todayRoom(a, s, localDay());
+  const sizes = sizeFor(Number(stop), Number(risk), a.max_contracts);
+  const riskN = Number(risk);
+  const line = (ok: boolean | null, label: string, text: string) => (
+    <li className="flex items-baseline justify-between gap-3 text-[12px]" data-sim-line={label}>
+      <span className="font-medium">{label}</span>
+      <span className="text-right tabular-nums" style={{ color: ok == null ? 'var(--text-dim)' : ok ? 'var(--text)' : 'rgb(var(--outcome-loss))' }}>{text}</span>
+    </li>
+  );
+  return (
+    <div className="grid gap-4 lg:grid-cols-3" data-prop-whatif>
+      <Card title="Days ahead" note="Your rules, carried forward — not a forecast" className="lg:col-span-2">
+        <p className="text-[12px]" style={{ color: 'var(--text-dim)' }}>Type the P&amp;L of the next days, one per day: <span className="tabular-nums">+400, -250, 300</span>. The account is carried forward from where it stands now ({usd(s.balance)}, floor {usd(s.floor)}).</p>
+        <input value={plan} onChange={(e) => setPlan(e.target.value)} placeholder="+400, -250, 300" aria-label="P&L of the next days" data-sim-input
+          className={`${INPUT} mt-2 tabular-nums`} style={INPUT_STYLE} />
+        {sim ? (
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <table className="w-full text-[12px] tabular-nums" data-sim-days>
+              <thead><tr className="text-left text-[10.5px] uppercase tracking-[0.06em]" style={{ color: 'var(--text-faint)' }}><th className="font-normal">Day</th><th className="font-normal">P&amp;L</th><th className="font-normal">Balance</th><th className="font-normal">Floor</th></tr></thead>
+              <tbody>{sim.days.map((d) => (
+                <tr key={d.n} style={{ color: d.note ? 'rgb(var(--outcome-loss))' : undefined }}>
+                  <td>+{d.n}</td><td>{usd(d.pnl, true)}</td><td>{usd(d.balance)}</td><td>{usd(d.floor)}{d.note ? ` · ${d.note}` : ''}</td>
+                </tr>))}</tbody>
+            </table>
+            <ul className="space-y-1.5">
+              {line(!sim.breach, 'Drawdown and daily limit', sim.breach ? `Broken on day +${sim.breach.n} (${sim.breach.rule === 'daily' ? 'daily limit' : 'the floor'})` : 'Kept')}
+              {a.consistency ? line(sim.consistencyOk, `Consistency (≤ ${Math.round(a.consistency * 100)}%)`, sim.consistencyRatio == null ? 'No profit yet' : `Best day ${Math.round(sim.consistencyRatio * 100)}% of profit`) : null}
+              {a.min_days ? line(sim.daysOk, 'Minimum days', `${sim.tradingDays} of ${a.min_days}`) : null}
+              {sim.targetMet != null && line(sim.targetMet, 'Profit target', `${usd(sim.profit, true)} of ${usd(a.profit_target)}`)}
+              {sim.passes != null && <li className="pt-1 text-[12px] font-medium" data-sim-passes={sim.passes}>{sim.passes ? 'Every pass condition the journal can see would be met.' : 'Not every pass condition would be met.'}</li>}
+            </ul>
+          </div>
+        ) : <p className="mt-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Nothing typed yet.</p>}
+      </Card>
+      <Card title="Size for a stop" note="Maths, not a signal">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Stop (points)
+            <input value={stop} onChange={(e) => setStop(e.target.value)} inputMode="decimal" placeholder="12" className={`${INPUT} mt-0.5 tabular-nums`} style={INPUT_STYLE} data-size-stop /></label>
+          <label className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Risk ($)
+            <input value={risk} onChange={(e) => setRisk(e.target.value)} inputMode="decimal" placeholder="200" className={`${INPUT} mt-0.5 tabular-nums`} style={INPUT_STYLE} data-size-risk /></label>
+        </div>
+        {sizes.length ? (
+          <ul className="mt-3 space-y-1.5" data-size-result>
+            {sizes.map((z) => (
+              <li key={z.instrument} className="flex items-baseline justify-between text-[12.5px] tabular-nums">
+                <span className="font-medium">{z.instrument}</span>
+                <span>{z.contracts ? <><b>{z.contracts}</b> contract{z.contracts === 1 ? '' : 's'} · {usd(z.risk)} at risk</> : <span style={{ color: 'var(--text-faint)' }}>Under one contract ({usd(z.perContract)} each)</span>}</span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="mt-3 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Type the stop in points and the dollars you risk.</p>}
+        <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+          NQ $20 a point, MNQ $2. Rounded down{a.max_contracts ? `; capped at ${a.max_contracts} minis (this account's max)` : ''}.
+          {riskN > 0 && riskN > t.canLose ? <span style={{ color: 'rgb(var(--outcome-loss))' }}> That risk is more than the {usd(t.canLose)} left today before {t.firstLimit === 'daily' ? 'the daily limit' : 'the floor'}.</span> : null}
+        </p>
+      </Card>
+    </div>
   );
 }

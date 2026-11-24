@@ -12,7 +12,7 @@ import type { StudyTotals } from '@/lib/study';
 import { StudyToday } from './StudyToday';
 import { Card, Faint, Head, Pill, rTone, shotSrc, signedR } from './shared';
 
-export type HubTab = 'today' | 'question' | 'lessons' | 'notes' | 'later';
+export type HubTab = 'today' | 'question' | 'lessons' | 'notes' | 'gallery' | 'later';
 
 /**
  * Today in the study room: what to study, from what costs you most. The

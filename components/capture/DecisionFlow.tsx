@@ -10,6 +10,8 @@ import { Field, Input } from '@/components/ui/Field';
 import { Help } from '@/components/ui/Help';
 import { Button } from '@/components/ui/Button';
 import { ShotSlots, type SlotFiles } from './ShotSlots';
+import { ShotWithDrawing } from '@/components/drawing/ShotWithDrawing';
+import type { DrawItem } from '@/lib/drawing';
 import { HonestyCard, Rotator, TradeNotes } from './TradeNotes';
 import { ExplanationField } from './ExplanationField';
 import { DrillChip, type DrillKept } from './DrillChip';
@@ -165,6 +167,8 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
     setFocusState(focusRef.current);
   }, []);
   const [slots, setSlots] = useState<SlotFiles>({});
+  // The compare peek: your three nearest A+ charts, over the chart box (charts only, no results).
+  const [comparing, setComparing] = useState(false);
   const [asking, setAsking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -481,7 +485,12 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
           )}
           {/* The chart box takes only the room the window has left, and the chart is drawn inside it:
               whatever is pasted, the box keeps its size and nothing below it moves — no scrolling. */}
-          <div className="flex min-h-[10rem] flex-1 flex-col"><ShotSlots files={slots} onChange={setSlots} grow box="min-h-0 flex-1" only="Entry" /></div>
+          <div className="relative flex min-h-[10rem] flex-1 flex-col"><ShotSlots files={slots} onChange={setSlots} grow box="min-h-0 flex-1" only="Entry" />
+            {comparing && <ComparePeek onClose={() => setComparing(false)} draft={{
+              account, instrument, session, direction, plan_scenario: scenario, leg_location: leg, htf_origin: htfOrigin, target_type: target,
+              entry_method: entry, planned_rr: plannedR, confidence_at_entry: confidence, singular_gap: gap, ...rows, decision: 'take',
+            }} />}
+          </div>
           <div className="grid items-start gap-x-6 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-1.5 md:order-2">
           <div className="relative">
@@ -523,7 +532,9 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
               {optional.length > 0 && <> Not set: {optional.join(', ')}.</>}
             </p>
           )}
-          <p className="text-[10.5px]" style={faint}>{RUBRIC_V2_LABEL} · locks at the decision · Similar setups and expected R come in Step 2.</p>
+          <p className="text-[10.5px]" style={faint}>{RUBRIC_V2_LABEL} · locks at the decision · Similar setups and expected R come in Step 2.{' '}
+            <button type="button" onClick={() => setComparing((v) => !v)} data-compare-aplus className="font-medium underline underline-offset-2" style={{ color: 'rgb(var(--accent))' }}>
+              {comparing ? 'Hide your A+' : 'Compare with your A+'}</button></p>
           </div>
           </div>
         </div>
@@ -1656,6 +1667,42 @@ function FillsStrip({ trade, onUse }: { trade: Trade; onUse: (f: FillsSummary) =
         className="shrink-0 rounded-full px-3 py-0.5 text-[11.5px] font-semibold disabled:opacity-50" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>
         {used ? 'Used' : 'Use these'}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Your three past A+ charts nearest to the setup being graded (big update, #7): pictures and the
+ * lines you drew, nothing else — no R, no outcome, since the decision is not made yet. Over the
+ * bottom of the chart box, so the chart you pasted stays in view and nothing moves.
+ */
+function ComparePeek({ draft, onClose }: { draft: Record<string, unknown>; onClose: () => void }) {
+  type Near = { id: string; date: string; setup: string; direction: string; shot: string; shared: number; drawing: DrawItem[] | null };
+  const [items, setItems] = useState<Near[] | null>(null);
+  const key = JSON.stringify(draft);
+  useEffect(() => {
+    let live = true;
+    void fetch('/api/playbook/compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: `{"draft":${key}}` })
+      .then((r) => r.json()).then((j: { items: Near[] }) => { if (live) setItems(j.items ?? []); }).catch(() => { if (live) setItems([]); });
+    return () => { live = false; };
+  }, [key]);
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-10 rounded-[calc(14px*var(--rk))] border p-2" data-compare-peek
+      style={{ background: 'var(--bg-raised)', borderColor: 'var(--glass-stroke)', boxShadow: 'var(--shadow-panel)' }}>
+      <div className="mb-1.5 flex items-center justify-between px-1 text-[11px]">
+        <span style={{ color: 'var(--text-dim)' }}><b style={{ color: 'var(--text)' }}>Your A+, nearest first</b> · graded A+, every rule kept · charts only</span>
+        <button type="button" onClick={onClose} aria-label="Close the compare peek" className="rounded-full px-2" style={{ color: 'var(--text-faint)' }}>✕</button>
+      </div>
+      {items == null ? <p className="px-1 pb-1 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>Looking…</p>
+        : !items.length ? <p className="px-1 pb-1 text-[11.5px]" style={{ color: 'var(--text-faint)' }}>No A+ chart to compare with yet — a trade graded A+ with every rule kept and a chart lands in Study → A+ gallery.</p>
+        : <div className="grid grid-cols-3 gap-2">
+            {items.map((n) => (
+              <div key={n.id} className="overflow-hidden rounded-[calc(10px*var(--rk))] border" style={{ borderColor: 'var(--glass-stroke)' }} data-compare-item>
+                <ShotWithDrawing shot={n.shot} drawing={n.drawing} w={360} />
+                <span className="block truncate px-1.5 py-0.5 text-[10.5px]" style={{ color: 'var(--text-dim)' }}>{n.date} · {n.setup} {n.direction}</span>
+              </div>
+            ))}
+          </div>}
     </div>
   );
 }
