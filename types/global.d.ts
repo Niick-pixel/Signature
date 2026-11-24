@@ -44,6 +44,7 @@ declare global {
         install: () => Promise<boolean>;
         onChange: (handler: (state: UpdateState) => void) => () => void;
       };
+      savePdf?: (name: string) => Promise<string | null>;
       cockpit?: {
         open: () => Promise<boolean>;
         close: () => Promise<boolean>;

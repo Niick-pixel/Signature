@@ -126,7 +126,7 @@ function candidates(s: ReminderSnapshot): Reminder[] {
   // 10. Weekly review: Friday after the close, and the weekend, until it is written.
   const monday = mondayOf(c.nyDay);
   if (!s.weeklyReviewDone && ((c.nyWeekday === 5 && c.nyMins >= 13 * 60) || ((c.nyWeekday === 6 || c.nyWeekday === 0) && c.localMins >= 10 * 60))) {
-    add({ id: `weekly:${monday}`, kind: 'weekly', title: 'Weekly review', body: 'The week is done — review it while you remember it.', route: `/review?week=${monday}`, urgent: false });
+    add({ id: `weekly:${monday}`, kind: 'weekly', title: 'Your week, on one page', body: 'The weekly report is ready — read it and add your paragraph while you remember the week.', route: `/review/week?week=${monday}`, urgent: false });
   }
 
   // 16. The Sunday consistency report, for the week just done.

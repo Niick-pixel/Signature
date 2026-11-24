@@ -48,7 +48,7 @@ const TIER: Record<string, 1 | 2> = {
   'theme-costs': 1, rolling: 1, 'avg-win-loss': 1,
   'profit-factor': 2, 'losing-run': 2, 'by-source': 2, tier: 2, 'eval-odds': 2, underwater: 2, 'real-vs-backtest': 2,
   'r-dist': 2, when: 2, tilt: 2, 'mfe-losers': 2, 'be-cost': 2, 'rule-breaks': 2, 'point-rules': 2, 'point-risk': 2,
-  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'v2-mirrors': 2, 'v2-pass-reasons': 2, 'v2-fear-rule': 2, 'replay-outcomes': 2, 'replay-scenarios': 2, 'replay-not-taken': 2, 'replay-zones': 2, 'replay-kills': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
+  focus: 2, integrity: 2, 'v2-total': 2, 'v2-rows': 2, 'v2-scenario': 2, 'v2-time': 2, 'v2-decisions': 2, 'v2-gap': 2, 'v2-origin': 2, 'v2-mirrors': 2, 'v2-pass-reasons': 2, 'v2-fear-rule': 2, 'replay-outcomes': 2, 'replay-scenarios': 2, 'replay-not-taken': 2, 'replay-zones': 2, 'replay-kills': 2, 'plan-scenarios': 2, 'plan-bias': 2, 'plan-matched': 2, 'plan-kills-held': 2, 'plan-targets': 2, 'plan-by-bias': 2, 'plan-by-overnight': 2, 'fix-data': 2, losses: 2, 'day-audit': 2, lessons: 2, 'exit-reasons': 2, 'planned-rr': 2, trial: 2,
 };
 /** About a flaw to fix, or a strength to keep (the faint tint). Everything else is plain data. */
 const LEAN: Record<string, 'fix' | 'keep'> = {
@@ -657,6 +657,69 @@ const zoneWidget = (id: string, title: string, key: 'zones' | 'kills', what: str
 });
 zoneWidget('replay-zones', 'Replay plans: trigger zones on winning vs losing days', 'zones', 'trigger zones');
 zoneWidget('replay-kills', 'Replay plans: kill switches on winning vs losing days', 'kills', 'kill switches');
+
+/* ── Did your scenarios work? (big update, #5): replay days as evidence about which plans pay ── */
+const dayLine = (g: { days: number; trades: number; wins: number; avgR: number | null }) =>
+  g.trades ? `${R(g.avgR)} · ${Math.round((g.wins / g.trades) * 100)}% won · ${plural(g.trades, 'trade')} · ${plural(g.days, 'day')}` : `no trades · ${plural(g.days, 'day')}`;
+
+add({
+  id: 'plan-matched', title: 'Plans: when the day matched', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Backtests only. Replay days where a plan played out (A, B or both), against days it did not (C, or something unplanned): R per trade and how many won, of the trades taken on those days. Read from the locked plan; amended days are left out.',
+  select: (v) => {
+    const { played, notPlayed } = v.replayPlans.plan.matched;
+    if (!played.days && !notPlayed.days) return REPLAY_EMPTY;
+    const n = played.trades + notPlayed.trades;
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n, level: null },
+      items: [played, notPlayed].filter((g) => g.days > 0).map((g) => ({ label: g.label, value: g.avgR ?? 0, display: dayLine(g),
+        tone: (g === played ? 'accent' : 'watch') as Tone })),
+      caption: `R per trade · ${plural(played.days + notPlayed.days, 'replay day')} · too early under ${MIN_N} trades each` };
+  },
+});
+
+add({
+  id: 'plan-kills-held', title: 'Plans: kill switches, respected or traded through', category: 'chart', kind: 'bars', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Backtests only. Each kill switch, on the days its scenario did not play: how often you stayed out, and what the trades taken on it anyway made. Trading through a killed plan is shown as a warning, whatever it made.',
+  select: (v) => {
+    const rows = v.replayPlans.plan.kills.slice(0, 6);
+    if (!rows.length) return REPLAY_EMPTY;
+    return { kind: 'bars', horizontal: true, claim: { n: rows.reduce((a, r) => a + r.killed, 0), level: null },
+      items: rows.flatMap((k) => [
+        { label: `${k.label} · stayed out`, value: k.stayedOut, display: `${k.stayedOut} of ${k.killed}`, tone: 'accent' as Tone },
+        ...(k.tradedThrough ? [{ label: `${k.label} · traded anyway`, value: k.tradedThrough, display: `${plural(k.tradedThrough, 'trade')} · ${R(k.throughR)}`, tone: 'bad' as Tone }] : []),
+      ]),
+      caption: 'Days the scenario did not play' };
+  },
+});
+
+add({
+  id: 'plan-targets', title: 'Plans: first targets reached', category: 'chart', kind: 'bars', sizes: ['M', 'L'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: 'Backtests only. Each scenario\'s first target, on the days it played and was traded: how many trades reached it. "Reached" is the target recorded as hit; when that was not recorded, a full win.',
+  select: (v) => {
+    const rows = v.replayPlans.plan.targets.slice(0, 8);
+    if (!rows.length) return REPLAY_EMPTY;
+    return { kind: 'bars', horizontal: true, claim: { n: rows.reduce((a, r) => a + r.trades, 0), level: null },
+      items: rows.map((t) => ({ label: t.label, value: t.trades ? t.reached / t.trades : 0, display: `${t.reached} of ${t.trades} · ${P(t.reached / t.trades)}`, tone: 'accent' as Tone })),
+      caption: `Share reached · too early under ${MIN_N} trades each` };
+  },
+});
+
+const dayGroupWidget = (id: string, title: string, key: 'byBias' | 'byOvernight', what: string) => add({
+  id, title, category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,
+  settings: {},
+  help: `Backtests only. Replay days by ${what}: R per trade taken, how many won, and how often a plan played. It tests the morning read, not the entries.`,
+  select: (v) => {
+    const rows = v.replayPlans.plan[key];
+    if (!rows.length) return REPLAY_EMPTY;
+    return { kind: 'bars', horizontal: true, marker: { value: 0, label: '0R' }, claim: { n: rows.reduce((a, g) => a + g.trades, 0), level: null },
+      items: rows.map((g) => ({ label: g.label, value: g.avgR ?? 0, display: `${dayLine(g)} · played ${g.played}/${g.days}`, tone: 'accent' as Tone })),
+      caption: `R per trade · too early under ${MIN_N} trades each` };
+  },
+});
+dayGroupWidget('plan-by-bias', 'Plans: by the day\'s bias', 'byBias', 'the day\'s bias (the 4H, when the 1H agrees)');
+dayGroupWidget('plan-by-overnight', 'Plans: by what ran overnight', 'byOvernight', 'what ran before the open (highs, lows, both, neither)');
 
 add({
   id: 'v2-scenario', title: 'Rubric v2: by scenario', category: 'chart', kind: 'bars', sizes: ['M', 'S'], defaultSize: 'M', claims: true, minTrades: 0,

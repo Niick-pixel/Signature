@@ -1089,3 +1089,23 @@ html[data-rail='off'] [data-side-rail] { display: none; }
 
 /* The chart prep's closing bar (components/prep/ChartPrep Ready): empties from full, on the compositor. */
 @keyframes prep-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* ── Printing a page (the weekly report's Save as PDF): only [data-print-root], on paper colours. ── */
+[data-print-only] { display: none; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  html, body { background: #fff !important; }
+  body::before, body::after { display: none !important; }
+  body * { visibility: hidden; }
+  .h-dvh { height: auto !important; }
+  .overflow-y-auto, .overflow-hidden { overflow: visible !important; }
+  [data-print-root], [data-print-root] * { visibility: visible; }
+  [data-print-root] {
+    position: absolute; left: 0; top: 0; width: 100%; max-width: none !important; padding: 0 !important;
+    --text: #1d1a16; --text-dim: #4a443b; --text-faint: #6b6458; --glass-stroke: #d9d3c7; --glass-fill-strong: #f1ede5;
+    color: var(--text);
+  }
+  [data-print-root] .glass { background: #fff !important; border: 1px solid #d9d3c7 !important; box-shadow: none !important; backdrop-filter: none !important; break-inside: avoid; }
+  [data-print-root] [data-noprint] { display: none !important; }
+  [data-print-root] [data-print-only] { display: block !important; }
+}

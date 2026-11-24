@@ -1,5 +1,5 @@
 import { isBacktest } from './domain';
-import { DAY_OUTCOMES, DAY_OUTCOME_LABEL, playedOf, type DayOutcome, type ReplayDay } from './replay';
+import { DAY_OUTCOMES, DAY_OUTCOME_LABEL, dayBias, overnightOf, playedOf, type DayOutcome, type ReplayDay } from './replay';
 import type { Trade } from './types';
 
 /*
@@ -27,6 +27,22 @@ export interface ReplayStats {
   kills: Array<{ label: string; win: number; loss: number }>;
   winDays: number;
   lossDays: number;
+  /** Did your scenarios work? (big update, #5) — read from the same closed, unamended days. */
+  plan: PlanAnalytics;
+}
+
+/** Trades taken on a group of days: how many, how many won, their R. */
+export interface DayGroup { label: string; days: number; played: number; trades: number; wins: number; netR: number; avgR: number | null }
+export interface PlanAnalytics {
+  /** Days a plan played (A, B or both) against days it did not (C, or something unplanned): the trades taken on each. */
+  matched: { played: DayGroup; notPlayed: DayGroup };
+  /** Each kill switch: days its scenario did not play, how often you stayed out, and what trading it anyway made. */
+  kills: Array<{ label: string; killed: number; stayedOut: number; tradedThrough: number; throughR: number | null }>;
+  /** Each scenario's first target: trades taken on it when it played, and how many reached it. */
+  targets: Array<{ label: string; trades: number; reached: number }>;
+  /** By the day's bias (4H with the 1H agreeing, or none), and by what ran overnight. */
+  byBias: DayGroup[];
+  byOvernight: DayGroup[];
 }
 
 export function replayStats(days: readonly ReplayDay[], trades: readonly Trade[]): ReplayStats {
@@ -62,5 +78,57 @@ export function replayStats(days: readonly ReplayDay[], trades: readonly Trade[]
     zones: tally((d) => [...d.scenarios.a.zones, ...d.scenarios.b.zones]),
     kills: tally((d) => [d.scenarios.a.kill, d.scenarios.b.kill].filter((k): k is NonNullable<typeof k> => !!k)),
     winDays: win.length, lossDays: loss.length,
+    plan: planAnalytics(plain, bt),
+  };
+}
+
+/**
+ * The plans read as evidence: which kinds of plan pay, never which trade to take. Only the locked
+ * original plan of a closed day counts (amended days are left out, as everywhere here). A trade counts
+ * on its replay day; "reached" is the target recorded as hit, or, when it was not recorded, a full win.
+ */
+export function planAnalytics(days: readonly ReplayDay[], trades: readonly Trade[]): PlanAnalytics {
+  const onDay = new Map<string, Trade[]>();
+  for (const t of trades) if (t.replay_day_id) onDay.set(t.replay_day_id, [...(onDay.get(t.replay_day_id) ?? []), t]);
+  const group = (label: string, ds: readonly ReplayDay[]): DayGroup => {
+    const ts = ds.flatMap((d) => onDay.get(d.id) ?? []);
+    const netR = ts.reduce((s, t) => s + (t.r_multiple ?? 0), 0);
+    return { label, days: ds.length, played: ds.filter((d) => playedOf(d.outcome).length > 0).length, trades: ts.length,
+      wins: ts.filter((t) => t.outcome === 'Win').length, netR, avgR: ts.length ? netR / ts.length : null };
+  };
+  const isPlayed = (d: ReplayDay) => playedOf(d.outcome).length > 0;
+
+  const kills = new Map<string, { killed: number; stayedOut: number; through: number[] }>();
+  const targets = new Map<string, { trades: number; reached: number }>();
+  for (const d of days) {
+    const played = playedOf(d.outcome);
+    for (const k of ['A', 'B'] as const) {
+      const sc = d.scenarios[k === 'A' ? 'a' : 'b'];
+      const onIt = (onDay.get(d.id) ?? []).filter((t) => t.plan_scenario === k);
+      if (!played.includes(k)) {
+        if (!sc.kill) continue;
+        const row = kills.get(sc.kill) ?? { killed: 0, stayedOut: 0, through: [] };
+        row.killed += 1;
+        if (onIt.length) row.through.push(...onIt.map((t) => t.r_multiple as number)); else row.stayedOut += 1;
+        kills.set(sc.kill, row);
+      } else if (sc.targets[0] && onIt.length) {
+        const row = targets.get(sc.targets[0]) ?? { trades: 0, reached: 0 };
+        row.trades += onIt.length;
+        row.reached += onIt.filter((t) => t.target_hit ?? (t.outcome === 'Win' && t.partial_win !== true)).length;
+        targets.set(sc.targets[0], row);
+      }
+    }
+  }
+  const biasOf = (d: ReplayDay) => { const b = d.context ? dayBias(d.context) : null; return b === 'Long' ? 'Bias long' : b === 'Short' ? 'Bias short' : 'No bias'; };
+  const nightOf = (d: ReplayDay) => d.context?.overnight ?? (d.context?.taken ? overnightOf(d.context.taken) : null);
+  const by = (labels: readonly string[], of: (d: ReplayDay) => string | null) =>
+    labels.map((l) => group(l, days.filter((d) => of(d) === l))).filter((g) => g.days > 0);
+  return {
+    matched: { played: group('Plan played', days.filter(isPlayed)), notPlayed: group('Plan did not play', days.filter((d) => !isPlayed(d))) },
+    kills: [...kills].map(([label, r]) => ({ label, killed: r.killed, stayedOut: r.stayedOut, tradedThrough: r.through.length,
+      throughR: r.through.length ? r.through.reduce((a, b) => a + b, 0) / r.through.length : null })).sort((a, b) => b.killed - a.killed),
+    targets: [...targets].map(([label, r]) => ({ label, ...r })).sort((a, b) => b.trades - a.trades),
+    byBias: by(['Bias long', 'Bias short', 'No bias'], biasOf),
+    byOvernight: by(['Highs run', 'Lows run', 'Both', 'Neither'], nightOf),
   };
 }

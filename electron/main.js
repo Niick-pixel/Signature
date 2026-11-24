@@ -532,6 +532,17 @@ ipcMain.handle('signature:pick-folder', async (_event, title) => {
   return r.canceled ? null : r.filePaths[0] ?? null;
 });
 
+/** The page as a PDF (the weekly report): A4, backgrounds on, saved where you choose. Null when cancelled. */
+ipcMain.handle('signature:save-pdf', async (event, name) => {
+  const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+  const safe = (typeof name === 'string' ? name : 'Signature').replace(/[^\w .()-]+/g, '').slice(0, 80) || 'Signature';
+  const r = await dialog.showSaveDialog(win, { title: 'Save as PDF', defaultPath: `${safe}.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+  if (r.canceled || !r.filePath) return null;
+  const data = await event.sender.printToPDF({ pageSize: 'A4', printBackground: true, margins: { marginType: 'custom', top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 } });
+  fs.writeFileSync(r.filePath, data);
+  return r.filePath;
+});
+
 ipcMain.handle('signature:open-data-folder', async () => {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   await shell.openPath(DATA_DIR);

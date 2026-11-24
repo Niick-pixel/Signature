@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { freshPush, markStale } from '@/lib/freshness';
 import { localDay } from '@/lib/day';
@@ -22,8 +23,13 @@ export function WeekReviewButton() {
     if (r?.pageId) { markStale(); freshPush(router, `/journal?page=${r.pageId}`); }
   }
   return (
-    <Button onClick={() => void go()} disabled={busy} className="mt-2 w-full" data-week-review title="A page that starts with the week's numbers, patterns, rules broken and best/worst trade">
-      {busy ? 'Writing…' : "This week's review"}
-    </Button>
+    <>
+      <Button onClick={() => void go()} disabled={busy} className="mt-2 w-full" data-week-review title="A page that starts with the week's numbers, patterns, rules broken and best/worst trade">
+        {busy ? 'Writing…' : "This week's review"}
+      </Button>
+      <Link href="/review/week" className="mt-1 block text-center text-[11.5px] hover:underline" style={{ color: 'var(--text-dim)' }} data-week-report-link>
+        The week on one page (report, PDF)
+      </Link>
+    </>
   );
 }
