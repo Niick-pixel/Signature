@@ -457,7 +457,7 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
   const refresh = async () => { setBusy(true); await fetch('/api/news/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: true }) }); await load(); setBusy(false); };
   if (!d) return <p className="mt-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading the calendar…</p>;
   return (
-    <div className="mt-1 rounded-[calc(12px*var(--rk))] border px-3 py-1.5 text-[12px]" style={{ borderColor: 'var(--glass-stroke)' }} data-session-news={d.events.length}>
+    <div className="mt-1 rounded-[calc(12px*var(--rk))] border px-3 py-1.5 text-[12px] [contain:inline-size]" style={{ borderColor: 'var(--glass-stroke)' }} data-session-news={d.events.length}>
       <div className="flex items-baseline justify-between gap-2">
         <span style={{ color: 'var(--text-dim)' }}>
           {d.events.length ? <>News in your session ({nyToLocal(d.window.from)}–{nyToLocal(d.window.to)}, {d.currencies.join('/')})</> : <>No red or orange {d.currencies.join('/')} news in your session ({nyToLocal(d.window.from)}–{nyToLocal(d.window.to)})</>}
@@ -465,8 +465,10 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
         {d.auto && <button type="button" onClick={refresh} disabled={busy} className="shrink-0 text-[10.5px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>{busy ? 'Pulling…' : 'Refresh'}</button>}
       </div>
       {d.events.length > 0 && (
-        <ul className="mt-1 max-h-[2.6rem] space-y-0.5 overflow-y-auto" data-session-news-list>
-          {d.events.map((e) => (
+        // Two lines at most, never a scrolling box (a busy day lists eight): the first two releases, then
+        // "+N more", every one of them in its tooltip.
+        <ul className="mt-1 space-y-0.5" data-session-news-list title={d.events.map((e) => `${e.at.slice(11, 16)} ${e.title}${figuresLine(e) ? ` · ${figuresLine(e)}` : ''}`).join('\n')}>
+          {d.events.slice(0, d.events.length > 2 ? 1 : 2).map((e) => (
             <li key={e.id} className="flex items-center gap-2">
               <span className="size-2 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
               <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.at.slice(11, 16)}</span>
@@ -474,6 +476,11 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
               {figuresLine(e) && <span className="ml-auto shrink-0 tabular-nums text-[11px]" style={{ color: 'var(--text-dim)' }} data-news-figures>{figuresLine(e)}</span>}
             </li>
           ))}
+          {d.events.length > 2 && (
+            <li className="truncate text-[11px]" style={{ color: 'var(--text-dim)' }} data-news-more>
+              +{d.events.length - 1} more: {d.events.slice(1).map((e) => `${e.at.slice(11, 16)} ${e.title}`).join(' · ')}
+            </li>
+          )}
         </ul>
       )}
       <p className="mt-0.5 text-[10.5px] leading-tight" style={{ color: d.error ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
