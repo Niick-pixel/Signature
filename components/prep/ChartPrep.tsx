@@ -268,7 +268,7 @@ function ReadPage({ data, change, review, carried }: { data: PrepData; change: C
             {field('news', 'news')}
             <SessionNews review={review} answered={data.answers['session.news'] != null} onAnswer={(v) => setAnswer(news, news.fields.find((x) => x.id === 'news')!, v)} />
             {data.answers['session.news'] === 'Inside the killzone' && (
-              <Rule>Red folder inside NY AM: no position through it — wait for the release candle’s range, then trade off it.</Rule>
+              <Rule>Red folder in the killzone: no position through it — trade off the release candle’s range.</Rule>
             )}
           </div>
           <div className={`${card} flex flex-1 flex-col gap-1.5`} style={cardStyle} data-prep-section="overnight">
@@ -459,31 +459,25 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
   return (
     <div className="mt-1 rounded-[calc(12px*var(--rk))] border px-3 py-1.5 text-[12px] [contain:inline-size]" style={{ borderColor: 'var(--glass-stroke)' }} data-session-news={d.events.length}>
       <div className="flex items-baseline justify-between gap-2">
-        <span style={{ color: 'var(--text-dim)' }}>
-          {d.events.length ? <>News in your session ({nyToLocal(d.window.from)}–{nyToLocal(d.window.to)}, {d.currencies.join('/')})</> : <>No red or orange {d.currencies.join('/')} news in your session ({nyToLocal(d.window.from)}–{nyToLocal(d.window.to)})</>}
-        </span>
+        {/* Two lines, always, news or not: this one (the releases, or that there are none) and where it came from. */}
+        {d.events.length ? (() => {
+          const e = d.events[0];
+          return (
+            <span className="flex min-w-0 items-center gap-2" data-session-news-list
+              title={d.events.map((x) => `${x.at.slice(11, 16)} ${x.title}${figuresLine(x) ? ` · ${figuresLine(x)}` : ''}`).join('\n')}>
+              <span className="size-2 shrink-0 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
+              <span className="shrink-0 tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.at.slice(11, 16)}</span>
+              <b className="min-w-0 truncate font-medium">{e.title}{figuresLine(e) ? <span className="font-normal tabular-nums" style={{ color: 'var(--text-dim)' }} data-news-figures> · {figuresLine(e)}</span> : null}</b>
+              {d.events.length > 1 && <span className="shrink-0 text-[11px]" style={{ color: 'var(--text-dim)' }} data-news-more>+{d.events.length - 1} more</span>}
+              <span className="min-w-0 truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>· your session {nyToLocal(d.window.from)}–{nyToLocal(d.window.to)}, {d.currencies.join('/')}</span>
+            </span>
+          );
+        })() : (
+          <span className="min-w-0 truncate" style={{ color: 'var(--text-dim)' }}>No red or orange {d.currencies.join('/')} news in your session ({nyToLocal(d.window.from)}–{nyToLocal(d.window.to)})</span>
+        )}
         {d.auto && <button type="button" onClick={refresh} disabled={busy} className="shrink-0 text-[10.5px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>{busy ? 'Pulling…' : 'Refresh'}</button>}
       </div>
-      {d.events.length > 0 && (
-        // Two lines at most, never a scrolling box (a busy day lists eight): the first two releases, then
-        // "+N more", every one of them in its tooltip.
-        <ul className="mt-1 space-y-0.5" data-session-news-list title={d.events.map((e) => `${e.at.slice(11, 16)} ${e.title}${figuresLine(e) ? ` · ${figuresLine(e)}` : ''}`).join('\n')}>
-          {d.events.slice(0, d.events.length > 2 ? 1 : 2).map((e) => (
-            <li key={e.id} className="flex items-center gap-2">
-              <span className="size-2 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
-              <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.at.slice(11, 16)}</span>
-              <b className="font-medium">{e.title}</b>
-              {figuresLine(e) && <span className="ml-auto shrink-0 tabular-nums text-[11px]" style={{ color: 'var(--text-dim)' }} data-news-figures>{figuresLine(e)}</span>}
-            </li>
-          ))}
-          {d.events.length > 2 && (
-            <li className="truncate text-[11px]" style={{ color: 'var(--text-dim)' }} data-news-more>
-              +{d.events.length - 1} more: {d.events.slice(1).map((e) => `${e.at.slice(11, 16)} ${e.title}`).join(' · ')}
-            </li>
-          )}
-        </ul>
-      )}
-      <p className="mt-0.5 text-[10.5px] leading-tight" style={{ color: d.error ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
+      <p className="mt-0.5 truncate text-[10.5px] leading-tight" style={{ color: d.error ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }}>
         {d.error ?? (d.auto ? (d.syncedAt ? `From ForexFactory, pulled ${new Date(d.syncedAt).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'From ForexFactory.') : 'ForexFactory pull is off — Analytics → News.')}
         {review?.news ? ` Morning check-in said: ${review.news === 'None' ? 'nothing major' : review.news.toLowerCase()}.` : ''}
       </p>
