@@ -4,6 +4,7 @@
 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+// Times read on the trader's clock (UTC−6 in tests/setup.mts).
 import { planMatch, planSplit, planDay, nyMinutes } from '../lib/planMatch';
 import type { Trade } from '../lib/types';
 
@@ -55,13 +56,13 @@ test('times: Costa Rica entries converted to New York, across the clock change',
   assert.equal(nyMinutes('2026-12-08T08:50'), 9 * 60 + 50);
   const plan = prep({ 'session.first': 'After 9:45', 'session.done': '11:00' });
   // 07:40 CR in October is 9:40 NY — before the planned first entry.
-  assert.deepEqual(planMatch(t({ date: '2026-10-13T07:40' }), plan).diffs, ['entered 9:40 NY, planned from 9:45']);
+  assert.deepEqual(planMatch(t({ date: '2026-10-13T07:40' }), plan).diffs, ['entered 07:40, planned from 07:45'], 'New York 9:40 and 9:45 in October (UTC−4), read at UTC−6');
   // 09:30 CR is 11:30 NY — past "done by 11:00".
-  assert.deepEqual(planMatch(t({ date: '2026-10-13T09:30' }), plan).diffs, ['entered 11:30 NY, planned done by 11:00']);
+  assert.deepEqual(planMatch(t({ date: '2026-10-13T09:30' }), plan).diffs, ['entered 09:30, planned done by 09:00']);
   // 08:05 CR is 10:05 NY — inside the window.
   const ok = planMatch(t({ date: '2026-10-13T08:05' }), plan);
   assert.equal(ok.status, 'in');
-  assert.deepEqual(ok.agreed, ['time (10:05 NY)']);
+  assert.deepEqual(ok.agreed, ['time (08:05)']);
   // "15 min after the news" cannot be checked without the release time.
   assert.equal(planMatch(t(), prep({ 'session.first': '15 min after the news' })).status, 'none');
   // And it is counted as its own reason.

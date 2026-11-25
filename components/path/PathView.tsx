@@ -1,4 +1,5 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
 
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { Reveal } from '@/components/ui/Motion';
@@ -51,10 +52,10 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
       <InTitleBar
         merged={<MergedHeader title="Path" data="path" sub={active ? <>Step {steps.indexOf(active) + 1} of {steps.length}: {active.title}</> : 'Every step is done'}>
         <div className="flex gap-2">
-          <Button onClick={openGoals} data-path-goals title="Goals (G)">Goals</Button>
+          <BarButton kind="window" onClick={openGoals} data-path-goals title="Goals (G)">Goals</BarButton>
           {/* The prop hub's home now the tab is off by default: evals are a step of the path. */}
-          <Button onClick={() => navigate('/prop')} data-path-prop title="Your prop and eval accounts (6)">Prop accounts</Button>
-          <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
+          <BarButton kind="action" onClick={() => navigate('/prop')} data-path-prop title="Your prop and eval accounts (6)">Prop accounts</BarButton>
+          <BarButton kind="action" onClick={() => setEditing(true)} data-path-edit>Edit path</BarButton>
         </div>
         </MergedHeader>}
         inline={
@@ -68,17 +69,18 @@ export function PathView({ steps, events, purchases, eventTrades, startEditing, 
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={openGoals} data-path-goals title="Goals (G)">Goals</Button>
+          <BarButton kind="window" onClick={openGoals} data-path-goals title="Goals (G)">Goals</BarButton>
           {/* The prop hub's home now the tab is off by default: evals are a step of the path. */}
-          <Button onClick={() => navigate('/prop')} data-path-prop title="Your prop and eval accounts (6)">Prop accounts</Button>
-          <Button onClick={() => setEditing(true)} data-path-edit>Edit path</Button>
+          <BarButton kind="action" onClick={() => navigate('/prop')} data-path-prop title="Your prop and eval accounts (6)">Prop accounts</BarButton>
+          <BarButton kind="action" onClick={() => setEditing(true)} data-path-edit>Edit path</BarButton>
         </div>
       </header>
         } />
       {/* What to do next, under the title bar when the title moved up into it. */}
       {merged && active && <p className="max-w-[46rem] text-[13px]" style={{ color: 'var(--text-dim)' }} data-path-next>Next: {active.nextAction}</p>}
 
-      <ol className="space-y-3">
+      {/* Wide windows: the steps in two columns, read left to right — the whole path on one screen. */}
+      <ol className="grid items-start gap-3 xl:grid-cols-2">
         {steps.map((s, i) => (
           <StepCard key={s.id} step={s} index={i + 1} total={steps.length} purchases={purchases} steps={steps}
             onChanged={() => router.refresh()} />

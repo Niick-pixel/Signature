@@ -1059,6 +1059,12 @@ html[data-platform='win32'] [data-wco-pad] { padding-right: 152px; }
   for forms, lists and single columns.
 */
 :root { --page-wide: 88rem; --page-read: 64rem; --page-form: 96rem; }
+/* Full width (Settings → Appearance → Page width, the default): every page runs to the window's edges, the
+   same 24px gutters; the layouts below spread their columns instead of leaving margins. */
+html:not([data-width='centred']) { --page-wide: 100%; --page-read: 100%; }
+/* What sits above and below the Journal's two panels: the title bar and the page's own header row, or (side rail) the bar alone. */
+:root { --journal-chrome: 10.25rem; }
+html[data-rail='icons'], html[data-rail='labels'] { --journal-chrome: 5.25rem; }
 /* The one exception: the New trade form is a workspace, four columns wide on a
    large screen. The sheet over a page and the /new page share it, so starting a
    fresh form (which loads /new) never changes its width. */
@@ -1082,8 +1088,38 @@ html[data-rail='icons'] header.titlebar-drag [data-tabs], html[data-rail='labels
 html[data-rail='icons'] [data-title-slot], html[data-rail='labels'] [data-title-slot] { display: flex; }
 /* A page whose header merges into the title bar: its own row is gone from the first paint. */
 html[data-rail='icons'] [data-inline-header], html[data-rail='labels'] [data-inline-header] { display: none !important; }
-/* A page's buttons in the title bar take the bar's size (components/shell/TitleSlot MergedHeader). */
-[data-merged-header] .ui-btn { padding: 0.25rem 0.8rem; font-size: 12px; border-radius: 999px; }
+/*
+  The title bar's controls, one family (components/ui/BarButton): 28px tall, 12px medium type, pill
+  corners, one border and fill. What a tap does is in the shape: a menu ends in a chevron after a
+  hairline, a window opens with a window glyph in front, a toggle carries a small switch.
+*/
+.bar-ctl {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; flex-shrink: 0;
+  border-radius: 999px; border: 1px solid var(--glass-stroke); background: var(--glass-fill); color: var(--text-dim);
+  font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: 0; white-space: nowrap; outline: none; cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+.bar-ctl:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 28%, var(--glass-stroke)); }
+.bar-ctl:focus-visible { box-shadow: 0 0 0 2px rgb(var(--accent) / 0.45); }
+.bar-ctl[data-on] { border-color: rgb(var(--accent) / 0.55); background: rgb(var(--accent) / 0.12); color: rgb(var(--accent)); }
+.bar-ctl[data-bar='primary'] { background: rgb(var(--accent)); border-color: transparent; color: var(--bg-raised); font-weight: 600; box-shadow: 0 6px 18px -8px rgb(var(--accent) / 0.8); }
+.bar-ctl[data-bar='primary']:hover { color: var(--bg-raised); filter: brightness(1.06); }
+.bar-ctl[data-bar='icon'] { width: 28px; padding: 0; justify-content: center; }
+.bar-ctl[data-bar='menu'] { padding-right: 8px; }
+.bar-ctl .bar-glyph { flex-shrink: 0; opacity: 0.85; }
+.bar-ctl .bar-chev { display: inline-flex; align-items: center; height: 14px; margin-left: 2px; padding-left: 7px; border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
+.bar-ctl .bar-chev svg { transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1); }
+.bar-ctl[aria-expanded='true'] .bar-chev svg { transform: rotate(180deg); }
+.bar-switch { position: relative; display: inline-block; width: 18px; height: 10px; flex-shrink: 0; border-radius: 999px; border: 1px solid currentColor; opacity: 0.8; }
+.bar-switch > span { position: absolute; top: 1px; left: 1px; width: 6px; height: 6px; border-radius: 999px; background: currentColor; transition: transform 180ms ease; }
+.bar-switch[data-on] > span { transform: translateX(8px); }
+/* A choice of several (the Stats boards, an account): one pill holding its options, the bar's height. */
+.bar-seg { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 2px; border-radius: 999px; border: 1px solid var(--glass-stroke); background: var(--glass-fill); scrollbar-width: none; }
+.bar-seg-opt { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--text-dim); transition: color 150ms ease, background-color 150ms ease; }
+.bar-seg-opt:hover { color: var(--text); }
+.bar-seg-opt[aria-current='page'], .bar-seg-opt[aria-pressed='true'] { background: var(--bg-raised); color: var(--text); box-shadow: var(--shadow-card); }
+/* Buttons a page puts in the title bar take the same shape (components/shell/TitleSlot MergedHeader). */
+[data-merged-header] .ui-btn { height: 28px; padding: 0 12px; font-size: 12px; font-weight: 500; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; box-shadow: none !important; }
 /* Top tabs chosen: the rail (drawn by the server for the default) is gone from the first paint. */
 html[data-rail='off'] [data-side-rail] { display: none; }
 

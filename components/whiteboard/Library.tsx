@@ -225,7 +225,7 @@ export function Library({ trades: initial }: { trades: Trade[] }) {
           
           <input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search  /" aria-label="Search trades" data-library-search
             onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); search.current?.blur(); } if (e.key === 'Enter' && order[0]) setOpenId(order[0].id); }}
-            className="w-44 rounded-full border px-3 py-1 text-[12px] outline-none focus:w-60"
+            className="h-7 w-44 rounded-full border px-3 text-[12px] outline-none focus:w-60"
             style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)', transition: 'width 160ms ease' }} />
           {discuss}
         </MergedHeader>} />}
@@ -324,9 +324,10 @@ function Unfinished({ trades, onDelete }: { trades: Trade[]; onDelete: (t: Trade
         </h2>
         <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Outcome not written yet — they count nowhere until it is.</span>
       </div>
-      <ul className="divide-y" style={{ borderColor: 'var(--glass-stroke)' }}>
+      {/* Wide windows: two or three columns of rows, so a row is not a long gap between its facts and its buttons. */}
+      <ul className="grid gap-x-6 lg:grid-cols-2 min-[1700px]:grid-cols-3">
         {trades.map((t) => (
-          <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-2 text-[12.5px]" data-unfinished-row={t.id}>
+          <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-1 py-2 text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)' }} data-unfinished-row={t.id}>
             <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{tradeDay(t, { month: 'short', day: 'numeric' })} {t.date.slice(11, 16)}</span>
             <span className="font-medium">{t.instrument} {t.direction}</span>
             <span style={{ color: 'var(--text-dim)' }}>{accountLabel(t.account)}</span>

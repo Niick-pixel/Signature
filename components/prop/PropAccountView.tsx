@@ -38,7 +38,7 @@ export function PropAccountView({ id }: { id: string }) {
     <div className="mx-auto w-full max-w-[var(--page-wide)] px-6 pb-24 pt-4" data-prop-account={a.id}>
       {/* With the side rail the name and the way back are in the title bar; these two are hidden (data-inline-header). */}
       <InTitleBar inline={null} merged={<MergedHeader data="prop-account" title={<>{a.firm} <span style={{ color: 'var(--text-faint)' }}>· {a.plan}</span></>}>
-        <Link href="/prop" className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>← All accounts</Link>
+        <Link href="/prop" className="bar-ctl" data-bar="action">← All accounts</Link>
       </MergedHeader>} />
       <Link href="/prop" className="text-[11px]" style={{ color: 'var(--text-faint)' }} data-inline-header>← All accounts</Link>
       <div className="mt-1 flex flex-wrap items-end justify-between gap-3">

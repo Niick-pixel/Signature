@@ -1,4 +1,5 @@
 'use client';
+import { BarButton, type BarKind } from '@/components/ui/BarButton';
 
 import { V2Summary } from '@/components/whiteboard/V2Summary';
 import { V2_LETTER_OF, gradeV2, isRubricV2 } from '@/lib/decision';
@@ -100,7 +101,7 @@ export function TradeView(p: TradeViewProps) {
 
             <HeadButton onClick={() => navigate(`/new?edit=${t.id}`)} title="Edit (E)">Edit</HeadButton>
             <HeadButton onClick={openOnBoard}>On the board</HeadButton>
-            <HeadButton onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}>Customize</HeadButton>
+            <HeadButton kind="window" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}>Customize</HeadButton>
           </div>
         </MergedHeader>}
         inline={<>
@@ -129,7 +130,7 @@ export function TradeView(p: TradeViewProps) {
           <div className="mt-3 flex justify-end gap-2">
             <HeadButton onClick={() => navigate(`/new?edit=${t.id}`)} title="Edit (E)">Edit</HeadButton>
             <HeadButton onClick={openOnBoard}>On the board</HeadButton>
-            <HeadButton onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}>Customize</HeadButton>
+            <HeadButton kind="window" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}>Customize</HeadButton>
           </div>
         </div>
       </div>
@@ -314,20 +315,15 @@ function ChipRow({ label, items, color }: { label: string; items: readonly strin
 }
 
 function NavArrow({ href, label, children }: { href: string | null; label: string; children: React.ReactNode }) {
-  if (!href) return <span className="grid size-6 place-items-center rounded-full opacity-30">{children}</span>;
+  if (!href) return <span className="bar-ctl opacity-30" data-bar="icon">{children}</span>;
   return (
     <Link href={`/trade/${href}`} title={label} aria-label={label}
-      className="grid size-6 place-items-center rounded-full border" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>{children}</Link>
+      className="bar-ctl" data-bar="icon">{children}</Link>
   );
 }
 
-function HeadButton({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title?: string }) {
-  return (
-    <button type="button" onClick={onClick} title={title}
-      className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)' }}>
-      {children}
-    </button>
-  );
+function HeadButton({ children, onClick, title, kind = 'action' }: { children: React.ReactNode; onClick: () => void; title?: string; kind?: BarKind }) {
+  return <BarButton kind={kind} onClick={onClick} title={title}>{children}</BarButton>;
 }
 
 const Faint = ({ children }: { children: React.ReactNode }) => <span style={{ color: 'var(--text-faint)' }}>{children}</span>;

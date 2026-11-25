@@ -43,7 +43,7 @@ export function setWatch(p: { folder?: string | null; platform?: unknown; zone?:
     else {
       const f = p.folder.trim();
       if (!path.isAbsolute(f)) return { ok: false, error: 'Use a full path, like C:\\Users\\you\\Documents\\Tradovate.' };
-      if (!fs.existsSync(f) || !fs.statSync(f).isDirectory()) return { ok: false, error: 'That folder does not exist.' };
+      if (!fs.existsSync(/* turbopackIgnore: true */ f) || !fs.statSync(/* turbopackIgnore: true */ f).isDirectory()) return { ok: false, error: 'That folder does not exist.' };
       if (c.folder !== f) c.seen = {};
       c.folder = f;
     }
@@ -67,14 +67,14 @@ export function scanExecutionFolder(now = false): WatchConfig['last'] | null {
   if (!c.folder) return null;
   let files = 0; let added = 0; let linked = 0; let error: string | undefined;
   try {
-    const names = fs.readdirSync(c.folder).filter((n) => READABLE.test(n));
+    const names = fs.readdirSync(/* turbopackIgnore: true */ c.folder).filter((n) => READABLE.test(n));
     for (const name of names) {
       const file = at(c.folder, name);
-      const st = fs.statSync(file);
+      const st = fs.statSync(/* turbopackIgnore: true */ file);
       if (!st.isFile() || st.size > MAX_BYTES) continue;
       if (!now && c.seen[name] === st.mtimeMs) continue;
       files += 1;
-      const parsed = parseExecutions(fs.readFileSync(file, 'utf8'), { platform: c.platform, zone: c.zone, feePerContract: 0 });
+      const parsed = parseExecutions(fs.readFileSync(/* turbopackIgnore: true */ file, 'utf8'), { platform: c.platform, zone: c.zone, feePerContract: 0 });
       const known = knownFingerprints(parsed.trips.map((t) => t.fingerprint));
       const fresh = parsed.trips.filter((t) => !known.get(t.fingerprint)?.trade_id);
       if (fresh.length) {

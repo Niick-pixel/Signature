@@ -1,3 +1,4 @@
+import { localizeNy } from './localTime';
 import { TARGET_TYPES } from './domain';
 
 /**
@@ -47,6 +48,8 @@ export interface PrepField {
   long?: boolean;
   /** No longer asked; answers already saved still read (plan match, exports). */
   hidden?: boolean;
+  /** The options are New York times: stored as written, shown on the trader's clock (lib/localTime). */
+  clock?: 'ny';
   /** For many: at most this many; a tap past it lets go of the oldest. */
   max?: number;
   /** One line of help behind the label (its tooltip). */
@@ -171,8 +174,8 @@ export const LEGACY_STEPS: PrepStep[] = [
     fields: [
       { id: 'news', label: 'News', kind: 'one', options: ['None today', 'Before the open', 'Inside the killzone'] },
       // Retired from the form: the session is the same every day. Old answers still read.
-      { id: 'first', label: 'First entry', kind: 'pick', options: ['From the open (9:30)', 'After 9:45', 'After 10:00', '15 min after the news'], hidden: true },
-      { id: 'done', label: 'Done by', kind: 'pick', options: ['11:00', '11:30', '12:00', 'The close'], hidden: true },
+      { id: 'first', label: 'First entry', kind: 'pick', options: ['From the open (9:30)', 'After 9:45', 'After 10:00', '15 min after the news'], hidden: true, clock: 'ny' },
+      { id: 'done', label: 'Done by', kind: 'pick', options: ['11:00', '11:30', '12:00', 'The close'], hidden: true, clock: 'ny' },
       { id: 'stop', label: 'Stop after', kind: 'one', options: ['1 loss', '2 losses', 'Daily limit'] },
     ],
   },
@@ -348,7 +351,7 @@ export const PREP_STEPS: PrepStep[] = [
     fields: [
       ...scenario('a'),
       ...scenario('b'),
-      { id: 'cutoffAt', label: 'Cutoff', kind: 'one', options: CUTOFFS },
+      { id: 'cutoffAt', label: 'Cutoff', kind: 'one', options: CUTOFFS, clock: 'ny' },
       { id: 'cutoff', label: 'Cutoff, written', kind: 'text', options: [], hidden: true },
       { id: 'stop', key: 'session.stop', label: 'Stop after', kind: 'one', options: ['1 loss', '2 losses', 'Daily limit'] },
     ],
@@ -662,7 +665,7 @@ export function scenarioLine(answers: Record<string, Answer>, k: 'a' | 'b'): str
 }
 
 export const scenarioC = (answers: Record<string, Answer>) =>
-  `Neither trigger zone reached by ${str(answers['plans.cutoffAt']) ?? str(answers['plans.cutoff']) ?? '9:30'}, or price chops through both: no trade.`;
+  `Neither trigger zone reached by ${localizeNy(str(answers['plans.cutoffAt']) ?? str(answers['plans.cutoff']) ?? '9:30')}, or price chops through both: no trade.`;
 
 /** The day's plan in a few rows: what the dashboard shows and the prep ends on. */
 export function planSummary(answers: Record<string, Answer>): Array<{ label: string; value: string }> {

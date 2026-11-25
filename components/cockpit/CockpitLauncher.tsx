@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
-import { press, spring } from '@/lib/motion';
 import { localDay } from '@/lib/day';
 import { openCockpit } from './openCockpit';
+import { BarButton } from '@/components/ui/BarButton';
 
 const AUTO_KEY = 'signature.cockpit.autoDay';
 const NY_HM = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'short' });
@@ -13,13 +12,10 @@ const NY_HM = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', h
 /** The title bar's door to the cockpit. */
 export function CockpitButton() {
   return (
-    <motion.button type="button" onClick={openCockpit} whileTap={press} whileHover={{ y: -1 }} transition={spring} data-cockpit-open
-      title="The cockpit: a small window above your charts — countdowns, today against your rules, the plans a tap away"
-      className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium"
-      style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}>
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden><rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.5" /><path d="M5 9.5l2-2 1.5 1.5L11 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    <BarButton kind="window" onClick={openCockpit} data-cockpit-open className="mr-2"
+      title="The cockpit: a small window above your charts — countdowns, today against your rules, the plans a tap away">
       Cockpit
-    </motion.button>
+    </BarButton>
   );
 }
 

@@ -1,4 +1,5 @@
 'use client';
+import { BarInner, barAttrs, type BarKind } from '@/components/ui/BarButton';
 
 import { useCallback, useEffect, useState } from 'react';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
@@ -65,14 +66,15 @@ export function Card({ title, note, children, className = '' }: { title?: string
   );
 }
 
-export function PillButton({ children, onClick, accent, disabled, type = 'button', title }: {
-  children: React.ReactNode; onClick?: () => void; accent?: boolean; disabled?: boolean; type?: 'button' | 'submit'; title?: string;
+/** The prop pages' buttons: the title bar's controls (components/ui/BarButton) — a window kind opens a dialog or a panel. */
+export function PillButton({ children, onClick, accent, disabled, type = 'button', title, kind }: {
+  children: React.ReactNode; onClick?: () => void; accent?: boolean; disabled?: boolean; type?: 'button' | 'submit'; title?: string; kind?: BarKind;
 }) {
+  const k: BarKind = kind ?? (accent ? 'primary' : 'action');
   return (
-    <button type={type} onClick={onClick} disabled={disabled} title={title}
-      className="rounded-full border px-3 py-1 text-[11.5px] font-medium disabled:opacity-50"
-      style={accent ? { background: 'rgb(var(--accent))', borderColor: 'rgb(var(--accent))', color: 'var(--bg-raised)' }
-        : { borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text)' }}>{children}</button>
+    <button type={type} onClick={onClick} disabled={disabled} title={title} {...barAttrs(k)} className="bar-ctl disabled:opacity-50">
+      <BarInner kind={k}>{children}</BarInner>
+    </button>
   );
 }
 

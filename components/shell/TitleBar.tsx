@@ -156,9 +156,7 @@ export function TitleBar() {
         {/* New trade, here on every screen with the tabs on top (in the rail otherwise):
             last, so the chips that come and go never move it. */}
         <motion.div whileTap={press} whileHover={{ y: -1 }} transition={spring} className="ml-2" data-titlebar-new>
-          <Link href="/new" prefetch={false} data-new-trade
-            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold outline-none"
-            style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)', boxShadow: '0 6px 18px -8px rgb(var(--accent) / 0.8)' }}>
+          <Link href="/new" prefetch={false} data-new-trade className="bar-ctl" data-bar="primary">
             <span className="text-[14px] leading-none">+</span> New trade
           </Link>
         </motion.div>

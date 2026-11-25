@@ -162,10 +162,8 @@ export function NotificationBell() {
       <motion.button type="button" data-bell aria-label={count ? `Reminders, ${count} unread` : 'Reminders'} aria-expanded={open}
         onClick={() => { if (!open) void load(); setOpen(!open); }} whileTap={press} whileHover={{ y: -1 }} transition={springSnappy}
         title="Reminders"
-        className="relative grid size-[26px] place-items-center rounded-full border outline-none"
-        style={count
-          ? { borderColor: 'rgb(var(--accent) / 0.6)', background: 'rgb(var(--accent) / 0.14)', color: 'rgb(var(--accent))', boxShadow: '0 0 14px -4px rgb(var(--accent) / 0.7)' }
-          : { borderColor: open ? 'rgb(var(--accent) / 0.45)' : 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-faint)' }}>
+        className="bar-ctl relative" data-bar="icon" data-on={count ? '' : undefined}
+        style={count ? { boxShadow: '0 0 14px -4px rgb(var(--accent) / 0.7)' } : undefined}>
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" aria-hidden>
           <path d="M10 2.8a5 5 0 0 0-5 5v2.6c0 .8-.3 1.6-.8 2.2L3.4 13.6c-.4.5 0 1.2.6 1.2h12c.6 0 1-.7.6-1.2l-.8-1c-.5-.6-.8-1.4-.8-2.2V7.8a5 5 0 0 0-5-5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
           <path d="M8 16.6a2.1 2.1 0 0 0 4 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

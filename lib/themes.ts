@@ -154,7 +154,7 @@ export const THEME_BOOTSTRAP = `(() => {
     document.documentElement.dataset.theme = id;
     document.documentElement.dataset.mode = modes[id];
     // The side rail, before first paint, so the page never jumps sideways on load.
-    try { var p = JSON.parse(localStorage.getItem('signature:preferences') || '{}'); document.documentElement.dataset.rail = p.nav === 'top' ? 'off' : (p.railLabels ? 'labels' : 'icons'); } catch (e) { document.documentElement.dataset.rail = 'icons'; }
+    try { var p = JSON.parse(localStorage.getItem('signature:preferences') || '{}'); document.documentElement.dataset.rail = p.nav === 'top' ? 'off' : (p.railLabels ? 'labels' : 'icons'); document.documentElement.dataset.width = p.pageWidth === 'centred' ? 'centred' : 'full'; } catch (e) { document.documentElement.dataset.rail = 'icons'; document.documentElement.dataset.width = 'full'; }
   } catch (e) {
     document.documentElement.dataset.rail = 'icons';
     document.documentElement.dataset.theme = '${DEFAULT_THEME}';

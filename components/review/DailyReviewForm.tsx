@@ -1,4 +1,5 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
 
 import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 
@@ -73,8 +74,8 @@ export function DailyReviewForm({ day, existing, tradesOnDay }: {
   // The header's actions, once: in the title bar (side rail) or in the page's own header row.
   const headActions = (<>
         <div className="flex shrink-0 gap-2">
-          <Button title="The day before" onClick={() => shift(-1)}>←</Button>
-          <Button title="The day after" onClick={() => shift(1)}>→</Button>
+          <BarButton kind="icon" title="The day before" onClick={() => shift(-1)}>←</BarButton>
+          <BarButton kind="icon" title="The day after" onClick={() => shift(1)}>→</BarButton>
           {/*
             Back to wherever this was opened from, not to the board.
 
@@ -84,14 +85,14 @@ export function DailyReviewForm({ day, existing, tradesOnDay }: {
             history.back() returns to the calendar, on the month you were
             looking at; the board is only the fallback for a day opened cold.
           */}
-          <Button
+          <BarButton kind="action"
             onClick={() => {
               if (window.history.length > 1) window.history.back();
               else window.location.href = '/';
             }}
           >
             Close
-          </Button>
+          </BarButton>
         </div>
   </>);
   return (

@@ -3,6 +3,7 @@
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { ReplayDayControl } from '@/components/replay/ReplayPlan';
 import { Reveal } from '@/components/ui/Motion';
+import { BarButton } from '@/components/ui/BarButton';
 import { ActiveFilters, FilterChip, FilterPanel, FilterPill, FilterRow } from '@/components/ui/FilterBar';
 import { useEffect, useState } from 'react';
 import { QuoteOfDay } from '@/components/personal/QuoteOfDay';
@@ -13,7 +14,7 @@ import { PropMini } from '@/components/prop/PropMini';
 import { motion } from 'framer-motion';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { SETTINGS_TOGGLE } from '@/components/shell/Shortcuts';
-import { press, spring, springSoft } from '@/lib/motion';
+import { springSoft } from '@/lib/motion';
 import { DIRECTIONS, SESSIONS } from '@/lib/domain';
 import { openTrade } from '@/components/trade/openTrade';
 import { DASH_PERIODS, type DashboardData, type DashWorld } from '@/lib/dashboard';
@@ -71,15 +72,9 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
         merged={<MergedHeader title="Dashboard" data="dashboard" sub={<>{new Date(`${today}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · {scope}</>}>
           <div className="flex items-center gap-1.5" data-dash-accounts>
           <FilterChip open={open} count={nFilters} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" />
-          <Chip on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data="cards">
-            Cards <span aria-hidden className="inline-block transition-transform" style={{ transform: arranging ? 'rotate(180deg)' : 'none' }}>▾</span>
-          </Chip>
-          <Chip on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data="hide-pnl">
-            {prefs.hidePnl ? 'Show P&L' : 'Hide P&L'}
-          </Chip>
-          <Chip onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data="customize">
-            Customize
-          </Chip>
+          <BarButton kind="menu" on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data-dash-action="cards">Cards</BarButton>
+          <BarButton kind="toggle" on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data-dash-action="hide-pnl">Hide P&amp;L</BarButton>
+          <BarButton kind="window" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data-dash-action="customize">Customize</BarButton>
           {prefs.dashWorld !== 'real' && <ReplayDayControl />}
 </div>
         </MergedHeader>}
@@ -95,15 +90,9 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
         </div>
         <div className="flex flex-wrap items-center gap-1.5" data-dash-accounts>
           <FilterChip open={open} count={nFilters} onClick={() => setOpen((o) => !o)} title="Accounts, period, session, direction" />
-          <Chip on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data="cards">
-            Cards <span aria-hidden className="inline-block transition-transform" style={{ transform: arranging ? 'rotate(180deg)' : 'none' }}>▾</span>
-          </Chip>
-          <Chip on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data="hide-pnl">
-            {prefs.hidePnl ? 'Show P&L' : 'Hide P&L'}
-          </Chip>
-          <Chip onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data="customize">
-            Customize
-          </Chip>
+          <BarButton kind="menu" on={arranging} onClick={() => setArranging((a) => !a)} title="Choose and arrange the cards in the bottom row" data-dash-action="cards">Cards</BarButton>
+          <BarButton kind="toggle" on={prefs.hidePnl} onClick={() => update({ hidePnl: !prefs.hidePnl })} title="Blur every money figure — hover one to peek" data-dash-action="hide-pnl">Hide P&amp;L</BarButton>
+          <BarButton kind="window" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'dashboard' } }))} title="Settings → Dashboard: blocks, world, dollars or R, the score" data-dash-action="customize">Customize</BarButton>
           {prefs.dashWorld !== 'real' && <ReplayDayControl />}
         </div>
       </header>
@@ -175,15 +164,6 @@ export function DashboardView({ data, today, accounts = [] }: { data: Record<Das
 
 
 
-function Chip({ on = false, onClick, title, children, data }: { on?: boolean; onClick: () => void; title: string; children: React.ReactNode; data: string }) {
-  return (
-    <motion.button type="button" onClick={onClick} title={title} whileTap={press} transition={spring} data-dash-action={data}
-      className="rounded-full border px-3.5 py-1.5 text-[12px] font-medium"
-      style={{ borderColor: on ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: on ? 'rgb(var(--accent) / 0.12)' : 'var(--glass-fill)', color: on ? 'rgb(var(--accent))' : 'var(--text-dim)' }}>
-      {children}
-    </motion.button>
-  );
-}
 
 
 function Week({ d, money, today }: { d: DashboardData; money: boolean; today: string }) {

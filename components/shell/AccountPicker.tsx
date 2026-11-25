@@ -56,7 +56,7 @@ export function AccountPicker() {
   };
 
   return (
-    <div className="mr-2 flex items-center text-[11.5px]" title="The account this screen shows — each screen remembers its own">
+    <div className="mr-2 flex items-center" title="The account this screen shows — each screen remembers its own">
       <AccountMenu value={account} options={OPTIONS} label={label} onChange={choose} />
     </div>
   );
@@ -106,8 +106,7 @@ function AccountMenu({ value, options, label, onChange }: {
         whileTap={press}
         whileHover={{ y: -1 }}
         transition={springSnappy}
-        className="flex items-center gap-1.5 rounded-full border px-3 py-1 font-medium outline-none"
-        style={{ borderColor: open ? 'rgb(var(--accent) / 0.45)' : 'var(--glass-stroke)', background: 'var(--glass-fill)', color: 'var(--text-dim)' }}
+        className="bar-ctl" data-bar="menu"
       >
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.span key={value} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6, transition: exitQuick }}
@@ -115,9 +114,9 @@ function AccountMenu({ value, options, label, onChange }: {
             {label(value)}
           </motion.span>
         </AnimatePresence>
-        <motion.svg width="9" height="9" viewBox="0 0 10 10" aria-hidden animate={{ rotate: open ? 180 : 0 }} transition={springBouncy}>
-          <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </motion.svg>
+        <span className="bar-chev" aria-hidden>
+          <svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </span>
       </motion.button>
       <AnimatePresence>
         {open && (

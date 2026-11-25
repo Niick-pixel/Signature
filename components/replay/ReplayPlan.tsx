@@ -1,4 +1,6 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
+import { localizeNy } from '@/lib/localTime';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Overlay } from '@/components/ui/Overlay';
@@ -231,7 +233,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
           focused={fid === `${k}-rr`} onFocus={() => focusOn(`${k}-rr`)} tone={(o) => (o === '<1.5' ? LOSS : undefined)} required />
         {warn && <p className="px-2 text-[11.5px] font-medium" style={{ color: `rgb(${LOSS})` }} data-rr-warning>{warn}</p>}
         </div>
-        <Chips id={`${k}-kill`} label="Kill switch" options={KILLS} value={sc.kill} onChange={(v) => set({ kill: v as ReplayScenario['kill'] })}
+        <Chips id={`${k}-kill`} label="Kill switch" options={KILLS} value={sc.kill} onChange={(v) => set({ kill: v as ReplayScenario['kill'] })} labelFor={(o) => localizeNy(o, date)}
           focused={fid === `${k}-kill`} onFocus={() => focusOn(`${k}-kill`)} required />
       </div>
     );
@@ -294,7 +296,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
               {context.overnight ?? 'Follows what was taken'}
             </span>
           </InfoBox>
-          <Chips id="news" label="News" options={NEWS} value={context.news} onChange={(v) => setC({ news: v as ReplayContext['news'] })}
+          <Chips id="news" label="News" options={NEWS} value={context.news} onChange={(v) => setC({ news: v as ReplayContext['news'] })} labelFor={(o) => localizeNy(o, date)}
             focused={fid === 'news'} onFocus={() => focusOn('news')} required hint="On a news day the data wick becomes a trigger zone and a target." className="md:col-span-2" />
           <Chips id="open" label="Open location" options={OPEN_LOCATIONS} value={context.open} onChange={(v) => setC({ open: v as ReplayContext['open'] })}
             focused={fid === 'open'} onFocus={() => focusOn('open')} required />
@@ -316,7 +318,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
             </span>
           </InfoBox>
           <InfoBox label="Scenario C · no trade" mark="rule" data-scenario-c>
-            <span className="text-[12px]" style={dim}>{SCENARIO_C}</span>
+            <span className="text-[12px]" style={dim}>{localizeNy(SCENARIO_C, date)}</span>
           </InfoBox>
         </div>
 
@@ -408,23 +410,18 @@ export function ReplayDayControl({ instrument, onPlanned }: { instrument?: strin
   }, [anyOpen]);
   if (!state) return null;
   const d = state.active;
-  const chip = 'rounded-full border px-3 py-1 text-[11.5px]';
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-replay-control={d ? 'active' : 'none'}>
       {d ? (
         <>
-          <button type="button" onClick={() => setViewing(true)} title="View the plan" className={`${chip} font-medium`}
-            style={{ borderColor: 'rgb(var(--accent) / 0.4)', color: 'rgb(var(--accent))', background: 'rgb(var(--accent) / 0.06)' }} data-replay-day={d.sequence}>
-            Day {d.sequence} · {d.weekday ?? ''} {fmtDate(d.replay_date)} · locked{d.amended_at ? ' · amended' : ''}
-            <span className="ml-1.5 opacity-70" aria-hidden>▸ plan</span>
-          </button>
-          <button type="button" className={chip} style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }} onClick={() => setAmending(true)} data-amend>Amend</button>
-          <button type="button" className={chip} style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }} onClick={() => setClosing(true)} data-next-replay-day>Next replay day</button>
+          <BarButton kind="window" on onClick={() => setViewing(true)} title="View the locked plan" data-replay-day={d.sequence}>
+            Day {d.sequence} · {d.weekday ?? ''} {fmtDate(d.replay_date)}{d.amended_at ? ' · amended' : ''}
+          </BarButton>
+          <BarButton kind="window" onClick={() => setAmending(true)} title="Amend the plan (the original stays what counts)" data-amend>Amend</BarButton>
+          <BarButton kind="window" onClick={() => setClosing(true)} title="Close this day, then plan the next" data-next-replay-day>Next replay day</BarButton>
         </>
       ) : (
-        <button type="button" className={`${chip} font-medium`} style={{ borderColor: 'rgb(var(--accent) / 0.4)', color: 'rgb(var(--accent))' }} onClick={() => setBuilding(true)} data-plan-replay-day>
-          Plan replay day
-        </button>
+        <BarButton kind="window" on onClick={() => setBuilding(true)} data-plan-replay-day>Plan replay day</BarButton>
       )}
       <PlanView open={viewing} day={d} trades={state.trades} onClose={() => setViewing(false)} onAmend={() => { setViewing(false); setAmending(true); }} />
       <ReplayBuilder open={building} onClose={() => setBuilding(false)} last={state.last} instrument={instrument} onLocked={onPlanned} />
@@ -459,11 +456,11 @@ function PlanView({ open, day, trades, onClose, onAmend }: {
               <Button variant="primary" onClick={onClose}>Close</Button>
             </div>
           </div>
-          <PlanBody context={day.context} scenarios={day.scenarios} onPick={day.closed_at ? undefined : (k) => { onClose(); pickScenario(k); }} />
+          <PlanBody day={day.replay_date} context={day.context} scenarios={day.scenarios} onPick={day.closed_at ? undefined : (k) => { onClose(); pickScenario(k); }} />
           {day.amended_at && day.amended_context && day.amended_scenarios && (
             <div className="mt-4" data-plan-view-amended>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'rgb(var(--amber))' }}>Amended after locking — the original above is what counts</p>
-              <PlanBody context={day.amended_context} scenarios={day.amended_scenarios} />
+              <PlanBody day={day.replay_date} context={day.amended_context} scenarios={day.amended_scenarios} />
             </div>
           )}
           <div className="mt-3 rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-plan-view-trades>
@@ -487,7 +484,7 @@ function pickScenario(k: 'a' | 'b') {
   if (!ev.detail.taken) navigate(`/new?plan=${k}`);
 }
 
-function PlanBody({ context: c, scenarios: s, onPick }: { context: ReplayContext; scenarios: ReplayScenarios; onPick?: (k: 'a' | 'b') => void }) {
+function PlanBody({ context: c, scenarios: s, onPick, day }: { context: ReplayContext; scenarios: ReplayScenarios; onPick?: (k: 'a' | 'b') => void; day?: string }) {
   const bias = dayBias(c);
   const row = (label: string, value: ReactNode) => (
     <div className="flex items-baseline justify-between gap-3 py-0.5 text-[12px]"><span style={faint}>{label}</span><span className="text-right">{value ?? '—'}</span></div>
@@ -506,7 +503,7 @@ function PlanBody({ context: c, scenarios: s, onPick }: { context: ReplayContext
         {row('Confirmation', confirmText(sc.confirm))}
         {row(sc.targets.length > 1 ? 'First targets' : 'First target', sc.targets.join(' / ') || null)}
         {row('Rough R', sc.rr ? <span style={sc.rr === '<1.5' ? { color: `rgb(${LOSS})` } : undefined}>{sc.rr}R</span> : null)}
-        {row('Kill switch', sc.kill)}
+        {row('Kill switch', sc.kill ? localizeNy(sc.kill, day) : null)}
       </Wrap>
     );
   };
@@ -533,12 +530,12 @@ function PlanBody({ context: c, scenarios: s, onPick }: { context: ReplayContext
         <div>
           {row('Taken before the open', c.taken ? (c.taken.join(', ') || 'Nothing') : null)}
           {row('Overnight', c.overnight)}
-          {row('News · open in', `${c.news ?? '—'} · ${c.open ?? '—'}`)}
+          {row('News · open in', `${c.news ? localizeNy(c.news, day) : '—'} · ${c.open ?? '—'}`)}
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">{card('a')}{card('b')}</div>
       <p className="rounded-[calc(14px*var(--rk))] border px-3 py-2 text-[12px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)', ...dim }}>
-        <b style={{ color: 'var(--text)' }}>Scenario C</b> — {SCENARIO_C}
+        <b style={{ color: 'var(--text)' }}>Scenario C</b> — {localizeNy(SCENARIO_C, day)}
       </p>
     </div>
   );

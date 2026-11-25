@@ -147,8 +147,25 @@ for (const nav of ['side', 'top']) {
   });
 }
 
-await check('every screen sits in one of the two page widths, centred in the space beside the rail', async () => {
+await check('Full width (the default): every screen runs to the window edges beside the rail, the same 24px gutters', async () => {
   const { page } = await open({ width: 1920, height: 1000 }, { nav: 'side', railLabels: false });
+  const bad = [];
+  for (const u of ['/dashboard', '/calendar', '/path', '/prop', '/review', '/executions']) {
+    await page.goto(`${BASE}${u}`); await page.waitForTimeout(600);
+    const r = await page.evaluate(() => {
+      const main = document.querySelector('header.titlebar-drag')?.nextElementSibling;
+      // The Today panel docked on the right is part of the page (the content makes room for it).
+      const cards = [...(main?.querySelectorAll('[data-card], .glass') ?? []), ...document.querySelectorAll('[data-today="open"]')].map((e) => e.getBoundingClientRect()).filter((x) => x.width > 40);
+      return { right: Math.round(Math.max(0, ...cards.map((c) => c.right))), w: innerWidth };
+    });
+    if (r.w - r.right > 40) bad.push(`${u}: ends ${r.w - r.right}px short of the edge`);
+  }
+  await page.context().close();
+  expect(!bad.length, bad.join(' | '));
+});
+
+await check('Centred (Settings → Page width): every screen sits in one of the two page widths, centred in the space beside the rail', async () => {
+  const { page } = await open({ width: 1920, height: 1000 }, { nav: 'side', railLabels: false, pageWidth: 'centred' });
   const bad = [];
   for (const u of SCREENS) {
     await page.goto(`${BASE}${u}`); await page.waitForTimeout(600);
@@ -341,12 +358,13 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
   const notes = await page.locator('[data-plan-checks]').innerText();
   expect(/no kill switch/.test(notes), `the rules were not checked: ${notes}`);
   await pill('aKills', '15m closes through the zone'); await pill('bKills', 'Never reaches the zone'); await pill('bKills', 'Bias invalidated');
-  await pill('cutoffAt', '10:00'); await page.waitForTimeout(300);
+  // The cutoffs are New York times shown on the local clock: the second one is 10:00 New York.
+  await g('cutoffAt').getByRole('button').nth(1).click(); await page.waitForTimeout(300);
   expect(await clear(), 'the plans and C end above the footer');
   expect(await page.locator('[data-plan-checks]').count() === 0, 'the notes clear once the plans are sound');
   await page.click('[data-prep-next]'); await page.waitForSelector('[data-prep-plan]');
   const plan = await page.locator('[data-prep-plan]').innerText();
-  expect(/Scenario A/.test(plan) && /Scenario C/.test(plan) && /bias is bearish because 4H displaced/.test(plan) && /from PDH/.test(plan) && /by 10:00/.test(plan), plan.slice(0, 300));
+  expect(/Scenario A/.test(plan) && /Scenario C/.test(plan) && /bias is bearish because 4H displaced/.test(plan) && /from PDH/.test(plan) && /reached by \d{2}:\d{2}/.test(plan), plan.slice(0, 300));
   const day = await page.evaluate(() => new Date().toLocaleDateString('en-CA'));
   const saved = await page.evaluate(async (day) => (await (await fetch(`/api/prep?day=${day}`)).json()).prep.data.answers, day);
   expect(saved['draw.side'] === 'Both ways' && JSON.stringify(saved['liquidity.wait']) === JSON.stringify(['PDH', 'London low']), JSON.stringify(saved).slice(0, 200));

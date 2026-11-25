@@ -175,7 +175,7 @@ export function JournalBook({ initial, tradesByDay, openPage = null }: {
         inside them instead. (Narrow windows stack the two and keep scrolling
         the page.)
       */}
-      <aside className="glass flex max-h-[calc(100dvh-8rem)] flex-col rounded-[calc(24px*var(--rk))] p-4 lg:max-h-none lg:h-[calc(100dvh-10.25rem)]">
+      <aside className="glass flex max-h-[calc(100dvh-8rem)] flex-col rounded-[calc(24px*var(--rk))] p-4 lg:max-h-none lg:h-[calc(100dvh-var(--journal-chrome))]">
         <Button variant="primary" onClick={() => setPicking(true)} className="w-full">
           New page
         </Button>
@@ -235,7 +235,7 @@ export function JournalBook({ initial, tradesByDay, openPage = null }: {
 
       {/* ------------------------------------------------------------- page */}
       {open === null ? (
-        <div className="glass grid place-items-center rounded-[calc(24px*var(--rk))] p-10 text-center lg:h-[calc(100dvh-10.25rem)]">
+        <div className="glass grid place-items-center rounded-[calc(24px*var(--rk))] p-10 text-center lg:h-[calc(100dvh-var(--journal-chrome))]">
           <div>
             <p className="text-[15px] font-medium">Nothing open</p>
             <p className="mt-1.5 max-w-sm text-[13px]" style={{ color: 'var(--text-dim)' }}>
@@ -247,7 +247,7 @@ export function JournalBook({ initial, tradesByDay, openPage = null }: {
         </div>
       ) : (
         <motion.article {...riseIn} transition={spring} key={open.id}
-          className="glass flex flex-col rounded-[calc(24px*var(--rk))] p-7 sm:p-9 lg:h-[calc(100dvh-10.25rem)]">
+          className="glass flex flex-col rounded-[calc(24px*var(--rk))] p-7 sm:p-9 lg:h-[calc(100dvh-var(--journal-chrome))]">
           {/*
             Explicit keys on the direct children.
 

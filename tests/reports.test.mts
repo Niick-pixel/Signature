@@ -1,6 +1,7 @@
 /* Reports: compare, breakdowns, fees, tags — and your own tag groups in the database. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+const { localizeNy } = await import('../lib/localTime');
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,7 +44,7 @@ test('breakdowns: holding time and the NY open in buckets, in order; winners aga
   const hold = b.find((x) => x.id === 'hold')!;
   assert.deepEqual(hold.rows.map((r) => r.label), ['Under 2 min', '2–5 min', '15–60 min']);
   const open = b.find((x) => x.id === 'open')!;
-  assert.deepEqual(open.rows.map((r) => r.label), ['9:30–9:45', '9:45–10:00', '10:00–10:30']);
+  assert.deepEqual(open.rows.map((r) => r.label), ['9:30–9:45', '9:45–10:00', '10:00–10:30'].map((l) => localizeNy(l)), 'labelled on the trader\'s clock');
   const wl = R.winnersVsLosers(rows);
   assert.equal(wl.winners.hold, 2); assert.equal(wl.losers.size, 3);
 });

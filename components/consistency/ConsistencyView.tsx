@@ -241,8 +241,6 @@ function Head({ title, right }: { title: string; right?: string }) {
 }
 function NavButton({ children, onClick, label, disabled }: { children: React.ReactNode; onClick: () => void; label: string; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} disabled={disabled}
-      className="grid size-7 place-items-center rounded-full border text-[14px] disabled:opacity-30"
-      style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>{children}</button>
+    <button type="button" onClick={onClick} aria-label={label} disabled={disabled} className="bar-ctl disabled:opacity-30" data-bar="icon">{children}</button>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { nyToLocal } from '@/lib/localTime';
 
 import Link from 'next/link';
 import { Segmented } from '@/components/ui/Segmented';
@@ -17,8 +18,8 @@ export function PropSettings({ Section }: { Section: SectionComp }) {
         <div>
           <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>A trading day is</span>
           <Segmented<Preferences['propDayBoundary']> value={prefs.propDayBoundary} onChange={(propDayBoundary) => update({ propDayBoundary })}
-            options={['cme', 'calendar']} labelFor={(v) => (v === 'cme' ? 'The futures session (from 6pm New York)' : 'The calendar date')}
-            titleFor={(v) => (v === 'cme' ? 'How the firms count daily loss and qualifying days: a trade after 6pm New York counts on the next day.' : 'The date the trade was logged on.')} />
+            options={['cme', 'calendar']} labelFor={(v) => (v === 'cme' ? `The futures session (from ${nyToLocal(1080)})` : 'The calendar date')}
+            titleFor={(v) => (v === 'cme' ? `How the firms count daily loss and qualifying days: a trade after ${nyToLocal(1080)} counts on the next day.` : 'The date the trade was logged on.')} />
         </div>
         <div>
           <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Warn when only this much of the drawdown or daily limit is left</span>

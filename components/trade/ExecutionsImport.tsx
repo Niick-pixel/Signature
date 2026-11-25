@@ -1,4 +1,5 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
 
 import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 
@@ -105,8 +106,7 @@ export function ExecutionsImport({ stored }: { stored: ExecutionRow[] }) {
 
   // The header's actions, once: in the title bar (side rail) or in the page's own header row.
   const headActions = (<>
-        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}
-          className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>Customize</button>
+        <BarButton kind="window" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'trades' } }))}>Customize</BarButton>
   </>);
   return (
     <div className="mx-auto w-full max-w-[var(--page-read)] px-6 pb-24 pt-4" data-executions-page>

@@ -1,4 +1,5 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
 
 import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 
@@ -76,9 +77,9 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
   // The header's actions, once: in the title bar (side rail) or in the page's own header row.
   const headActions = (<>
         <div className="flex shrink-0 gap-2">
-          <Button onClick={() => shift(-1)}>←</Button>
-          <Button onClick={() => shift(1)}>→</Button>
-          <Button onClick={() => { window.location.href = '/'; }}>Close</Button>
+          <BarButton kind="icon" title="The week before" onClick={() => shift(-1)}>←</BarButton>
+          <BarButton kind="icon" title="The week after" onClick={() => shift(1)}>→</BarButton>
+          <BarButton kind="action" onClick={() => { window.location.href = '/'; }}>Close</BarButton>
         </div>
   </>);
   return (
@@ -141,10 +142,13 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
                 </span>
               </div>
 
+              {/* Wide windows: the chart on the left, the flags and the three questions beside it. */}
+              <div className="grid gap-x-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] xl:items-start">
+              <div>
               {/* A quick log can have no chart at all. */}
               {trade.screenshot_path ? (
                 <img src={`/api/screenshots/${trade.screenshot_path}`} alt="Chart"
-                  className="mb-4 max-h-[38vh] w-full rounded-[calc(16px*var(--rk))] object-contain"
+                  className="mb-4 max-h-[38vh] w-full rounded-[calc(16px*var(--rk))] object-contain xl:max-h-[62vh]"
                   style={{ background: 'var(--letterbox)' }} />
               ) : (
                 <p className="mb-4 rounded-[calc(16px*var(--rk))] px-4 py-6 text-center text-[12px]"
@@ -163,6 +167,7 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
                 </ul>
               )}
 
+              </div>
               <div className="space-y-5">
                 {QUESTIONS.map((q, n) => (
                   <Field key={q} label={q}>
@@ -175,6 +180,7 @@ export function WeeklyReviewFlow({ week, trades, totalInWeek, existing }: {
                     />
                   </Field>
                 ))}
+              </div>
               </div>
 
               <div className="mt-6 flex items-center gap-3">

@@ -1,4 +1,5 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
 
 /**
  * Edit mode's panels: the widget gallery (searchable, by category, each with
@@ -285,7 +286,7 @@ export function BoardSettingsPanel({ open, onClose, s, onChange }: { open: boole
 /* ───────────────────────── the board menu ───────────────────────── */
 
 export interface MenuItem { label: string; onClick: () => void; danger?: boolean; disabled?: boolean }
-export function Menu({ items, label = '⋯' }: { items: MenuItem[]; label?: string }) {
+export function Menu({ items, label = 'More' }: { items: MenuItem[]; label?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -296,8 +297,7 @@ export function Menu({ items, label = '⋯' }: { items: MenuItem[]; label?: stri
   }, [open]);
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-label="Board menu" aria-expanded={open} data-board-menu
-        className="grid h-7 w-8 place-items-center rounded-full border text-[15px] font-semibold" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>{label}</button>
+      <BarButton kind="menu" on={open} onClick={() => setOpen((o) => !o)} aria-label="Board menu" data-board-menu>{label}</BarButton>
       <AnimatePresence>
         {open && (
           <motion.ul initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14 }}

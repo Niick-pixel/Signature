@@ -3,7 +3,7 @@
 import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/Button';
+import { BarButton } from '@/components/ui/BarButton';
 import type { ReportTrade, WeeklyReport } from '@/lib/weeklyReport';
 
 const signed = (v: number | null | undefined, dp = 2) => (v == null ? '—' : `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(dp)}R`);
@@ -73,10 +73,10 @@ export function WeeklyReportView({ report: w, note, reviewedIds, thisWeek }: { r
   const plannedOf = w.plan.in + w.plan.off;
   const head = (
     <div className="flex items-center gap-1.5" data-noprint>
-      <Link href={`/review/week?week=${addDays(w.monday, -7)}`} className="rounded-full px-2.5 py-1 text-[12px] hover:brightness-110" style={{ color: 'var(--text-dim)' }} aria-label="Previous week">‹ Prev</Link>
-      {!thisWeek && <Link href={`/review/week?week=${addDays(w.monday, 7)}`} className="rounded-full px-2.5 py-1 text-[12px] hover:brightness-110" style={{ color: 'var(--text-dim)' }} aria-label="Next week">Next ›</Link>}
-      <Link href={`/review?week=${w.monday}`} className="rounded-full px-2.5 py-1 text-[12px] hover:brightness-110" style={{ color: 'var(--text-dim)' }}>Walk through the trades</Link>
-      <Button onClick={() => void savePdf()} data-report-pdf>Save as PDF</Button>
+      <Link href={`/review/week?week=${addDays(w.monday, -7)}`} className="bar-ctl" data-bar="icon" aria-label="Previous week" title="Previous week">‹</Link>
+      {!thisWeek && <Link href={`/review/week?week=${addDays(w.monday, 7)}`} className="bar-ctl" data-bar="icon" aria-label="Next week" title="Next week">›</Link>}
+      <Link href={`/review?week=${w.monday}`} className="bar-ctl" data-bar="action">Walk through the trades</Link>
+      <BarButton kind="window" onClick={() => void savePdf()} data-report-pdf>Save as PDF</BarButton>
     </div>
   );
 

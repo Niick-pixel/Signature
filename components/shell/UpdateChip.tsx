@@ -33,7 +33,7 @@ export function UpdateChip() {
           exit={{ opacity: 0, y: -4, transition: exitQuick }}
           transition={spring}
           title="A new version has downloaded. Restart to use it — or it installs when you next close Signature."
-          className="mr-2 flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11.5px] font-medium"
+          className="bar-ctl mr-2" data-bar="action"
           style={{ borderColor: 'rgb(var(--outcome-win) / 0.5)', background: 'rgb(var(--outcome-win) / 0.1)', color: 'rgb(var(--outcome-win))' }}
         >
           <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden>

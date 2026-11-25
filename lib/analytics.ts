@@ -290,7 +290,7 @@ function segments(ts: readonly Trade[]): Segment[] {
   };
   by('setup', (t) => t.setup_type); by('session', (t) => t.session);
   by('weekday', (t) => WEEKDAY_FULL[clockOf(t, 'ny').weekday]);
-  by('half-hour', (t) => { const m = clockOf(t, 'ny').mins; const b = Math.floor(m / 30) * 30; return `${hhmm(b)}–${hhmm(b + 30)} New York`; });
+  by('half-hour', (t) => { const m = clockOf(t, 'local').mins; const b = Math.floor(m / 30) * 30; return `${hhmm(b)}–${hhmm(b + 30)}`; });
   by('target', (t) => t.target_type); by('direction', (t) => t.direction);
   by('mistake', (t) => t.mistake_tags ?? []);
   by('pattern', (t) => themesOf(t).map((id) => THEMES.find((d) => d.id === id)?.title ?? id));
@@ -315,12 +315,12 @@ export function ask(question: string, trades: readonly Trade[], opts: AskOptions
 
   // Time
   if (/\b(time|hour|session|morning|afternoon|o'?clock|half-hour)\b/.test(q) && !/\bstop\b/.test(q)) {
-    const tv = timeView(ts, 'ny', opts.minN);
+    const tv = timeView(ts, 'local', opts.minN);
     const sessions = tv.sessions.filter((s) => s.n).sort((a, b) => (b.avgR ?? 0) - (a.avgR ?? 0));
     return {
       intent: 'time', title: 'Your time of day',
       lines: [
-        tv.best ? `Best half-hour: ${hhmm(tv.best.from)}–${hhmm(tv.best.from + 30)} New York — ${statLine(tv.best)}.` : `No half-hour has ${opts.minN}+ trades yet.`,
+        tv.best ? `Best half-hour: ${hhmm(tv.best.from)}–${hhmm(tv.best.from + 30)} — ${statLine(tv.best)}.` : `No half-hour has ${opts.minN}+ trades yet.`,
         tv.worst ? `Worst: ${hhmm(tv.worst.from)}–${hhmm(tv.worst.from + 30)} — ${statLine(tv.worst)}.` : '',
         ...sessions.map((s) => `${s.label}: ${statLine(s)}.`),
       ].filter(Boolean),

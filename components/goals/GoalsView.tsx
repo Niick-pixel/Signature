@@ -1,4 +1,5 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
 
 import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 
@@ -47,10 +48,7 @@ export function GoalsView() {
 
   // The header's actions, once: in the title bar (side rail) or in the page's own header row.
   const headActions = (<>
-        <button type="button" onClick={() => setAdding(true)} data-goal-add
-          className="rounded-full px-4 py-2 text-[12.5px] font-semibold" style={{ background: 'var(--text)', color: 'var(--bg)' }}>
-          + New goal
-        </button>
+        <BarButton kind="primary" onClick={() => setAdding(true)} data-goal-add>+ New goal</BarButton>
   </>);
   return (
     <div data-goals>

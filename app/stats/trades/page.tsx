@@ -49,7 +49,7 @@ export default async function TradesFor({ searchParams }: { searchParams: Promis
             merged={<MergedHeader data="stats-trades" title={title} sub={<>{matched.length} trade{matched.length === 1 ? '' : 's'} · {losers.length} lost or flat · {winners.length} won ·{' '}
               <span style={{ color: net < 0 ? 'rgb(var(--outcome-loss))' : 'rgb(var(--outcome-win))' }}>{net < 0 ? '−' : '+'}{Math.abs(net).toFixed(1)}R</span>
               {def && <> — <i>{def.rule}</i></>}</>}>
-              <a href={`/stats?${back}`} className="rounded-full border px-3 py-1 text-[11.5px] font-medium" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}>← Stats</a>
+              <a href={`/stats?${back}`} className="bar-ctl" data-bar="action">← Stats</a>
             </MergedHeader>}
             inline={<>
           <a href={`/stats?${back}`} className="text-[12px]" style={{ color: 'var(--text-dim)' }}>← Stats</a>

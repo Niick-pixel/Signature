@@ -1,4 +1,5 @@
 'use client';
+import { BarInner, barAttrs } from '@/components/ui/BarButton';
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -44,13 +45,9 @@ export function ReviewExport({ month, label, options, title, blurb }: {
         whileHover={{ y: -1 }}
         transition={spring}
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12px] font-medium"
-        style={{ borderColor: 'rgb(var(--accent) / 0.45)', background: 'rgb(var(--accent) / 0.1)', color: 'rgb(var(--accent))' }}
+        {...barAttrs('menu', open)}
       >
-        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" aria-hidden>
-          <path d="M10 3v9m0 0l-3.5-3.5M10 12l3.5-3.5M4 15.5h12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        {title ?? `Review ${label} with Claude`}
+        <BarInner kind="menu">{title ?? `Review ${label} with Claude`}</BarInner>
       </motion.button>
 
       <AnimatePresence>

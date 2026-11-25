@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Reveal } from '@/components/ui/Motion';
 import { press, spring, springSnappy } from '@/lib/motion';
+import { BarInner, barAttrs } from './BarButton';
 
 /*
   One way to filter, on every page that filters (Dashboard, Stats): a "Filters" chip in the header that
@@ -15,9 +16,8 @@ export function FilterChip({ open, count, onClick, title = 'Filter what this pag
   const on = open || count > 0;
   return (
     <motion.button type="button" onClick={onClick} title={title} whileTap={press} transition={spring} data-filter-chip={count} aria-expanded={open}
-      className="rounded-full border px-3.5 py-1.5 text-[12px] font-medium"
-      style={{ borderColor: on ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)', background: on ? 'rgb(var(--accent) / 0.12)' : 'var(--glass-fill)', color: on ? 'rgb(var(--accent))' : 'var(--text-dim)' }}>
-      Filters{count ? ` · ${count}` : ''} <span aria-hidden className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
+      {...barAttrs('menu', on)}>
+      <BarInner kind="menu">Filters{count ? ` · ${count}` : ''}</BarInner>
     </motion.button>
   );
 }

@@ -14,7 +14,8 @@ const SEEN_KEY = 'signature.cockpit.seen';
 const PAUSE_S = 60;
 const LOSS = 'var(--outcome-loss)'; const WIN = 'var(--outcome-win)'; const AMBER = 'var(--amber)';
 const TONE = { stop: LOSS, warn: AMBER, note: 'var(--text-faint)' } as const;
-const NY = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+/** Your own clock: every time in the cockpit is the computer's local time. */
+const LOCAL = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 const fmtIn = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m} min`);
 const read = <T,>(k: string, d: T): T => { try { const v = window.localStorage.getItem(k); return v ? JSON.parse(v) as T : d; } catch { return d; } };
 const write = (k: string, v: unknown) => { try { window.localStorage.setItem(k, JSON.stringify(v)); } catch { /* fine */ } };
@@ -43,10 +44,10 @@ export function CockpitView() {
   useEffect(() => {
     load();
     const id = window.setInterval(load, 15_000);
-    const tick = window.setInterval(() => setClock(NY.format(new Date())), 1000);
+    const tick = window.setInterval(() => setClock(LOCAL.format(new Date())), 1000);
     // The clock starts at once, not a second late (the server renders none: its time is not yours).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setClock(NY.format(new Date()));
+    setClock(LOCAL.format(new Date()));
     return () => { window.clearInterval(id); window.clearInterval(tick); };
   }, [load]);
   // A stop or warn nudge seen for the first time today: a minute to breathe and read the rule (skippable).
@@ -83,7 +84,7 @@ export function CockpitView() {
       {/* The bar: drag the window by it; pin above the charts, close. */}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2" style={{ borderColor: 'var(--glass-stroke)', WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>Cockpit · New York</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--text-faint)' }}>Cockpit · your time</div>
           <div className="text-[22px] font-semibold leading-none tabular-nums" data-cockpit-clock>{clock}</div>
         </div>
         <div className="flex gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>

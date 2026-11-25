@@ -5,6 +5,7 @@
 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+const { nyToLocal } = await import('../lib/localTime');
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -107,7 +108,7 @@ test('overnight: what is still there, and which side was run; the plan reads as 
   assert.deepEqual(rows.map((r) => r.label), ['Bias', 'Scenario A', 'Scenario C']);
   assert.equal(rows[0].value, '4H/1H bias is bullish because the 4H displaced up. Invalidated by a 1H body close beyond 21,310.');
   assert.equal(rows[1].value, 'Sweep of the Asia low, then long → PDH · 2+R · killed by a 15m close below 21,280');
-  assert.match(rows[2].value, /by 9:45/);
+  assert.ok(rows[2].value.includes(`by ${nyToLocal('9:45')}`), 'the cutoff, on the trader\'s clock');
   assert.equal(planSummary({}).length, 0);
 });
 
@@ -117,7 +118,7 @@ test('the tapped plan reads as one line; zones are side-specific; shared zones a
   const rows = planSummary(t);
   assert.equal(rows[0].value, '4H/1H bias is bearish because 4H displaced through a level, swept a HTF high or low. Invalidated by a 1H body close beyond the 1H iFVG.');
   assert.equal(rows[1].value, 'Short from PDH + 1H gap → Asia low · 2+R · killed by 15m closes through the zone');
-  assert.match(rows[rows.length - 1].value, /by 10:00/);
+  assert.ok(rows[rows.length - 1].value.includes(`by ${nyToLocal('10:00')}`));
   assert.ok(wrongSide('Short', 'zone').includes('PDL') && !wrongSide('Short', 'zone').includes('PDH'));
   assert.ok(wrongSide('Long', 'target').includes('PDL') && wrongSide(null, 'zone').length === 0);
   const same = planChecks({ 'plans.aZones': ['PDH'], 'plans.bZones': ['PDH', 'EQH'], 'plans.aKills': ['x'], 'plans.bKills': ['y'] });

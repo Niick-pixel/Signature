@@ -1,3 +1,4 @@
+import { nyToLocal } from './localTime';
 /**
  * Live nudges (the cockpit): what today's own trades and rules say right now. Pure.
  *
@@ -39,7 +40,8 @@ export interface NudgeInput {
 export const REENTRY_MIN = 15;
 /** A release this close (before or after) is "through it". */
 const NEWS_BEFORE = 10; const NEWS_AFTER = 15;
-const hhmm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+/** A New York minute, shown on the trader's clock (lib/localTime). */
+const hhmm = (m: number) => nyToLocal(m);
 const minutesBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 60_000);
 
 export function nudges(x: NudgeInput): Nudge[] {
@@ -89,8 +91,8 @@ export function nudges(x: NudgeInput): Nudge[] {
 /** The next moment worth counting down to: the killzone opening or closing, the cutoff, the next release. */
 export function countdowns(nowNy: number, cutoffNy: number | null, news: NudgeInput['news'], killzone = { from: 9 * 60 + 30, to: 12 * 60 }): Array<{ key: string; label: string; inMin: number }> {
   const out: Array<{ key: string; label: string; inMin: number }> = [];
-  if (nowNy < killzone.from) out.push({ key: 'kz-open', label: 'NY AM killzone opens', inMin: killzone.from - nowNy });
-  else if (nowNy < killzone.to) out.push({ key: 'kz-close', label: 'NY AM killzone ends', inMin: killzone.to - nowNy });
+  if (nowNy < killzone.from) out.push({ key: 'kz-open', label: `Killzone opens (${nyToLocal(killzone.from)})`, inMin: killzone.from - nowNy });
+  else if (nowNy < killzone.to) out.push({ key: 'kz-close', label: `Killzone ends (${nyToLocal(killzone.to)})`, inMin: killzone.to - nowNy });
   if (cutoffNy != null && nowNy < cutoffNy) out.push({ key: 'cutoff', label: `Cutoff ${hhmm(cutoffNy)} (Scenario C)`, inMin: cutoffNy - nowNy });
   const next = news.filter((n) => n.ny > nowNy).sort((a, b) => a.ny - b.ny)[0];
   if (next) out.push({ key: 'news', label: next.title, inMin: next.ny - nowNy });

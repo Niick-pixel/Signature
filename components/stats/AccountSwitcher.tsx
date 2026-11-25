@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { pageShortcutAllowed } from '@/lib/keys';
 import { announceAccount, scopeOf, writeAccountCookie } from '@/lib/account-pref';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { freshPush } from '@/lib/freshness';
-import { press, spring } from '@/lib/motion';
 import type { Account } from '@/lib/domain';
 import { accountLabel } from '@/lib/domain';
 
@@ -70,35 +68,15 @@ export function AccountSwitcher({ available, current }: AccountSwitcherProps) {
   if (options.length <= 1) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="bar-seg" role="group" aria-label="Account">
       {options.map((opt) => {
         const on = opt.key === current;
-        const mixed = opt.key === 'All';
         return (
-          <motion.button
-      initial={false}
-            key={opt.key}
-            type="button"
-            onClick={() => go(opt.key)}
-            whileTap={press}
-            animate={{
-              borderColor: on ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)',
-              background: on ? 'rgb(var(--accent) / 0.12)' : 'var(--glass-fill)',
-            }}
-            transition={spring}
-            className="rounded-full border px-3.5 py-1.5 text-[12px] font-medium"
-            style={{
-              color: on ? 'rgb(var(--accent))' : 'var(--text-dim)',
-              fontStyle: mixed ? 'italic' : undefined,
-            }}
-          >
+          <button key={opt.key} type="button" onClick={() => go(opt.key)} aria-pressed={on} className="bar-seg-opt"
+            style={opt.key === 'All' ? { fontStyle: 'italic' } : undefined}>
             {opt.label}
-            {opt.count != null && (
-              <span className="ml-1.5 tabular-nums" style={{ color: 'var(--text-faint)' }}>
-                {opt.count}
-              </span>
-            )}
-          </motion.button>
+            {opt.count != null && <span className="ml-1.5 tabular-nums" style={{ color: 'var(--text-faint)' }}>{opt.count}</span>}
+          </button>
         );
       })}
     </div>

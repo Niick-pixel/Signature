@@ -1,3 +1,4 @@
+import { nyToLocal } from './localTime';
 import { isBacktest } from './domain';
 import { targetsOf, zonesOf, type PrepData } from './prep';
 import type { Trade } from './types';
@@ -50,7 +51,6 @@ export function nyMinutes(date: string): number | null {
   return h * 60 + min;
 }
 
-const hhmm = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
 /** "First entry" answers, as the earliest NY minute they allow. */
 const FIRST: Record<string, number> = { 'From the open (9:30)': 570, 'After 9:45': 585, 'After 10:00': 600 };
 /** "Done by" answers, as the latest NY minute they allow. */
@@ -114,9 +114,9 @@ export function planMatch(
   const done = typeof a['session.done'] === 'string' ? DONE[a['session.done']] : undefined;
   const at = first != null || done != null ? nyMinutes(t.date) : null;
   if (at != null) {
-    if (first != null && at < first) diffs.push(`entered ${hhmm(at)} NY, planned from ${hhmm(first)}`);
-    else if (done != null && at > done) diffs.push(`entered ${hhmm(at)} NY, planned done by ${hhmm(done)}`);
-    else agreed.push(`time (${hhmm(at)} NY)`);
+    if (first != null && at < first) diffs.push(`entered ${nyToLocal(at, planDay(t))}, planned from ${nyToLocal(first, planDay(t))}`);
+    else if (done != null && at > done) diffs.push(`entered ${nyToLocal(at, planDay(t))}, planned done by ${nyToLocal(done, planDay(t))}`);
+    else agreed.push(`time (${nyToLocal(at, planDay(t))})`);
   }
 
   if (diffs.length) return { status: 'off', diffs, agreed };

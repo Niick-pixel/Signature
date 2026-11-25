@@ -1,4 +1,5 @@
 'use client';
+import { localOpen } from '@/lib/localTime';
 
 import { useEffect, useState } from 'react';
 import { Segmented } from '@/components/ui/Segmented';
@@ -64,7 +65,7 @@ export function NotificationSettings({ Section }: { Section: SectionComp }) {
         </div>
       </Section>
 
-      <Section title="What to remind" hint="Times follow New York (the open is 9:30 ET), so daylight-saving changes are handled for you.">
+      <Section title="What to remind" hint={`Times are your clock. The market opens at ${localOpen()} for you today; when the US changes its clocks, every reminder follows by itself.`}>
         <div className="flex flex-wrap gap-2" data-settings="notify-kinds">
           {REMINDER_KINDS.map((k) => (
             <TogglePill key={k.kind} checked={s.kinds[k.kind]} onChange={(on) => save({ kinds: { ...s.kinds, [k.kind]: on } })} label={k.label} hint={k.hint} />
@@ -112,7 +113,7 @@ export function NotificationSettings({ Section }: { Section: SectionComp }) {
       <Section title="Timing">
         <div className="space-y-3">
           <div>
-            <Label>Prep reminder, before the NY open</Label>
+            <Label>Prep reminder, before the open ({localOpen()})</Label>
             <Segmented<string> value={String(s.prepLead)} options={['15', '30', '45', '60']} labelFor={(v) => `${v} min`} onChange={(v) => save({ prepLead: Number(v) })} />
           </div>
           <div>

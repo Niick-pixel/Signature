@@ -40,7 +40,7 @@ test('settings: parse fills gaps, quiet hours wrap midnight', () => {
 test('prep: in the 30 minutes before the open, only while unfinished', () => {
   assert.deepEqual(ids(snap({ prepSteps: 2 })), ['prep:2026-11-04']);
   const r = dueReminders(snap({ checkInDone: false, prepSteps: 2 }))[0];
-  assert.match(r.title, /NY open in 20 min/);
+  assert.match(r.title, /The open in 20 min \(08:30\)/);
   assert.match(r.body, /check-in and the chart prep \(2 of 6/);
   assert.deepEqual(ids(snap()), []);                                                      // all done
   assert.deepEqual(ids(snap({ prepSteps: 2, clock: at('2026-11-04T13:50:00Z') })), []);   // 40 min out

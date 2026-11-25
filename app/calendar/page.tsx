@@ -153,20 +153,9 @@ export default async function CalendarPage(
             } />
 
           <div className="space-y-5">
-            {account !== 'All' && isHypothetical(account) ? (
-              <>
-                <HypotheticalNote />
-                <MissedCard trades={scoped} />
-              </>
-            ) : account !== 'All' && isBacktest(account) ? (
-              <>
-                <BacktestNote undated={forAccount(all, account).filter((t) => !isDated(t)).length} where="calendar" />
-                <BacktestCard trades={forAccount(all, account)} />
-              </>
-            ) : (
-              <BalanceCard balance={balance} account={account} events={visibleEvents} />
-            )}
-
+            {/* Wide: the month on the left, the money and the month's figures in a column beside it — no margins, no scroll for the grid. */}
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)] xl:items-start">
+              <div className="min-w-0">
             <Panel
               title={`${MONTHS[month]} ${year}`}
               note="One square per day, coloured by what the day made or lost. A day whose trades were logged before the P&L started saving shows a dash with its R underneath — it has a direction but cannot state an amount. An amber ✕ marks rule breaks, because a red day traded properly and a green day traded badly are not the same day."
@@ -185,7 +174,23 @@ export default async function CalendarPage(
                 dayQuery={backtest ? `&account=${encodeURIComponent(account)}` : ''} />
             </Panel>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              </div>
+              <div className="min-w-0 space-y-5">
+            {account !== 'All' && isHypothetical(account) ? (
+              <>
+                <HypotheticalNote />
+                <MissedCard trades={scoped} />
+              </>
+            ) : account !== 'All' && isBacktest(account) ? (
+              <>
+                <BacktestNote undated={forAccount(all, account).filter((t) => !isDated(t)).length} where="calendar" />
+                <BacktestCard trades={forAccount(all, account)} />
+              </>
+            ) : (
+              <BalanceCard balance={balance} account={account} events={visibleEvents} />
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-2">
               <Stat
                 label="Month P&L"
                 value={summary.net == null ? '—' : usd(summary.net)}
@@ -219,6 +224,9 @@ export default async function CalendarPage(
             >
               <Mornings data={mornings} />
             </Panel>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -228,13 +236,7 @@ export default async function CalendarPage(
 
 function NavLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href}
-      className="rounded-full border px-3.5 py-1.5 text-[12px] font-medium"
-      style={{
-        borderColor: 'var(--glass-stroke)',
-        background: 'var(--glass-fill)',
-        color: 'var(--text-dim)',
-      }}>
+    <Link href={href} className="bar-ctl" data-bar="action">
       {label}
     </Link>
   );

@@ -40,7 +40,7 @@ export const TIPS: Quote[] = [
   'Old highs and lows are magnets. Fresh ones are where the trap gets set.',
   'Power of three: accumulation, manipulation, distribution. Know which one you are looking at.',
   'A target you cannot name is not a target.',
-  'If CPI or NFP prints at 8:30 New York, the first candle after it is noise, not a signal.',
+  'When CPI or NFP prints, the first candle after it is noise, not a signal.',
   'An inversion that closes through the gap is a trigger. A wick through it is a question.',
   'Your first loss of the day is information. Your second is a decision.',
   'If you have to talk yourself into it, it is not the model.',

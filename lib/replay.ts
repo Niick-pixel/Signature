@@ -1,3 +1,4 @@
+import { localizeNy, nyToLocal } from './localTime';
 /*
   Replay plans (048): two plans per replay day, built from taps only, before
   replaying a session in FX Replay. The morning check-in does the same for
@@ -206,7 +207,7 @@ export function lockMissing(c: ReplayContext, raw: ReplayScenarios): string[] {
 /** One line per scenario, for the plan strip and the exports. */
 export function scenarioLine(s: ReplayScenario): string {
   const route = `${s.zones.join(' + ') || 'no zone'}${s.targets.length ? ` → ${s.targets.join(' / ')}` : ''}`;
-  return [s.dir ?? '—', route, s.rr ? `${s.rr}R` : null, s.kill ? `kill: ${s.kill}` : null].filter(Boolean).join(' · ');
+  return [s.dir ?? '—', route, s.rr ? `${s.rr}R` : null, s.kill ? `kill: ${localizeNy(s.kill)}` : null].filter(Boolean).join(' · ');
 }
 
 /** The plan a day is read by: always the locked original — an amendment is shown beside it, never instead. */
@@ -232,7 +233,8 @@ export function nextWeekday(date: string): string {
 }
 /** A backtest's date on its replay day: the replayed date, at the session's usual time (New York). */
 export const SESSION_TIME: Record<string, string> = { Asia: '20:00', London: '03:00', 'NY AM': '09:45', 'NY Lunch': '12:00', 'NY PM': '13:30' };
-export const replayTradeDate = (replayDate: string, session: string) => `${replayDate}T${SESSION_TIME[session] ?? '09:45'}`;
+/** Stored on the trader's clock, like every other trade: the session's New York time read locally on that date. */
+export const replayTradeDate = (replayDate: string, session: string) => `${replayDate}T${nyToLocal(SESSION_TIME[session] ?? '09:45', replayDate)}`;
 
 /** "Did I take it?", read off the trades that day linked to that scenario: a take wins over a pass, a pass over a miss. */
 export function tookFromTrades(trades: ReadonlyArray<{ plan_scenario?: string | null; decision?: string | null }>, scenario: 'A' | 'B'): Took | null {

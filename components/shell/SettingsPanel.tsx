@@ -1,4 +1,5 @@
 'use client';
+import { nyToLocal } from '@/lib/localTime';
 
 import { SwapIn } from '@/components/ui/Motion';
 import { createPortal } from 'react-dom';
@@ -382,6 +383,16 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </Section>
 
             <Section
+              title="Page width"
+              hint="Full width runs every page to the window's edges, the cards and charts growing with it. Centred keeps the older column in the middle, with margins either side on a wide screen."
+            >
+              <div data-width-setting>
+                <Segmented value={prefs.pageWidth} onChange={(pageWidth) => update({ pageWidth })} options={['full', 'centred'] as const}
+                  labelFor={(v) => (v === 'full' ? 'Full width' : 'Centred')} />
+              </div>
+            </Section>
+
+            <Section
               title="Theme"
               hint="Warm creams, cool grays and two darks. Each changes the surfaces, corners and headings, not only the colours."
             >
@@ -461,12 +472,12 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             </Section>
             <Section title="Cockpit" hint="A small window above your charts during the session: the clock, the countdowns, today against your rules, nudges, and the plans a tap from a trade. Open it any time from the title bar.">
               <TogglePill checked={prefs.cockpitAuto} onChange={(cockpitAuto) => update({ cockpitAuto })}
-                label="Open it at 9:20 New York time" hint="Once a trading day, in the desktop app. Off, it opens only when you click Cockpit." />
+                label={`Open it at ${nyToLocal(560)}, ten minutes before the open`} hint="Once a trading day, in the desktop app. Off, it opens only when you click Cockpit." />
             </Section>
 
             <Section
               title="Chart prep"
-              hint="The chart half of the check-in: six short steps before New York — bias, liquidity, HTF gaps, the heatmap, the draw, the session. Ticks and taps, nothing to type. Press P to go straight to it."
+              hint="The chart half of the check-in: six short steps before the open — bias, liquidity, HTF gaps, the heatmap, the draw, the session. Ticks and taps, nothing to type. Press P to go straight to it."
             >
               <label className="block">
                 <span className="mb-1.5 block text-[11px]" style={{ color: 'var(--text-faint)' }}>Order-book heatmap link</span>

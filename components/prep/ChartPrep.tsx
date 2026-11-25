@@ -1,10 +1,10 @@
 'use client';
+import { localizeNy, localOpen, nyToLocal } from '@/lib/localTime';
 
 import { CONFIRM_RULE } from '@/lib/replay';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { localDay } from '@/lib/day';
-import { nyMinutes as nyMinutesOf } from '@/lib/planMatch';
 import { press, spring, springSoft } from '@/lib/motion';
 import {
   EMPTY_PREP, PREP_STEPS, TAKEN_KEY, WAIT_KEY, answerKey, answerText, biasSentence, deriveDecisions, gradeCeiling, liveMarks,
@@ -18,7 +18,7 @@ import { figuresLine } from '@/lib/news';
 
 export const PREP_SAVED = 'signature:prep';
 
-/** Minutes until 09:30 in New York, today — negative once the session has opened. */
+/** Minutes until the cash open (9:30 in New York, shown on your clock), today — negative once it has opened. */
 function minutesToOpen(now = new Date()): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false,
@@ -28,9 +28,9 @@ function minutesToOpen(now = new Date()): number {
   return 9 * 60 + 30 - (h * 60 + m);
 }
 function openLine(mins: number): string {
-  if (mins > 0) return `New York opens in ${mins >= 60 ? `${Math.floor(mins / 60)}h ` : ''}${mins % 60}m`;
-  if (mins > -150) return 'New York is open — a late prep, and that is worth knowing';
-  return 'After the New York session';
+  if (mins > 0) return `The open (${localOpen()}) in ${mins >= 60 ? `${Math.floor(mins / 60)}h ` : ''}${mins % 60}m`;
+  if (mins > -150) return 'The market is open — a late prep, and that is worth knowing';
+  return 'After the session';
 }
 
 /**
@@ -350,7 +350,7 @@ function FieldView({ field, value, onChange, hide = [], notes = {}, inline = tru
                 }}
                 transition={spring}
                 className="flex-[1_0_auto] whitespace-nowrap rounded-[calc(10px*var(--rk))] px-2.5 py-1 text-[11.5px] font-medium">
-                {o}
+                {field.clock === 'ny' ? localizeNy(o) : o}
                 {notes[o] && on && <span className="ml-1.5 text-[10px] font-normal opacity-70" data-carried={o}>{notes[o]}</span>}
               </motion.button>
             );
@@ -394,7 +394,7 @@ function Ready({ data, startedAt, onClose }: { data: PrepData; startedAt: string
           </svg>
         </motion.span>
         <div>
-          <h3 className="text-[19px] font-semibold tracking-tight">Ready for New York</h3>
+          <h3 className="text-[19px] font-semibold tracking-tight">Ready for the open</h3>
           <p className="text-[11.5px]" style={{ color: 'var(--text-dim)' }}>
             {p.done} of {p.total} marked{p.answered > p.done ? `, ${p.answered - p.done} skipped` : ''}
             {startedAt ? ` · started ${new Date(startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
@@ -455,13 +455,12 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (d && !answered && (d.syncedAt || d.events.length)) onAnswer(d.answer); }, [d]);
   const refresh = async () => { setBusy(true); await fetch('/api/news/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: true }) }); await load(); setBusy(false); };
-  const ny = (at: string) => { const m = nyMinutesOf(at); return m == null ? at.slice(11, 16) : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} NY`; };
   if (!d) return <p className="mt-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>Reading the calendar…</p>;
   return (
     <div className="mt-1 rounded-[calc(12px*var(--rk))] border px-3 py-1.5 text-[12px]" style={{ borderColor: 'var(--glass-stroke)' }} data-session-news={d.events.length}>
       <div className="flex items-baseline justify-between gap-2">
         <span style={{ color: 'var(--text-dim)' }}>
-          {d.events.length ? <>News in your session ({d.window.from}–{d.window.to} NY, {d.currencies.join('/')})</> : <>No red or orange {d.currencies.join('/')} news in your session ({d.window.from}–{d.window.to} NY)</>}
+          {d.events.length ? <>News in your session ({nyToLocal(d.window.from)}–{nyToLocal(d.window.to)}, {d.currencies.join('/')})</> : <>No red or orange {d.currencies.join('/')} news in your session ({nyToLocal(d.window.from)}–{nyToLocal(d.window.to)})</>}
         </span>
         {d.auto && <button type="button" onClick={refresh} disabled={busy} className="shrink-0 text-[10.5px] underline-offset-2 hover:underline" style={{ color: 'var(--text-faint)' }}>{busy ? 'Pulling…' : 'Refresh'}</button>}
       </div>
@@ -470,7 +469,7 @@ function SessionNews({ review, answered, onAnswer }: { review: DailyReview | nul
           {d.events.map((e) => (
             <li key={e.id} className="flex items-center gap-2">
               <span className="size-2 rounded-full" style={{ background: e.impact === 'High' ? 'rgb(var(--outcome-loss))' : 'rgb(var(--amber))' }} />
-              <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.at.slice(11, 16)} <span className="text-[10.5px]">({ny(e.at)})</span></span>
+              <span className="tabular-nums" style={{ color: 'var(--text-faint)' }}>{e.at.slice(11, 16)}</span>
               <b className="font-medium">{e.title}</b>
               {figuresLine(e) && <span className="ml-auto shrink-0 tabular-nums text-[11px]" style={{ color: 'var(--text-dim)' }} data-news-figures>{figuresLine(e)}</span>}
             </li>

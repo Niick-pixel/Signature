@@ -1,3 +1,4 @@
+import { localizeNy } from './localTime';
 /**
  * Reports: compare two groups of trades, break them down, count the fees,
  * and lay the year out day by day. Pure and client-safe: the server turns
@@ -91,7 +92,8 @@ const bucket = (v: number | null, edges: number[], labels: string[]) => {
   return labels[i === -1 ? labels.length - 1 : i];
 };
 const HOLD = { edges: [2, 5, 15, 60], labels: ['Under 2 min', '2–5 min', '5–15 min', '15–60 min', 'An hour or more'] };
-const OPEN = { edges: [0, 15, 30, 60, 120], labels: ['Before 9:30', '9:30–9:45', '9:45–10:00', '10:00–10:30', '10:30–11:30', 'After 11:30'] };
+/** Minutes from the open (9:30 New York), labelled on the trader's clock. */
+const OPEN = { edges: [0, 15, 30, 60, 120], labels: ['Before 9:30', '9:30–9:45', '9:45–10:00', '10:00–10:30', '10:30–11:30', 'After 11:30'].map((l) => localizeNy(l)) };
 
 function group(rows: readonly ReportRow[], keyOf: (r: ReportRow) => string | null, order?: string[]): BreakdownRow[] {
   const m = new Map<string, ReportRow[]>();

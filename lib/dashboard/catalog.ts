@@ -244,7 +244,7 @@ const DEEP: Array<[string, 'report' | 'analytics', string, string, string]> = [
   ['report-fees', 'report', 'fees', 'Fees', 'What commissions and fees took out of your results, by account and over time.'],
   ['report-heatmap', 'report', 'heatmap', 'Rules heatmap', 'Every trading day as a square: which rules were kept and which were broken.'],
   ['report-tags', 'report', 'tags', 'Your tags', 'Your own tag groups, and what trades carrying each tag made.'],
-  ['analytics-time', 'analytics', 'time', 'Time of day', 'When you make and lose: by hour and by weekday, in New York time or your own clock.'],
+  ['analytics-time', 'analytics', 'time', 'Time of day', 'When you make and lose: by hour and by weekday, on your own clock.'],
   ['analytics-confluences', 'analytics', 'confluences', 'Confluences', 'What each confluence you tick goes with: trades that had it against trades that did not.'],
   ['analytics-psychology', 'analytics', 'psychology', 'Psychology', 'Sleep, state of mind, late trades and the words in your writing, against your results.'],
   ['analytics-mistakes', 'analytics', 'mistakes', 'Mistake cost', 'What each mistake you tagged has cost, in R and in dollars.'],
@@ -311,7 +311,7 @@ add({
 add({
   id: 'when', title: 'Day and hour', category: 'chart', kind: 'heat', sizes: ['M', 'L'], defaultSize: 'M', minTrades: 10,
   settings: { scope: true },
-  help: 'Average R by weekday and entry hour (New York time). Faded where fewer than 5 trades: a cell that small is noise, not a schedule.',
+  help: 'Average R by weekday and entry hour (your clock). Faded where fewer than 5 trades: a cell that small is noise, not a schedule.',
   select: (v) => {
     // Backtests only on a backtest view, and only those with a replay date: the rest carry the day they were logged.
     const pool = v.when.trades.filter((t) => sourceOf(t.account) !== 'backtest' || v.source === 'backtest');

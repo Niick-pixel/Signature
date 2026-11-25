@@ -1,4 +1,5 @@
 'use client';
+import { BarButton } from '@/components/ui/BarButton';
 
 import { InTitleBar, MergedHeader, useMergedHeader } from '@/components/shell/TitleSlot';
 import { SwapIn } from '@/components/ui/Motion';
@@ -99,13 +100,13 @@ export function StudyRoom() {
         merged={<MergedHeader title="Study room" data="study">
           {prefs.studyClock === 'cube' ? (
             <button type="button" onClick={() => void logBlock(prefs.cubeMinutes, selected, (notes ?? []).find((x) => x.id === selected)?.title || null)}
-              title={`Your timer rang: log ${prefs.cubeMinutes} minutes`} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-log-block>
+              title={`Your timer rang: log ${prefs.cubeMinutes} minutes`} className="bar-ctl" data-bar="primary" data-log-block>
               Log a {prefs.cubeMinutes}-min block
             </button>
           ) : (
-            <button type="button" onClick={() => startTimer(null, 'Studying')} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>Start timer</button>
+            <button type="button" onClick={() => startTimer(null, 'Studying')} className="bar-ctl" data-bar="primary">Start timer</button>
           )}
-          <button type="button" onClick={() => openFocus(selected)} className="rounded-full border px-3 py-1.5 text-[12px] font-medium" style={ST}>Close the door</button>
+          <BarButton kind="window" onClick={() => openFocus(selected)}>Close the door</BarButton>
         </MergedHeader>}
         inline={
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -122,11 +123,11 @@ export function StudyRoom() {
           )}
           {prefs.studyClock === 'cube' ? (
             <button type="button" onClick={() => void logBlock(prefs.cubeMinutes, selected, (notes ?? []).find((x) => x.id === selected)?.title || null)}
-              title={`Your timer rang: log ${prefs.cubeMinutes} minutes`} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-log-block>
+              title={`Your timer rang: log ${prefs.cubeMinutes} minutes`} className="bar-ctl" data-bar="primary" data-log-block>
               Log a {prefs.cubeMinutes}-min block
             </button>
           ) : (
-            <button type="button" onClick={() => startTimer(null, 'Studying')} className="rounded-full px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }}>Start timer</button>
+            <button type="button" onClick={() => startTimer(null, 'Studying')} className="bar-ctl" data-bar="primary">Start timer</button>
           )}
           <button type="button" onClick={() => openFocus(selected)} className="rounded-full border px-3 py-1.5 text-[12px] font-medium" style={ST}>Close the door</button>
         </div>

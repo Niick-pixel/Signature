@@ -20,6 +20,7 @@ import { InTitleBar, useMergedHeader } from '@/components/shell/TitleSlot';
 import { Overlay } from '@/components/ui/Overlay';
 import { ActiveFilters, FilterChip, FilterPanel, FilterPill, FilterRow } from '@/components/ui/FilterBar';
 import { WidgetBody } from './renderers';
+import { BarButton, BarLink } from '@/components/ui/BarButton';
 import { BoardSettingsPanel, Gallery, Menu, WidgetSettings } from './EditPanels';
 
 /**
@@ -306,31 +307,30 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
     : s.background === 'blurred' ? 'radial-gradient(500px 360px at 20% 20%, rgb(var(--accent) / 0.16), transparent 70%), radial-gradient(520px 380px at 80% 75%, rgb(var(--sem-good) / 0.10), transparent 70%)' : undefined;
 
   // The header's pieces: inline (tabs across the top) or merged into the title bar (side rail; components/shell/TitleSlot).
-  const boardTabs = ((page.boards.length > 1 || editing) && <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Boards" data-board-tabs>
+  const boardTabs = ((page.boards.length > 1 || editing) && <nav className="bar-seg min-w-0 overflow-x-auto" aria-label="Boards" data-board-tabs>
           {page.boards.map((b) => renaming === b.id ? (
             <input key={b.id} autoFocus defaultValue={b.name} aria-label="Board name" data-rename
               onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
               onBlur={async (e) => { const name = e.target.value.trim(); setRenaming(null); if (name && name !== b.name) { await ed.boardAction({ action: 'rename', board: b.id, name }); router.refresh(); } }}
-              className="w-36 rounded-full border bg-transparent px-3 py-1 text-[12.5px]" style={{ borderColor: 'rgb(var(--accent) / 0.6)' }} />
+              className="h-6 w-36 rounded-full border bg-transparent px-3 text-[12px]" style={{ borderColor: 'rgb(var(--accent) / 0.6)' }} />
           ) : (
             <Link key={b.id} href={`/stats?${new URLSearchParams({ ...filters, board: b.id }).toString()}`} prefetch={false} scroll={false}
               onDoubleClick={(e) => { e.preventDefault(); setRenaming(b.id); }}
-              className="whitespace-nowrap rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors" aria-current={b.id === board.id ? 'page' : undefined}
-              style={b.id === board.id ? { background: 'var(--bg-raised)', color: 'var(--text)', boxShadow: 'var(--shadow-card)' } : { color: 'var(--text-dim)' }}>{b.name}</Link>
+              className="bar-seg-opt" aria-current={b.id === board.id ? 'page' : undefined}>{b.name}</Link>
           ))}
           <button type="button" aria-label="New board" title="New board" data-new-board
             onClick={async () => { const r = await ed.boardAction({ action: 'create', name: 'New board' }); if (r.ok) go(String(r.json.id), true); }}
-            className="grid size-7 place-items-center rounded-full text-[15px]" style={{ color: 'var(--text-dim)' }}>+</button>
+            className="bar-seg-opt text-[14px]">+</button>
         </nav>);
   const editTools = (<>
               <span className="text-[11.5px]" style={{ color: ed.status.kind === 'error' ? 'rgb(var(--outcome-loss))' : 'var(--text-faint)' }} data-save-status>
                 {ed.status.kind === 'saving' ? 'Saving…' : ed.status.kind === 'saved' ? 'Saved' : ed.status.kind === 'error' ? ed.status.text : 'Drag to move · corner to resize · drop on a tile to stack'}
               </span>
-              <button type="button" onClick={() => setPanel(panel === 'gallery' ? null : 'gallery')} className="rounded-full border px-3 py-1 font-medium" style={pill(panel === 'gallery')} data-open-gallery>+ Add widget</button>
-              <button type="button" onClick={ed.undo} disabled={!ed.canUndo} title="Undo (Ctrl+Z)" className="rounded-full border px-2.5 py-1 disabled:opacity-40" style={pill(false)} data-undo>↶</button>
-              <button type="button" onClick={ed.redo} disabled={!ed.canRedo} title="Redo (Ctrl+Shift+Z)" className="rounded-full border px-2.5 py-1 disabled:opacity-40" style={pill(false)} data-redo>↷</button>
-              <button type="button" onClick={() => setPanel(panel === 'board' ? null : 'board')} className="rounded-full border px-3 py-1 font-medium" style={pill(panel === 'board')} data-open-board-settings>Board</button>
-              <button type="button" onClick={() => { setEditing(false); setPanel(null); setSelected(null); router.refresh(); }} className="rounded-full px-3.5 py-1 font-semibold" style={{ background: 'rgb(var(--accent))', color: 'var(--bg-raised)' }} data-done>Done</button>
+              <BarButton kind="window" on={panel === 'gallery'} onClick={() => setPanel(panel === 'gallery' ? null : 'gallery')} data-open-gallery>Add widget</BarButton>
+              <BarButton kind="icon" onClick={ed.undo} disabled={!ed.canUndo} title="Undo (Ctrl+Z)" className="disabled:opacity-40" data-undo>↶</BarButton>
+              <BarButton kind="icon" onClick={ed.redo} disabled={!ed.canRedo} title="Redo (Ctrl+Shift+Z)" className="disabled:opacity-40" data-redo>↷</BarButton>
+              <BarButton kind="window" on={panel === 'board'} onClick={() => setPanel(panel === 'board' ? null : 'board')} data-open-board-settings>Board</BarButton>
+              <BarButton kind="primary" onClick={() => { setEditing(false); setPanel(null); setSelected(null); router.refresh(); }} data-done>Done</BarButton>
   </>);
   // The page's filters, as everywhere else: a chip here, the rows in a panel under the header (components/ui/FilterBar).
   const setPeriod = (v: string) => router.push(href({ period: v === 'all' ? undefined : v }), { scroll: false });
@@ -344,8 +344,8 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
               <FilterChip open={filtersOpen} count={nFilters} onClick={() => setFiltersOpen((o) => !o)} title="Which trades, the period, pre-graded only" />
   </>);
   const editButton = (<>
-              <button type="button" onClick={() => setEditing(true)} disabled={board.readOnly} title={board.readOnly ? 'Saved by a newer version of Signature' : 'Move, resize, stack, restyle and add widgets'}
-                className="rounded-full border px-3 py-1 font-semibold disabled:opacity-40" style={pill(false)} data-edit>Edit</button>
+              <BarButton kind="action" onClick={() => setEditing(true)} disabled={board.readOnly} title={board.readOnly ? 'Saved by a newer version of Signature' : 'Move, resize, stack, restyle and add widgets'}
+                className="disabled:opacity-40" data-edit>Edit board</BarButton>
   </>);
   const importInput = <input ref={importer} type="file" accept="application/json,.json" hidden onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = ''; }} />;
   // In the title bar there is room for the essentials; the rest of the toolbar joins the ⋯ menu.
@@ -382,7 +382,7 @@ export function StatsBoard({ page, startEditing = false }: { page: BoardPage; st
           {editing ? editTools : (
             <>
               {sourceAndPeriod}
-              <Link href={href({ open: 'report-compare' })} scroll={false} prefetch={false} className="rounded-full border px-2.5 py-1 font-medium" style={pill(false)} title="Reports and analytics: compare, breakdowns, time of day, psychology, what if…" data-deep-dives>Deep dives</Link>
+              <BarLink kind="window" href={href({ open: 'report-compare' })} scroll={false} title="Reports and analytics: compare, breakdowns, time of day, psychology, what if…" data-deep-dives>Deep dives</BarLink>
               {editButton}
             </>
           )}

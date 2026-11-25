@@ -7,7 +7,7 @@ import { isTradingDay, marketHoliday } from './marketHolidays';
 
 export type ReminderKind = 'prep' | 'before' | 'news' | 'stop' | 'cooldown' | 'journal' | 'evening' | 'redday' | 'weekly' | 'weekend' | 'prop' | 'backup' | 'consistency' | 'watch';
 export const REMINDER_KINDS: ReadonlyArray<{ kind: ReminderKind; label: string; hint: string; live: boolean }> = [
-  { kind: 'prep', label: 'Prep not done', hint: 'Before the NY open, if the morning check-in or chart prep is not finished.', live: false },
+  { kind: 'prep', label: 'Prep not done', hint: 'Before the market opens, if the morning check-in or chart prep is not finished.', live: false },
   { kind: 'before', label: 'Before you trade', hint: 'The morning of a trading day, before the first trade: the #1 leak, the last session, the rule behind it.', live: false },
   { kind: 'news', label: 'News heads-up', hint: 'Before a high-impact release inside your session.', live: true },
   { kind: 'stop', label: 'Stop rules', hint: 'When the day reaches your loss or trade limit. Information only — nothing is blocked.', live: true },

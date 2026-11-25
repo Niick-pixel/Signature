@@ -11,6 +11,7 @@
 import { NY_AM_CLOSE, NY_OPEN, hhmmMin, inQuiet, type Clock, type NotifySettings, type ReminderKind } from './notify';
 import { mondayOf } from './study';
 import { figuresLine } from './news';
+import { localOpen } from './localTime';
 
 export interface Reminder { id: string; kind: ReminderKind; title: string; body: string; route: string; urgent: boolean; silent: boolean }
 
@@ -70,7 +71,7 @@ function candidates(s: ReminderSnapshot): Reminder[] {
   // 5. Prep not done, in the lead-up to the NY open.
   if (session && c.nyMins >= NY_OPEN - s.settings.prepLead && c.nyMins < NY_OPEN && (!s.checkInDone || !prepped(s))) {
     const missing = [!s.checkInDone && 'the morning check-in', !prepped(s) && `the chart prep (${s.prepSteps} of ${s.prepTotal ?? 6} steps)`].filter(Boolean).join(' and ');
-    add({ id: `prep:${c.nyDay}`, kind: 'prep', title: `NY open in ${NY_OPEN - c.nyMins} min`, body: `Not done yet: ${missing}.`, route: s.checkInDone ? 'checkin:chart' : 'checkin:morning', urgent: false });
+    add({ id: `prep:${c.nyDay}`, kind: 'prep', title: `The open in ${NY_OPEN - c.nyMins} min (${localOpen(c.localDay)})`, body: `Not done yet: ${missing}.`, route: s.checkInDone ? 'checkin:chart' : 'checkin:morning', urgent: false });
   }
 
   // 6. News heads-up, a few minutes before each release in the session.

@@ -139,6 +139,8 @@ export interface Preferences {
   nav: 'top' | 'side';
   /** The side rail with its labels showing (wider), or icons only. */
   railLabels: boolean;
+  /** Pages run to the window's edges (full), or sit in a centred column as before. */
+  pageWidth: 'full' | 'centred';
   /** Before the daily range: minutes a day for the streak. Kept so old settings still read; studyMin replaced it. */
   studyGoal: number;
   /** The daily study range: the minimum keeps the streak, past the maximum the app says rest. */
@@ -321,7 +323,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   analyticsTab: 'time',
   analyticsWorld: 'all',
   analyticsMinN: 5,
-  analyticsClock: 'ny',
+  analyticsClock: 'local',
   analyticsLateHour: 13,
   analyticsWords: DEFAULT_WORDS,
   newsWindow: 30,
@@ -332,6 +334,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   studyTab: true,
   nav: 'side',
   railLabels: false,
+  pageWidth: 'full',
   studyGoal: 20,
   studyMin: 120,
   studyMax: 180,
@@ -395,6 +398,8 @@ export function readPreferences(): Preferences {
       ...DEFAULT_PREFERENCES, ...saved,
       // The side rail is the default; only an explicit choice of top tabs keeps them.
       nav: saved.nav === 'top' ? 'top' : 'side',
+      // Every time is the trader's own clock now; New York time is never shown.
+      analyticsClock: 'local',
       // The Prop tab moved off the title bar: once, for everyone who had it on by default. Turned back on, it stays.
       ...(saved.propTabMoved ? {} : { propTab: false, propTabMoved: true }),
       // One level deeper for the on/off maps, so a block added later is on, not undefined.
@@ -447,6 +452,8 @@ export function applyPreferences(prefs: Preferences): void {
   root.dataset.hidePnl = prefs.hidePnl ? 'true' : 'false';
   // The side rail (components/shell/SideRail): the page moves over by its width (globals.css).
   root.dataset.rail = prefs.nav === 'side' ? (prefs.railLabels ? 'labels' : 'icons') : 'off';
+  // Full width (the default) or the centred column (globals.css, the page widths).
+  root.dataset.width = prefs.pageWidth === 'centred' ? 'centred' : 'full';
   // Your own accent over the theme's (the variable is "r g b").
   const rgb = hexToRgb(prefs.accent);
   if (rgb) root.style.setProperty('--accent', rgb); else root.style.removeProperty('--accent');

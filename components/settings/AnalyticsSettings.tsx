@@ -34,10 +34,6 @@ export function AnalyticsSettings({ Section }: { Section: SectionComp }) {
         <L label="Fewer trades than this is an early signal (shown faded, never ranked)">
           <Segmented<string> value={String(prefs.analyticsMinN)} onChange={(v) => update({ analyticsMinN: Number(v) })} options={['3', '5', '10', '20']} labelFor={(v) => v} />
         </L>
-        <L label="The dial and heatmap in">
-          <Segmented<Preferences['analyticsClock']> value={prefs.analyticsClock} onChange={(analyticsClock) => update({ analyticsClock })}
-            options={['ny', 'local']} labelFor={(v) => (v === 'ny' ? 'New York time' : 'My clock')} />
-        </L>
         <L label="Late trading starts at (my clock)">
           <Segmented<string> value={String(prefs.analyticsLateHour)} onChange={(v) => update({ analyticsLateHour: Number(v) })}
             options={['11', '12', '13', '14', '16', '20']} labelFor={(v) => `${v}:00`} />

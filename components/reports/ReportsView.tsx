@@ -100,9 +100,8 @@ function Card({ title, help, right, children }: { title?: string; help?: string;
 }
 function Seg<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: readonly T[]; label: (v: T) => string }) {
   return (
-    <div className="flex rounded-full border p-0.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
-      {options.map((o) => <button key={o} type="button" onClick={() => onChange(o)} className="rounded-full px-2.5 py-0.5 text-[11.5px] font-medium"
-        style={value === o ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-faint)' }}>{label(o)}</button>)}
+    <div className="bar-seg">
+      {options.map((o) => <button key={o} type="button" onClick={() => onChange(o)} className="bar-seg-opt" aria-pressed={value === o}>{label(o)}</button>)}
     </div>
   );
 }
@@ -284,7 +283,7 @@ function Breakdowns({ rows, groups }: { rows: ReportRow[]; groups: Group[] }) {
             {([
               ['Average hold', mins(wl.winners.hold), mins(wl.losers.hold)],
               ['Average size', wl.winners.size?.toFixed(1) ?? '—', wl.losers.size?.toFixed(1) ?? '—'],
-              ['Minutes after 9:30 NY', wl.winners.fromOpen?.toFixed(0) ?? '—', wl.losers.fromOpen?.toFixed(0) ?? '—'],
+              ['Minutes after the open', wl.winners.fromOpen?.toFixed(0) ?? '—', wl.losers.fromOpen?.toFixed(0) ?? '—'],
               ['Worst point against (MAE)', signedR(wl.winners.mae), signedR(wl.losers.mae)],
               ['Best point for (MFE)', signedR(wl.winners.mfe), signedR(wl.losers.mfe)],
               ['Confidence at entry', wl.winners.confidence?.toFixed(1) ?? '—', wl.losers.confidence?.toFixed(1) ?? '—'],

@@ -1,4 +1,6 @@
 'use client';
+import { localToNy, nyToLocal } from '@/lib/localTime';
+import { BarButton } from '@/components/ui/BarButton';
 
 import { InTitleBar, MergedHeader } from '@/components/shell/TitleSlot';
 
@@ -53,7 +55,7 @@ export function AnalyticsView({ initialTab, embed = false }: { initialTab: Analy
         <div className="flex items-center gap-2">
           <Seg<Preferences['analyticsWorld']> value={prefs.analyticsWorld} onChange={(analyticsWorld) => update({ analyticsWorld })}
             options={['real', 'backtest', 'all']} label={(v) => ({ real: 'Real', backtest: 'Backtest', all: 'Both' }[v])} />
-          <Pill onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'analytics' } }))}>Customize</Pill>
+          <BarButton kind="window" onClick={() => window.dispatchEvent(new CustomEvent(SETTINGS_TOGGLE, { detail: { cat: 'analytics' } }))}>Customize</BarButton>
         </div>
   </>);
   return (
@@ -126,9 +128,8 @@ function Pill({ children, onClick, accent, disabled }: { children: React.ReactNo
 }
 function Seg<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: readonly T[]; label: (v: T) => string }) {
   return (
-    <div className="flex rounded-full border p-0.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
-      {options.map((o) => <button key={o} type="button" onClick={() => onChange(o)} className="rounded-full px-2.5 py-0.5 text-[11.5px] font-medium"
-        style={value === o ? { background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' } : { color: 'var(--text-faint)' }}>{label(o)}</button>)}
+    <div className="bar-seg">
+      {options.map((o) => <button key={o} type="button" onClick={() => onChange(o)} className="bar-seg-opt" aria-pressed={value === o}>{label(o)}</button>)}
     </div>
   );
 }
@@ -146,7 +147,7 @@ const HEAD = <><th className="py-1.5 text-right font-normal">Trades</th><th clas
 
 /* ───────────── Time ───────────── */
 
-function Time({ v, minN, clock, onClock }: { v: TimeView; minN: number; clock: Preferences['analyticsClock']; onClock: (c: Preferences['analyticsClock']) => void }) {
+function Time({ v, minN, clock }: { v: TimeView; minN: number; clock: Preferences['analyticsClock']; onClock?: (c: Preferences['analyticsClock']) => void }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(0.5, ...v.buckets.filter((b) => b.n).map((b) => Math.abs(b.avgR ?? 0)));
   const C = 160; const R1 = 92; const R2 = 140; const RS = 150;
@@ -160,11 +161,11 @@ function Time({ v, minN, clock, onClock }: { v: TimeView; minN: number; clock: P
   };
   const hb = hover != null ? v.buckets[hover] : null;
   const maxHeat = Math.max(0.5, ...v.heat.rows.flatMap((r) => r.cells.filter((c) => c.n).map((c) => Math.abs(c.avgR ?? 0))));
-  const clockName = clock === 'ny' ? 'New York' : 'your clock';
+  const clockName = 'your clock';
   return (
     <div className="grid gap-4 lg:grid-cols-5">
       {!!v.noReplayDate && <p className="text-[11.5px] lg:col-span-5" style={{ color: 'var(--text-faint)' }} data-no-replay-date>{v.noReplayDate} backtest{v.noReplayDate === 1 ? '' : 's'} left out — no replay date (Calendar → Backtest → Fix replay dates).</p>}
-      <Card title="24-hour dial" note={<Seg value={clock} onChange={onClock} options={['ny', 'local'] as const} label={(c) => (c === 'ny' ? 'New York' : 'My clock')} />} className="lg:col-span-2">
+      <Card title="24-hour dial" note="Your clock" className="lg:col-span-2">
         <svg viewBox="0 0 320 320" className="mx-auto w-full max-w-[22rem]" role="img" aria-label="Average R by half-hour of the day" onMouseLeave={() => setHover(null)} data-dial>
           {SESSION_RANGES.map((s) => (
             <path key={s.id} d={arc(((s.from + shift) % 1440 + 1440) % 1440, ((s.to + shift) % 1440 + 1440) % 1440 || 1440, RS - 4, RS)} fill="rgb(var(--accent) / 0.45)">
@@ -184,7 +185,7 @@ function Time({ v, minN, clock, onClock }: { v: TimeView; minN: number; clock: P
           {v.best ? <p><span style={{ color: 'var(--text-faint)' }}>Best half-hour:</span> <b>{hhmm(v.best.from)}–{hhmm(v.best.from + 30)}</b> <span style={{ color: tone(v.best.avgR) }}>{signedR(v.best.avgR)}</span> over {v.best.n}</p>
             : <p style={{ color: 'var(--text-faint)' }}>No half-hour has {minN}+ trades yet.</p>}
           {v.worst && <p><span style={{ color: 'var(--text-faint)' }}>Worst:</span> <b>{hhmm(v.worst.from)}–{hhmm(v.worst.from + 30)}</b> <span style={{ color: tone(v.worst.avgR) }}>{signedR(v.worst.avgR)}</span> over {v.worst.n}</p>}
-          <p className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>Outer ring: the sessions (New York times). Faded slices have fewer than {minN} trades.</p>
+          <p className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}>Outer ring: the sessions, on your clock. Faded slices have fewer than {minN} trades.</p>
         </div>
       </Card>
       <div className="space-y-4 lg:col-span-3">
@@ -214,7 +215,7 @@ function Time({ v, minN, clock, onClock }: { v: TimeView; minN: number; clock: P
           <table className="w-full text-[12px]">
             <thead><tr className="text-[10.5px]" style={{ color: 'var(--text-faint)' }}><th className="text-left font-normal">When</th>{HEAD}</tr></thead>
             <tbody>
-              {v.sessions.filter((s) => s.n).map((s) => <tr key={s.id} className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}><td>{s.label} <span style={{ color: 'var(--text-faint)' }}>{hhmm(s.from)}–{hhmm(s.to)} NY</span></td><StatCells s={s} /></tr>)}
+              {v.sessions.filter((s) => s.n).map((s) => <tr key={s.id} className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}><td>{s.label} <span style={{ color: 'var(--text-faint)' }}>{nyToLocal(s.from)}–{nyToLocal(s.to)}</span></td><StatCells s={s} /></tr>)}
               {v.weekdays.filter((d) => d.n).map((d) => <tr key={d.label} className="border-t" style={{ borderColor: 'var(--glass-stroke)' }}><td>{d.label}</td><StatCells s={d} /></tr>)}
             </tbody>
           </table>
@@ -435,10 +436,10 @@ function News({ v, monday, setMonday, reload }: { v: Data['news']; monday: strin
             <span>Pull ForexFactory&apos;s calendar on its own (at most every 6 hours; the only time the app goes online for news).</span>
           </label>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-            My session (New York time)
-            <input type="time" value={win.from} onChange={(e) => setWin({ ...win, from: e.target.value })} onBlur={() => saveSettings({ window: win })} className={input} style={st} aria-label="Session from" />
+            My session (your clock)
+            <input type="time" value={nyToLocal(win.from)} onChange={(e) => setWin({ ...win, from: localToNy(e.target.value) })} onBlur={() => saveSettings({ window: win })} className={input} style={st} aria-label="Session from" />
             to
-            <input type="time" value={win.to} onChange={(e) => setWin({ ...win, to: e.target.value })} onBlur={() => saveSettings({ window: win })} className={input} style={st} aria-label="Session to" />
+            <input type="time" value={nyToLocal(win.to)} onChange={(e) => setWin({ ...win, to: localToNy(e.target.value) })} onBlur={() => saveSettings({ window: win })} className={input} style={st} aria-label="Session to" />
           </div>
           <div className="mt-2 flex items-center gap-2">
             <Pill onClick={async () => { const r = await fetch('/api/news/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: true }) }); const j = await r.json(); setMsg(j.error ? { ok: false, text: j.error } : { ok: true, text: `ForexFactory: ${j.added} new, ${j.already} already here.` }); reload(); }}>Pull now</Pill>

@@ -1,4 +1,5 @@
 'use client';
+import { BarGlyph } from '@/components/ui/BarButton';
 
 import { useCallback, useEffect, useState } from 'react';
 import { usePathSummary } from '@/components/path/PathBanner';
@@ -386,13 +387,9 @@ export function CheckInChip() {
       animate={{ opacity: 1, y: 0 }}
       transition={spring}
       title={done ? 'Today’s plan — tap a scenario to trade it (M for the morning, P for the chart)' : 'Four questions, then the chart, before the session (M)'}
-      className="flex max-w-[22rem] items-center gap-2 rounded-full border px-3 py-1 text-[11.5px] font-medium"
-      style={{
-        borderColor: done ? 'var(--glass-stroke)' : 'rgb(var(--accent) / 0.45)',
-        background: done ? 'var(--glass-fill)' : 'rgb(var(--accent) / 0.1)',
-        color: done ? 'var(--text-dim)' : 'rgb(var(--accent))',
-      }}
+      className="bar-ctl max-w-[24rem]" data-bar="window" data-on={done ? undefined : ''}
     >
+      <BarGlyph kind="window" />
       {done ? (
         <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden style={{ color: 'rgb(var(--outcome-win))' }}>
           <path d="M5 10.5l3.2 3.2L15 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
