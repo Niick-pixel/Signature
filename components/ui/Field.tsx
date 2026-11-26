@@ -49,7 +49,8 @@ export function Field({
     </span>
   );
   return (
-    <Tag className={`block ${className}`} {...(group ? { role: 'group', 'aria-label': label } : {})}>
+    // data-need: the control (the second child, after the caption) breathes a faint glow until answered (globals.css).
+    <Tag className={`block ${className}`} data-need={required ? '' : undefined} {...(group ? { role: 'group', 'aria-label': label } : {})}>
       {badge ? <div className={`${gap} flex items-center justify-between gap-2`}>{caption}{badge}</div> : caption}
       {children}
       {hint && !quiet && <span className="mt-1.5 block text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>{hint}</span>}

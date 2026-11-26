@@ -633,7 +633,7 @@ function GateBar({ value, onChange, flash = false, readOnly = false }: { value: 
         {required && <span className="font-medium normal-case tracking-normal opacity-75">· required</span>}
         {!readOnly && <Key k="G" />}
       </span>
-      <div className="min-w-[16rem]">
+      <div className={`min-w-[16rem] rounded-[calc(14px*var(--rk))] ${required ? 'need-glow' : ''}`}>
         <Segmented value={value ?? ('' as SingularGap)} onChange={onChange} options={['one', 'many'] as const}
           labelFor={(v) => SINGULAR_GAP_LABEL[v]} accentFor={(v) => (v === 'one' ? WIN : LOSS)}
           titleFor={(v) => (v === 'one' ? 'Pass: one clean, unmistakable FVG' : 'Fail: No trade, whatever the rows say')} compact />
@@ -702,7 +702,7 @@ function RubricRow({ row, value, focused, late, onFocus, onPick, flash = false, 
         </span>
         <span className="text-[10px]" style={faint}>{late ? 'scored after the clock' : focused ? 'press 2 · 1 · 0' : ''}</span>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid grid-cols-3 gap-2 rounded-[calc(12px*var(--rk))] ${required ? 'need-glow' : ''}`}>
         {([2, 1, 0] as const).map((v) => {
           const on = value === v;
           return (
@@ -970,7 +970,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       {/* Three equal columns: the locked decision, how it ended, the words. The tags run below them, then Save. */}
       <div className="grid min-h-0 flex-1 items-stretch gap-x-6 gap-y-5 lg:grid-cols-2 xl:grid-cols-3">
         {/* Step 1, read-only: the decision and its grade. */}
-        <div className="flex flex-col gap-2" data-step1-summary>
+        <div className="flex flex-col gap-2" data-step1-summary data-info-col>
           <div className="rounded-[calc(18px*var(--rk))] border p-3" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -994,7 +994,7 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
               {ROWS.map((row) => {
                 const v = trade[row.key];
                 return (
-                  <div key={row.key} className="rounded-[10px] border px-1.5 py-1 text-center" style={{ borderColor: 'var(--glass-stroke)' }} title={v == null ? 'Not scored' : row.defs[v as 0 | 1 | 2]}>
+                  <div key={row.key} className="rounded-[10px] px-1.5 py-1 text-center" data-score-tile title={v == null ? 'Not scored' : row.defs[v as 0 | 1 | 2]}>
                     <div className="text-[9.5px] uppercase tracking-[0.06em]" style={faint}>{row.label}</div>
                     <div className="text-[15px] font-semibold tabular-nums" style={{ color: v === 2 ? 'rgb(var(--grade-a))' : v === 1 ? 'rgb(var(--grade-b))' : v === 0 ? 'rgb(var(--grade-f))' : 'var(--text-faint)' }}>{v ?? '—'}</div>
                   </div>
@@ -1180,7 +1180,7 @@ function ReasonRow({ decision, reasons, main, onTap, flash }: { decision: Decisi
         {title}{required && <span className="font-medium normal-case tracking-normal opacity-75">· required</span>}
         <Help>Pick every reason that applies. Tap a picked one again to make it the main reason (★); a third tap removes it. Stats compares them — fear passes against rule passes.</Help>
       </span>
-      <div className={`grid grid-cols-2 gap-1.5 rounded-[calc(16px*var(--rk))] border p-2 md:grid-cols-4 ${flash ? 'need-flash' : ''}`}
+      <div className={`grid grid-cols-2 gap-1.5 rounded-[calc(16px*var(--rk))] border p-2 md:grid-cols-4 ${flash ? 'need-flash' : required ? 'need-glow' : ''}`}
         style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }}>
         {PASS_REASONS.map((r) => {
           const on = reasons.includes(r);

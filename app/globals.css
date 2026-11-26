@@ -1037,6 +1037,35 @@ html[data-reduce-motion='true'] .need-pulse { animation: none; box-shadow: 0 0 0
 html[data-reduce-motion='true'] .need-flash { animation: none; box-shadow: 0 0 0 2.5px rgb(var(--outcome-loss) / 0.95); }
 
 /*
+  Still to fill: a faint breath of the accent around the control itself, so
+  the eye finds what is owed without reading a label. It stops the moment the
+  field is answered (the class or data-need goes with "required"). Deliberately
+  quiet — the amber pulse and the red flash above are the loud ones.
+*/
+@keyframes need-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgb(var(--accent) / 0.16), 0 0 0 0 rgb(var(--accent) / 0); }
+  50% { box-shadow: 0 0 0 1px rgb(var(--accent) / 0.38), 0 0 9px 0 rgb(var(--accent) / 0.2); }
+}
+.need-glow, [data-need] > :nth-child(2) { animation: need-glow 2.6s ease-in-out infinite; }
+/* A text box with its counter under it: the glow sits on the box, not around the counter too. */
+[data-need] > :nth-child(2):has(> [data-text-box]) { animation: none; }
+[data-need] > :nth-child(2) > [data-text-box] { animation: need-glow 2.6s ease-in-out infinite; }
+html[data-reduce-motion='true'] .need-glow, html[data-reduce-motion='true'] [data-need] > :nth-child(2) { animation: none; box-shadow: 0 0 0 1px rgb(var(--accent) / 0.3); }
+@media (prefers-reduced-motion: reduce) { .need-glow, [data-need] > :nth-child(2) { animation: none; box-shadow: 0 0 0 1px rgb(var(--accent) / 0.3); } }
+
+/*
+  Read, not written (Step 2's left column: the locked decision, the replay, the
+  progress): dashed and faintly tinted like the builder's AUTO and RULE boxes.
+  The drill card keeps its solid frame — its Kept / Broken is the one answer here.
+*/
+[data-info-col] .border:not([data-drill-chip]):not([data-drill-chip] *) {
+  border-style: dashed !important;
+  background: rgb(var(--accent) / 0.025) !important;
+  box-shadow: none !important;
+}
+[data-info-col] [data-score-tile] { border-color: transparent !important; background: color-mix(in srgb, var(--text) 4%, transparent) !important; }
+
+/*
   Full-screen views cover the title strip, and on Windows the window's own
   minimise / maximise / close buttons are painted over that strip, above
   everything the app draws (about 140 × 32 px, top right). What a view puts
