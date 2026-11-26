@@ -160,7 +160,7 @@ export function CockpitView() {
             </>
           ) : (
             <button type="button" onClick={() => openInMain('checkin:chart')} className="w-full rounded-[12px] border border-dashed px-3 py-3 text-center" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }} data-cockpit-no-plan>
-              No plan written for today — write it in the chart prep ▸
+              No plan for today — plan the session ▸
             </button>
           )}
         </div>

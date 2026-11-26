@@ -17,7 +17,7 @@ import { isTradingDay, marketHoliday } from './marketHolidays';
 
 export type RingId = 'prep' | 'rules' | 'journal' | 'review';
 export const RINGS: ReadonlyArray<{ id: RingId; label: string; hint: string }> = [
-  { id: 'prep', label: 'Prep', hint: 'The morning check-in and the chart prep, every step.' },
+  { id: 'prep', label: 'Prep', hint: 'The morning check-in and the session plan.' },
   { id: 'rules', label: 'Rules', hint: 'No written rule broken. A day you sat out breaks nothing.' },
   { id: 'journal', label: 'Trades', hint: 'Every trade finished — backtests included: settled, not a quick log, with a lesson.' },
   { id: 'review', label: 'Journal', hint: 'Journal once a day: a journal page or the day review, every trading day — traded or not.' },

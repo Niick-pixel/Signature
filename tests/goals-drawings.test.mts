@@ -122,7 +122,7 @@ test('plan grade: no F before the session, and nothing to grade on a day off', (
   const day = '2026-10-29';
   const morning = dayGrade(day, [], null, null, 2, true);
   assert.equal(morning.score, null); assert.equal(morning.parts[0].detail, 'Not yet');
-  assert.equal(dayGrade(day, [], prep(2), null, 2, true).parts[0].detail, '2 of 6 prep steps so far');
+  assert.equal(dayGrade(day, [], prep(2), null, 2, true).parts[0].detail, 'Plan not finished yet');
   assert.equal(dayGrade(day, [t(`${day}T08:40`)], null, null, 2, true).parts[0].kept, false, 'a trade without prep is a miss, even today');
   const weekend = dayGrade('2026-10-25', [t('2026-10-25T10:00', { account: 'Backtest (FX Replay)' })], null, null, 2);
   assert.deepEqual([weekend.score, weekend.parts.length], [null, 0]);

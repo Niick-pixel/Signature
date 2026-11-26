@@ -62,7 +62,8 @@ export function TodayPanel() {
   useEffect(() => {
     if (!shown) return;
     load();
-    const events = [BOARD_SHOWN, JOURNAL_CHANGED, 'focus'];
+    // 'signature:prep' is PREP_SAVED: a plan saved ticks the Prep ring at once.
+    const events = [BOARD_SHOWN, JOURNAL_CHANGED, 'signature:prep', 'focus'];
     for (const e of events) window.addEventListener(e, load);
     return () => { for (const e of events) window.removeEventListener(e, load); };
   }, [shown, load]);

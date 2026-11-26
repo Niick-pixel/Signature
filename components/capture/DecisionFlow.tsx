@@ -481,7 +481,7 @@ function DecideStep({ onSaved, onFresh, keep }: { onSaved: (t: Trade) => void; o
           ) : (
             <PlanStrip cards={plans && (plans.aDir || plans.bDir || plans.aLine || plans.bLine) ? morningCards(plans) : null} direction={direction}
               title="this morning’s prep"
-              empty={<>no chart prep today — pick the scenario by hand, or Unplanned (max B).</>} />
+              empty={<>no session plan today — pick the scenario by hand, or Unplanned (max B).</>} />
           )}
           {/* The chart box takes only the room the window has left, and the chart is drawn inside it:
               whatever is pasted, the box keeps its size and nothing below it moves — no scrolling. */}

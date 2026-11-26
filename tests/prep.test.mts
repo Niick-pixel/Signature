@@ -275,3 +275,31 @@ test('the daily plan: confirmation is the strategy (not asked), up to three targ
   const trade = { account: 'Demo', undated: false, direction: 'Long', sweep_level: null, target_type: 'Weekly high/low', date: '2026-11-24T09:45', plan_scenario: 'A' } as never;
   assert.equal(PM.planMatch(trade, prep).status, 'in');
 });
+
+test('a session plan from the backtest builder becomes the prep\'s answers, every step done, other answers kept', async () => {
+  const { planToAnswers, withSessionPlan } = await import('../lib/prep');
+  const { emptyContext, emptyScenario, KILLS } = await import('../lib/replay');
+  const plan = {
+    context: { ...emptyContext(), h4: 'Bear' as const, h1Agrees: true, taken: ['Asia high'], news: 'Data at 10:00 ET' as const, open: 'EQ' as const },
+    scenarios: {
+      a: { ...emptyScenario(), dir: 'Short' as const, zones: ['1H FVG'], targets: ['PWH/PWL', 'Session H/L'], rr: '2+' as const, kill: KILLS[0] },
+      b: { ...emptyScenario(), dir: 'Long' as const },
+    },
+  };
+  const a = planToAnswers(plan);
+  assert.equal(a['htf.bias'], 'Bearish');
+  assert.equal(a['session.news'], 'Inside the killzone');
+  assert.equal(a['location.zone'], 'Equilibrium');
+  assert.equal(a['plans.aDir'], 'Short');
+  assert.deepEqual(a['plans.aTarget'], ['Weekly high/low', 'Session high/low']);
+  assert.deepEqual(a['plans.aKills'], [KILLS[0]]);
+  assert.equal(a['plans.bDir'], 'Long');
+  assert.equal(a['plans.bZones'], undefined, 'an empty list is left unanswered');
+  assert.equal(planToAnswers({ ...plan, context: { ...plan.context, h1Agrees: false } })['htf.bias'], 'Neutral', '1H disagreeing: no bias');
+
+  const data = withSessionPlan({ ...EMPTY_PREP, answers: { 'session.stop': '1 loss' } }, plan);
+  assert.ok(PREP_STEPS.every((s: { id: string }) => data.steps[s.id] === 'done'));
+  assert.equal(data.answers['session.stop'], '1 loss');
+  assert.equal(data.plan?.context.h4, 'Bear');
+  assert.equal(parsePrepData(JSON.parse(JSON.stringify(data))).plan?.scenarios.a.rr, '2+', 'the plan survives a round trip');
+});

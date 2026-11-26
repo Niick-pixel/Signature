@@ -70,7 +70,7 @@ function candidates(s: ReminderSnapshot): Reminder[] {
 
   // 5. Prep not done, in the lead-up to the NY open.
   if (session && c.nyMins >= NY_OPEN - s.settings.prepLead && c.nyMins < NY_OPEN && (!s.checkInDone || !prepped(s))) {
-    const missing = [!s.checkInDone && 'the morning check-in', !prepped(s) && `the chart prep (${s.prepSteps} of ${s.prepTotal ?? 6} steps)`].filter(Boolean).join(' and ');
+    const missing = [!s.checkInDone && 'the morning check-in', !prepped(s) && 'the session plan'].filter(Boolean).join(' and ');
     add({ id: `prep:${c.nyDay}`, kind: 'prep', title: `The open in ${NY_OPEN - c.nyMins} min (${localOpen(c.localDay)})`, body: `Not done yet: ${missing}.`, route: s.checkInDone ? 'checkin:chart' : 'checkin:morning', urgent: false });
   }
 
@@ -224,7 +224,7 @@ export function resolvedIds(s: ReminderSnapshot, ids: readonly string[]): string
  * doing the thing is enough (no need to tick it off as well).
  */
 export const DONE_WHEN: Record<ReminderKind, string> = {
-  prep: 'Clears when the check-in and the chart prep are done, or the day is over.',
+  prep: 'Clears when the check-in and the session plan are done, or the day is over.',
   before: 'Clears with the day’s first trade, or when the day is over.',
   news: 'Clears once the release is out.',
   stop: 'Clears when the day is over.',

@@ -9,7 +9,10 @@ import { localDay } from '@/lib/day';
 import { navigate } from '@/lib/nav';
 import { press, springSoft } from '@/lib/motion';
 import { CONFIRM_RULE, PLAN_ACCOUNTS, PLAN_PREFILL } from '@/lib/replay';
-import { biasSentence, gradeCeiling, overnightRead, scenarioC, targetsOf, zonesOf, type Answer } from '@/lib/prep';
+import { biasSentence, gradeCeiling, overnightRead, scenarioC, targetsOf, zonesOf, type Answer, type SessionPlan } from '@/lib/prep';
+import { PlanBody, PlanKindBadge } from '@/components/replay/ReplayPlan';
+import { BarButton } from '@/components/ui/BarButton';
+import { openCockpit } from '@/components/cockpit/openCockpit';
 
 /** Opens today's plan (the title bar chip, once the morning is answered). */
 export const OPEN_DAY_PLAN = 'signature:open-day-plan';
@@ -32,14 +35,16 @@ const dirTone = (d: unknown) => (d === 'Long' ? WIN : d === 'Short' ? LOSS : nul
 export function DayPlanWindow({ onEdit }: { onEdit: (tab: 'morning' | 'chart') => void }) {
   const [open, setOpen] = useState(false);
   const [answers, setAnswers] = useState<Record<string, Answer> | null>(null);
+  // Planned in the plan builder: read back exactly as the backtest's day is (the same PlanBody).
+  const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [account, setAccount] = useState<PlanAccount>('Demo');
   useEffect(() => {
     const on = () => {
       setAccount(lastReal());
       setOpen(true);
       void fetch(`/api/prep?day=${localDay()}`).then((r) => (r.ok ? r.json() : null))
-        .then((j: { prep: { data: { answers: Record<string, Answer> } } | null } | null) => setAnswers(j?.prep?.data.answers ?? {}))
-        .catch(() => setAnswers({}));
+        .then((j: { prep: { data: { answers: Record<string, Answer>; plan?: SessionPlan | null } } | null } | null) => { setAnswers(j?.prep?.data.answers ?? {}); setPlan(j?.prep?.data.plan ?? null); })
+        .catch(() => { setAnswers({}); setPlan(null); });
     };
     window.addEventListener(OPEN_DAY_PLAN, on);
     return () => window.removeEventListener(OPEN_DAY_PLAN, on);
@@ -89,19 +94,33 @@ export function DayPlanWindow({ onEdit }: { onEdit: (tab: 'morning' | 'chart') =
       <div data-day-plan>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-[20px] font-semibold">Today&rsquo;s plan <span className="text-[13px] font-medium" style={{ color: 'var(--text-faint)' }}>· {new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-[20px] font-semibold">Today&rsquo;s plan <span className="text-[13px] font-medium" style={{ color: 'var(--text-faint)' }}>· {new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></h1>
+              <PlanKindBadge kind="session" />
+            </div>
             <p className="mt-0.5 text-[12.5px]" style={{ color: 'var(--text-dim)' }}>The plan as you wrote it this morning. Tap A or B to trade it.</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => { close(); onEdit('chart'); }} data-day-plan-edit>Edit the prep</Button>
-            <Button onClick={() => { close(); onEdit('morning'); }}>Morning</Button>
-            <Button variant="primary" onClick={close}>Close</Button>
+          {/* The next steps from here, without closing to find them. */}
+          <div className="flex flex-wrap gap-2">
+            <BarButton kind="window" onClick={() => { close(); onEdit('chart'); }} data-day-plan-edit>{any ? 'Edit the plan' : 'Plan the session'}</BarButton>
+            <BarButton kind="window" onClick={() => { close(); onEdit('morning'); }}>Morning</BarButton>
+            <BarButton kind="window" onClick={() => { close(); openCockpit(); }} data-day-plan-cockpit>Cockpit</BarButton>
+            <BarButton kind="primary" onClick={close}>Close</BarButton>
           </div>
         </div>
-        {answers == null ? <div className="h-40" /> : !any ? (
+        {answers == null ? <div className="h-40" /> : plan ? (
+          <div className="space-y-3" data-day-plan-session>
+            {/* The account the tapped plan is traded on: real accounts only. */}
+            <div className="flex flex-wrap items-center gap-3" data-day-plan-account={account}>
+              <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Trade it on</span>
+              <div className="min-w-[18rem]"><Segmented value={account} onChange={setAccount} options={PLAN_ACCOUNTS} compact /></div>
+            </div>
+            <PlanBody context={plan.context} scenarios={plan.scenarios} day={localDay()} onPick={pick} />
+          </div>
+        ) : !any ? (
           <div className="rounded-[calc(14px*var(--rk))] border px-4 py-5 text-center text-[12.5px]" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-day-plan-empty>
             <p style={{ color: 'var(--text-dim)' }}>No plans written for today yet.</p>
-            <Button className="mt-3" variant="primary" onClick={() => { close(); onEdit('chart'); }}>Write the plans</Button>
+            <Button className="mt-3" variant="primary" onClick={() => { close(); onEdit('chart'); }}>Plan the session</Button>
           </div>
         ) : (
           <div className="space-y-3">

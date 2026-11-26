@@ -16,7 +16,8 @@ import { Field, Input } from '@/components/ui/Field';
 import { Choice } from '@/components/ui/Choice';
 import { Scale } from '@/components/ui/Scale';
 import { usePreferences } from './PreferencesProvider';
-import { ChartPrep, usePrepProgress } from '@/components/prep/ChartPrep';
+import { usePrepProgress } from '@/components/prep/ChartPrep';
+import { SessionPlanTab } from '@/components/prep/SessionPlanTab';
 import { DayPlanWindow, openDayPlan } from '@/components/prep/DayPlanWindow';
 import { figuresLine, isRedFolder } from '@/lib/news';
 
@@ -134,9 +135,8 @@ export function MorningCheckIn() {
     if (day) writeAsked(day);
     setOpen(false);
   }, [day]);
-  // The chart prep's last screen: the window shrinks to its summary (only while it is that screen).
-  const [finishedPrep, setSmall] = useState(false);
-  const small = finishedPrep && open && tab === 'chart';
+  // The old chart prep's closing summary shrank the window; the plan builder opens today's plan instead.
+  const small = false;
 
   return (<>
     {/* Today's plan, tappable: what the title bar chip opens once the morning is answered. */}
@@ -151,7 +151,7 @@ export function MorningCheckIn() {
           const on = tab === t;
           const label = t === 'morning'
             ? `Morning${existing?.checked_in_at ? ' ✓' : ''}`
-            : `Chart${prep ? ` ${prep.answered}/${prep.total}` : ''}`;
+            : `Plan${prep?.planned ? ' ✓' : ''}`;
           return (
             <button key={t} type="button" role="tab" aria-selected={on} data-checkin-tab={t} onClick={() => setTab(t)}
               className="relative flex-1 rounded-full px-3 py-1.5 text-[12px] font-medium">
@@ -172,7 +172,8 @@ export function MorningCheckIn() {
             <CheckInForm key={day} day={day} existing={existing} onDone={close}
               onSaved={setExisting} onChart={() => setTab('chart')} />
           )}
-          {day && tab === 'chart' && <ChartPrep review={existing} onClose={close} onFinished={setSmall} />}
+          {/* The plan: the backtest's plan builder, for the live session (components/prep/SessionPlanTab). */}
+          {day && tab === 'chart' && <SessionPlanTab day={day} onClose={close} />}
         </motion.div>
       </AnimatePresence>
     </Overlay>
@@ -371,8 +372,7 @@ export function CheckInChip() {
   const prep = usePrepProgress();
   if (review === undefined) return null;
   const done = !!review?.checked_in_at;
-  const chart = prep && prep.answered > 0
-    ? (prep.answered === prep.total ? 'chart ✓' : `chart ${prep.answered}/${prep.total}`) : null;
+  const chart = prep?.planned ? 'plan ✓' : null;
   const line = done ? [planLine(review!), chart].filter(Boolean).join(' · ') : '';
 
   return (

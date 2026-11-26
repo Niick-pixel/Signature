@@ -426,7 +426,7 @@ function Ready({ data, startedAt, onClose }: { data: PrepData; startedAt: string
 }
 
 /** Today's prep progress, for the check-in chip — kept in step with saves. */
-export function usePrepProgress(): { answered: number; total: number } | null {
+export function usePrepProgress(): { answered: number; total: number; planned: boolean } | null {
   const [prep, setPrep] = useState<SessionPrep | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
@@ -438,7 +438,8 @@ export function usePrepProgress(): { answered: number; total: number } | null {
   }, []);
   if (prep === undefined) return null;
   const p = prepProgress(prep?.data ?? EMPTY_PREP);
-  return { answered: p.answered, total: p.total };
+  // Planned: today's plan saved in the plan builder (or an older prep finished every step).
+  return { answered: p.answered, total: p.total, planned: Boolean(prep?.data.plan) || p.complete };
 }
 
 interface SessionNewsData { events: Array<{ id: string; at: string; title: string; impact: string; currency: string; forecast?: string | null; previous?: string | null }>; answer: string; window: { from: string; to: string }; currencies: string[]; auto: boolean; syncedAt: string | null; error?: string }

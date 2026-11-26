@@ -32,7 +32,7 @@ export function dayGrade(day: string, trades: readonly Trade[], prep: PrepData |
   parts.push({
     id: 'prepared', label: 'Prepared before the session',
     kept: prepared ? true : open && !ts.length ? null : false,
-    detail: progress ? `${progress.done} of ${progress.total} prep steps${!prepared && open && !ts.length ? ' so far' : ''}` : open && !ts.length ? 'Not yet' : 'No chart prep',
+    detail: progress ? (prepared ? 'Session planned' : `Plan not finished${open && !ts.length ? ' yet' : ''}`) : open && !ts.length ? 'Not yet' : 'No session plan',
   });
 
   const side = prep?.answers?.['draw.side'];

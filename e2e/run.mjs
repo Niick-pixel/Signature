@@ -5,7 +5,7 @@
   drives a real Chromium through what a person does: every screen opens with
   no error, in both navigation layouts; Stats fits the window with nothing
   spilling out of a tile; a stack flips one widget per flick; edit mode
-  stacks and undoes; the deep dives open; the morning prep ends in a plan.
+  stacks and undoes; the deep dives open; the morning plan is the backtest builder.
 
   PW_CHROMIUM: a Chromium to use instead of Playwright's own download.
 */
@@ -316,67 +316,35 @@ await check('deep dives: the old Reports and Analytics links open in Stats', asy
   expect(!errors.length, errors.join(' | '));
 });
 
-await check('the morning prep ends in a plan, checks the three rules, and the trade form asks which plan', async () => {
+await check('the morning plan is the backtest builder: taps only, saved to the prep, and Today\'s plan opens next', async () => {
   const { page, errors } = await open();
-  await page.click('text=Morning check-in'); await page.click('[data-checkin-tab="chart"]'); await page.waitForSelector('[data-chart-prep]');
-  const g = (f) => page.locator(`[data-prep-field="${f}"]`);
-  const pill = (f, o) => g(f).getByRole('button', { name: o, exact: true }).first().click();
-  const next = async () => { await page.click('[data-prep-next]'); await page.waitForTimeout(350); };
-  await page.waitForTimeout(800);
-  // Page 1, read the chart: news, bias, overnight, location and the map on one page. Taps only.
-  expect(await page.locator('[data-chart-prep] textarea').count() === 0, 'no text boxes');
-  expect(await page.locator('[data-chart-prep] [role="combobox"]').count() === 0, 'no dropdowns');
-  const box = () => page.locator('[data-chart-prep]').evaluate((el) => { const r = el.getBoundingClientRect(); return `${Math.round(r.width)}×${Math.round(r.height)}`; });
-  const size1 = await box();
-  const fits = () => page.evaluate(() => [...document.querySelectorAll('[data-chart-prep] *')].every((el) => el.scrollHeight <= el.clientHeight + 1 || getComputedStyle(el).overflowY === 'visible'));
-  expect(await fits(), 'nothing scrolls on page 1');
-  await pill('bias', 'Bearish'); await pill('reasons', '4H displaced through a level'); await pill('reasons', 'Swept a HTF high or low'); await pill('invAt', 'The 1H iFVG');
-  await pill('taken', 'Asia high'); await pill('zone', 'Premium');
-  // A red folder inside the killzone adds the rule line: the map still ends above the footer, nothing under it.
-  await pill('news', 'Inside the killzone'); await page.waitForTimeout(300);
-  const clear = () => page.evaluate(() => {
-    const foot = document.querySelector('[data-prep-next]').closest('.border-t').getBoundingClientRect().top;
-    return Math.max(...[...document.querySelectorAll('[data-chart-prep] [data-map-side], [data-chart-prep] [data-scenario]')].map((el) => el.getBoundingClientRect().bottom)) <= foot;
-  });
-  expect(await clear(), 'the read-the-chart cards end above the footer');
-  await next();
-  expect(await box() === size1, `the window keeps its size from page to page (${size1} → ${await box()})`);
-  expect(await fits(), 'nothing scrolls on the plans');
-  expect(await page.locator('[data-chart-prep] textarea').count() === 0, 'no text boxes on the plans');
-  // The bearish bias already filled A short and B long; the Asia high, run overnight, is not offered.
-  expect(await g('aDir').locator('[aria-pressed="true"]').innerText() === 'Short' && await g('bDir').locator('[aria-pressed="true"]').innerText() === 'Long', 'A with the bias, B against it');
-  expect(await g('aZones').getByRole('button', { name: 'PDL', exact: true }).count() === 0, 'a short waits above: no lows offered');
-  expect(await g('aZones').getByRole('button', { name: 'Asia high', exact: true }).count() === 0, 'run overnight: not offered');
-  expect(/run overnight, so not offered: Asia high/.test(await page.locator('[data-plans-auto]').innerText()), 'and it says why');
-  await pill('aZones', 'PDH');
-  expect(await g('aConfirms').count() === 0 && await page.locator('[data-confirm-info="prep"]').count() === 1, 'the confirmation is shown as the strategy, not asked');
-  // Up to three first targets.
-  for (const t of ['PDH/PDL', 'Weekly high/low', 'Session high/low', 'EQH/EQL']) await pill('aTarget', t);
-  expect(await g('aTarget').locator('[aria-pressed="true"]').count() === 3, 'three first targets at most');
-  await pill('bZones', 'London low'); await page.waitForTimeout(300);
-  expect(await g('bZones').getByRole('button', { name: 'PDH', exact: true }).count() === 0, 'a long: no highs offered');
-  const notes = await page.locator('[data-plan-checks]').innerText();
-  expect(/no kill switch/.test(notes), `the rules were not checked: ${notes}`);
-  await pill('aKills', '15m closes through the zone'); await pill('bKills', 'Never reaches the zone'); await pill('bKills', 'Bias invalidated');
-  // The cutoffs are New York times shown on the local clock: the second one is 10:00 New York.
-  await g('cutoffAt').getByRole('button').nth(1).click(); await page.waitForTimeout(300);
-  expect(await clear(), 'the plans and C end above the footer');
-  expect(await page.locator('[data-plan-checks]').count() === 0, 'the notes clear once the plans are sound');
-  await page.click('[data-prep-next]'); await page.waitForSelector('[data-prep-plan]');
-  const plan = await page.locator('[data-prep-plan]').innerText();
-  expect(/Scenario A/.test(plan) && /Scenario C/.test(plan) && /bias is bearish because 4H displaced/.test(plan) && /from PDH/.test(plan) && /reached by \d{2}:\d{2}/.test(plan), plan.slice(0, 300));
+  await page.click('text=Morning check-in');
+  const tab = page.locator('[data-checkin-tab="chart"]');
+  expect(/^Plan/.test((await tab.innerText()).trim()) && !/6\/6|\d\/6/.test(await tab.innerText()), `the tab is the plan, no step count: ${await tab.innerText()}`);
+  await tab.click();
+  await page.waitForSelector('[data-replay-builder="session"]');
+  expect(await page.locator('[data-plan-kind="session"]').count() >= 1, 'marked as the live session plan');
+  expect(await page.locator('[data-replay-builder="session"] textarea').count() === 0, 'no text boxes');
+  const grp = (id) => page.locator(`[data-replay-builder="session"] [data-replay-group="${id}"]`);
+  const tap = (id, o) => grp(id).locator(`[data-option="${o}"]`).first().click();
+  await tap('h4', 'Bear'); await tap('h1', 'Yes');
+  await grp('taken').locator('[data-option]').last().click();
+  await tap('news', 'None'); await tap('open', 'Premium');
+  for (const k of ['a', 'b']) {
+    await grp(`${k}-zones`).locator('[data-option]').first().click();
+    await grp(`${k}-target`).locator('[data-option]').first().click();
+    await tap(`${k}-rr`, '2+');
+    await grp(`${k}-kill`).locator('[data-option]').first().click();
+  }
+  const foot = await page.locator('[data-builder-footer]').innerText();
+  expect(/Ready to lock/.test(foot), `every question answered: ${foot}`);
+  await page.click('[data-lock-play]');
+  // The next step without leaving: the plan read back, A and B a tap from a trade.
+  await page.waitForSelector('[data-day-plan] [data-plan-pick="a"]', { timeout: 8000 });
+  expect(await page.locator('[data-replay-builder]').count() === 0, 'the check-in closed');
   const day = await page.evaluate(() => new Date().toLocaleDateString('en-CA'));
-  const saved = await page.evaluate(async (day) => (await (await fetch(`/api/prep?day=${day}`)).json()).prep.data.answers, day);
-  expect(saved['draw.side'] === 'Both ways' && JSON.stringify(saved['liquidity.wait']) === JSON.stringify(['PDH', 'London low']), JSON.stringify(saved).slice(0, 200));
-  // The end is small and has no buttons: a bar empties and the window closes by itself.
-  await page.waitForTimeout(600);
-  const w = await page.locator('[data-prep-ready]').evaluate((el) => Math.round(el.closest('[role="dialog"]')?.getBoundingClientRect().width ?? el.getBoundingClientRect().width));
-  expect(w <= 560, `the summary window is small (${w}px)`);
-  expect(await page.locator('[data-prep-ready] button').count() === 0, 'no buttons on the summary');
-  expect(await page.locator('[data-prep-countdown]').count() === 1, 'the countdown bar');
-  await page.mouse.move(2, 2);
-  await page.waitForSelector('[data-prep-ready]', { state: 'detached', timeout: 12000 });
-  expect(await page.locator('[data-chart-prep]').count() === 0, 'closed by itself');
+  const prep = await page.evaluate(async (day) => (await (await fetch(`/api/prep?day=${day}`)).json()).prep, day);
+  expect(prep.completed_at && prep.data.plan?.context.h4 === 'Bear' && prep.data.answers['htf.bias'] === 'Bearish' && prep.data.answers['plans.aDir'] === 'Short', JSON.stringify(prep.data.answers).slice(0, 240));
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });
@@ -384,11 +352,11 @@ await check('the morning prep ends in a plan, checks the three rules, and the tr
 await check('Today\'s plan: the morning\'s A and B, tappable, on the account picked — real accounts only', async () => {
   const { page, errors } = await open();
   await page.evaluate(() => window.dispatchEvent(new Event('signature:open-day-plan')));
-  await page.waitForSelector('[data-day-plan-pick="a"]');
+  await page.waitForSelector('[data-day-plan] [data-plan-pick="a"]');
   const accounts = await page.locator('[data-day-plan-account] [data-option]').allTextContents();
   expect(JSON.stringify(accounts) === JSON.stringify(['Live', 'Demo', 'Eval', 'Funded']), `real accounts only: ${accounts}`);
   await page.click('[data-day-plan-account] [data-option="Live"]');
-  await page.click('[data-day-plan-pick="a"]');
+  await page.click('[data-day-plan] [data-plan-pick="a"]');
   await page.waitForSelector('[data-decide-step]');
   await page.waitForFunction(() => document.querySelector('[data-facts] [data-option="A"][aria-pressed="true"]'), null, { timeout: 8000 });
   expect(await page.locator('[data-context="account"] [data-option="Live"][aria-checked="true"]').count() === 1, 'on Live');

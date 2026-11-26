@@ -1,5 +1,6 @@
 import { localizeNy } from './localTime';
 import { TARGET_TYPES } from './domain';
+import { dayBias, parseContext, parseScenarios, type ReplayContext, type ReplayScenarios } from './replay';
 
 /**
  * The morning prep: the second half of the check-in, done on the chart before
@@ -256,7 +257,9 @@ export const RR_BANDS = ['<1.5', '1.5–2', '2+'];
   reads — everything below prefers the tapped answer and falls back to the words.
 */
 /** Trigger zones: a level to sweep or a gap to be delivered into. A long waits below, a short above. */
-export const PREP_ZONES = [...SWEEPABLE, 'ITH', 'ITL', 'Data wick', '5m gap', '15m gap', '1H gap', '4H gap'];
+export const PREP_ZONES = [...SWEEPABLE, 'ITH', 'ITL', 'Data wick', '5m gap', '15m gap', '1H gap', '4H gap',
+  // The plan builder's words (lib/replay zoneOptions): a session planned there keeps its zones.
+  'Major swing low', 'Major swing high', 'HTF FVG 5m', 'HTF FVG 15m', 'HTF FVG 1H', 'HTF FVG 4H', 'Asia H/L', 'London H/L', 'PDH/PDL', 'PWH/PWL', 'EQH/EQL', 'ITH/ITL', 'Major swing H/L'];
 const LOWS_ONLY = new Set(['PDL', 'PWL', 'Asia low', 'London low', 'EQL', 'ITL']);
 const HIGHS_ONLY = new Set(['PDH', 'PWH', 'Asia high', 'London high', 'EQH', 'ITH']);
 /** The levels on the wrong side for this direction: a long's zone is below price, its target above. */
@@ -270,7 +273,7 @@ export const PREP_CONFIRMS = ['Sweep + iFVG close', 'HTF FVG delivery + iFVG clo
 export const PREP_TARGET_AT = [...SWEEPABLE, 'ITH', 'ITL', 'Session high', 'Session low', 'Data wick', 'Opposing 1H gap', 'Opposing 4H gap'];
 export const PREP_KILLS = ['Never reaches the zone', '5m closes through the zone', '15m closes through the zone', 'Opposing HTF gap forms',
   'Not triggered by the cutoff', 'Takes the other side’s liquidity first', 'News spike through the zone', 'Bias invalidated',
-  'Triggered before the market open'];
+  'Triggered before the market open', 'Not triggered by 10:30', "Takes the other side's liquidity first"];
 /** First targets per scenario: up to this many (a scale-out or the level after), as the backtest plan. */
 export const MAX_TARGETS = 3;
 export const HTF_REASONS = ['4H displaced through a level', '1H holding an iFVG', 'HTF FVG respected', 'Swept a HTF high or low',
@@ -380,7 +383,13 @@ export interface PrepData {
   ticks: Record<string, number[]>;
   /** "step.field" → the answer. */
   answers: Record<string, Answer>;
+  /**
+   * The plan as the plan builder writes it (the backtest's builder, in session mode): the same context and
+   * scenarios as a replay day. The answers above are derived from it, so everything that reads a prep reads it.
+   */
+  plan?: SessionPlan | null;
 }
+export interface SessionPlan { context: ReplayContext; scenarios: ReplayScenarios }
 
 export interface SessionPrep {
   day: string;
@@ -428,7 +437,49 @@ export function parsePrepData(raw: unknown): PrepData {
       answers[key] = v;
     }
   }
-  return { steps, ticks, answers };
+  const p = obj(r.plan);
+  let plan: SessionPlan | null = null;
+  if (r.plan && typeof r.plan === 'object') { const context = parseContext(p.context); plan = { context, scenarios: parseScenarios(p.scenarios, context) }; }
+  return { steps, ticks, answers, ...(plan ? { plan } : {}) };
+}
+
+/* ───────────── the session plan, read as a prep ───────────── */
+
+/** The builder's target names in the trade form's words. */
+const TARGET_OF: Record<string, string> = { 'PWH/PWL': 'Weekly high/low', 'Session H/L': 'Session high/low', 'HTF FVG': 'HTF FVG (1H/4H)' };
+const NEWS_OF: Record<string, string> = { None: 'None today', 'Data at 8:30 ET': 'Before the open', 'Data at 10:00 ET': 'Inside the killzone', 'Afternoon FOMC or speaker': 'None today' };
+const OPEN_OF: Record<string, string> = { Premium: 'Premium', EQ: 'Equilibrium', Discount: 'Discount' };
+
+/**
+ * A session plan as the prep's answers: the bias, what was taken, the news, the location, A and B, the cutoff
+ * (Scenario C's 10:30) — so the plan match, the trade form, the cockpit and the exports read it unchanged.
+ */
+export function planToAnswers(plan: SessionPlan): Record<string, Answer> {
+  const { context: c, scenarios: s } = plan;
+  const bias = dayBias(c);
+  const out: Record<string, Answer> = { 'htf.bias': bias === 'Long' ? 'Bullish' : bias === 'Short' ? 'Bearish' : 'Neutral', 'plans.cutoffAt': '10:30' };
+  if (c.taken) out[TAKEN_KEY_] = [...c.taken];
+  if (c.news) out['session.news'] = NEWS_OF[c.news];
+  if (c.open) out['location.zone'] = OPEN_OF[c.open];
+  for (const k of ['a', 'b'] as const) {
+    const sc = s[k];
+    if (sc.dir) out[`plans.${k}Dir`] = sc.dir;
+    if (sc.zones.length) out[`plans.${k}Zones`] = [...sc.zones];
+    const types = [...new Set(sc.targets.map((t) => TARGET_OF[t] ?? t))];
+    if (types.length) out[`plans.${k}Target`] = types;
+    if (sc.rr) out[`plans.${k}RR`] = sc.rr;
+    if (sc.kill) out[`plans.${k}Kills`] = [sc.kill];
+  }
+  return out;
+}
+
+/** A day's prep with a session plan written in: the plan, its answers over the old ones, every step done. */
+export function withSessionPlan(data: PrepData, plan: SessionPlan): PrepData {
+  const steps = { ...data.steps };
+  for (const st of PREP_STEPS) steps[st.id] = 'done';
+  // The plan's own answers replace the plan questions; a stop-after answered elsewhere stays.
+  const kept = Object.fromEntries(Object.entries(data.answers).filter(([k]) => !k.startsWith('plans.') && k !== 'htf.bias' && k !== TAKEN_KEY_));
+  return parsePrepData({ ...data, steps, answers: { ...kept, ...planToAnswers(plan) }, plan });
 }
 
 /*

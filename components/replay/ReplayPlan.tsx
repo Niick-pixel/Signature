@@ -86,7 +86,30 @@ const dirTone = (d: string) => (d === 'Long' ? WIN : LOSS);
  * With `amend`, the same screen edits a locked day — saved beside the
  * original, and the day is flagged amended.
  */
-type BuilderProps = { open: boolean; onClose: () => void; last: ReplayDay | null; amend?: ReplayDay | null; instrument?: string | null; onLocked?: (d: ReplayDay) => void };
+type PlanShape = { context: ReplayContext; scenarios: ReplayScenarios };
+/** The live session's plan, in the same builder (the morning check-in's Plan tab): today's date, saved to the day's prep. */
+export type SessionMode = { day: string; start: PlanShape | null; last: PlanShape | null; onSave: (plan: PlanShape) => Promise<string | null> };
+type BuilderProps = { open: boolean; onClose: () => void; last: ReplayDay | null; amend?: ReplayDay | null; instrument?: string | null; onLocked?: (d: ReplayDay) => void; session?: SessionMode };
+
+/** The two kinds of plan, told apart everywhere they show: a backtest's replay day, or today's live session. */
+export const PLAN_KIND = {
+  backtest: { label: 'Backtest plan', tone: 'var(--series-a)' },
+  session: { label: 'Session plan · live', tone: 'var(--outcome-win)' },
+} as const;
+export function PlanKindBadge({ kind }: { kind: keyof typeof PLAN_KIND }) {
+  const k = PLAN_KIND[kind];
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.06em]" data-plan-kind={kind}
+      style={{ color: `rgb(${k.tone})`, background: `rgb(${k.tone} / 0.12)`, border: `1px solid rgb(${k.tone} / 0.4)` }}>
+      <span className="size-1.5 rounded-full" style={{ background: `rgb(${k.tone})` }} />{k.label}
+    </span>
+  );
+}
+
+/** The builder inside another window (the check-in's Plan tab), for the live session. */
+export function SessionPlanBuilder({ session, onClose }: { session: SessionMode; onClose: () => void }) {
+  return <BuilderBody open onClose={onClose} last={null} session={session} />;
+}
 export function ReplayBuilder(props: BuilderProps) {
   return (
     <Overlay open={props.open} onClose={props.onClose} className="max-h-[calc(100dvh-2rem)] w-[min(86rem,calc(100vw-2rem))] max-w-full overflow-y-auto rounded-[calc(24px*var(--rk))] p-5" surface="color-mix(in srgb, var(--bg-raised) 96%, transparent)">
@@ -96,10 +119,12 @@ export function ReplayBuilder(props: BuilderProps) {
   );
 }
 
-function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: BuilderProps) {
-  const start = amend ? copyPlan({ context: amend.amended_context ?? amend.context, scenarios: amend.amended_scenarios ?? amend.scenarios }) : null;
-  // Today's calendar date by default (the day you sat the replay); the chart's own day can still be typed.
-  const [date, setDate] = useState(() => (amend ? amend.replay_date : localDay()));
+function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session }: BuilderProps) {
+  const sessionStart = session?.start ?? null;
+  const start = useMemo(() => (sessionStart ? { context: sessionStart.context, scenarios: sessionStart.scenarios }
+    : amend ? copyPlan({ context: amend.amended_context ?? amend.context, scenarios: amend.amended_scenarios ?? amend.scenarios }) : null), [sessionStart, amend]);
+  // Today's calendar date by default (the day you sat the replay); the chart's own day can still be typed. A live session is today.
+  const [date, setDate] = useState(() => (session ? session.day : amend ? amend.replay_date : localDay()));
   const [context, setContext] = useState<ReplayContext>(() => start?.context ?? emptyContext());
   const [raw, setRaw] = useState<ReplayScenarios>(() => start?.scenarios ?? emptyScenarios());
   const [focus, setFocus] = useState(0);
@@ -148,6 +173,12 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
   const lock = useCallback(async () => {
     if (missing.length) { setError(`Still to tap: ${missing.join(', ')}.`); return; }
     setSaving(true); setError(null);
+    if (session) {
+      const err = await session.onSave({ context, scenarios: s });
+      setSaving(false);
+      if (err) setError(err);
+      return;
+    }
     // Amend: a corrected date moves the day (and its trades) without touching the plan;
     // the plan itself is saved as an amendment only if it changed.
     if (amend && date !== amend.replay_date) {
@@ -166,7 +197,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
     changed();
     onLocked?.(body as ReplayDay);
     onClose();
-  }, [missing, amend, context, s, date, instrument, last, onLocked, onClose, start]);
+  }, [missing, amend, context, s, date, instrument, last, onLocked, onClose, start, session]);
 
   useEffect(() => {
     if (!open) return;
@@ -224,7 +255,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
         <Chips id={`${k}-zones`} label="Trigger zone" options={zoneOptions(sc.dir, context.news, context.taken)} value={sc.zones} multi max={MAX_ZONES}
           onChange={(v) => set({ zones: v as string[] })} focused={fid === `${k}-zones`} onFocus={() => focusOn(`${k}-zones`)} required titleFor={swingTitle}
           hint={`The high side for a short, the low side for a long; a level taken before the open is not offered. The data wick appears on a news day. Major swing: ${MAJOR_SWING_HELP}`} />
-        <Chips id={`${k}-target`} label="First target · up to 3" options={targetOptions(context.news, sc.dir, context.taken)} value={sc.targets} multi max={MAX_TARGETS} onChange={(v) => set({ targets: v as string[] })}
+        <Chips id={`${k}-target`} label="First target" options={targetOptions(context.news, sc.dir, context.taken)} value={sc.targets} multi max={MAX_TARGETS} onChange={(v) => set({ targets: v as string[] })}
           labelFor={(o) => { const left = targetLeft(o, sc.dir, context.taken); return left ? `${o} · ${left}` : o; }}
           focused={fid === `${k}-target`} onFocus={() => focusOn(`${k}-target`)} required titleFor={swingTitle}
           hint="A target already run before the open is not offered: a long aims above, a short below." />
@@ -240,15 +271,24 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
   };
 
   return (
-      <div data-replay-builder={amend ? 'amend' : 'plan'}>
+      <div data-replay-builder={session ? 'session' : amend ? 'amend' : 'plan'}>
         <div className="mb-2 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[20px] font-semibold">{amend ? `Amend Day ${amend.sequence}` : 'Plan replay day'} <span className="text-[13px] font-medium" style={faint}>· backtest</span></h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-[20px] font-semibold">{session ? 'Plan today’s session' : amend ? `Amend Day ${amend.sequence}` : 'Plan replay day'}</h1>
+              <PlanKindBadge kind={session ? 'session' : 'backtest'} />
+            </div>
             <p className="mt-0.5 text-[12.5px]" style={dim}>
-              {amend ? 'The locked plan stays as it was; this is kept beside it, and the day shows as amended everywhere.'
+              {session ? `${new Date(`${session.day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · the same builder as the backtest. Taps only · Enter saves; change it any time today.`
+                : amend ? 'The locked plan stays as it was; this is kept beside it, and the day shows as amended everywhere.'
                 : 'Taps only. Keys: 1–9 pick in the lit group · Tab / ↑ ↓ move · Enter locks.'}
             </p>
           </div>
+          {session ? (
+            <div className="flex items-end gap-2">
+              {session.last && <Button onClick={() => { const p = copyPlan(session.last!); setContext(p.context); setRaw(p.scenarios); }} data-copy-last>Copy yesterday’s plan</Button>}
+            </div>
+          ) : (
           <div className="flex items-end gap-2">
             <div className="w-[12.5rem]">
               <Field quiet label={`FX Replay date${date ? ` · ${weekdayOf(date) ?? 'weekend'}` : ''}`}>
@@ -266,6 +306,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
               <Button onClick={() => { const p = copyPlan(last); setContext(p.context); setRaw(p.scenarios); }} data-copy-last>Copy last day</Button>
             )}
           </div>
+          )}
         </div>
 
         {/* Context. */}
@@ -331,7 +372,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked }: Build
           <div className="flex gap-2">
             <Button onClick={onClose}>Cancel</Button>
             <Button variant="primary" onClick={() => void lock()} disabled={saving} data-lock-play>
-              {amend ? 'Save amendment' : 'Lock & play'} <span className="opacity-70">↵</span>
+              {session ? (session.start ? 'Save the plan' : 'Save today’s plan') : amend ? 'Save amendment' : 'Lock & play'} <span className="opacity-70">↵</span>
             </Button>
           </div>
         </div>
@@ -423,7 +464,8 @@ export function ReplayDayControl({ instrument, onPlanned }: { instrument?: strin
       ) : (
         <BarButton kind="window" on onClick={() => setBuilding(true)} data-plan-replay-day>Plan replay day</BarButton>
       )}
-      <PlanView open={viewing} day={d} trades={state.trades} onClose={() => setViewing(false)} onAmend={() => { setViewing(false); setAmending(true); }} />
+      <PlanView open={viewing} day={d} trades={state.trades} onClose={() => setViewing(false)} onAmend={() => { setViewing(false); setAmending(true); }}
+        onNext={() => { setViewing(false); setClosing(true); }} />
       <ReplayBuilder open={building} onClose={() => setBuilding(false)} last={state.last} instrument={instrument} onLocked={onPlanned} />
       <ReplayBuilder open={amending} onClose={() => setAmending(false)} last={state.last} amend={d} instrument={instrument} />
       <CloseDayDialog open={closing} onClose={() => setClosing(false)} day={d} trades={state.trades}
@@ -439,8 +481,10 @@ export function ReplayDayControl({ instrument, onPlanned }: { instrument?: strin
  * after one. The context, A and B in full, C, and what was taken so far. An
  * amendment shows under the original, which is what counts.
  */
-function PlanView({ open, day, trades, onClose, onAmend }: {
+function PlanView({ open, day, trades, onClose, onAmend, onNext }: {
   open: boolean; day: ReplayDay | null; trades: ReplayState['trades']; onClose: () => void; onAmend: () => void;
+  /** Close this replay day and plan the next — straight from here. */
+  onNext?: () => void;
 }) {
   return (
     <Overlay open={open && day != null} onClose={onClose} className="max-h-[calc(100dvh-2rem)] w-full max-w-[60rem] overflow-y-auto rounded-[calc(24px*var(--rk))] p-5" surface="color-mix(in srgb, var(--bg-raised) 96%, transparent)">
@@ -448,12 +492,17 @@ function PlanView({ open, day, trades, onClose, onAmend }: {
         <div data-plan-view>
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-[20px] font-semibold">Day {day.sequence} · {day.weekday ?? ''} {fmtDate(day.replay_date)} <span className="text-[13px] font-medium" style={faint}>· locked{day.amended_at ? ' · amended' : ''}</span></h1>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-[20px] font-semibold">Day {day.sequence} · {day.weekday ?? ''} {fmtDate(day.replay_date)} <span className="text-[13px] font-medium" style={faint}>· locked{day.amended_at ? ' · amended' : ''}</span></h1>
+                <PlanKindBadge kind="backtest" />
+              </div>
               <p className="mt-0.5 text-[12.5px]" style={dim}>The plan as it was locked — a reminder, not a form. {day.instrument ?? ''}</p>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={onAmend}>Amend</Button>
-              <Button variant="primary" onClick={onClose}>Close</Button>
+            {/* The next steps, from here: amend it, or close the day and plan the next one. */}
+            <div className="flex flex-wrap gap-2">
+              <BarButton kind="window" onClick={onAmend} data-plan-view-amend>Amend</BarButton>
+              {onNext && !day.closed_at && <BarButton kind="window" onClick={onNext} data-plan-view-next>Close day &amp; plan the next</BarButton>}
+              <BarButton kind="primary" onClick={onClose}>Close</BarButton>
             </div>
           </div>
           <PlanBody day={day.replay_date} context={day.context} scenarios={day.scenarios} onPick={day.closed_at ? undefined : (k) => { onClose(); pickScenario(k); }} />
@@ -484,7 +533,7 @@ function pickScenario(k: 'a' | 'b') {
   if (!ev.detail.taken) navigate(`/new?plan=${k}`);
 }
 
-function PlanBody({ context: c, scenarios: s, onPick, day }: { context: ReplayContext; scenarios: ReplayScenarios; onPick?: (k: 'a' | 'b') => void; day?: string }) {
+export function PlanBody({ context: c, scenarios: s, onPick, day }: { context: ReplayContext; scenarios: ReplayScenarios; onPick?: (k: 'a' | 'b') => void; day?: string }) {
   const bias = dayBias(c);
   const row = (label: string, value: ReactNode) => (
     <div className="flex items-baseline justify-between gap-3 py-0.5 text-[12px]"><span style={faint}>{label}</span><span className="text-right">{value ?? '—'}</span></div>
