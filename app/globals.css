@@ -1042,16 +1042,18 @@ html[data-reduce-motion='true'] .need-flash { animation: none; box-shadow: 0 0 0
   field is answered (the class or data-need goes with "required"). Deliberately
   quiet — the amber pulse and the red flash above are the loud ones.
 */
+/* Light orange in every theme: it has to stand apart from the accent, which marks what is picked. */
+:root { --need: 251 146 60; }
 @keyframes need-glow {
-  0%, 100% { box-shadow: 0 0 0 1px rgb(var(--accent) / 0.16), 0 0 0 0 rgb(var(--accent) / 0); }
-  50% { box-shadow: 0 0 0 1px rgb(var(--accent) / 0.38), 0 0 9px 0 rgb(var(--accent) / 0.2); }
+  0%, 100% { box-shadow: 0 0 0 1px rgb(var(--need) / 0.35), 0 0 0 0 rgb(var(--need) / 0); }
+  50% { box-shadow: 0 0 0 1.5px rgb(var(--need) / 0.85), 0 0 12px 1px rgb(var(--need) / 0.35); }
 }
 .need-glow, [data-need] > :nth-child(2) { animation: need-glow 2.6s ease-in-out infinite; }
 /* A text box with its counter under it: the glow sits on the box, not around the counter too. */
 [data-need] > :nth-child(2):has(> [data-text-box]) { animation: none; }
 [data-need] > :nth-child(2) > [data-text-box] { animation: need-glow 2.6s ease-in-out infinite; }
-html[data-reduce-motion='true'] .need-glow, html[data-reduce-motion='true'] [data-need] > :nth-child(2) { animation: none; box-shadow: 0 0 0 1px rgb(var(--accent) / 0.3); }
-@media (prefers-reduced-motion: reduce) { .need-glow, [data-need] > :nth-child(2) { animation: none; box-shadow: 0 0 0 1px rgb(var(--accent) / 0.3); } }
+html[data-reduce-motion='true'] .need-glow, html[data-reduce-motion='true'] [data-need] > :nth-child(2) { animation: none; box-shadow: 0 0 0 1.5px rgb(var(--need) / 0.7); }
+@media (prefers-reduced-motion: reduce) { .need-glow, [data-need] > :nth-child(2) { animation: none; box-shadow: 0 0 0 1.5px rgb(var(--need) / 0.7); } }
 
 /*
   Read, not written (Step 2's left column: the locked decision, the replay, the

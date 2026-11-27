@@ -333,8 +333,9 @@ await check('the morning plan is the backtest builder: taps only, saved to the p
   for (const k of ['a', 'b']) {
     await grp(`${k}-zones`).locator('[data-option]').first().click();
     await grp(`${k}-target`).locator('[data-option]').first().click();
-    await tap(`${k}-rr`, '2+');
-    await grp(`${k}-kill`).locator('[data-option]').first().click();
+    // The kill switch takes several; no rough R is asked (the rules already set 1.5R or more).
+    await grp(`${k}-kill`).locator('[data-option]').nth(0).click();
+    await grp(`${k}-kill`).locator('[data-option]').nth(1).click();
   }
   const foot = await page.locator('[data-builder-footer]').innerText();
   expect(/Ready to lock/.test(foot), `every question answered: ${foot}`);
@@ -344,6 +345,7 @@ await check('the morning plan is the backtest builder: taps only, saved to the p
   expect(await page.locator('[data-replay-builder]').count() === 0, 'the check-in closed');
   const day = await page.evaluate(() => new Date().toLocaleDateString('en-CA'));
   const prep = await page.evaluate(async (day) => (await (await fetch(`/api/prep?day=${day}`)).json()).prep, day);
+  expect(prep.data.plan?.scenarios.a.kills.length === 2, `two kill switches kept: ${JSON.stringify(prep.data.plan?.scenarios.a.kills)}`);
   expect(prep.completed_at && prep.data.plan?.context.h4 === 'Bear' && prep.data.answers['htf.bias'] === 'Bearish' && prep.data.answers['plans.aDir'] === 'Short', JSON.stringify(prep.data.answers).slice(0, 240));
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
@@ -773,9 +775,8 @@ await check('Replay plan: Next replay day closes the day with one question, and 
   expect(await page.locator('[data-overnight]').getAttribute('data-overnight') === (side === 'high' ? 'Highs run' : 'Lows run'), 'overnight follows');
   expect(await page.locator('[data-replay-scenario="a"] [data-replay-group="a-zones"] [data-option^="Major swing"]').getAttribute('title') !== null, 'the major swing tooltip');
   await page.locator('[data-replay-scenario="a"] [data-replay-group="a-zones"] [data-option^="PW"]').click();
-  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-option="<1.5"]').click();
-  expect(await page.locator('[data-rr-warning]').count() === 1, 'the <1.5R warning');
-  await page.locator('[data-replay-scenario="a"] [data-replay-group="a-rr"] [data-option="2+"]').click();
+  expect(await page.locator('[data-replay-group="a-rr"]').count() === 0, 'no rough R asked');
+  expect(await page.locator('[data-replay-scenario="a"] [data-replay-group="a-zones"] [data-option^="HTF FVG"]').count() === 0, 'no HTF FVG trigger zones');
   await page.keyboard.press('Enter');
   await page.waitForSelector('[data-replay-builder]', { state: 'detached' });
   await page.waitForSelector('[data-replay-day="2"]');
@@ -982,6 +983,30 @@ await check('Trades: unfinished trades wait on their own shelf; deleting one ask
   await page.waitForFunction((id) => !document.querySelector(`[data-unfinished-row="${id}"]`), t.id, { timeout: 5000 });
   const gone = await page.evaluate(async (id) => (await fetch(`/api/trades/${id}`)).json().catch(() => null), t.id);
   expect(!gone || gone.deleted_at, 'in the Trash');
+  await page.context().close();
+  expect(!errors.length, errors.join(' | '));
+});
+
+await check('Step 2: closing a new trade without saving discards it (to the Trash); the right tag row glows for the result; no +1R first', async () => {
+  const { page, errors } = await openNewTrade();
+  for (const k of ['2', '2', '2', '2', 'l', 'a']) await page.keyboard.press(k);
+  await gateAndR(page);
+  await page.keyboard.press('t');
+  await page.waitForSelector('[data-outcome-step]');
+  const t = await savedTrade(page);
+  expect(await page.getByText('+1R first').count() === 0, 'no +1R first');
+  for (const [ended, row] of [['Win', 'worked'], ['Loss', 'me'], ['Breakeven', 'market']]) {
+    await page.locator('[data-outcome-step] button', { hasText: new RegExp(`^${ended}$`) }).first().click();
+    await page.waitForTimeout(200);
+    const on = await page.locator('[data-tags]').getAttribute('data-tag-need-for');
+    expect(on === row, `${ended}: the ${row} row glows (got ${on})`);
+  }
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-close-dialog] [data-action="discard"], button[data-action="discard"], [data-discard]', { timeout: 5000 }).catch(() => {});
+  await page.getByRole('button', { name: 'Discard the trade' }).click();
+  await page.waitForSelector('[data-outcome-step]', { state: 'detached', timeout: 8000 });
+  const gone = await page.evaluate(async (id) => (await fetch(`/api/trades/${id}`)).json().catch(() => null), t.id);
+  expect(!gone || gone.deleted_at, `discarded to the Trash: ${JSON.stringify(gone)?.slice(0, 80)}`);
   await page.context().close();
   expect(!errors.length, errors.join(' | '));
 });

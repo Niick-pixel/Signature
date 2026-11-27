@@ -29,9 +29,14 @@ export const CONFIRMS = ['Sweep + iFVG close', 'HTF FVG delivery + iFVG close', 
 export const CONFIRM_RULE = { trigger: 'Sweep + iFVG close', extra: 'HTF FVG delivery + iFVG close' } as const;
 export const confirmText = (picked: readonly string[]) => (picked.length ? picked.join(', ') : `${CONFIRM_RULE.trigger} · ${CONFIRM_RULE.extra} for extra`);
 export const RR_BANDS = ['<1.5', '1.5–2', '2+'] as const;
+/**
+ * What cancels a scenario — as many as apply (a list since the kill switch became multiple choice; a day
+ * planned before held one, read in by parseScenario). The first six are the originals, kept for old days.
+ */
 export const KILLS = [
   'Never reaches the zone', '5m closes through the zone', 'Opposing HTF gap forms', 'Not triggered by 10:30', "Takes the other side's liquidity first",
   'Triggered before the market open',
+  'Target hit before the trigger', 'Sweep but no inversion', '1H closes against the bias', 'Red folder inside the killzone', 'Other scenario triggers first',
 ] as const;
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 export const DAY_OUTCOMES = ['A', 'B', 'C', 'unplanned', 'both'] as const;
@@ -64,8 +69,10 @@ export interface ReplayScenario {
   confirm: string[];
   /** First targets, up to MAX_TARGETS (a day planned before held one: `target`, read in by withTargets). */
   targets: string[];
+  /** Rough R: no longer asked (the rules already require 1.5R or more); a day planned before keeps its answer. */
   rr: (typeof RR_BANDS)[number] | null;
-  kill: (typeof KILLS)[number] | null;
+  /** Kill switches, any number (a day planned before held one, `kill`, read in by parseScenario). */
+  kills: (typeof KILLS)[number][];
 }
 export interface ReplayScenarios { a: ReplayScenario; b: ReplayScenario }
 
@@ -77,7 +84,7 @@ export interface ReplayDay {
 }
 
 export const emptyContext = (): ReplayContext => ({ h4: null, h1Agrees: null, overnight: null, taken: null, news: null, open: null });
-export const emptyScenario = (): ReplayScenario => ({ dir: null, zones: [], confirm: [], targets: [], rr: null, kill: null });
+export const emptyScenario = (): ReplayScenario => ({ dir: null, zones: [], confirm: [], targets: [], rr: null, kills: [] });
 /** A stored scenario of either age: one planned before targets were a list held `target` (a string). */
 export function withTargets(sc: unknown): ReplayScenario {
   const raw = (sc && typeof sc === 'object' ? sc : {}) as Partial<ReplayScenario> & { target?: unknown };
@@ -131,7 +138,9 @@ export function zoneOptions(dir: Dir | null, news: ReplayContext['news'], taken:
     if (dir === 'Long') return t.has(lo) ? [] : [lo];
     return t.has(hi) && t.has(lo) ? [] : [both];
   });
-  return [...sided, ...(hasNews(news) ? ['Data wick'] : []), ...HTF_FVGS];
+  // No HTF FVG zones any more: whether price delivered from a higher-timeframe gap is the trade form's
+  // "HTF origin", read at the decision — a plan does not need it to say where to wait. Old days keep theirs.
+  return [...sided, ...(hasNews(news) ? ['Data wick'] : [])];
 }
 export const hasNews = (news: ReplayContext['news']): boolean => news != null && news !== 'None';
 /** The levels each pair target stands for, [high side, low side]: what "taken" can rule out. */
@@ -177,7 +186,7 @@ export function tidyScenarios(c: ReplayContext, s: ReplayScenarios): ReplayScena
   const one = (sc: ReplayScenario): ReplayScenario => {
     const zones = zoneOptions(sc.dir, c.news, c.taken);
     const targets = targetOptions(c.news, sc.dir, c.taken);
-    return { ...sc, zones: sc.zones.filter((z) => zones.includes(z)), targets: sc.targets.filter((t) => targets.includes(t)) };
+    return { ...sc, zones: sc.zones.filter((z) => zones.includes(z) || (HTF_FVGS as readonly string[]).includes(z)), targets: sc.targets.filter((t) => targets.includes(t)) };
   };
   return { a: one(s.a), b: one(s.b) };
 }
@@ -198,8 +207,7 @@ export function lockMissing(c: ReplayContext, raw: ReplayScenarios): string[] {
     if (!sc.dir) out.push(`${k}: direction`);
     if (!sc.zones.length) out.push(`${k}: trigger zone`);
     if (!sc.targets.length) out.push(`${k}: first target`);
-    if (!sc.rr) out.push(`${k}: rough R`);
-    if (!sc.kill) out.push(`${k}: kill switch`);
+    if (!sc.kills.length) out.push(`${k}: kill switch`);
   }
   return out;
 }
@@ -207,7 +215,7 @@ export function lockMissing(c: ReplayContext, raw: ReplayScenarios): string[] {
 /** One line per scenario, for the plan strip and the exports. */
 export function scenarioLine(s: ReplayScenario): string {
   const route = `${s.zones.join(' + ') || 'no zone'}${s.targets.length ? ` → ${s.targets.join(' / ')}` : ''}`;
-  return [s.dir ?? '—', route, s.rr ? `${s.rr}R` : null, s.kill ? `kill: ${localizeNy(s.kill)}` : null].filter(Boolean).join(' · ');
+  return [s.dir ?? '—', route, s.rr ? `${s.rr}R` : null, s.kills.length ? `kill: ${s.kills.map((k) => localizeNy(k)).join(' / ')}` : null].filter(Boolean).join(' · ');
 }
 
 /** The plan a day is read by: always the locked original — an amendment is shown beside it, never instead. */
@@ -250,7 +258,7 @@ export const playedOf = (o: DayOutcome | null): Array<'A' | 'B'> => (o === 'A' ?
 /* ───────────────────────── parsing (the API's input) ───────────────────────── */
 
 const pick = <T extends string>(v: unknown, list: readonly T[]): T | null => (typeof v === 'string' && (list as readonly string[]).includes(v) ? v as T : null);
-const ALL_ZONES = [...new Set([...zoneOptions(null, 'Data at 8:30 ET'), ...zoneOptions('Long', 'Data at 8:30 ET'), ...zoneOptions('Short', 'Data at 8:30 ET')])];
+const ALL_ZONES = [...new Set([...zoneOptions(null, 'Data at 8:30 ET'), ...zoneOptions('Long', 'Data at 8:30 ET'), ...zoneOptions('Short', 'Data at 8:30 ET'), ...HTF_FVGS])];
 const ALL_TARGETS = targetOptions('Data at 8:30 ET', null, null);
 
 export function parseContext(v: unknown): ReplayContext {
@@ -269,7 +277,8 @@ function parseScenario(v: unknown): ReplayScenario {
   return {
     dir: pick(o.dir, ['Long', 'Short'] as const), zones: list(o.zones, ALL_ZONES, MAX_ZONES), confirm: list(o.confirm, CONFIRMS),
     targets: list(Array.isArray(o.targets) ? o.targets : typeof o.target === 'string' ? [o.target] : [], ALL_TARGETS, MAX_TARGETS),
-    rr: pick(o.rr, RR_BANDS), kill: pick(o.kill, KILLS),
+    rr: pick(o.rr, RR_BANDS),
+    kills: list(Array.isArray(o.kills) ? o.kills : typeof o.kill === 'string' ? [o.kill] : [], KILLS) as ReplayScenario['kills'],
   };
 }
 export function parseScenarios(v: unknown, context: ReplayContext): ReplayScenarios {

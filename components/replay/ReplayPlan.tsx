@@ -12,8 +12,8 @@ import { InfoBox } from '@/components/ui/InfoBox';
 import { localDay } from '@/lib/day';
 import { navigate } from '@/lib/nav';
 import {
-  DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_TARGETS, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, RR_BANDS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
-  CONFIRM_RULE, PLAN_PREFILL, confirmText, copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, noBiasCap, playedOf, rrWarning, scenarioLine, targetLeft, targetOptions,
+  DAY_OUTCOMES, DAY_OUTCOME_LABEL, H4, KILLS, MAJOR_SWING_HELP, MAX_TARGETS, MAX_ZONES, NEWS, NOTHING_TAKEN, OPEN_LOCATIONS, SCENARIO_C, TAKEN_LEVELS, TOOK, TOOK_LABEL,
+  CONFIRM_RULE, PLAN_PREFILL, confirmText, copyPlan, dayBias, emptyContext, emptyScenarios, lockMissing, noBiasCap, playedOf, scenarioLine, targetLeft, targetOptions,
   overnightOf, tidyScenarios, tookFromTrades, weekdayOf, withDirections, zoneOptions,
   type DayOutcome, type ReplayContext, type ReplayDay, type ReplayScenario, type ReplayScenarios, type Took,
 } from '@/lib/replay';
@@ -154,8 +154,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session
       ...(k === 'a' && !bias ? [{ id: 'a-dir', options: ['Long', 'Short'], pick: (o: string) => set({ dir: sc.dir === o ? null : o as 'Long' }) }] : []),
       { id: `${k}-zones`, options: zoneOptions(sc.dir, context.news, context.taken), pick: (o) => set({ zones: sc.zones.includes(o) ? sc.zones.filter((z) => z !== o) : [...sc.zones, o].slice(-MAX_ZONES) }) },
       { id: `${k}-target`, options: targetOptions(context.news, sc.dir, context.taken), pick: (o) => set({ targets: sc.targets.includes(o) ? sc.targets.filter((t) => t !== o) : [...sc.targets, o].slice(-MAX_TARGETS) }) },
-      { id: `${k}-rr`, options: RR_BANDS, pick: (o) => set({ rr: sc.rr === o ? null : o as ReplayScenario['rr'] }) },
-      { id: `${k}-kill`, options: KILLS, pick: (o) => set({ kill: sc.kill === o ? null : o as ReplayScenario['kill'] }) },
+      { id: `${k}-kill`, options: KILLS, pick: (o) => set({ kills: (sc.kills as string[]).includes(o) ? sc.kills.filter((x) => x !== o) : [...sc.kills, o as ReplayScenario['kills'][number]] }) },
     ];
     return [
       { id: 'h4', options: H4, pick: (o) => setC({ h4: context.h4 === o ? null : o as ReplayContext['h4'], ...(o === 'None' ? { h1Agrees: null } : {}) }) },
@@ -222,11 +221,10 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session
   }, [open, groups, focus, lock]);
 
   const scenarioCol = (k: 'a' | 'b', sc: ReplayScenario, set: (p: Partial<ReplayScenario>) => void) => {
-    const warn = rrWarning(sc.rr);
     return (
       // Six rows on a subgrid shared by A and B: each question sits beside its twin, so a scenario
       // with fewer zones (some taken) leaves a little room in that row, not an empty block at the bottom.
-      <div className="row-span-5 grid grid-rows-subgrid gap-y-1 rounded-[calc(18px*var(--rk))] border px-3 py-2.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-replay-scenario={k}>
+      <div className="row-span-4 grid grid-rows-subgrid gap-y-1 rounded-[calc(18px*var(--rk))] border px-3 py-2.5" style={{ borderColor: 'var(--glass-stroke)', background: 'var(--glass-fill)' }} data-replay-scenario={k}>
         <div>
         <div className="flex items-baseline justify-between px-1">
           <span className="text-[14px] font-semibold">Scenario {k.toUpperCase()}</span>
@@ -259,13 +257,10 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session
           labelFor={(o) => { const left = targetLeft(o, sc.dir, context.taken); return left ? `${o} · ${left}` : o; }}
           focused={fid === `${k}-target`} onFocus={() => focusOn(`${k}-target`)} required titleFor={swingTitle}
           hint="A target already run before the open is not offered: a long aims above, a short below." />
-        <div>
-        <Chips id={`${k}-rr`} label="Rough R" options={RR_BANDS} value={sc.rr} onChange={(v) => set({ rr: v as ReplayScenario['rr'] })}
-          focused={fid === `${k}-rr`} onFocus={() => focusOn(`${k}-rr`)} tone={(o) => (o === '<1.5' ? LOSS : undefined)} required />
-        {warn && <p className="px-2 text-[11.5px] font-medium" style={{ color: `rgb(${LOSS})` }} data-rr-warning>{warn}</p>}
-        </div>
-        <Chips id={`${k}-kill`} label="Kill switch" options={KILLS} value={sc.kill} onChange={(v) => set({ kill: v as ReplayScenario['kill'] })} labelFor={(o) => localizeNy(o, date)}
-          focused={fid === `${k}-kill`} onFocus={() => focusOn(`${k}-kill`)} required />
+        {/* No rough R: the rules already require 1.5R or more, and the trade form asks for the planned R. */}
+        <Chips id={`${k}-kill`} label="Kill switch" options={KILLS} value={sc.kills} multi onChange={(v) => set({ kills: v as ReplayScenario['kills'] })} labelFor={(o) => localizeNy(o, date)}
+          focused={fid === `${k}-kill`} onFocus={() => focusOn(`${k}-kill`)} required
+          hint="Every reason this scenario is off for the day — tap as many as apply." />
       </div>
     );
   };
@@ -551,8 +546,9 @@ export function PlanBody({ context: c, scenarios: s, onPick, day }: { context: R
         {row('Trigger zone', sc.zones.join(' + ') || null)}
         {row('Confirmation', confirmText(sc.confirm))}
         {row(sc.targets.length > 1 ? 'First targets' : 'First target', sc.targets.join(' / ') || null)}
-        {row('Rough R', sc.rr ? <span style={sc.rr === '<1.5' ? { color: `rgb(${LOSS})` } : undefined}>{sc.rr}R</span> : null)}
-        {row('Kill switch', sc.kill ? localizeNy(sc.kill, day) : null)}
+        {/* Rough R is no longer asked; a day planned with one still shows it. */}
+        {sc.rr && row('Rough R', <span style={sc.rr === '<1.5' ? { color: `rgb(${LOSS})` } : undefined}>{sc.rr}R</span>)}
+        {row(sc.kills.length > 1 ? 'Kill switches' : 'Kill switch', sc.kills.map((k) => localizeNy(k, day)).join(' · ') || null)}
       </Wrap>
     );
   };

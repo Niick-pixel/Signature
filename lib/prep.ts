@@ -273,7 +273,8 @@ export const PREP_CONFIRMS = ['Sweep + iFVG close', 'HTF FVG delivery + iFVG clo
 export const PREP_TARGET_AT = [...SWEEPABLE, 'ITH', 'ITL', 'Session high', 'Session low', 'Data wick', 'Opposing 1H gap', 'Opposing 4H gap'];
 export const PREP_KILLS = ['Never reaches the zone', '5m closes through the zone', '15m closes through the zone', 'Opposing HTF gap forms',
   'Not triggered by the cutoff', 'Takes the other side’s liquidity first', 'News spike through the zone', 'Bias invalidated',
-  'Triggered before the market open', 'Not triggered by 10:30', "Takes the other side's liquidity first"];
+  'Triggered before the market open', 'Not triggered by 10:30', "Takes the other side's liquidity first",
+  'Target hit before the trigger', 'Sweep but no inversion', '1H closes against the bias', 'Red folder inside the killzone', 'Other scenario triggers first'];
 /** First targets per scenario: up to this many (a scale-out or the level after), as the backtest plan. */
 export const MAX_TARGETS = 3;
 export const HTF_REASONS = ['4H displaced through a level', '1H holding an iFVG', 'HTF FVG respected', 'Swept a HTF high or low',
@@ -468,7 +469,7 @@ export function planToAnswers(plan: SessionPlan): Record<string, Answer> {
     const types = [...new Set(sc.targets.map((t) => TARGET_OF[t] ?? t))];
     if (types.length) out[`plans.${k}Target`] = types;
     if (sc.rr) out[`plans.${k}RR`] = sc.rr;
-    if (sc.kill) out[`plans.${k}Kills`] = [sc.kill];
+    if (sc.kills.length) out[`plans.${k}Kills`] = [...sc.kills];
   }
   return out;
 }

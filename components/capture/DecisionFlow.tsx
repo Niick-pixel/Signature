@@ -79,7 +79,6 @@ const legTone = (direction: string | null) => (l: string) =>
 const plannedRTone = (r: string) => (r === '1.5' ? CAUTION : WIN);
 const confidenceTone = (c: string) => (Number(c) <= 2 ? LOSS : c === '3' ? CAUTION : WIN);
 const endedTone = (e: string) => (e === 'Win' || e === 'Partial win' ? WIN : e === 'Loss' ? LOSS : NEUTRAL);
-const yesNoTone = (v: string) => (v === 'Yes' ? WIN : LOSS);
 const exitTone = (x: string) => (x === 'TP' ? WIN : x === 'SL' ? LOSS : x.startsWith('Manual') ? CAUTION : NEUTRAL);
 const LETTER_TONE: Record<string, string> = { 'A+': 'rgb(var(--grade-aplus))', A: 'rgb(var(--grade-a))', B: 'rgb(var(--grade-b))', 'No trade': 'rgb(var(--grade-f))' };
 
@@ -760,7 +759,8 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const [pnl, setPnl] = useState(trade.pnl_dollars != null ? String(trade.pnl_dollars) : '');
   const [contracts, setContracts] = useState(trade.contracts != null ? String(trade.contracts) : '');
   const [mfe, setMfe] = useState(trade.mfe_r != null ? String(trade.mfe_r) : '');
-  const [reached1R, setReached1R] = useState<boolean | null>(trade.reached_1r);
+  // No longer asked on Step 2: a trade that had it keeps it.
+  const [reached1R] = useState<boolean | null>(trade.reached_1r);
   const [exit, setExit] = useState<string | null>(trade.exit_reason ?? null);
   const [management, setManagement] = useState<string | null>(trade.management ?? null);
   const [wouldR, setWouldR] = useState(trade.would_be_r != null ? String(trade.would_be_r) : '');
@@ -818,6 +818,13 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const flags = consistencyFlags({ mistake_tags: me, market_tags: market, reached_1r: reached1R, management, mfe_r: num(mfe), planned_rr: trade.planned_rr });
   const settled = !taken || stage === 'Settled';
   const autoNow = taken ? autoMarketTags({ mfe_r: num(mfe), planned_rr: trade.planned_rr, exit_reason: exit }) : [];
+  // The tag row to fill for how it ended, glowing until one tag is picked there (never required to save):
+  // a win says what worked, a loss what went wrong on my side, a breakeven what the market did.
+  const tagNeed: 'worked' | 'me' | 'market' | null = !taken ? null
+    : ended === 'Win' || ended === 'Partial win' ? (worked.length ? null : 'worked')
+    : ended === 'Loss' ? (me.length ? null : 'me')
+    : ended === 'Breakeven' ? (market.length || autoNow.length ? null : 'market')
+    : null;
   // A pass or a miss owes one line of why; the lesson is optional. Taken trades keep 160 + 160.
   const minExplanation = taken ? MIN_EXPLANATION : MIN_PASS_EXPLANATION;
   const lessonRequired = taken && settled;
@@ -835,7 +842,15 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
   const snapshot = JSON.stringify([account, when, ended, r, pnl, contracts, mfe, reached1R, exit, management, wouldR, wouldMfe, explanation, lesson, me, market, worked, regrade, stage, drillKept, reasons, mainReason]);
   const [initial] = useState(snapshot);
   const dirty = snapshot !== initial;
-  const requestClose = useCallback(() => { if (dirty) setClosing(true); else closeCapture(); }, [dirty]);
+  // A new trade (no outcome yet) always asks: closing it silently would leave the decision saved on its own.
+  const requestClose = useCallback(() => { if (dirty || first) setClosing(true); else closeCapture(); }, [dirty, first]);
+  /** "Close without saving" on a new trade: it was saved at the decision, so it goes to the Trash (recoverable), not left behind. */
+  const discard = useCallback(async () => {
+    const res = await fetch(`/api/trades/${trade.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Discarded at the outcome step, before it was written.' }) }).catch(() => null);
+    if (!res || !res.ok) { setError('Could not discard the trade.'); return; }
+    window.dispatchEvent(new CustomEvent(TRADE_SAVED, { detail: trade.id }));
+    closeCapture();
+  }, [trade.id]);
   useEffect(() => {
     window.addEventListener(CAPTURE_OUTSIDE, requestClose);
     return () => window.removeEventListener(CAPTURE_OUTSIDE, requestClose);
@@ -1040,14 +1055,10 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
                 <Field quiet label="Contracts"><Input inputMode="numeric" value={contracts} onChange={(e) => setContracts(e.target.value)} placeholder="—" /></Field>
                 <Field quiet label="Max R (MFE)"><Input inputMode="decimal" value={mfe} onChange={(e) => setMfe(e.target.value)} placeholder="—" data-field="mfe" /></Field>
               </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                <div data-field="exit">
-                  <Field quiet label="Exit" group>
-                    <Segmented value={exit ?? ''} onChange={setExit} options={EXIT_REASONS} accentFor={exitTone} compact />
-                  </Field>
-                </div>
-                <Field quiet label="+1R first">
-                  <Segmented value={reached1R == null ? '' : reached1R ? 'Yes' : 'No'} onChange={(v) => setReached1R(v === 'Yes')} options={['Yes', 'No']} accentFor={yesNoTone} compact />
+              {/* No "+1R first" here any more: Max R (MFE) already says how far it went. A trade that had it keeps it. */}
+              <div data-field="exit">
+                <Field quiet label="Exit" group>
+                  <Segmented value={exit ?? ''} onChange={setExit} options={EXIT_REASONS} accentFor={exitTone} compact />
                 </Field>
               </div>
               <div data-field="management">
@@ -1114,16 +1125,16 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
       {!taken ? (
         <ReasonRow decision={decision} reasons={reasons} main={mainReason} onTap={tapReason} flash={flashing && reasons.length === 0} />
       ) : (
-      <div className="mt-2.5 grid items-stretch gap-x-6 gap-y-4 border-t pt-2 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags>
-        <TagBlock title="What went wrong — me" help="Execution and management only. Each one is a rule broken. Its opposite sits at the same place under What worked.">
+      <div className="mt-2.5 grid items-stretch gap-x-6 gap-y-4 border-t pt-2 md:grid-cols-[5fr_3fr_5fr]" style={{ borderColor: 'var(--glass-stroke)' }} data-tags data-tag-need-for={tagNeed ?? ''}>
+        <TagBlock need={tagNeed === 'me'} title="What went wrong — me" help="Execution and management only. Each one is a rule broken. Its opposite sits at the same place under What worked.">
           <TagGrid cols={3} tone="loss" options={tagOptions(ME_TAGS as readonly string[], trade.mistake_tags)} value={me}
             onToggle={(tag) => toggleTag('me', tag)} blocked={(tag) => tagBlocked(tag, { me, worked }, { decision, overTime: overTime(trade) })} data="me" />
         </TagBlock>
-        <TagBlock title="What went wrong — market" help="Outside your control, never a rule broken. The two marked auto are computed from Max R, the planned R and the exit.">
+        <TagBlock need={tagNeed === 'market'} title="What went wrong — market" help="Outside your control, never a rule broken. The two marked auto are computed from Max R, the planned R and the exit.">
           <TagGrid cols={2} tone="market" options={[...tagOptions(MARKET_TAGS_V2 as readonly string[], market), ...AUTO_MARKET_TAGS]} value={[...market, ...autoNow]}
             auto={AUTO_MARKET_TAGS as readonly string[]} onToggle={(tag) => toggleTag('market', tag)} blocked={() => null} data="market" />
         </TagBlock>
-        <TagBlock title="What worked">
+        <TagBlock need={tagNeed === 'worked'} title="What worked">
           <TagGrid cols={3} tone="win" options={tagOptions(WORKED_TAGS_V2 as readonly string[], trade.worked_tags)} value={worked}
             onToggle={(tag) => toggleTag('worked', tag)} blocked={(tag) => tagBlocked(tag, { me, worked }, { decision, overTime: overTime(trade) })} data="worked" />
         </TagBlock>
@@ -1156,13 +1167,17 @@ function OutcomeStep({ trade, onNext, onBack }: { trade: Trade; onNext?: () => v
 
       <CloseDialog open={closing} onCancel={() => setClosing(false)}
         title="Save before closing?"
-        body={!owed.length ? 'Save what you wrote, or close and lose it.'
-          : first ? `Still to write: ${owed.join(', ')}. Save what you have — the trade waits on the Unfinished shelf in Trades — or close without it.`
+        body={first
+          // A new trade is saved at the decision; discarding it here takes the decision with it (to the Trash, so it can come back).
+          ? `${owed.length ? `Still to write: ${owed.join(', ')}. ` : ''}Save it${owed.length ? ' as unfinished — it waits on the Unfinished shelf in Trades' : ''}, or discard the trade: it goes to the Trash, decision and all.`
+          : !owed.length ? 'Save what you wrote, or close and lose the changes.'
           : `Still to write: ${owed.join(', ')}. Finish them to save, or close without the changes.`}
         actions={[
           ...(!owed.length ? [{ label: 'Save & close', primary: true, data: 'save', onClick: () => { setClosing(false); void save(false); } }]
             : first ? [{ label: 'Save as unfinished', primary: true, data: 'draft', onClick: () => { setClosing(false); void save(false, true); } }] : []),
-          { label: 'Close without saving', danger: true, data: 'discard', onClick: () => closeCapture() },
+          first
+            ? { label: 'Discard the trade', danger: true, data: 'discard', onClick: () => { setClosing(false); void discard(); } }
+            : { label: 'Close without saving', danger: true, data: 'discard', onClick: () => closeCapture() },
           { label: 'Keep writing', data: 'keep', onClick: () => setClosing(false) },
         ]} />
     </div>
@@ -1324,13 +1339,13 @@ function TagGrid({ options, value, onToggle, blocked, cols, tone, auto = [], dat
   );
 }
 
-function TagBlock({ title, help, children }: { title: string; help?: string; children: React.ReactNode }) {
+function TagBlock({ title, help, children, need = false }: { title: string; help?: string; children: React.ReactNode; need?: boolean }) {
   return (
     <div className="flex min-h-0 flex-col">
       <span className="mb-1 flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={faint}>
         {title}{help && <Help>{help}</Help>}
       </span>
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className={`min-h-0 flex-1 rounded-[calc(16px*var(--rk))] ${need ? 'need-glow' : ''}`} data-tag-need={need ? '' : undefined}>{children}</div>
     </div>
   );
 }

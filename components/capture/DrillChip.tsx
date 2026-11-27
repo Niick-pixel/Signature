@@ -116,7 +116,8 @@ export function DrillChip({ drillKey, value, onChange, draft, onJump, compact = 
               ))}.</>
         ) : (
           <span className="inline-flex flex-wrap items-center gap-1.5 align-middle">
-            <span role="radiogroup" aria-label="The drill on this trade" className="inline-flex gap-1">
+            {/* Unanswered: the three answers glow until one is tapped (globals.css need-glow). */}
+            <span role="radiogroup" aria-label="The drill on this trade" className={`inline-flex gap-1 rounded-full ${draft && value == null ? 'need-glow' : ''}`} data-drill-need={draft && value == null ? '' : undefined}>
               {ANSWERS.map((o) => {
                 const on = value === o.v;
                 return (

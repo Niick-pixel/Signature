@@ -47,7 +47,7 @@ test('plan analytics: matched days, kill switches respected or traded through, f
   const sc = (x: Partial<ReturnType<typeof R.emptyScenario>> = {}) => ({ ...R.emptyScenario(), ...x });
   const ctx = (x: Record<string, unknown> = {}) => ({ ...R.emptyContext(), h4: 'Bull', h1Agrees: true, overnight: 'Lows run', taken: ['Asia low'], ...x });
   const day = (id: string, outcome: string, x: Record<string, unknown> = {}) => ({
-    id, closed_at: 'x', amended_at: null, outcome, context: ctx(), scenarios: { a: sc({ kill: 'Never reaches the zone', targets: ['PDH'] }), b: sc({ kill: 'Opposing HTF gap forms' }) }, ...x,
+    id, closed_at: 'x', amended_at: null, outcome, context: ctx(), scenarios: { a: sc({ kills: ['Never reaches the zone'], targets: ['PDH'] }), b: sc({ kills: ['Opposing HTF gap forms'] }) }, ...x,
   }) as never;
   const bt = (id: string, dayId: string, sc2: string, r: number, x: Record<string, unknown> = {}) =>
     ({ id, account: BACKTEST, decision: 'take', r_multiple: r, outcome: r > 0 ? 'Win' : 'Loss', replay_day_id: dayId, plan_scenario: sc2, target_hit: null, partial_win: null, deleted_at: null, ...x }) as never;

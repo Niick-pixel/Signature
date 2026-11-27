@@ -76,7 +76,7 @@ export function replayStats(days: readonly ReplayDay[], trades: readonly Trade[]
   return {
     days: closed.length, amended: closed.filter((d) => d.amended_at).length, outcomes, byScenario, notTaken,
     zones: tally((d) => [...d.scenarios.a.zones, ...d.scenarios.b.zones]),
-    kills: tally((d) => [d.scenarios.a.kill, d.scenarios.b.kill].filter((k): k is NonNullable<typeof k> => !!k)),
+    kills: tally((d) => [...d.scenarios.a.kills, ...d.scenarios.b.kills]),
     winDays: win.length, lossDays: loss.length,
     plan: planAnalytics(plain, bt),
   };
@@ -106,11 +106,13 @@ export function planAnalytics(days: readonly ReplayDay[], trades: readonly Trade
       const sc = d.scenarios[k === 'A' ? 'a' : 'b'];
       const onIt = (onDay.get(d.id) ?? []).filter((t) => t.plan_scenario === k);
       if (!played.includes(k)) {
-        if (!sc.kill) continue;
-        const row = kills.get(sc.kill) ?? { killed: 0, stayedOut: 0, through: [] };
-        row.killed += 1;
-        if (onIt.length) row.through.push(...onIt.map((t) => t.r_multiple as number)); else row.stayedOut += 1;
-        kills.set(sc.kill, row);
+        // Every kill switch the scenario named counts the day: which one fired is not recorded.
+        for (const kill of sc.kills) {
+          const row = kills.get(kill) ?? { killed: 0, stayedOut: 0, through: [] };
+          row.killed += 1;
+          if (onIt.length) row.through.push(...onIt.map((t) => t.r_multiple as number)); else row.stayedOut += 1;
+          kills.set(kill, row);
+        }
       } else if (sc.targets[0] && onIt.length) {
         const row = targets.get(sc.targets[0]) ?? { trades: 0, reached: 0 };
         row.trades += onIt.length;

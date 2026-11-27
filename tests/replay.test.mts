@@ -20,7 +20,7 @@ const { parseTradeInput } = await import('../lib/validate');
 const { applyRules } = await import('../db/rules');
 
 const ctx = (x: Partial<import('../lib/replay').ReplayContext> = {}) => ({ ...R.emptyContext(), h4: 'Bull' as const, h1Agrees: true, overnight: 'Lows run' as const, news: 'Data at 8:30 ET' as const, open: 'Discount' as const, ...x });
-const sc = (x: Partial<import('../lib/replay').ReplayScenario> = {}) => ({ ...R.emptyScenario(), zones: ['PDL'], confirm: ['Sweep + iFVG close'], targets: ['PDH/PDL'], rr: '2+' as const, kill: 'Not triggered by 10:30' as const, ...x });
+const sc = (x: Partial<import('../lib/replay').ReplayScenario> = {}) => ({ ...R.emptyScenario(), zones: ['PDL'], confirm: ['Sweep + iFVG close'], targets: ['PDH/PDL'], rr: '2+' as const, kills: ['Not triggered by 10:30'] as R.ReplayScenario['kills'], ...x });
 
 test('day bias: the 4H direction when the 1H agrees; otherwise no bias', () => {
   assert.equal(R.dayBias({ h4: 'Bull', h1Agrees: true }), 'Long');
@@ -266,4 +266,18 @@ test('the morning plan tapped: its scenario, direction, first target type and pl
   assert.deepEqual(R.prepPrefill(a, 'a'), { scenario: 'A', direction: 'Long', target_type: 'Weekly high/low', planned_rr: '2' });
   assert.deepEqual(R.prepPrefill(a, 'b'), { scenario: 'B', direction: 'Short', target_type: null, planned_rr: null }, 'a target Step 1 cannot store, and under 1.5R, are left to tap');
   assert.deepEqual([...R.PLAN_ACCOUNTS], ['Live', 'Demo', 'Eval', 'Funded'], 'never a backtest');
+});
+
+test('kill switches are a list (a day planned with one reads in), no HTF FVG zones offered, rough R no longer asked', () => {
+  const ctx = R.parseContext({ h4: 'Bull', h1Agrees: true, taken: [], news: 'None', open: 'Discount' });
+  const old = R.parseScenarios({ a: { zones: ['PDL', 'HTF FVG 15m'], targets: ['PDH/PDL'], rr: '2+', kill: 'Never reaches the zone' }, b: {} }, ctx);
+  assert.deepEqual(old.a.kills, ['Never reaches the zone'], 'one kill switch, read in as a list');
+  assert.deepEqual(old.a.zones, ['PDL', 'HTF FVG 15m'], 'an old HTF zone is kept on the old day');
+  assert.equal(old.a.rr, '2+', 'and its rough R');
+  assert.ok(!R.zoneOptions('Long', 'None').some((z) => z.startsWith('HTF FVG')), 'no HTF FVG zone offered');
+  const s = { a: { ...R.emptyScenario(), zones: ['PDL'], targets: ['PDH/PDL'], kills: ['Never reaches the zone', 'Sweep but no inversion'] as R.ReplayScenario['kills'] },
+    b: { ...R.emptyScenario(), zones: ['PDH'], targets: ['Session H/L'], kills: ['Opposing HTF gap forms'] as R.ReplayScenario['kills'] } };
+  assert.deepEqual(R.lockMissing(ctx, s), [], 'locks without a rough R');
+  assert.match(R.scenarioLine(R.parseScenarios(s, ctx).a), /kill: Never reaches the zone \/ Sweep but no inversion/);
+  assert.deepEqual(R.lockMissing(ctx, { ...s, b: { ...s.b, kills: [] } }), ['B: kill switch']);
 });

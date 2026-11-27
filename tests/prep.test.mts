@@ -282,7 +282,7 @@ test('a session plan from the backtest builder becomes the prep\'s answers, ever
   const plan = {
     context: { ...emptyContext(), h4: 'Bear' as const, h1Agrees: true, taken: ['Asia high'], news: 'Data at 10:00 ET' as const, open: 'EQ' as const },
     scenarios: {
-      a: { ...emptyScenario(), dir: 'Short' as const, zones: ['1H FVG'], targets: ['PWH/PWL', 'Session H/L'], rr: '2+' as const, kill: KILLS[0] },
+      a: { ...emptyScenario(), dir: 'Short' as const, zones: ['1H FVG'], targets: ['PWH/PWL', 'Session H/L'], rr: '2+' as const, kills: [KILLS[0]] },
       b: { ...emptyScenario(), dir: 'Long' as const },
     },
   };
