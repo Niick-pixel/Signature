@@ -142,11 +142,11 @@ export function MorningCheckIn() {
     {/* Today's plan, tappable: what the title bar chip opens once the morning is answered. */}
     <DayPlanWindow onEdit={(t) => openCheckIn(t)} />
     {/* The chart prep is one fixed window, as the backtest plan builder: the same size on every page, never scrolled. */}
-    <Overlay open={open} onClose={close} className={`${tab === 'chart' && small ? 'flex w-[min(34rem,calc(100vw-2rem))] flex-col overflow-hidden px-6 pb-5 pt-5' : tab === 'chart' ? 'flex h-[min(50rem,calc(100dvh-2rem))] w-[min(86rem,calc(100vw-2rem))] flex-col overflow-hidden px-5 pb-4 pt-4' : 'max-h-[90vh] w-[34rem] overflow-y-auto p-7'} max-w-full rounded-[calc(26px*var(--rk))] transition-[width] duration-300`}
+    <Overlay open={open} onClose={close} className={`${tab === 'chart' && small ? 'flex w-[min(34rem,calc(100vw-2rem))] flex-col overflow-hidden px-6 pb-5 pt-5' : tab === 'chart' ? 'flex max-h-[calc(100dvh-2rem)] w-[min(86rem,calc(100vw-2rem))] flex-col overflow-hidden pt-3' : 'max-h-[90vh] w-[34rem] overflow-y-auto p-7'} max-w-full rounded-[calc(26px*var(--rk))] transition-[width] duration-300`}
       // Something to work through, not glance at: solid enough that the board behind stays behind.
       surface="color-mix(in srgb, var(--bg-raised) 94%, transparent)">
       {/* The two halves of the morning, in one window. */}
-      {!small && <div role="tablist" aria-label="Check-in" className={`${tab === 'chart' ? 'mx-auto mb-3 w-full max-w-[34rem]' : 'mb-6'} flex shrink-0 gap-1 rounded-full p-1`} style={{ background: 'var(--glass-fill-strong)' }}>
+      {!small && <div role="tablist" aria-label="Check-in" className={`${tab === 'chart' ? 'mx-auto mb-1 w-full max-w-[34rem]' : 'mb-6'} flex shrink-0 gap-1 rounded-full p-1`} style={{ background: 'var(--glass-fill-strong)' }}>
         {(['morning', 'chart'] as const).map((t) => {
           const on = tab === t;
           const label = t === 'morning'

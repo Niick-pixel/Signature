@@ -61,8 +61,8 @@ function Chips<T extends string>({ id, label, options, value, onChange, multi = 
   const picked = multi ? (value as T[] | null) ?? [] : value != null ? [value as T] : [];
   const keys = <span className="rounded-[5px] border px-1 py-px text-[9.5px] font-medium tabular-nums" style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-faint)', opacity: focused ? 1 : 0 }}>1–{Math.min(9, options.length)}</span>;
   return (
-    <div data-replay-group={id} onMouseDown={onFocus} className={`rounded-[calc(18px*var(--rk))] p-1 transition-shadow ${className}`}
-      style={{ boxShadow: focused ? '0 0 0 1.5px rgb(var(--accent) / 0.35)' : undefined }}>
+    // The group in focus lights its options, not a frame around the question (globals.css, [data-replay-group][data-focused]).
+    <div data-replay-group={id} data-focused={focused ? '' : undefined} onMouseDown={onFocus} className={`rounded-[calc(18px*var(--rk))] p-1 ${className}`}>
       <Field quiet group label={multi ? `${label}${max ? ` · up to ${max}` : ' · any'}` : label} hint={hint} required={required && !picked.length} badge={keys}>
         {multi ? (
           <MultiSegmented value={picked} onChange={(v) => onChange(v)} options={options} max={max} labelFor={labelFor} accentFor={tone} titleFor={titleFor} />
@@ -240,7 +240,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session
         )}
         {/* A no-bias day: A's direction is tapped, B's follows it — shown in the same row, never an empty block. */}
         {k === 'b' && !bias && (
-          <div className="p-1" data-b-direction={sc.dir ?? 'none'}>
+          <div className="p-1" data-b-direction={sc.dir ?? 'none'} data-placeholder-row>
             <Field quiet label="Direction · the other way of A">
               <div className="glass flex rounded-[calc(16px*var(--rk))] p-1">
                 {sc.dir ? (['Long', 'Short'] as const).map((d) => (
@@ -278,7 +278,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session
               <h1 className="text-[20px] font-semibold">{session ? 'Plan today’s session' : amend ? `Amend Day ${amend.sequence}` : 'Plan replay day'}</h1>
               <PlanKindBadge kind={session ? 'session' : 'backtest'} />
             </div>
-            <p className="mt-0.5 text-[12.5px]" style={dim}>
+            <p className="mt-0.5 text-[12.5px]" style={dim} data-builder-sub>
               {session ? `${new Date(`${session.day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · the same builder as the backtest. Taps only · Enter saves; change it any time today.`
                 : amend ? 'The locked plan stays as it was; this is kept beside it, and the day shows as amended everywhere.'
                 : 'Taps only. Keys: 1–9 pick in the lit group · Tab / ↑ ↓ move · Enter locks.'}
@@ -317,7 +317,7 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session
             <Chips id="h1" label="1H agrees with 4H" options={['Yes', 'No'] as const} value={context.h1Agrees == null ? null : context.h1Agrees ? 'Yes' : 'No'}
               onChange={(v) => setC({ h1Agrees: v == null ? null : v === 'Yes' })} focused={fid === 'h1'} onFocus={() => focusOn('h1')} required />
           ) : (
-            <div className="p-1">
+            <div className="p-1" data-placeholder-row>
               <Field quiet label="1H agrees with 4H">
                 <div className="glass flex rounded-[calc(16px*var(--rk))] p-1">
                   <span className="flex-1 px-3 py-2 text-center text-[12px]" style={dim}>{context.h4 === 'None' ? 'No 4H direction — nothing to agree with' : 'Pick the 4H direction first'}</span>

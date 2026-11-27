@@ -1174,3 +1174,35 @@ html[data-rail='off'] [data-side-rail] { display: none; }
   [data-print-root] [data-noprint] { display: none !important; }
   [data-print-root] [data-print-only] { display: block !important; }
 }
+
+/* The plan builders' group in focus (keys 1–9 pick in it): its options ring and glow — no frame around the question. */
+[data-replay-group][data-focused] > [role='group'] > :nth-child(2) {
+  box-shadow: 0 0 0 1.5px rgb(var(--accent) / 0.45), 0 0 12px 0 rgb(var(--accent) / 0.18);
+  transition: box-shadow 0.2s ease;
+}
+
+/*
+  The plan builders (backtest and session) fit a 1080p window whole: option rows a little slimmer than
+  the app's default and the question wrappers tighter. Same taps, same targets — 30px tall, still easy.
+*/
+[data-replay-builder] [data-replay-group] { padding: 1px; }
+[data-replay-builder] [data-replay-group] [data-option] { padding-top: 6px; padding-bottom: 6px; }
+/* A row that waits on another answer ("Pick the 4H direction first") stands as tall as the rows beside it. */
+[data-replay-builder] [data-placeholder-row] { padding: 1px; }
+[data-replay-builder] [data-placeholder-row] .glass > span { padding-top: 6px; padding-bottom: 6px; }
+/* A shorter window (laptops, 900px): denser still, so the plan stays one screen there too. */
+@media (max-height: 1000px) {
+  [data-replay-builder] [data-replay-group] { padding: 0; }
+  [data-replay-builder] [data-replay-group] [data-option] { padding-top: 3px; padding-bottom: 3px; font-size: 11.5px; }
+  [data-replay-builder] [data-replay-group] [role='group'] > :first-child { margin-bottom: 2px; }
+  [data-replay-builder] [data-replay-group] .glass { padding: 2px; }
+  [data-replay-builder] [data-replay-scenario] { padding-top: 6px; padding-bottom: 6px; }
+  /* The line under the title and the date's note go; the keys stay in the footer's "Still to tap" and the tooltips. */
+  [data-replay-builder] [data-builder-sub], [data-replay-builder] [data-replay-date-note] { display: none; }
+  [data-replay-builder] [data-placeholder-row] { padding: 0; }
+  [data-replay-builder] [data-placeholder-row] .glass { padding: 2px; }
+  [data-replay-builder] [data-placeholder-row] .glass > span { padding-top: 3px; padding-bottom: 3px; font-size: 11.5px; }
+  [data-replay-builder] [data-placeholder-row] [data-pending], [data-replay-builder] [data-placeholder-row] > * > :first-child { margin-bottom: 2px; }
+  [data-replay-builder] h1 { font-size: 18px; }
+  [data-replay-builder] [data-builder-footer] { padding-top: 6px; padding-bottom: 6px; }
+}

@@ -33,7 +33,8 @@ export function SessionPlanTab({ day, onClose }: { day: string; onClose: () => v
     return null;
   };
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-session-plan-tab>
+    // The padding the backtest window has, here on the scroller: the builder's sticky footer reaches into it, edge to edge.
+    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 pt-2" data-session-plan-tab>
       <SessionPlanBuilder onClose={onClose}
         session={{ day, start: state.prep?.data.plan ?? null, last: state.previous?.data.plan ?? null, onSave: save }} />
     </div>
