@@ -234,15 +234,15 @@ function BuilderBody({ open, onClose, last, amend, instrument, onLocked, session
             {sc.dir ?? 'direction —'}{k === 'a' ? (bias ? ' · with the bias' : ' · no bias: tap it') : ' · the other way'}{!bias && ' · max B'}
           </span>
         </div>
-        {k === 'a' && !bias && (
+        {/* The direction row is always there, so the window never grows when the 1H disagrees: a biased day shows
+            A with the bias (derived), a day without one asks for A; B always reads the other way of A. */}
+        {k === 'a' && !bias ? (
           <Chips id="a-dir" label="Direction" options={['Long', 'Short'] as const} value={sc.dir} onChange={(v) => set({ dir: v as 'Long' | null })}
             focused={fid === 'a-dir'} onFocus={() => focusOn('a-dir')} tone={dirTone} required />
-        )}
-        {/* A no-bias day: A's direction is tapped, B's follows it — shown in the same row, never an empty block. */}
-        {k === 'b' && !bias && (
-          <div className="p-1" data-b-direction={sc.dir ?? 'none'} data-placeholder-row>
-            <Field quiet label="Direction · the other way of A">
-              <div className="glass flex rounded-[calc(16px*var(--rk))] p-1">
+        ) : (
+          <div className="p-1" data-b-direction={k === 'b' ? sc.dir ?? 'none' : undefined} data-a-direction={k === 'a' ? sc.dir ?? 'none' : undefined} data-placeholder-row>
+            <Field quiet label={k === 'a' ? 'Direction · with the bias' : 'Direction · the other way of A'}>
+              <div className="glass flex rounded-[calc(16px*var(--rk))] p-1" title={k === 'a' ? 'Set by the day bias: 4H and 1H agree.' : 'Always the other way of A.'}>
                 {sc.dir ? (['Long', 'Short'] as const).map((d) => (
                   <span key={d} className="flex-1 rounded-[calc(12px*var(--rk))] px-3 py-2 text-center text-[12.5px] font-medium"
                     style={d === sc.dir ? { background: `rgb(${dirTone(d)} / 0.14)`, color: `rgb(${dirTone(d)})`, boxShadow: `inset 0 0 0 1px rgb(${dirTone(d)} / 0.35)` } : { color: 'var(--text-faint)' }}>{d}</span>
